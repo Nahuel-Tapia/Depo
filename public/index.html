@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Depósito - Login</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <section class="card" id="loginCard">
+        <h1>Depósito - Control de Stock</h1>
+        <p class="subtitle">Ingreso al sistema</p>
+
+        <form id="loginForm">
+          <label>Email</label>
+          <input type="email" id="email" required placeholder="admin@depo.local" />
+
+          <label>Contraseña</label>
+          <input type="password" id="password" required placeholder="********" />
+
+          <button type="submit">Iniciar sesión</button>
+        </form>
+
+        <p id="loginMsg" class="msg"></p>
+      </section>
+
+      <section class="card hidden" id="appCard">
+        <div class="topbar">
+          <div>
+            <h2>Panel</h2>
+            <p id="currentUser"></p>
+          </div>
+          <button id="logoutBtn" class="secondary">Cerrar sesión</button>
+        </div>
+
+        <div class="permissions-box">
+          <h3>Permisos de tu rol</h3>
+          <ul id="permissionsList"></ul>
+        </div>
+
+        <div id="adminArea" class="hidden">
+          <h3>Gestión de usuarios y roles</h3>
+
+          <form id="createUserForm" class="grid">
+            <input type="text" id="newNombre" placeholder="Nombre completo" required />
+            <input type="email" id="newEmail" placeholder="Email" required />
+            <input type="password" id="newPassword" placeholder="Contraseña" required />
+            <select id="newRole" required>
+              <option value="operador">operador</option>
+              <option value="consulta">consulta</option>
+              <option value="admin">admin</option>
+            </select>
+            <button type="submit">Crear usuario</button>
+          </form>
+
+          <p id="adminMsg" class="msg"></p>
+
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Nombre</th>
+                <th>Email</th>
+                <th>Rol</th>
+                <th>Activo</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="usersTbody"></tbody>
+          </table>
+        </div>
+
+        <div id="nonAdminArea" class="hidden">
+          <h3>Acceso concedido</h3>
+          <p>Tu rol actual no permite administrar usuarios.</p>
+        </div>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>

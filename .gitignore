@@ -1,0 +1,31 @@
+# Dependencias
+node_modules/
+
+# Base de datos local
+*.sqlite
+*.sqlite3
+*.db
+
+# Variables de entorno reales
+.env
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs/
+*.log
+
+# Sistema operativo
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Editores
+.vscode/settings.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
