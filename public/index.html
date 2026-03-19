@@ -28,20 +28,155 @@
       <section class="card hidden" id="appCard">
         <div class="topbar">
           <div>
-            <h2>Panel</h2>
+            <h2>Panel - Depósito Stock</h2>
             <p id="currentUser"></p>
           </div>
           <button id="logoutBtn" class="secondary">Cerrar sesión</button>
         </div>
 
-        <div class="permissions-box">
-          <h3>Permisos de tu rol</h3>
-          <ul id="permissionsList"></ul>
+        <div class="tabs">
+          <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
+          <button class="tab-btn" data-tab="productos">Productos</button>
+          <button class="tab-btn" data-tab="movimientos">Movimientos</button>
+          <button class="tab-btn" data-tab="ajustes">Ajustes</button>
+          <button class="tab-btn" data-tab="auditoria">Auditoría</button>
+          <button class="tab-btn" data-tab="usuarios">Usuarios</button>
         </div>
 
-        <div id="adminArea" class="hidden">
-          <h3>Gestión de usuarios y roles</h3>
+        <!-- DASHBOARD -->
+        <div class="tab-content active" id="dashboardTab">
+          <div class="permissions-box">
+            <h3>Permisos de tu rol</h3>
+            <ul id="permissionsList"></ul>
+          </div>
+        </div>
 
+        <!-- PRODUCTOS -->
+        <div class="tab-content hidden" id="productosTab">
+          <h3>Gestión de Productos</h3>
+          <form id="createProductForm" class="grid">
+            <input type="text" id="productoCodigo" placeholder="Código" required />
+            <input type="text" id="productoNombre" placeholder="Nombre" required />
+            <input type="number" id="productoPrecio" placeholder="Precio" step="0.01" />
+            <input type="text" id="productoDescripcion" placeholder="Descripción" />
+            <button type="submit">Crear producto</button>
+          </form>
+          <p id="productosMsg" class="msg"></p>
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Código</th>
+                <th>Nombre</th>
+                <th>Precio</th>
+                <th>Stock</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="productosTbody"></tbody>
+          </table>
+        </div>
+
+        <!-- MOVIMIENTOS -->
+        <div class="tab-content hidden" id="movimientosTab">
+          <h3>Movimientos de Stock</h3>
+          <form id="createMovimientoForm" class="grid">
+            <select id="movProductoId" required>
+              <option value="">Seleccionar producto...</option>
+            </select>
+            <select id="movTipo" required>
+              <option value="">Tipo de movimiento</option>
+              <option value="entrada">Entrada</option>
+              <option value="salida">Salida</option>
+            </select>
+            <input type="number" id="movCantidad" placeholder="Cantidad" min="1" required />
+            <input type="text" id="movMotivo" placeholder="Motivo (opcional)" />
+            <button type="submit">Registrar movimiento</button>
+          </form>
+          <p id="movimientosMsg" class="msg"></p>
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Producto</th>
+                <th>Tipo</th>
+                <th>Cantidad</th>
+                <th>Motivo</th>
+                <th>Registrado por</th>
+                <th>Fecha</th>
+              </tr>
+            </thead>
+            <tbody id="movimientosTbody"></tbody>
+          </table>
+        </div>
+
+        <!-- AJUSTES -->
+        <div class="tab-content hidden" id="ajustesTab">
+          <h3>Ajustes de Inventario</h3>
+          <form id="createAjusteForm" class="grid">
+            <select id="ajuProductoId" required>
+              <option value="">Seleccionar producto...</option>
+            </select>
+            <input type="number" id="ajuCantidad" placeholder="Nueva cantidad" min="0" required />
+            <input type="text" id="ajuMotivo" placeholder="Motivo del ajuste" required />
+            <button type="submit">Crear ajuste</button>
+          </form>
+          <p id="ajustesMsg" class="msg"></p>
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Producto</th>
+                <th>Stock Anterior</th>
+                <th>Stock Nuevo</th>
+                <th>Motivo</th>
+                <th>Por</th>
+                <th>Fecha</th>
+              </tr>
+            </thead>
+            <tbody id="ajustesTbody"></tbody>
+          </table>
+        </div>
+
+        <!-- AUDITORÍA -->
+        <div class="tab-content hidden" id="auditoriaTab">
+          <h3>Registro de Auditoría</h3>
+          <div class="filter-box">
+            <select id="auditoriaEntidad">
+              <option value="">Filtrar por entidad...</option>
+              <option value="productos">Productos</option>
+              <option value="movimientos">Movimientos</option>
+              <option value="ajustes">Ajustes</option>
+              <option value="usuarios">Usuarios</option>
+            </select>
+            <select id="auditoriaAccion">
+              <option value="">Filtrar por acción...</option>
+              <option value="CREATE">CREATE</option>
+              <option value="UPDATE">UPDATE</option>
+              <option value="DELETE">DELETE</option>
+            </select>
+            <button id="auditoriaRefreshBtn">Actualizar</button>
+          </div>
+          <p id="auditoriaMsg" class="msg"></p>
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Usuario</th>
+                <th>Entidad</th>
+                <th>Acción</th>
+                <th>Registro ID</th>
+                <th>Cambios</th>
+                <th>Fecha</th>
+              </tr>
+            </thead>
+            <tbody id="auditoriaTbody"></tbody>
+          </table>
+        </div>
+
+        <!-- USUARIOS -->
+        <div class="tab-content hidden" id="usuariosTab">
+          <h3>Gestión de usuarios y roles</h3>
           <form id="createUserForm" class="grid">
             <input type="text" id="newNombre" placeholder="Nombre completo" required />
             <input type="email" id="newEmail" placeholder="Email" required />
@@ -53,9 +188,7 @@
             </select>
             <button type="submit">Crear usuario</button>
           </form>
-
           <p id="adminMsg" class="msg"></p>
-
           <table>
             <thead>
               <tr>
@@ -69,11 +202,6 @@
             </thead>
             <tbody id="usersTbody"></tbody>
           </table>
-        </div>
-
-        <div id="nonAdminArea" class="hidden">
-          <h3>Acceso concedido</h3>
-          <p>Tu rol actual no permite administrar usuarios.</p>
         </div>
       </section>
     </main>

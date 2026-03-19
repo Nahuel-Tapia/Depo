@@ -8,6 +8,10 @@ const { initDb } = require("./db");
 const authRoutes = require("./routes/auth");
 const userRoutes = require("./routes/users");
 const permissionsRoutes = require("./routes/permissions");
+const productosRoutes = require("./routes/productos");
+const movimientosRoutes = require("./routes/movimientos");
+const ajustesRoutes = require("./routes/ajustes");
+const auditoriaRoutes = require("./routes/auditoria");
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -23,6 +27,10 @@ app.get("/api/health", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/permissions", permissionsRoutes);
+app.use("/api/productos", productosRoutes);
+app.use("/api/movimientos", movimientosRoutes);
+app.use("/api/ajustes", ajustesRoutes);
+app.use("/api/auditoria", auditoriaRoutes);
 
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "..", "public", "index.html"));

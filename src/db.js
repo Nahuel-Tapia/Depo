@@ -45,6 +45,60 @@ async function initDb() {
     )
   `);
 
+  await run(`
+    CREATE TABLE IF NOT EXISTS productos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      codigo TEXT NOT NULL UNIQUE,
+      nombre TEXT NOT NULL,
+      descripcion TEXT,
+      precio REAL NOT NULL DEFAULT 0,
+      stock_actual INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS movimientos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      producto_id INTEGER NOT NULL,
+      tipo TEXT NOT NULL CHECK(tipo IN ('entrada', 'salida')),
+      cantidad INTEGER NOT NULL,
+      usuario_id INTEGER NOT NULL,
+      motivo TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (producto_id) REFERENCES productos(id),
+      FOREIGN KEY (usuario_id) REFERENCES users(id)
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS ajustes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      producto_id INTEGER NOT NULL,
+      cantidad_anterior INTEGER NOT NULL,
+      cantidad_nueva INTEGER NOT NULL,
+      motivo TEXT NOT NULL,
+      usuario_id INTEGER NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (producto_id) REFERENCES productos(id),
+      FOREIGN KEY (usuario_id) REFERENCES users(id)
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS auditoria (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      usuario_id INTEGER NOT NULL,
+      entidad TEXT NOT NULL,
+      accion TEXT NOT NULL,
+      id_registro INTEGER,
+      cambios TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (usuario_id) REFERENCES users(id)
+    )
+  `);
+
   const admin = await get("SELECT id FROM users WHERE email = ?", ["admin@depo.local"]);
   if (!admin) {
     const hash = bcrypt.hashSync("Admin123!", 10);
