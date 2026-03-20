@@ -15,7 +15,7 @@ router.get("/", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW), async (req, 
     let query = `
       SELECT 
         m.id, m.producto_id, p.codigo, p.nombre,
-        m.tipo, m.cantidad, m.motivo,
+        m.tipo, m.cantidad, m.motivo, m.proveedor, m.cue,
         u.nombre as usuario_nombre, u.email,
         m.created_at
       FROM movimientos m
@@ -75,7 +75,7 @@ router.get("/:id", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW), async (re
 // Crear movimiento (entrada o salida)
 router.post("/", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), async (req, res) => {
   try {
-    const { producto_id, tipo, cantidad, motivo } = req.body;
+    const { producto_id, tipo, cantidad, motivo, proveedor, cue } = req.body;
 
     if (!producto_id || !tipo || !cantidad) {
       return res.status(400).json({ error: "Faltan campos obligatorios" });
@@ -102,8 +102,8 @@ router.post("/", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), async (re
 
     // Registrar movimiento
     const result = await run(
-      "INSERT INTO movimientos (producto_id, tipo, cantidad, usuario_id, motivo) VALUES (?, ?, ?, ?, ?)",
-      [producto_id, tipo, cantidad, req.user.id, motivo || null]
+      "INSERT INTO movimientos (producto_id, tipo, cantidad, usuario_id, motivo, proveedor, cue) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      [producto_id, tipo, cantidad, req.user.sub, motivo || null, proveedor || null, cue || null]
     );
 
     // Actualizar stock del producto
@@ -117,7 +117,7 @@ router.post("/", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), async (re
     await run(
       "INSERT INTO auditoria (usuario_id, entidad, accion, id_registro, cambios) VALUES (?, ?, ?, ?, ?)",
       [
-        req.user.id,
+        req.user.sub,
         "movimientos",
         "CREATE",
         result.lastID,
@@ -126,7 +126,9 @@ router.post("/", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), async (re
           cantidad,
           producto_id,
           stock_anterior: producto.stock_actual,
-          stock_nuevo: nuevoStock
+          stock_nuevo: nuevoStock,
+          proveedor,
+          cue
         })
       ]
     );

@@ -59,7 +59,7 @@ router.post("/", authorizePermissions(PERMISSIONS.PRODUCTOS_CREATE), async (req,
     // Auditoría
     await run(
       "INSERT INTO auditoria (usuario_id, entidad, accion, id_registro, cambios) VALUES (?, ?, ?, ?, ?)",
-      [req.user.id, "productos", "CREATE", result.lastID, JSON.stringify({ codigo, nombre, descripcion, precio })]
+      [req.user.sub, "productos", "CREATE", result.lastID, JSON.stringify({ codigo, nombre, descripcion, precio })]
     );
 
     return res.status(201).json({ id: result.lastID });
@@ -116,7 +116,7 @@ router.patch("/:id", authorizePermissions(PERMISSIONS.PRODUCTOS_EDIT), async (re
 
     await run(
       "INSERT INTO auditoria (usuario_id, entidad, accion, id_registro, cambios) VALUES (?, ?, ?, ?, ?)",
-      [req.user.id, "productos", "UPDATE", id, JSON.stringify(cambios)]
+      [req.user.sub, "productos", "UPDATE", id, JSON.stringify(cambios)]
     );
 
     return res.json({ ok: true });
@@ -149,7 +149,7 @@ router.delete("/:id", authorizePermissions(PERMISSIONS.PRODUCTOS_DELETE), async 
     // Auditoría
     await run(
       "INSERT INTO auditoria (usuario_id, entidad, accion, id_registro, cambios) VALUES (?, ?, ?, ?, ?)",
-      [req.user.id, "productos", "DELETE", id, JSON.stringify(producto)]
+      [req.user.sub, "productos", "DELETE", id, JSON.stringify(producto)]
     );
 
     return res.json({ ok: true });

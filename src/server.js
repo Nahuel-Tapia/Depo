@@ -16,6 +16,11 @@ const auditoriaRoutes = require("./routes/auditoria");
 const app = express();
 const PORT = process.env.PORT || 4000;
 
+(async () => {
+  await initDb();
+  console.log("Database initialized");
+})();
+
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "..", "public")));

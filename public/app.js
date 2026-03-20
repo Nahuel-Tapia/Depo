@@ -5,7 +5,7 @@ const state = {
   productos: [],
   movimientos: [],
   ajustes: [],
-  auditoria: []
+  users: []
 };
 
 const loginCard = document.getElementById("loginCard");
@@ -91,7 +91,7 @@ async function render() {
 
   loginCard.classList.add("hidden");
   appCard.classList.remove("hidden");
-  currentUser.textContent = `${state.user.nombre} (${state.user.role})`;
+  currentUser.textContent = state.user.role === 'admin' ? 'A' : state.user.role === 'operador' ? 'O' : 'C';
   renderPermissions();
 
   // Mostrar/ocultar tabs según permisos
@@ -107,7 +107,6 @@ async function render() {
   await loadProductos();
   await loadMovimientos();
   await loadAjustes();
-  await loadAuditoria();
   await loadUsers();
 }
 
@@ -116,7 +115,6 @@ function updateTabsVisibility() {
     productos: ["productos.view"],
     movimientos: ["movimientos.view"],
     ajustes: ["ajustes.view"],
-    auditoria: ["auditoria.view"],
     usuarios: ["users.read"]
   };
 
@@ -437,6 +435,8 @@ function renderMovimientos() {
       <td><span class="badge badge-${m.tipo}">${m.tipo}</span></td>
       <td>${m.cantidad}</td>
       <td>${m.motivo || "-"}</td>
+      <td>${m.proveedor || "-"}</td>
+      <td>${m.cue || "-"}</td>
       <td>${m.usuario_nombre}</td>
       <td>${new Date(m.created_at).toLocaleDateString()}</td>
     `;
@@ -444,17 +444,40 @@ function renderMovimientos() {
   });
 }
 
+document.getElementById("movTipo").addEventListener("change", (e) => {
+  const tipo = e.target.value;
+  const proveedorField = document.getElementById("proveedorField");
+  const cueField = document.getElementById("cueField");
+  if (tipo === "entrada") {
+    proveedorField.style.display = "block";
+    cueField.style.display = "none";
+  } else if (tipo === "salida") {
+    proveedorField.style.display = "none";
+    cueField.style.display = "block";
+  } else {
+    proveedorField.style.display = "none";
+    cueField.style.display = "none";
+  }
+});
+
 document.getElementById("createMovimientoForm")?.addEventListener("submit", async (e) => {
   e.preventDefault();
   const msg = document.getElementById("movimientosMsg");
   msg.textContent = "";
   
+  const tipo = document.getElementById("movTipo").value;
   const payload = {
     producto_id: parseInt(document.getElementById("movProductoId").value),
-    tipo: document.getElementById("movTipo").value,
+    tipo: tipo,
     cantidad: parseInt(document.getElementById("movCantidad").value),
     motivo: document.getElementById("movMotivo").value.trim() || null
   };
+  
+  if (tipo === "entrada") {
+    payload.proveedor = document.getElementById("movProveedor").value.trim() || null;
+  } else if (tipo === "salida") {
+    payload.cue = document.getElementById("movCue").value.trim() || null;
+  }
   
   const res = await fetch("/api/movimientos", {
     method: "POST",
@@ -469,6 +492,9 @@ document.getElementById("createMovimientoForm")?.addEventListener("submit", asyn
   }
   
   document.getElementById("createMovimientoForm").reset();
+  // Hide fields
+  document.getElementById("proveedorField").style.display = "none";
+  document.getElementById("cueField").style.display = "none";
   await loadMovimientos();
   await loadProductos();
 });
@@ -534,36 +560,7 @@ document.getElementById("createAjusteForm")?.addEventListener("submit", async (e
 });
 
 // ============ AUDITORÍA ============
-async function loadAuditoria() {
-  if (!hasPermission("auditoria.view")) return;
-  
-  const res = await fetch("/api/auditoria", { headers: authHeaders() });
-  if (!res.ok) return;
-  
-  const data = await res.json();
-  state.auditoria = data.registros || [];
-  renderAuditoria();
-}
 
-function renderAuditoria() {
-  const tbody = document.getElementById("auditoriaTbody");
-  tbody.innerHTML = "";
-  
-  state.auditoria.forEach(a => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${a.id}</td>
-      <td>${a.usuario_nombre}</td>
-      <td>${a.entidad}</td>
-      <td><span class="badge badge-${a.accion}">${a.accion}</span></td>
-      <td>${a.id_registro || "-"}</td>
-      <td><small>${a.cambios ? a.cambios.substring(0, 50) + "..." : "-"}</small></td>
-      <td>${new Date(a.created_at).toLocaleDateString()}</td>
-    `;
-    tbody.appendChild(tr);
-  });
-}
 
-document.getElementById("auditoriaRefreshBtn")?.addEventListener("click", loadAuditoria);
 
 render();

@@ -93,7 +93,7 @@ router.post("/", authorizePermissions(PERMISSIONS.AJUSTES_CREATE), async (req, r
     // Registrar ajuste
     const result = await run(
       "INSERT INTO ajustes (producto_id, cantidad_anterior, cantidad_nueva, motivo, usuario_id) VALUES (?, ?, ?, ?, ?)",
-      [producto_id, cantidad_anterior, cantidad_nueva, motivo, req.user.id]
+      [producto_id, cantidad_anterior, cantidad_nueva, motivo, req.user.sub]
     );
 
     // Actualizar stock del producto
@@ -104,7 +104,7 @@ router.post("/", authorizePermissions(PERMISSIONS.AJUSTES_CREATE), async (req, r
     await run(
       "INSERT INTO auditoria (usuario_id, entidad, accion, id_registro, cambios) VALUES (?, ?, ?, ?, ?)",
       [
-        req.user.id,
+        req.user.sub,
         "ajustes",
         "CREATE",
         result.lastID,

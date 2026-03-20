@@ -9,7 +9,8 @@
   <body>
     <main class="container">
       <section class="card" id="loginCard">
-        <h1>Depósito - Control de Stock</h1>
+        <img src="http://prod.eduge.com.ar/assets/logoGobierno-D5M0tUR9.png" alt="Logo Gobierno" style="width: 400px; height: auto; display: block; margin: 0 auto 20px;">
+        <h1 style="text-align: center;">Depósito - Control de Stock</h1>
         <p class="subtitle">Ingreso al sistema</p>
 
         <form id="loginForm">
@@ -27,11 +28,13 @@
 
       <section class="card hidden" id="appCard">
         <div class="topbar">
-          <div>
-            <h2>Panel - Depósito Stock</h2>
-            <p id="currentUser"></p>
+          <div class="logo-container">
+            <img src="http://prod.eduge.com.ar/assets/logoGobierno-D5M0tUR9.png" alt="Logo Gobierno" style="width: 400px; height: auto; display: block; margin: 0 auto;">
           </div>
-          <button id="logoutBtn" class="secondary">Cerrar sesión</button>
+          <div class="user-info">
+            <span id="currentUser"></span>
+            <button id="logoutBtn" class="secondary">Cerrar sesión</button>
+          </div>
         </div>
 
         <div class="tabs">
@@ -39,7 +42,6 @@
           <button class="tab-btn" data-tab="productos">Productos</button>
           <button class="tab-btn" data-tab="movimientos">Movimientos</button>
           <button class="tab-btn" data-tab="ajustes">Ajustes</button>
-          <button class="tab-btn" data-tab="auditoria">Auditoría</button>
           <button class="tab-btn" data-tab="usuarios">Usuarios</button>
         </div>
 
@@ -55,7 +57,13 @@
         <div class="tab-content hidden" id="productosTab">
           <h3>Gestión de Productos</h3>
           <form id="createProductForm" class="grid">
-            <input type="text" id="productoCodigo" placeholder="Código" required />
+            <select id="productoCodigo" required>
+              <option value="">Seleccionar código</option>
+              <option value="1">1: Insumos</option>
+              <option value="2">2: Inmuebles</option>
+              <option value="3">3: Bazar</option>
+              <option value="4">4: Limpieza</option>
+            </select>
             <input type="text" id="productoNombre" placeholder="Nombre" required />
             <input type="number" id="productoPrecio" placeholder="Precio" step="0.01" />
             <input type="text" id="productoDescripcion" placeholder="Descripción" />
@@ -91,6 +99,14 @@
             </select>
             <input type="number" id="movCantidad" placeholder="Cantidad" min="1" required />
             <input type="text" id="movMotivo" placeholder="Motivo (opcional)" />
+            <div id="proveedorField" style="display: none;">
+              <label>Proveedor</label>
+              <input type="text" id="movProveedor" placeholder="Nombre del proveedor" />
+            </div>
+            <div id="cueField" style="display: none;">
+              <label>CUE/CUI</label>
+              <input type="text" id="movCue" placeholder="CUE/CUI" />
+            </div>
             <button type="submit">Registrar movimiento</button>
           </form>
           <p id="movimientosMsg" class="msg"></p>
@@ -102,6 +118,8 @@
                 <th>Tipo</th>
                 <th>Cantidad</th>
                 <th>Motivo</th>
+                <th>Proveedor</th>
+                <th>CUE/CUI</th>
                 <th>Registrado por</th>
                 <th>Fecha</th>
               </tr>
@@ -138,41 +156,7 @@
           </table>
         </div>
 
-        <!-- AUDITORÍA -->
-        <div class="tab-content hidden" id="auditoriaTab">
-          <h3>Registro de Auditoría</h3>
-          <div class="filter-box">
-            <select id="auditoriaEntidad">
-              <option value="">Filtrar por entidad...</option>
-              <option value="productos">Productos</option>
-              <option value="movimientos">Movimientos</option>
-              <option value="ajustes">Ajustes</option>
-              <option value="usuarios">Usuarios</option>
-            </select>
-            <select id="auditoriaAccion">
-              <option value="">Filtrar por acción...</option>
-              <option value="CREATE">CREATE</option>
-              <option value="UPDATE">UPDATE</option>
-              <option value="DELETE">DELETE</option>
-            </select>
-            <button id="auditoriaRefreshBtn">Actualizar</button>
-          </div>
-          <p id="auditoriaMsg" class="msg"></p>
-          <table>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Usuario</th>
-                <th>Entidad</th>
-                <th>Acción</th>
-                <th>Registro ID</th>
-                <th>Cambios</th>
-                <th>Fecha</th>
-              </tr>
-            </thead>
-            <tbody id="auditoriaTbody"></tbody>
-          </table>
-        </div>
+
 
         <!-- USUARIOS -->
         <div class="tab-content hidden" id="usuariosTab">

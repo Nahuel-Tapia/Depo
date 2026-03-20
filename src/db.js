@@ -72,6 +72,10 @@ async function initDb() {
     )
   `);
 
+  // Add new columns if not exist
+  await run("ALTER TABLE movimientos ADD COLUMN proveedor TEXT;").catch(() => {});
+  await run("ALTER TABLE movimientos ADD COLUMN cue TEXT;").catch(() => {});
+
   await run(`
     CREATE TABLE IF NOT EXISTS ajustes (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
