@@ -65,8 +65,8 @@
               <option value="4">4: Limpieza</option>
             </select>
             <input type="text" id="productoNombre" placeholder="Nombre" required />
-            <input type="number" id="productoPrecio" placeholder="Precio" step="0.01" />
             <input type="text" id="productoDescripcion" placeholder="Descripción" />
+            <input type="text" id="productoProveedor" placeholder="Proveedor" />
             <button type="submit">Crear producto</button>
           </form>
           <p id="productosMsg" class="msg"></p>
@@ -76,8 +76,9 @@
                 <th>ID</th>
                 <th>Código</th>
                 <th>Nombre</th>
-                <th>Precio</th>
                 <th>Stock</th>
+                <th>Estado Stock</th>
+                <th>Proveedor</th>
                 <th>Acciones</th>
               </tr>
             </thead>

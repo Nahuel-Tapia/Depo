@@ -299,13 +299,30 @@ function renderProductos() {
   tbody.innerHTML = "";
   
   state.productos.forEach(p => {
+    let stockStatus = "";
+    let color = "";
+    if (p.stock_actual === 0) {
+      stockStatus = "Sin stock";
+      color = "red";
+    } else if (p.stock_actual < 10) {
+      stockStatus = "Bajo stock";
+      color = "red";
+    } else if (p.stock_actual <= 20) {
+      stockStatus = "Medio stock";
+      color = "#ff9900";
+    } else {
+      stockStatus = "Buen stock";
+      color = "green";
+    }
+    
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${p.id}</td>
       <td>${p.codigo}</td>
       <td>${p.nombre}</td>
-      <td>$${p.precio.toFixed(2)}</td>
       <td>${p.stock_actual}</td>
+      <td style="color: ${color};">${stockStatus}</td>
+      <td>${p.proveedor || "-"}</td>
       <td>
         <div class="inline-actions">
           ${hasPermission("productos.edit") ? `<button class="edit-producto" data-id="${p.id}">Editar</button>` : ""}
@@ -354,8 +371,8 @@ document.getElementById("createProductForm")?.addEventListener("submit", async (
   const payload = {
     codigo: document.getElementById("productoCodigo").value.trim(),
     nombre: document.getElementById("productoNombre").value.trim(),
-    precio: parseFloat(document.getElementById("productoPrecio").value) || 0,
-    descripcion: document.getElementById("productoDescripcion").value.trim() || ""
+    descripcion: document.getElementById("productoDescripcion").value.trim() || "",
+    proveedor: document.getElementById("productoProveedor").value.trim() || null
   };
   
   const res = await fetch("/api/productos", {
@@ -404,7 +421,8 @@ async function deleteProducto(id) {
   });
   
   if (!res.ok) {
-    alert("No se pudo eliminar el producto");
+    const data = await res.json();
+    alert(data.error || "No se pudo eliminar el producto");
     return;
   }
   

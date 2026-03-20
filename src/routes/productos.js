@@ -11,7 +11,7 @@ router.use(authenticate);
 router.get("/", authorizePermissions(PERMISSIONS.PRODUCTOS_VIEW), async (req, res) => {
   try {
     const productos = await all(
-      "SELECT id, codigo, nombre, descripcion, precio, stock_actual, created_at, updated_at FROM productos ORDER BY id DESC"
+      "SELECT id, codigo, nombre, descripcion, proveedor, stock_actual, created_at, updated_at FROM productos ORDER BY id DESC"
     );
     return res.json({ productos });
   } catch (err) {
@@ -25,7 +25,7 @@ router.get("/:id", authorizePermissions(PERMISSIONS.PRODUCTOS_VIEW), async (req,
   try {
     const { id } = req.params;
     const producto = await get(
-      "SELECT id, codigo, nombre, descripcion, precio, stock_actual, created_at, updated_at FROM productos WHERE id = ?",
+      "SELECT id, codigo, nombre, descripcion, proveedor, stock_actual, created_at, updated_at FROM productos WHERE id = ?",
       [id]
     );
     if (!producto) {
@@ -41,7 +41,7 @@ router.get("/:id", authorizePermissions(PERMISSIONS.PRODUCTOS_VIEW), async (req,
 // Crear producto
 router.post("/", authorizePermissions(PERMISSIONS.PRODUCTOS_CREATE), async (req, res) => {
   try {
-    const { codigo, nombre, descripcion, precio } = req.body;
+    const { codigo, nombre, descripcion, proveedor } = req.body;
     if (!codigo || !nombre) {
       return res.status(400).json({ error: "Faltan campos obligatorios" });
     }
@@ -52,14 +52,14 @@ router.post("/", authorizePermissions(PERMISSIONS.PRODUCTOS_CREATE), async (req,
     }
 
     const result = await run(
-      "INSERT INTO productos (codigo, nombre, descripcion, precio, stock_actual) VALUES (?, ?, ?, ?, 0)",
-      [codigo, nombre, descripcion || null, precio || 0]
+      "INSERT INTO productos (codigo, nombre, descripcion, proveedor, stock_actual) VALUES (?, ?, ?, ?, 0)",
+      [codigo, nombre, descripcion || null, proveedor || null]
     );
 
     // Auditoría
     await run(
       "INSERT INTO auditoria (usuario_id, entidad, accion, id_registro, cambios) VALUES (?, ?, ?, ?, ?)",
-      [req.user.sub, "productos", "CREATE", result.lastID, JSON.stringify({ codigo, nombre, descripcion, precio })]
+      [req.user.sub, "productos", "CREATE", result.lastID, JSON.stringify({ codigo, nombre, descripcion, proveedor })]
     );
 
     return res.status(201).json({ id: result.lastID });
@@ -73,7 +73,7 @@ router.post("/", authorizePermissions(PERMISSIONS.PRODUCTOS_CREATE), async (req,
 router.patch("/:id", authorizePermissions(PERMISSIONS.PRODUCTOS_EDIT), async (req, res) => {
   try {
     const { id } = req.params;
-    const { nombre, descripcion, precio } = req.body;
+    const { nombre, descripcion, proveedor } = req.body;
 
     const producto = await get("SELECT * FROM productos WHERE id = ?", [id]);
     if (!producto) {
@@ -91,9 +91,9 @@ router.patch("/:id", authorizePermissions(PERMISSIONS.PRODUCTOS_EDIT), async (re
       updates.push("descripcion = ?");
       params.push(descripcion);
     }
-    if (precio !== undefined) {
-      updates.push("precio = ?");
-      params.push(precio);
+    if (proveedor !== undefined) {
+      updates.push("proveedor = ?");
+      params.push(proveedor);
     }
 
     if (updates.length === 0) {
@@ -112,7 +112,7 @@ router.patch("/:id", authorizePermissions(PERMISSIONS.PRODUCTOS_EDIT), async (re
     const cambios = {};
     if (nombre !== undefined) cambios.nombre = { antes: producto.nombre, despues: nombre };
     if (descripcion !== undefined) cambios.descripcion = { antes: producto.descripcion, despues: descripcion };
-    if (precio !== undefined) cambios.precio = { antes: producto.precio, despues: precio };
+    if (proveedor !== undefined) cambios.proveedor = { antes: producto.proveedor, despues: proveedor };
 
     await run(
       "INSERT INTO auditoria (usuario_id, entidad, accion, id_registro, cambios) VALUES (?, ?, ?, ?, ?)",
@@ -141,7 +141,9 @@ router.delete("/:id", authorizePermissions(PERMISSIONS.PRODUCTOS_DELETE), async 
     const ajustes = await get("SELECT COUNT(*) as count FROM ajustes WHERE producto_id = ?", [id]);
 
     if (movimientos.count > 0 || ajustes.count > 0) {
-      return res.status(409).json({ error: "No se puede eliminar un producto con movimientos o ajustes registrados" });
+      // Delete related records first
+      await run("DELETE FROM movimientos WHERE producto_id = ?", [id]);
+      await run("DELETE FROM ajustes WHERE producto_id = ?", [id]);
     }
 
     await run("DELETE FROM productos WHERE id = ?", [id]);
@@ -149,7 +151,7 @@ router.delete("/:id", authorizePermissions(PERMISSIONS.PRODUCTOS_DELETE), async 
     // Auditoría
     await run(
       "INSERT INTO auditoria (usuario_id, entidad, accion, id_registro, cambios) VALUES (?, ?, ?, ?, ?)",
-      [req.user.sub, "productos", "DELETE", id, JSON.stringify(producto)]
+      [req.user.sub, "productos", "DELETE", id, JSON.stringify({ producto, movimientos_eliminados: movimientos.count, ajustes_eliminados: ajustes.count })]
     );
 
     return res.json({ ok: true });
