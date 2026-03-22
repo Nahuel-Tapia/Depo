@@ -49,12 +49,36 @@ function hasPermission(permission) {
   return state.permissions.includes(permission);
 }
 
+function handleUnauthorized() {
+  clearSession();
+  loginMsg.textContent = "Sesión expirada. Por favor, ingresa de nuevo.";
+  render();
+}
+
+async function processApiResponse(res) {
+  if (res.status === 401) {
+    handleUnauthorized();
+    return { ok: false, error: "Unauthorized" };
+  }
+
+  if (res.status === 403) {
+    return { ok: false, error: "Forbidden" };
+  }
+
+  if (!res.ok) {
+    return { ok: false, error: `HTTP ${res.status}` };
+  }
+
+  return { ok: true };
+}
+
 async function loadMyPermissions() {
   const res = await fetch("/api/permissions/me", {
     headers: authHeaders()
   });
 
-  if (!res.ok) {
+  const result = await processApiResponse(res);
+  if (!result.ok) {
     state.permissions = [];
     return;
   }
@@ -136,9 +160,10 @@ async function loadUsers() {
     headers: authHeaders()
   });
 
-  if (!res.ok) {
+  const result = await processApiResponse(res);
+  if (!result.ok) {
     usersTbody.innerHTML = "";
-    adminMsg.textContent = "No se pudo cargar usuarios";
+    adminMsg.textContent = result.error === "Forbidden" ? "No tiene permiso para ver usuarios" : "No se pudo cargar usuarios";
     return;
   }
 
@@ -286,7 +311,13 @@ async function loadProductos() {
   if (!hasPermission("productos.view")) return;
   
   const res = await fetch("/api/productos", { headers: authHeaders() });
-  if (!res.ok) return;
+  const result = await processApiResponse(res);
+  if (!result.ok) {
+    if (result.error === "Forbidden") {
+      adminMsg.textContent = "No tiene permiso para ver productos";
+    }
+    return;
+  }
   
   const data = await res.json();
   state.productos = data.productos || [];
@@ -434,7 +465,13 @@ async function loadMovimientos() {
   if (!hasPermission("movimientos.view")) return;
   
   const res = await fetch("/api/movimientos", { headers: authHeaders() });
-  if (!res.ok) return;
+  const result = await processApiResponse(res);
+  if (!result.ok) {
+    if (result.error === "Forbidden") {
+      adminMsg.textContent = "No tiene permiso para ver movimientos";
+    }
+    return;
+  }
   
   const data = await res.json();
   state.movimientos = data.movimientos || [];
@@ -522,7 +559,13 @@ async function loadAjustes() {
   if (!hasPermission("ajustes.view")) return;
   
   const res = await fetch("/api/ajustes", { headers: authHeaders() });
-  if (!res.ok) return;
+  const result = await processApiResponse(res);
+  if (!result.ok) {
+    if (result.error === "Forbidden") {
+      adminMsg.textContent = "No tiene permiso para ver ajustes";
+    }
+    return;
+  }
   
   const data = await res.json();
   state.ajustes = data.ajustes || [];
