@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Depósito - Login</title>
+    <title>Depósito - Ministerio</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <link rel="icon" href="faviconmin.png" type="image/x-icon" />
@@ -42,7 +42,6 @@
           <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
           <button class="tab-btn" data-tab="productos">Productos</button>
           <button class="tab-btn" data-tab="movimientos">Movimientos</button>
-          <button class="tab-btn" data-tab="ajustes">Ajustes</button>
           <button class="tab-btn" data-tab="usuarios">Usuarios</button>
         </div>
 
@@ -74,7 +73,6 @@
           <table>
             <thead>
               <tr>
-                <th>ID</th>
                 <th>Código</th>
                 <th>Nombre</th>
                 <th>Stock</th>
@@ -115,7 +113,6 @@
           <table>
             <thead>
               <tr>
-                <th>ID</th>
                 <th>Producto</th>
                 <th>Tipo</th>
                 <th>Cantidad</th>
@@ -129,36 +126,6 @@
             <tbody id="movimientosTbody"></tbody>
           </table>
         </div>
-
-        <!-- AJUSTES -->
-        <div class="tab-content hidden" id="ajustesTab">
-          <h3>Ajustes de Inventario</h3>
-          <form id="createAjusteForm" class="grid">
-            <select id="ajuProductoId" required>
-              <option value="">Seleccionar producto...</option>
-            </select>
-            <input type="number" id="ajuCantidad" placeholder="Nueva cantidad" min="0" required />
-            <input type="text" id="ajuMotivo" placeholder="Motivo del ajuste" required />
-            <button type="submit">Crear ajuste</button>
-          </form>
-          <p id="ajustesMsg" class="msg"></p>
-          <table>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Producto</th>
-                <th>Stock Anterior</th>
-                <th>Stock Nuevo</th>
-                <th>Motivo</th>
-                <th>Por</th>
-                <th>Fecha</th>
-              </tr>
-            </thead>
-            <tbody id="ajustesTbody"></tbody>
-          </table>
-        </div>
-
-
 
         <!-- USUARIOS -->
         <div class="tab-content hidden" id="usuariosTab">
@@ -178,7 +145,6 @@
           <table>
             <thead>
               <tr>
-                <th>ID</th>
                 <th>Nombre</th>
                 <th>Email</th>
                 <th>Rol</th>

@@ -4,7 +4,6 @@ const state = {
   permissions: [],
   productos: [],
   movimientos: [],
-  ajustes: [],
   users: []
 };
 
@@ -130,7 +129,6 @@ async function render() {
   // Cargar datos iniciales
   await loadProductos();
   await loadMovimientos();
-  await loadAjustes();
   await loadUsers();
 }
 
@@ -138,7 +136,6 @@ function updateTabsVisibility() {
   const tabs = {
     productos: ["productos.view"],
     movimientos: ["movimientos.view"],
-    ajustes: ["ajustes.view"],
     usuarios: ["users.read"]
   };
 
@@ -174,7 +171,6 @@ async function loadUsers() {
   data.users.forEach((u) => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${u.id}</td>
       <td>${u.nombre}</td>
       <td>${u.email}</td>
       <td><span class="badge">${u.role}</span></td>
@@ -348,7 +344,6 @@ function renderProductos() {
     
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${p.id}</td>
       <td>${p.codigo}</td>
       <td>${p.nombre}</td>
       <td>${p.stock_actual}</td>
@@ -485,7 +480,6 @@ function renderMovimientos() {
   state.movimientos.forEach(m => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${m.id}</td>
       <td>${m.codigo} - ${m.nombre}</td>
       <td><span class="badge badge-${m.tipo}">${m.tipo}</span></td>
       <td>${m.cantidad}</td>
@@ -551,72 +545,6 @@ document.getElementById("createMovimientoForm")?.addEventListener("submit", asyn
   document.getElementById("proveedorField").style.display = "none";
   document.getElementById("cueField").style.display = "none";
   await loadMovimientos();
-  await loadProductos();
-});
-
-// ============ AJUSTES ============
-async function loadAjustes() {
-  if (!hasPermission("ajustes.view")) return;
-  
-  const res = await fetch("/api/ajustes", { headers: authHeaders() });
-  const result = await processApiResponse(res);
-  if (!result.ok) {
-    if (result.error === "Forbidden") {
-      adminMsg.textContent = "No tiene permiso para ver ajustes";
-    }
-    return;
-  }
-  
-  const data = await res.json();
-  state.ajustes = data.ajustes || [];
-  renderAjustes();
-}
-
-function renderAjustes() {
-  const tbody = document.getElementById("ajustesTbody");
-  tbody.innerHTML = "";
-  
-  state.ajustes.forEach(a => {
-    const tr = document.createElement("tr");
-    const diff = a.cantidad_nueva - a.cantidad_anterior;
-    tr.innerHTML = `
-      <td>${a.id}</td>
-      <td>${a.codigo} - ${a.nombre}</td>
-      <td>${a.cantidad_anterior}</td>
-      <td>${a.cantidad_nueva}</td>
-      <td>${a.motivo}</td>
-      <td>${a.usuario_nombre}</td>
-      <td>${new Date(a.created_at).toLocaleDateString()}</td>
-    `;
-    tbody.appendChild(tr);
-  });
-}
-
-document.getElementById("createAjusteForm")?.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const msg = document.getElementById("ajustesMsg");
-  msg.textContent = "";
-  
-  const payload = {
-    producto_id: parseInt(document.getElementById("ajuProductoId").value),
-    cantidad_nueva: parseInt(document.getElementById("ajuCantidad").value),
-    motivo: document.getElementById("ajuMotivo").value.trim()
-  };
-  
-  const res = await fetch("/api/ajustes", {
-    method: "POST",
-    headers: authHeaders(),
-    body: JSON.stringify(payload)
-  });
-  
-  if (!res.ok) {
-    const data = await res.json();
-    msg.textContent = data.error || "Error al crear ajuste";
-    return;
-  }
-  
-  document.getElementById("createAjusteForm").reset();
-  await loadAjustes();
   await loadProductos();
 });
 
