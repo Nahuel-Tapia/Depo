@@ -10,30 +10,38 @@
   <body>
     <main class="container">
       <section class="card" id="loginCard">
-        <img src="http://prod.eduge.com.ar/assets/logoGobierno-D5M0tUR9.png" alt="Logo Gobierno" style="width: 400px; height: auto; display: block; margin: 0 auto 20px;">
-        <h1 style="text-align: center;">Depósito - Ministerio</h1>
-        <p class="subtitle">Ingreso al sistema</p>
+        <div style="max-width: 500px; margin: 0 auto;">
+          <img src="http://prod.eduge.com.ar/assets/logoGobierno-D5M0tUR9.png" alt="Logo Gobierno" style="width: 300px; height: auto; display: block; margin: 0 auto 32px;">
+          <h1 style="text-align: center; margin-bottom: 8px;">Depósito</h1>
+          <p class="subtitle" style="text-align: center; margin-bottom: 32px;">Sistema de Control de Stock</p>
 
-        <form id="loginForm">
-          <label>Email</label>
-          <input type="email" id="email" required placeholder="admin@depo.local" />
+          <form id="loginForm">
+            <div>
+              <label>Correo Electrónico</label>
+              <input type="email" id="email" required placeholder="admin@depo.local" />
+            </div>
 
-          <label>Contraseña</label>
-          <input type="password" id="password" required placeholder="********" />
+            <div>
+              <label>Contraseña</label>
+              <input type="password" id="password" required placeholder="●●●●●●●●" />
+            </div>
 
-          <button type="submit">Iniciar sesión</button>
-        </form>
+            <button type="submit">Iniciar sesión</button>
+          </form>
 
-        <p id="loginMsg" class="msg"></p>
+          <div id="loginMsg" class="msg"></div>
+        </div>
       </section>
 
       <section class="card hidden" id="appCard">
         <div class="topbar">
           <div class="logo-container">
-            <img src="http://prod.eduge.com.ar/assets/logoGobierno-D5M0tUR9.png" alt="Logo Gobierno" style="width: 400px; height: auto; display: block; margin: 0 auto;">
+            <img src="http://prod.eduge.com.ar/assets/logoGobierno-D5M0tUR9.png" alt="Logo Gobierno" style="max-width: 180px; height: auto;">
           </div>
           <div class="user-info">
-            <span id="currentUser"></span>
+            <div>
+              <span id="currentUser"></span>
+            </div>
             <button id="logoutBtn" class="secondary">Cerrar sesión</button>
           </div>
         </div>
@@ -55,21 +63,41 @@
 
         <!-- PRODUCTOS -->
         <div class="tab-content hidden" id="productosTab">
-          <h3>Gestión de Productos</h3>
-          <form id="createProductForm" class="grid">
-            <select id="productoCodigo" required>
-              <option value="">Seleccionar código</option>
-              <option value="1">1: Insumos</option>
-              <option value="2">2: Inmuebles</option>
-              <option value="3">3: Bazar</option>
-              <option value="4">4: Limpieza</option>
-            </select>
-            <input type="text" id="productoNombre" placeholder="Nombre" required />
-            <input type="text" id="productoDescripcion" placeholder="Descripción" />
-            <input type="text" id="productoProveedor" placeholder="Proveedor" />
-            <button type="submit">Crear producto</button>
-          </form>
-          <p id="productosMsg" class="msg"></p>
+          <h2>Gestión de Productos</h2>
+          
+          <div style="background: #f9fafb; padding: 24px; border-radius: 8px; margin-bottom: 32px;">
+            <form id="createProductForm" class="grid">
+              <div>
+                <label>Categoría</label>
+                <select id="productoCodigo" required>
+                  <option value="">Seleccionar código</option>
+                  <option value="1">1: Insumos</option>
+                  <option value="2">2: Inmuebles</option>
+                  <option value="3">3: Bazar</option>
+                  <option value="4">4: Limpieza</option>
+                </select>
+              </div>
+              <div>
+                <label>Nombre</label>
+                <input type="text" id="productoNombre" placeholder="Nombre del producto" required />
+              </div>
+              <div>
+                <label>Descripción</label>
+                <input type="text" id="productoDescripcion" placeholder="Detalles adicionales" />
+              </div>
+              <div>
+                <label>Proveedor</label>
+                <input type="text" id="productoProveedor" placeholder="Nombre del proveedor" />
+              </div>
+              <div style="grid-column: 1 / -1;">
+                <button type="submit">Crear producto</button>
+              </div>
+            </form>
+          </div>
+          
+          <div id="productosMsg" class="msg"></div>
+          
+          <h3>Inventario de Productos</h3>
           <table>
             <thead>
               <tr>
@@ -87,29 +115,47 @@
 
         <!-- MOVIMIENTOS -->
         <div class="tab-content hidden" id="movimientosTab">
-          <h3>Movimientos de Stock</h3>
-          <form id="createMovimientoForm" class="grid">
-            <select id="movProductoId" required>
-              <option value="">Seleccionar producto...</option>
-            </select>
-            <select id="movTipo" required>
-              <option value="">Tipo de movimiento</option>
-              <option value="entrada">Entrada</option>
-              <option value="salida">Salida</option>
-            </select>
-            <input type="number" id="movCantidad" placeholder="Cantidad" min="1" required />
-            <input type="text" id="movMotivo" placeholder="Motivo (opcional)" />
-            <div id="proveedorField" style="display: none;">
-              <label>Proveedor</label>
-              <input type="text" id="movProveedor" placeholder="Nombre del proveedor" />
-            </div>
-            <div id="cueField" style="display: none;">
-              <label>CUE/CUI</label>
-              <input type="text" id="movCue" placeholder="CUE/CUI" />
-            </div>
-            <button type="submit">Registrar movimiento</button>
-          </form>
-          <p id="movimientosMsg" class="msg"></p>
+          <h2>Registro de Movimientos</h2>
+          
+          <div style="background: #f9fafb; padding: 24px; border-radius: 8px; margin-bottom: 32px;">
+            <form id="createMovimientoForm" class="grid">
+              <div>
+                <label>Producto</label>
+                <select id="movProductoId" required>
+                  <option value="">Seleccionar producto...</option>
+                </select>
+              </div>
+              <div>
+                <label>Tipo de Movimiento</label>
+                <select id="movTipo" required>
+                  <option value="">Seleccionar tipo...</option>
+                  <option value="entrada">Entrada</option>
+                  <option value="salida">Salida</option>
+                </select>
+              </div>
+              <div>
+                <label>Cantidad</label>
+                <input type="number" id="movCantidad" placeholder="0" min="1" required />
+              </div>
+              <div>
+                <label>Motivo</label>
+                <input type="text" id="movMotivo" placeholder="Ej: Compra, Devolución" />
+              </div>
+              <div id="proveedorField" class="hidden">
+                <label>Proveedor</label>
+                <input type="text" id="movProveedor" placeholder="Nombre del proveedor" />
+              </div>
+              <div id="cueField" class="hidden">
+                <label>CUE/CUI</label>
+                <input type="text" id="movCue" placeholder="Código identificador" />
+              </div>
+              <div style="grid-column: 1 / -1;">
+                <button type="submit">Registrar movimiento</button>
+              </div>
+            </form>
+          </div>
+          
+          <div id="movimientosMsg" class="msg"></div>
           <table>
             <thead>
               <tr>
@@ -129,19 +175,39 @@
 
         <!-- USUARIOS -->
         <div class="tab-content hidden" id="usuariosTab">
-          <h3>Gestión de usuarios y roles</h3>
-          <form id="createUserForm" class="grid">
-            <input type="text" id="newNombre" placeholder="Nombre completo" required />
-            <input type="email" id="newEmail" placeholder="Email" required />
-            <input type="password" id="newPassword" placeholder="Contraseña" required />
-            <select id="newRole" required>
-              <option value="operador">operador</option>
-              <option value="consulta">consulta</option>
-              <option value="admin">admin</option>
-            </select>
-            <button type="submit">Crear usuario</button>
-          </form>
-          <p id="adminMsg" class="msg"></p>
+          <h2>Gestión de Usuarios</h2>
+          
+          <div style="background: #f9fafb; padding: 24px; border-radius: 8px; margin-bottom: 32px;">
+            <form id="createUserForm" class="grid">
+              <div>
+                <label>Nombre Completo</label>
+                <input type="text" id="newNombre" placeholder="Ej: Juan García" required />
+              </div>
+              <div>
+                <label>Correo Electrónico</label>
+                <input type="email" id="newEmail" placeholder="usuario@depo.local" required />
+              </div>
+              <div>
+                <label>Contraseña</label>
+                <input type="password" id="newPassword" placeholder="●●●●●●●●" required />
+              </div>
+              <div>
+                <label>Rol</label>
+                <select id="newRole" required>
+                  <option value="consulta">Consulta (Solo lectura)</option>
+                  <option value="operador">Operador</option>
+                  <option value="admin">Administrador</option>
+                </select>
+              </div>
+              <div style="grid-column: 1 / -1;">
+                <button type="submit">Crear usuario</button>
+              </div>
+            </form>
+          </div>
+          
+          <div id="adminMsg" class="msg"></div>
+          
+          <h3>Usuarios Registrados</h3>
           <table>
             <thead>
               <tr>
