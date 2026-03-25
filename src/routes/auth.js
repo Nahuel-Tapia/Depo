@@ -92,12 +92,18 @@ router.post("/login", async (req, res) => {
       ? await get("SELECT * FROM users WHERE cue = ?", [cueNormalized])
       : await get("SELECT * FROM users WHERE email = ?", [email]);
     if (!user || !user.activo) {
-      return res.status(401).json({ error: "Credenciales inválidas" });
+      return res.status(401).json({
+        code: "INVALID_CREDENTIALS",
+        error: "No pudimos iniciar sesion con los datos ingresados. Verifique e intente nuevamente."
+      });
     }
 
     const ok = await bcrypt.compare(password, user.password_hash);
     if (!ok) {
-      return res.status(401).json({ error: "Credenciales inválidas" });
+      return res.status(401).json({
+        code: "INVALID_PASSWORD",
+        error: "La contrasena ingresada es incorrecta. Revise la contrasena e intente nuevamente."
+      });
     }
 
     const token = jwt.sign(

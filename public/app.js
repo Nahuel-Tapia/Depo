@@ -323,9 +323,18 @@ loginForm?.addEventListener("submit", async (e) => {
     body: JSON.stringify({ email, cue, password })
   });
 
-  const data = await res.json();
+  const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    showMessage(loginMsg, data.error || "Error de autenticación", "error");
+    const invalidCredentialsCodes = ["INVALID_PASSWORD", "INVALID_CREDENTIALS"];
+    const errorText = String(data.error || "").toLowerCase();
+    const isInvalidCredentialsText = errorText.includes("credenciales") && errorText.includes("invalid");
+    const shouldUseUnifiedMessage = invalidCredentialsCodes.includes(data.code) || res.status === 401 || isInvalidCredentialsText;
+
+    const message = shouldUseUnifiedMessage
+      ? "contraseña o usuario incorrectos"
+      : (data.error || "No se pudo iniciar sesion. Intente nuevamente en unos minutos.");
+
+    showMessage(loginMsg, message, "error");
     return;
   }
 
