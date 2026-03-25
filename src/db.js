@@ -40,11 +40,48 @@ async function initDb() {
       email TEXT NOT NULL UNIQUE,
       cue TEXT UNIQUE,
       password_hash TEXT NOT NULL,
-      role TEXT NOT NULL CHECK(role IN ('admin', 'operador', 'consulta')),
+      role TEXT NOT NULL CHECK(role IN ('admin', 'operador', 'consulta', 'directivo')),
       activo INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
   `);
+
+  const usersSchema = await get(
+    "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'users'"
+  );
+  const usersSql = (usersSchema && usersSchema.sql) || "";
+
+  if (usersSql && !usersSql.includes("'directivo'")) {
+    await run("PRAGMA foreign_keys = OFF");
+    await run("BEGIN TRANSACTION");
+    try {
+      await run(`
+        CREATE TABLE users_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          nombre TEXT NOT NULL,
+          email TEXT NOT NULL UNIQUE,
+          password_hash TEXT NOT NULL,
+          role TEXT NOT NULL CHECK(role IN ('admin', 'operador', 'consulta', 'directivo')),
+          activo INTEGER NOT NULL DEFAULT 1,
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      await run(`
+        INSERT INTO users_new (id, nombre, email, password_hash, role, activo, created_at)
+        SELECT id, nombre, email, password_hash, role, activo, created_at FROM users
+      `);
+
+      await run("DROP TABLE users");
+      await run("ALTER TABLE users_new RENAME TO users");
+      await run("COMMIT");
+    } catch (err) {
+      await run("ROLLBACK").catch(() => {});
+      await run("PRAGMA foreign_keys = ON");
+      throw err;
+    }
+    await run("PRAGMA foreign_keys = ON");
+  }
 
   await run("ALTER TABLE users ADD COLUMN cue TEXT;").catch(() => {});
   await run("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_cue_unique ON users(cue) WHERE cue IS NOT NULL;").catch(() => {});

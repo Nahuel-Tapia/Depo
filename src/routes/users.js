@@ -5,7 +5,7 @@ const { authenticate, authorizePermissions } = require("../middleware/auth");
 const { PERMISSIONS } = require("../permissions");
 
 const router = express.Router();
-const VALID_ROLES = ["admin", "operador", "consulta"];
+const VALID_ROLES = ["admin", "directivo", "operador", "consulta"];
 
 function normalizeCue(cue) {
   if (!cue) return null;

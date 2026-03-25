@@ -15,7 +15,7 @@
 
 body {
   margin: 0;
-  background: #f8f9fa;
+  background: radial-gradient(circle at 20% 0%, #131313 0%, #131313 45%, #131313 100%);
   color: var(--text);
   font-size: 1rem;
 }
@@ -30,12 +30,13 @@ body {
 }
 
 .card {
-  width: min(1100px, 100%);
+  width: min(1240px, 100%);
   background: var(--card);
   border: 1px solid #e5e7eb;
   border-radius: 12px;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
-  padding: 48px;
+  padding: 56px;
+  min-height: 90vh;
 }
 
 .topbar {
@@ -44,7 +45,7 @@ body {
   align-items: center;
   margin: -48px -48px 40px -48px;
   padding: 20px 48px;
-  background: linear-gradient(135deg, var(--orange) 0%, #ff8c00 100%);
+  background: linear-gradient(135deg, #ffffff 0%, #feb600 100%);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   gap: 20px;
 }
@@ -146,6 +147,10 @@ button.secondary {
   width: auto;
   margin: 0;
   padding: 12px 24px;
+}
+
+#logoutBtn {
+  border: 2px solid var(--orange);
 }
 
 .msg {
