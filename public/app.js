@@ -528,10 +528,12 @@ document.getElementById("createMovimientoForm")?.addEventListener("submit", asyn
   msg.textContent = "";
   
   const tipo = document.getElementById("movTipo").value;
+  const productoId = parseInt(document.getElementById("movProductoId").value);
+  const cantidad = parseInt(document.getElementById("movCantidad").value);
   const payload = {
-    producto_id: parseInt(document.getElementById("movProductoId").value),
+    producto_id: productoId,
     tipo: tipo,
-    cantidad: parseInt(document.getElementById("movCantidad").value),
+    cantidad: cantidad,
     motivo: document.getElementById("movMotivo").value.trim() || null
   };
   
@@ -560,6 +562,15 @@ document.getElementById("createMovimientoForm")?.addEventListener("submit", asyn
   document.getElementById("cueField").classList.add("hidden");
   await loadMovimientos();
   await loadProductos();
+
+  if (tipo === "salida") {
+    const productoActualizado = state.productos.find((p) => p.id === productoId);
+    if (productoActualizado && productoActualizado.stock_actual < 10) {
+      alert(
+        `Alerta de bajo stock: ${productoActualizado.nombre} (${productoActualizado.codigo}) quedo con ${productoActualizado.stock_actual} unidades.`
+      );
+    }
+  }
 });
 
 // ============ AUDITORÍA ============
