@@ -4,6 +4,7 @@ const { authenticate, authorizePermissions } = require("../middleware/auth");
 const { PERMISSIONS } = require("../permissions");
 
 const router = express.Router();
+const TIPOS_PRODUCTO = ["Bazar", "Inmuebles", "Insumos", "Libreria"];
 
 router.use(authenticate);
 
@@ -11,7 +12,7 @@ router.use(authenticate);
 router.get("/", authorizePermissions(PERMISSIONS.PRODUCTOS_VIEW), async (req, res) => {
   try {
     const productos = await all(
-      "SELECT id, codigo, nombre, descripcion, proveedor, stock_actual, created_at, updated_at FROM productos ORDER BY id DESC"
+      "SELECT id, codigo, nombre, tipo, descripcion, proveedor, stock_actual, created_at, updated_at FROM productos ORDER BY id DESC"
     );
     return res.json({ productos });
   } catch (err) {
@@ -25,7 +26,7 @@ router.get("/:id", authorizePermissions(PERMISSIONS.PRODUCTOS_VIEW), async (req,
   try {
     const { id } = req.params;
     const producto = await get(
-      "SELECT id, codigo, nombre, descripcion, proveedor, stock_actual, created_at, updated_at FROM productos WHERE id = ?",
+      "SELECT id, codigo, nombre, tipo, descripcion, proveedor, stock_actual, created_at, updated_at FROM productos WHERE id = ?",
       [id]
     );
     if (!producto) {
@@ -41,9 +42,13 @@ router.get("/:id", authorizePermissions(PERMISSIONS.PRODUCTOS_VIEW), async (req,
 // Crear producto
 router.post("/", authorizePermissions(PERMISSIONS.PRODUCTOS_CREATE), async (req, res) => {
   try {
-    const { codigo, nombre, descripcion, proveedor } = req.body;
+    const { codigo, nombre, tipo, descripcion, proveedor } = req.body;
     if (!codigo || !nombre) {
       return res.status(400).json({ error: "Faltan campos obligatorios" });
+    }
+
+    if (!tipo || !TIPOS_PRODUCTO.includes(tipo)) {
+      return res.status(400).json({ error: "Tipo de producto invalido" });
     }
 
     const existing = await get("SELECT id FROM productos WHERE codigo = ?", [codigo]);
@@ -52,14 +57,14 @@ router.post("/", authorizePermissions(PERMISSIONS.PRODUCTOS_CREATE), async (req,
     }
 
     const result = await run(
-      "INSERT INTO productos (codigo, nombre, descripcion, proveedor, stock_actual) VALUES (?, ?, ?, ?, 0)",
-      [codigo, nombre, descripcion || null, proveedor || null]
+      "INSERT INTO productos (codigo, nombre, tipo, descripcion, proveedor, stock_actual) VALUES (?, ?, ?, ?, ?, 0)",
+      [codigo, nombre, tipo, descripcion || null, proveedor || null]
     );
 
     // Auditoría
     await run(
       "INSERT INTO auditoria (usuario_id, entidad, accion, id_registro, cambios) VALUES (?, ?, ?, ?, ?)",
-      [req.user.sub, "productos", "CREATE", result.lastID, JSON.stringify({ codigo, nombre, descripcion, proveedor })]
+      [req.user.sub, "productos", "CREATE", result.lastID, JSON.stringify({ codigo, nombre, tipo, descripcion, proveedor })]
     );
 
     return res.status(201).json({ id: result.lastID });
@@ -73,7 +78,7 @@ router.post("/", authorizePermissions(PERMISSIONS.PRODUCTOS_CREATE), async (req,
 router.patch("/:id", authorizePermissions(PERMISSIONS.PRODUCTOS_EDIT), async (req, res) => {
   try {
     const { id } = req.params;
-    const { nombre, descripcion, proveedor } = req.body;
+    const { nombre, tipo, descripcion, proveedor } = req.body;
 
     const producto = await get("SELECT * FROM productos WHERE id = ?", [id]);
     if (!producto) {
@@ -86,6 +91,13 @@ router.patch("/:id", authorizePermissions(PERMISSIONS.PRODUCTOS_EDIT), async (re
     if (nombre !== undefined) {
       updates.push("nombre = ?");
       params.push(nombre);
+    }
+    if (tipo !== undefined) {
+      if (!TIPOS_PRODUCTO.includes(tipo)) {
+        return res.status(400).json({ error: "Tipo de producto invalido" });
+      }
+      updates.push("tipo = ?");
+      params.push(tipo);
     }
     if (descripcion !== undefined) {
       updates.push("descripcion = ?");
@@ -111,6 +123,7 @@ router.patch("/:id", authorizePermissions(PERMISSIONS.PRODUCTOS_EDIT), async (re
     // Auditoría
     const cambios = {};
     if (nombre !== undefined) cambios.nombre = { antes: producto.nombre, despues: nombre };
+    if (tipo !== undefined) cambios.tipo = { antes: producto.tipo, despues: tipo };
     if (descripcion !== undefined) cambios.descripcion = { antes: producto.descripcion, despues: descripcion };
     if (proveedor !== undefined) cambios.proveedor = { antes: producto.proveedor, despues: proveedor };
 

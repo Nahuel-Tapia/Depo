@@ -76,6 +76,16 @@
                 <input type="text" id="productoNombre" placeholder="Nombre del producto" required />
               </div>
               <div>
+                <label>Tipo de producto</label>
+                <select id="productoTipo" required>
+                  <option value="">Seleccionar tipo</option>
+                  <option value="Bazar">Bazar</option>
+                  <option value="Inmuebles">Inmuebles</option>
+                  <option value="Insumos">Insumos</option>
+                  <option value="Libreria">Libreria</option>
+                </select>
+              </div>
+              <div>
                 <label>Descripción</label>
                 <input type="text" id="productoDescripcion" placeholder="Detalles adicionales" />
               </div>
@@ -97,6 +107,7 @@
               <tr>
                 <th>Código</th>
                 <th>Nombre</th>
+                <th>Tipo</th>
                 <th>Stock</th>
                 <th>Estado Stock</th>
                 <th>Proveedor</th>

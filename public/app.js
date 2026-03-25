@@ -346,6 +346,7 @@ function renderProductos() {
     tr.innerHTML = `
       <td>${p.codigo}</td>
       <td>${p.nombre}</td>
+      <td>${p.tipo || "-"}</td>
       <td>${p.stock_actual}</td>
       <td style="color: ${color};">${stockStatus}</td>
       <td>${p.proveedor || "-"}</td>
@@ -397,6 +398,7 @@ document.getElementById("createProductForm")?.addEventListener("submit", async (
   const payload = {
     codigo: document.getElementById("productoCodigo").value.trim(),
     nombre: document.getElementById("productoNombre").value.trim(),
+    tipo: document.getElementById("productoTipo").value,
     descripcion: document.getElementById("productoDescripcion").value.trim() || "",
     proveedor: document.getElementById("productoProveedor").value.trim() || null
   };

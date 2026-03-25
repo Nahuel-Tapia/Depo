@@ -50,6 +50,7 @@ async function initDb() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       codigo TEXT NOT NULL UNIQUE,
       nombre TEXT NOT NULL,
+      tipo TEXT NOT NULL DEFAULT 'Insumos',
       descripcion TEXT,
       precio REAL NOT NULL DEFAULT 0,
       stock_actual INTEGER NOT NULL DEFAULT 0,
@@ -60,6 +61,7 @@ async function initDb() {
 
   // Add new columns if not exist
   await run("ALTER TABLE productos ADD COLUMN proveedor TEXT;").catch(() => {});
+  await run("ALTER TABLE productos ADD COLUMN tipo TEXT NOT NULL DEFAULT 'Insumos';").catch(() => {});
 
   await run(`
     CREATE TABLE IF NOT EXISTS movimientos (
