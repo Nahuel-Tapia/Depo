@@ -89,6 +89,14 @@ router.post("/", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), async (re
       return res.status(400).json({ error: "La cantidad debe ser mayor a 0" });
     }
 
+    if (tipo === "entrada" && !String(proveedor || "").trim()) {
+      return res.status(400).json({ error: "Proveedor es obligatorio para ingresos" });
+    }
+
+    if (tipo === "salida" && !String(cue || "").trim()) {
+      return res.status(400).json({ error: "CUE/CUI es obligatorio para salidas" });
+    }
+
     // Obtener producto
     const producto = await get("SELECT * FROM productos WHERE id = ?", [producto_id]);
     if (!producto) {
@@ -103,7 +111,15 @@ router.post("/", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), async (re
     // Registrar movimiento
     const result = await run(
       "INSERT INTO movimientos (producto_id, tipo, cantidad, usuario_id, motivo, proveedor, cue) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      [producto_id, tipo, cantidad, req.user.sub, motivo || null, proveedor || null, cue || null]
+      [
+        producto_id,
+        tipo,
+        cantidad,
+        req.user.sub,
+        motivo || null,
+        proveedor ? String(proveedor).trim() : null,
+        cue ? String(cue).trim() : null
+      ]
     );
 
     // Actualizar stock del producto

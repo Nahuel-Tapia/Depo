@@ -499,15 +499,26 @@ document.getElementById("movTipo").addEventListener("change", (e) => {
   const tipo = e.target.value;
   const proveedorField = document.getElementById("proveedorField");
   const cueField = document.getElementById("cueField");
+  const movProveedor = document.getElementById("movProveedor");
+  const movCue = document.getElementById("movCue");
+
   if (tipo === "entrada") {
-    proveedorField.style.display = "block";
-    cueField.style.display = "none";
+    proveedorField.classList.remove("hidden");
+    cueField.classList.add("hidden");
+    movProveedor.required = true;
+    movCue.required = false;
+    movCue.value = "";
   } else if (tipo === "salida") {
-    proveedorField.style.display = "none";
-    cueField.style.display = "block";
+    proveedorField.classList.add("hidden");
+    cueField.classList.remove("hidden");
+    movProveedor.required = false;
+    movCue.required = true;
+    movProveedor.value = "";
   } else {
-    proveedorField.style.display = "none";
-    cueField.style.display = "none";
+    proveedorField.classList.add("hidden");
+    cueField.classList.add("hidden");
+    movProveedor.required = false;
+    movCue.required = false;
   }
 });
 
@@ -543,9 +554,10 @@ document.getElementById("createMovimientoForm")?.addEventListener("submit", asyn
   }
   
   document.getElementById("createMovimientoForm").reset();
-  // Hide fields
-  document.getElementById("proveedorField").style.display = "none";
-  document.getElementById("cueField").style.display = "none";
+  document.getElementById("movProveedor").required = false;
+  document.getElementById("movCue").required = false;
+  document.getElementById("proveedorField").classList.add("hidden");
+  document.getElementById("cueField").classList.add("hidden");
   await loadMovimientos();
   await loadProductos();
 });
