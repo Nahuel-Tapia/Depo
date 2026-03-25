@@ -16,11 +16,12 @@ function helpCode() {
 
 router.post("/register", async (req, res) => {
   try {
-    const { nombre, cue, password } = req.body;
+    const { nombre, cue, email, password } = req.body;
     const cueNormalized = normalizeCue(cue);
+    const emailNormalized = String(email || "").trim().toLowerCase();
 
-    if (!nombre || !cueNormalized || !password) {
-      return res.status(400).json({ error: "Nombre, CUE y contraseña son obligatorios" });
+    if (!nombre || !cueNormalized || !emailNormalized || !password) {
+      return res.status(400).json({ error: "Nombre, CUE, email y contraseña son obligatorios" });
     }
 
     if (cueNormalized.length < 6 || cueNormalized.length > 12) {
@@ -29,6 +30,11 @@ router.post("/register", async (req, res) => {
 
     if (password.length < 6) {
       return res.status(400).json({ error: "La contraseña debe tener al menos 6 caracteres" });
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(emailNormalized)) {
+      return res.status(400).json({ error: "El email no tiene un formato válido" });
     }
 
     const existingCue = await get("SELECT id FROM users WHERE cue = ?", [cueNormalized]);
@@ -42,16 +48,15 @@ router.post("/register", async (req, res) => {
       });
     }
 
-    const emailAlias = `cue-${cueNormalized}@depo.local`;
-    const existingEmail = await get("SELECT id FROM users WHERE email = ?", [emailAlias]);
+    const existingEmail = await get("SELECT id FROM users WHERE email = ?", [emailNormalized]);
     if (existingEmail) {
-      return res.status(409).json({ error: "No se pudo registrar ese CUE" });
+      return res.status(409).json({ error: "El email ya está registrado" });
     }
 
     const hash = await bcrypt.hash(password, 10);
     const result = await run(
       "INSERT INTO users (nombre, email, cue, password_hash, role, activo) VALUES (?, ?, ?, ?, ?, 1)",
-      [nombre.trim(), emailAlias, cueNormalized, hash, "consulta"]
+      [nombre.trim(), emailNormalized, cueNormalized, hash, "consulta"]
     );
 
     return res.status(201).json({

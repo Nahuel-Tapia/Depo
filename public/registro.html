@@ -8,8 +8,8 @@
   </head>
   <link rel="icon" href="faviconmin.png" type="image/x-icon" />
   <body>
-    <main class="container">
-      <section class="card" id="registerCard">
+    <main class="container auth-container">
+      <section class="card auth-card" id="registerCard">
         <div style="max-width: 560px; margin: 0 auto;">
           <img src="http://prod.eduge.com.ar/assets/logoGobierno-D5M0tUR9.png" alt="Logo Gobierno" style="width: 300px; height: auto; display: block; margin: 0 auto 32px;">
           <h1 style="text-align: center; margin-bottom: 8px;">Registro de institución</h1>
@@ -25,6 +25,10 @@
               <input type="text" id="registerCue" required placeholder="Solo números" />
             </div>
             <div>
+              <label>Email de contacto</label>
+              <input type="email" id="registerEmail" required placeholder="Ej: institucion@correo.com" />
+            </div>
+            <div>
               <label>Contraseña</label>
               <input type="password" id="registerPassword" required placeholder="Mínimo 6 caracteres" />
             </div>
@@ -35,9 +39,6 @@
           <div id="registerMsg" class="msg"></div>
         </div>
       </section>
-
-      <section class="card hidden" id="loginCard"></section>
-      <section class="card hidden" id="appCard"></section>
     </main>
 
     <script src="app.js"></script>

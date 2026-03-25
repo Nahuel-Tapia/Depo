@@ -102,4 +102,38 @@ router.patch(
   }
 );
 
+router.delete("/:id", authorizePermissions(PERMISSIONS.USERS_DELETE), async (req, res) => {
+  try {
+    const userId = Number(req.params.id);
+
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(400).json({ error: "ID inválido" });
+    }
+
+    if (req.user && Number(req.user.id) === userId) {
+      return res.status(400).json({ error: "No podés eliminar tu propio usuario" });
+    }
+
+    const existing = await get("SELECT id, role FROM users WHERE id = ?", [userId]);
+    if (!existing) {
+      return res.status(404).json({ error: "Usuario no encontrado" });
+    }
+
+    const hasMovimientos = await get("SELECT id FROM movimientos WHERE usuario_id = ? LIMIT 1", [userId]);
+    const hasAjustes = await get("SELECT id FROM ajustes WHERE usuario_id = ? LIMIT 1", [userId]);
+    const hasAuditoria = await get("SELECT id FROM auditoria WHERE usuario_id = ? LIMIT 1", [userId]);
+
+    if (hasMovimientos || hasAjustes || hasAuditoria) {
+      return res.status(409).json({
+        error: "No se puede eliminar: el usuario tiene historial asociado"
+      });
+    }
+
+    await run("DELETE FROM users WHERE id = ?", [userId]);
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ error: "No se pudo eliminar usuario" });
+  }
+});
+
 module.exports = router;

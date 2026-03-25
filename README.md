@@ -45,7 +45,7 @@ Incluye:
 ## 4) Roles y permisos
 
 ### `admin`
-- Puede ver, crear y editar usuarios.
+- Puede ver, crear, editar y eliminar usuarios.
 - Puede cambiar roles y activar/desactivar cuentas.
 - Tiene todos los permisos de stock.
 
@@ -78,6 +78,7 @@ Incluye:
 | `users.create` | ✅ | ❌ | ❌ |
 | `users.role.update` | ✅ | ❌ | ❌ |
 | `users.status.update` | ✅ | ❌ | ❌ |
+| `users.delete` | ✅ | ❌ | ❌ |
 
 ---
 
@@ -92,6 +93,7 @@ Incluye:
 - `POST /api/users` → crear usuario (solo con permiso).
 - `PATCH /api/users/:id/role` → cambiar rol (solo con permiso).
 - `PATCH /api/users/:id/active` → activar/desactivar (solo con permiso).
+- `DELETE /api/users/:id` → eliminar usuario (solo admin).
 
 ### Permisos
 - `GET /api/permissions/me` → permisos del usuario autenticado.

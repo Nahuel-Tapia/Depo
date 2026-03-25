@@ -220,6 +220,8 @@ async function loadUsers() {
   data.users.forEach((u) => {
     const canChangeRole = hasPermission("users.role.update");
     const canToggleStatus = hasPermission("users.status.update");
+    const canDeleteUser = hasPermission("users.delete") && state.user?.role === "admin";
+    const canDeleteThisUser = canDeleteUser && Number(u.id) !== Number(state.user?.id);
 
     const tr = document.createElement("tr");
     tr.innerHTML = `
@@ -232,6 +234,7 @@ async function loadUsers() {
         <div class="inline-actions">
           ${canChangeRole ? `<button data-action="promote" data-id="${u.id}">Rol +</button>` : ""}
           ${canToggleStatus ? `<button data-action="toggle" data-id="${u.id}" data-active="${u.activo}">${u.activo ? "Desactivar" : "Activar"}</button>` : ""}
+          ${canDeleteThisUser ? `<button data-action="delete" data-id="${u.id}">Eliminar</button>` : ""}
         </div>
       </td>
     `;
@@ -280,6 +283,30 @@ usersTbody?.addEventListener("click", async (e) => {
 
     loadUsers();
   }
+
+  if (btn.dataset.action === "delete") {
+    if (!hasPermission("users.delete") || state.user?.role !== "admin") {
+      adminMsg.textContent = "No tiene permiso para eliminar usuarios";
+      return;
+    }
+
+    const confirmed = window.confirm("¿Seguro que querés eliminar este usuario?");
+    if (!confirmed) return;
+
+    const res = await fetch(`/api/users/${id}`, {
+      method: "DELETE",
+      headers: authHeaders()
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      adminMsg.textContent = data.error || "No se pudo eliminar usuario";
+      return;
+    }
+
+    adminMsg.textContent = "Usuario eliminado correctamente";
+    loadUsers();
+  }
 });
 
 loginForm?.addEventListener("submit", async (e) => {
@@ -315,12 +342,13 @@ registerForm?.addEventListener("submit", async (e) => {
 
   const nombre = document.getElementById("registerNombre").value.trim();
   const cue = document.getElementById("registerCue").value.trim();
+  const email = document.getElementById("registerEmail").value.trim();
   const password = document.getElementById("registerPassword").value;
 
   const res = await fetch("/api/auth/register", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ nombre, cue, password })
+    body: JSON.stringify({ nombre, cue, email, password })
   });
 
   const data = await res.json().catch(() => ({}));

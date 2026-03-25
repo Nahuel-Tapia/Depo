@@ -111,6 +111,17 @@ Response (200):
 }
 ```
 
+### Eliminar usuario
+```
+DELETE /api/users/:id
+Authorization: Bearer {token}
+
+Response (200):
+{
+  "ok": true
+}
+```
+
 ---
 
 ## Productos
