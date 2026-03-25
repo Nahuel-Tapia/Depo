@@ -114,11 +114,18 @@ async function render() {
 
   loginCard.classList.add("hidden");
   appCard.classList.remove("hidden");
-  currentUser.textContent = state.user.role === 'admin' ? 'A' : state.user.role === 'operador' ? 'O' : 'C';
+  currentUser.textContent = state.user.role === 'admin'
+    ? 'A'
+    : state.user.role === 'directivo'
+      ? 'D'
+      : state.user.role === 'operador'
+        ? 'O'
+        : 'C';
   renderPermissions();
 
   // Mostrar/ocultar tabs según permisos
   updateTabsVisibility();
+  updateFormVisibilityByPermissions();
 
   if (hasPermission("users.read")) {
     document.querySelector('[data-tab="usuarios"]').classList.remove("hidden");
@@ -152,6 +159,24 @@ function updateTabsVisibility() {
   });
 }
 
+function updateFormVisibilityByPermissions() {
+  const createProductForm = document.getElementById("createProductForm");
+  const createMovimientoForm = document.getElementById("createMovimientoForm");
+  const createUserFormEl = document.getElementById("createUserForm");
+
+  if (createProductForm?.parentElement) {
+    createProductForm.parentElement.style.display = hasPermission("productos.create") ? "" : "none";
+  }
+
+  if (createMovimientoForm?.parentElement) {
+    createMovimientoForm.parentElement.style.display = hasPermission("movimientos.create") ? "" : "none";
+  }
+
+  if (createUserFormEl?.parentElement) {
+    createUserFormEl.parentElement.style.display = hasPermission("users.create") ? "" : "none";
+  }
+}
+
 async function loadUsers() {
   const res = await fetch("/api/users", {
     headers: authHeaders()
@@ -169,6 +194,9 @@ async function loadUsers() {
   usersTbody.innerHTML = "";
 
   data.users.forEach((u) => {
+    const canChangeRole = hasPermission("users.role.update");
+    const canToggleStatus = hasPermission("users.status.update");
+
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${u.nombre}</td>
@@ -177,10 +205,8 @@ async function loadUsers() {
       <td>${u.activo ? "Sí" : "No"}</td>
       <td>
         <div class="inline-actions">
-          <button data-action="promote" data-id="${u.id}">Rol +</button>
-          <button data-action="toggle" data-id="${u.id}" data-active="${u.activo}">
-            ${u.activo ? "Desactivar" : "Activar"}
-          </button>
+          ${canChangeRole ? `<button data-action="promote" data-id="${u.id}">Rol +</button>` : ""}
+          ${canToggleStatus ? `<button data-action="toggle" data-id="${u.id}" data-active="${u.activo}">${u.activo ? "Desactivar" : "Activar"}</button>` : ""}
         </div>
       </td>
     `;
@@ -196,7 +222,7 @@ usersTbody.addEventListener("click", async (e) => {
   if (!id) return;
 
   if (btn.dataset.action === "promote") {
-    const role = prompt("Nuevo rol (admin, operador, consulta):", "operador");
+    const role = prompt("Nuevo rol (admin, directivo, operador, consulta):", "operador");
     if (!role) return;
 
     const res = await fetch(`/api/users/${id}/role`, {
@@ -258,6 +284,11 @@ loginForm.addEventListener("submit", async (e) => {
 createUserForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   adminMsg.textContent = "";
+
+  if (!hasPermission("users.create")) {
+    adminMsg.textContent = "No tiene permiso para crear usuarios";
+    return;
+  }
 
   const payload = {
     nombre: document.getElementById("newNombre").value.trim(),
@@ -394,6 +425,11 @@ document.getElementById("createProductForm")?.addEventListener("submit", async (
   e.preventDefault();
   const msg = document.getElementById("productosMsg");
   msg.textContent = "";
+
+  if (!hasPermission("productos.create")) {
+    msg.textContent = "No tiene permiso para crear productos";
+    return;
+  }
   
   const payload = {
     codigo: document.getElementById("productoCodigo").value.trim(),
