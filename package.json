@@ -4,6 +4,7 @@
   "description": "Sistema base de control de stock para depósito",
   "main": "src/server.js",
   "scripts": {
+    "build": "node --check src/server.js",
     "start": "node src/server.js",
     "dev": "node src/server.js",
     "reset-admin": "node scripts/reset-admin.js"

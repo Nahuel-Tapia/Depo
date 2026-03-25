@@ -17,8 +17,8 @@
 
           <form id="loginForm">
             <div>
-              <label>Correo Electrónico</label>
-              <input type="email" id="email" required placeholder="admin@depo.local" />
+              <label>CUE o Correo Electrónico</label>
+              <input type="text" id="email" required placeholder="Ej: 1234567 o admin@depo.local" />
             </div>
 
             <div>
@@ -28,6 +28,13 @@
 
             <button type="submit">Iniciar sesión</button>
           </form>
+
+          <div class="auth-divider"></div>
+          <div class="auth-alt-action">
+            <h3>Registrar institución</h3>
+            <p class="auth-helper">Si su establecimiento aún no tiene acceso, complete el alta desde una pantalla dedicada.</p>
+            <a href="/registro" class="secondary auth-switch-btn auth-switch-link">Registrar institución</a>
+          </div>
 
           <div id="loginMsg" class="msg"></div>
         </div>
@@ -218,6 +225,7 @@
               <tr>
                 <th>Nombre</th>
                 <th>Email</th>
+                <th>CUE</th>
                 <th>Rol</th>
                 <th>Activo</th>
                 <th>Acciones</th>

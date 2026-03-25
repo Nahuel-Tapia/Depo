@@ -8,15 +8,32 @@ const state = {
 };
 
 const loginCard = document.getElementById("loginCard");
+const registerCard = document.getElementById("registerCard");
 const appCard = document.getElementById("appCard");
 const loginForm = document.getElementById("loginForm");
+const registerForm = document.getElementById("registerForm");
 const loginMsg = document.getElementById("loginMsg");
+const registerMsg = document.getElementById("registerMsg");
 const adminMsg = document.getElementById("adminMsg");
 const currentUser = document.getElementById("currentUser");
 const permissionsList = document.getElementById("permissionsList");
 const usersTbody = document.getElementById("usersTbody");
 const logoutBtn = document.getElementById("logoutBtn");
 const createUserForm = document.getElementById("createUserForm");
+
+function showMessage(el, text, type = "error") {
+  if (!el) return;
+  if (!text) {
+    el.textContent = "";
+    el.classList.remove("show", "msg-success", "msg-error");
+    return;
+  }
+
+  el.textContent = text;
+  el.classList.add("show");
+  el.classList.remove("msg-success", "msg-error");
+  el.classList.add(type === "success" ? "msg-success" : "msg-error");
+}
 
 // Tabs
 const tabButtons = document.querySelectorAll(".tab-btn");
@@ -50,7 +67,12 @@ function hasPermission(permission) {
 
 function handleUnauthorized() {
   clearSession();
-  loginMsg.textContent = "Sesión expirada. Por favor, ingresa de nuevo.";
+  if (window.location.pathname === "/registro") {
+    window.location.href = "/";
+    return;
+  }
+
+  showMessage(loginMsg, "Sesión expirada. Por favor, ingresa de nuevo.", "error");
   render();
 }
 
@@ -105,15 +127,17 @@ function renderPermissions() {
 
 async function render() {
   if (!state.token || !state.user) {
-    loginCard.classList.remove("hidden");
-    appCard.classList.add("hidden");
+    if (loginCard) loginCard.classList.remove("hidden");
+    if (registerCard) registerCard.classList.remove("hidden");
+    if (appCard) appCard.classList.add("hidden");
     return;
   }
 
   await loadMyPermissions();
 
-  loginCard.classList.add("hidden");
-  appCard.classList.remove("hidden");
+  if (loginCard) loginCard.classList.add("hidden");
+  if (registerCard) registerCard.classList.add("hidden");
+  if (appCard) appCard.classList.remove("hidden");
   currentUser.textContent = state.user.role === 'admin' ? 'A' : state.user.role === 'operador' ? 'O' : 'C';
   renderPermissions();
 
@@ -173,6 +197,7 @@ async function loadUsers() {
     tr.innerHTML = `
       <td>${u.nombre}</td>
       <td>${u.email}</td>
+      <td>${u.cue || "-"}</td>
       <td><span class="badge">${u.role}</span></td>
       <td>${u.activo ? "Sí" : "No"}</td>
       <td>
@@ -188,7 +213,7 @@ async function loadUsers() {
   });
 }
 
-usersTbody.addEventListener("click", async (e) => {
+usersTbody?.addEventListener("click", async (e) => {
   const btn = e.target.closest("button");
   if (!btn) return;
 
@@ -231,31 +256,64 @@ usersTbody.addEventListener("click", async (e) => {
   }
 });
 
-loginForm.addEventListener("submit", async (e) => {
+loginForm?.addEventListener("submit", async (e) => {
   e.preventDefault();
-  loginMsg.textContent = "";
+  showMessage(loginMsg, "");
 
   const email = document.getElementById("email").value.trim();
   const password = document.getElementById("password").value;
+  const cue = /^\d+$/.test(email) ? email : "";
 
   const res = await fetch("/api/auth/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password })
+    body: JSON.stringify({ email, cue, password })
   });
 
   const data = await res.json();
   if (!res.ok) {
-    loginMsg.textContent = data.error || "Error de autenticación";
+    showMessage(loginMsg, data.error || "Error de autenticación", "error");
     return;
   }
+
+  showMessage(loginMsg, data.message || "Inicio de sesión correcto", "success");
 
   setSession(data.token, data.user);
   loginForm.reset();
   await render();
 });
 
-createUserForm.addEventListener("submit", async (e) => {
+registerForm?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  showMessage(registerMsg, "");
+
+  const nombre = document.getElementById("registerNombre").value.trim();
+  const cue = document.getElementById("registerCue").value.trim();
+  const password = document.getElementById("registerPassword").value;
+
+  const res = await fetch("/api/auth/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ nombre, cue, password })
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    if (data.message) {
+      showMessage(registerMsg, data.message, "error");
+    } else if (data.error && data.helpCode) {
+      showMessage(registerMsg, `${data.error}. Número de ayuda: ${data.helpCode}`, "error");
+    } else {
+      showMessage(registerMsg, data.error || "No se pudo registrar", "error");
+    }
+    return;
+  }
+
+  registerForm.reset();
+  showMessage(registerMsg, data.message || "Usuario creado correctamente", "success");
+});
+
+createUserForm?.addEventListener("submit", async (e) => {
   e.preventDefault();
   adminMsg.textContent = "";
 
@@ -282,9 +340,9 @@ createUserForm.addEventListener("submit", async (e) => {
   loadUsers();
 });
 
-logoutBtn.addEventListener("click", () => {
+logoutBtn?.addEventListener("click", () => {
   clearSession();
-  render();
+  window.location.href = "/";
 });
 
 // ============ TABS NAVIGATION ============
@@ -495,7 +553,7 @@ function renderMovimientos() {
   });
 }
 
-document.getElementById("movTipo").addEventListener("change", (e) => {
+document.getElementById("movTipo")?.addEventListener("change", (e) => {
   const tipo = e.target.value;
   const proveedorField = document.getElementById("proveedorField");
   const cueField = document.getElementById("cueField");

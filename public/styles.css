@@ -164,6 +164,51 @@ button.secondary {
   display: block;
 }
 
+.msg-success {
+  color: #166534;
+  background: #dcfce7;
+  border: 1px solid #86efac;
+}
+
+.msg-error {
+  color: #991b1b;
+  background: #fee2e2;
+  border: 1px solid #fecaca;
+}
+
+.auth-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #e5e7eb, transparent);
+  margin: 28px 0;
+}
+
+.auth-alt-action {
+  text-align: center;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.auth-alt-action h3 {
+  margin: 0 0 10px;
+}
+
+.auth-helper {
+  color: var(--muted);
+  margin: 0 0 16px;
+}
+
+.auth-switch-btn {
+  display: inline-flex;
+  justify-content: center;
+}
+
+.auth-switch-link {
+  text-decoration: none;
+  width: auto;
+}
+
 .permissions-box {
   border: 1.5px solid #fde68a;
   background: #fffdf2;

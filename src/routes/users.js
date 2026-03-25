@@ -7,6 +7,12 @@ const { PERMISSIONS } = require("../permissions");
 const router = express.Router();
 const VALID_ROLES = ["admin", "operador", "consulta"];
 
+function normalizeCue(cue) {
+  if (!cue) return null;
+  const value = String(cue).replace(/\D/g, "");
+  return value || null;
+}
+
 router.use(authenticate);
 
 router.get("/me", (req, res) => {
@@ -16,7 +22,7 @@ router.get("/me", (req, res) => {
 router.get("/", authorizePermissions(PERMISSIONS.USERS_READ), async (req, res) => {
   try {
     const users = await all(
-      "SELECT id, nombre, email, role, activo, created_at FROM users ORDER BY id DESC"
+      "SELECT id, nombre, email, cue, role, activo, created_at FROM users ORDER BY id DESC"
     );
     return res.json({ users });
   } catch (err) {
@@ -26,7 +32,8 @@ router.get("/", authorizePermissions(PERMISSIONS.USERS_READ), async (req, res) =
 
 router.post("/", authorizePermissions(PERMISSIONS.USERS_CREATE), async (req, res) => {
   try {
-    const { nombre, email, password, role } = req.body;
+    const { nombre, email, cue, password, role } = req.body;
+    const cueNormalized = normalizeCue(cue);
     if (!nombre || !email || !password || !role) {
       return res.status(400).json({ error: "Faltan campos obligatorios" });
     }
@@ -40,10 +47,17 @@ router.post("/", authorizePermissions(PERMISSIONS.USERS_CREATE), async (req, res
       return res.status(409).json({ error: "El email ya existe" });
     }
 
+    if (cueNormalized) {
+      const existingCue = await get("SELECT id FROM users WHERE cue = ?", [cueNormalized]);
+      if (existingCue) {
+        return res.status(409).json({ error: "El CUE ya existe" });
+      }
+    }
+
     const hash = await bcrypt.hash(password, 10);
     const result = await run(
-      "INSERT INTO users (nombre, email, password_hash, role, activo) VALUES (?, ?, ?, ?, 1)",
-      [nombre, email, hash, role]
+      "INSERT INTO users (nombre, email, cue, password_hash, role, activo) VALUES (?, ?, ?, ?, ?, 1)",
+      [nombre, email, cueNormalized, hash, role]
     );
 
     return res.status(201).json({ id: result.lastID });

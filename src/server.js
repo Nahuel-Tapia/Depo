@@ -37,6 +37,14 @@ app.use("/api/movimientos", movimientosRoutes);
 app.use("/api/ajustes", ajustesRoutes);
 app.use("/api/auditoria", auditoriaRoutes);
 
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "..", "public", "index.html"));
+});
+
+app.get("/registro", (req, res) => {
+  res.sendFile(path.join(__dirname, "..", "public", "registro.html"));
+});
+
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "..", "public", "index.html"));
 });

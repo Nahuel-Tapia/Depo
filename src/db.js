@@ -38,12 +38,16 @@ async function initDb() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       nombre TEXT NOT NULL,
       email TEXT NOT NULL UNIQUE,
+      cue TEXT UNIQUE,
       password_hash TEXT NOT NULL,
       role TEXT NOT NULL CHECK(role IN ('admin', 'operador', 'consulta')),
       activo INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
   `);
+
+  await run("ALTER TABLE users ADD COLUMN cue TEXT;").catch(() => {});
+  await run("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_cue_unique ON users(cue) WHERE cue IS NOT NULL;").catch(() => {});
 
   await run(`
     CREATE TABLE IF NOT EXISTS productos (
@@ -112,7 +116,7 @@ async function initDb() {
   if (!admin) {
     const hash = bcrypt.hashSync("Admin123!", 10);
     await run(
-      "INSERT INTO users (nombre, email, password_hash, role, activo) VALUES (?, ?, ?, ?, 1)",
+      "INSERT OR IGNORE INTO users (nombre, email, password_hash, role, activo) VALUES (?, ?, ?, ?, 1)",
       ["Administrador Inicial", "admin@depo.local", hash, "admin"]
     );
   }
