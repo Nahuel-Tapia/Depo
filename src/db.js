@@ -85,6 +85,7 @@ async function initDb() {
 
   await run("ALTER TABLE users ADD COLUMN cue TEXT;").catch(() => {});
   await run("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_cue_unique ON users(cue) WHERE cue IS NOT NULL;").catch(() => {});
+  await run("ALTER TABLE users ADD COLUMN institucion TEXT;").catch(() => {});
 
   await run(`
     CREATE TABLE IF NOT EXISTS productos (
@@ -121,6 +122,8 @@ async function initDb() {
   // Add new columns if not exist
   await run("ALTER TABLE movimientos ADD COLUMN proveedor TEXT;").catch(() => {});
   await run("ALTER TABLE movimientos ADD COLUMN cue TEXT;").catch(() => {});
+  await run("ALTER TABLE movimientos ADD COLUMN pedido_id INTEGER;").catch(() => {});
+  await run("CREATE UNIQUE INDEX IF NOT EXISTS idx_movimientos_pedido_unique ON movimientos(pedido_id) WHERE pedido_id IS NOT NULL;").catch(() => {});
 
   await run(`
     CREATE TABLE IF NOT EXISTS ajustes (
@@ -146,6 +149,22 @@ async function initDb() {
       cambios TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (usuario_id) REFERENCES users(id)
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS pedidos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      usuario_id INTEGER NOT NULL,
+      producto_id INTEGER NOT NULL,
+      cantidad INTEGER NOT NULL,
+      institucion TEXT NOT NULL,
+      estado TEXT NOT NULL DEFAULT 'pendiente' CHECK(estado IN ('pendiente', 'aprobado', 'rechazado', 'entregado')),
+      notas TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (usuario_id) REFERENCES users(id),
+      FOREIGN KEY (producto_id) REFERENCES productos(id)
     )
   `);
 

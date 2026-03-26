@@ -55,6 +55,7 @@
           <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
           <button class="tab-btn" data-tab="productos">Productos</button>
           <button class="tab-btn" data-tab="movimientos">Movimientos</button>
+          <button class="tab-btn" data-tab="pedidos">Pedidos</button>
           <button class="tab-btn" data-tab="usuarios">Usuarios</button>
         </div>
 
@@ -180,6 +181,51 @@
               </tr>
             </thead>
             <tbody id="movimientosTbody"></tbody>
+          </table>
+        </div>
+
+        <!-- PEDIDOS -->
+        <div class="tab-content hidden" id="pedidosTab">
+          <h2>Gestión de Pedidos</h2>
+
+          <div style="background: #f9fafb; padding: 24px; border-radius: 8px; margin-bottom: 32px;">
+            <form id="createPedidoForm" class="grid">
+              <div>
+                <label>Producto</label>
+                <select id="pedidoProductoId" required>
+                  <option value="">Seleccionar producto...</option>
+                </select>
+              </div>
+              <div>
+                <label>Cantidad</label>
+                <input type="number" id="pedidoCantidad" placeholder="0" min="1" required />
+              </div>
+              <div style="grid-column: 1 / -1;">
+                <label>Notas</label>
+                <input type="text" id="pedidoNotas" placeholder="Observaciones del pedido" />
+              </div>
+              <div style="grid-column: 1 / -1;">
+                <button type="submit">Crear pedido</button>
+              </div>
+            </form>
+          </div>
+
+          <div id="pedidosMsg" class="msg"></div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Producto</th>
+                <th>Cantidad</th>
+                <th>Institución</th>
+                <th>Estado</th>
+                <th>Solicitado por</th>
+                <th>Notas</th>
+                <th>Fecha</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="pedidosTbody"></tbody>
           </table>
         </div>
 

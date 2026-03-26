@@ -12,6 +12,7 @@ const productosRoutes = require("./routes/productos");
 const movimientosRoutes = require("./routes/movimientos");
 const ajustesRoutes = require("./routes/ajustes");
 const auditoriaRoutes = require("./routes/auditoria");
+const pedidosRoutes = require("./routes/pedidos");
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -31,6 +32,7 @@ app.use("/api/productos", productosRoutes);
 app.use("/api/movimientos", movimientosRoutes);
 app.use("/api/ajustes", ajustesRoutes);
 app.use("/api/auditoria", auditoriaRoutes);
+app.use("/api/pedidos", pedidosRoutes);
 
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "..", "public", "index.html"));

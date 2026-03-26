@@ -32,7 +32,7 @@ router.get("/", authorizePermissions(PERMISSIONS.USERS_READ), async (req, res) =
 
 router.post("/", authorizePermissions(PERMISSIONS.USERS_CREATE), async (req, res) => {
   try {
-    const { nombre, email, cue, password, role } = req.body;
+    const { nombre, email, cue, password, role, institucion } = req.body;
     const cueNormalized = normalizeCue(cue);
     if (!nombre || !email || !password || !role) {
       return res.status(400).json({ error: "Faltan campos obligatorios" });
@@ -56,8 +56,8 @@ router.post("/", authorizePermissions(PERMISSIONS.USERS_CREATE), async (req, res
 
     const hash = await bcrypt.hash(password, 10);
     const result = await run(
-      "INSERT INTO users (nombre, email, cue, password_hash, role, activo) VALUES (?, ?, ?, ?, ?, 1)",
-      [nombre, email, cueNormalized, hash, role]
+      "INSERT INTO users (nombre, email, cue, password_hash, role, institucion, activo) VALUES (?, ?, ?, ?, ?, ?, 1)",
+      [nombre, email, cueNormalized, hash, role, institucion || null]
     );
 
     return res.status(201).json({ id: result.lastID });

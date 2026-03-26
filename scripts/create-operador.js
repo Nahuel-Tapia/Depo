@@ -1,4 +1,16 @@
 const http = require("http");
+const readline = require("readline");
+
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout
+});
+
+function question(prompt) {
+  return new Promise((resolve) => {
+    rl.question(prompt, resolve);
+  });
+}
 
 async function request(method, path, body = null, token = null) {
   return new Promise((resolve, reject) => {
@@ -34,8 +46,15 @@ async function request(method, path, body = null, token = null) {
 
 async function main() {
   try {
+    console.log("\n=== Crear usuario Directivo ===");
+    const nombre = await question("Nombre del directivo: ");
+    const institucion = await question("Institución: ");
+    const email = await question("Email: ");
+    const password = await question("Contraseña: ");
+    rl.close();
+
     // Login
-    console.log("1️⃣  Logging as admin...");
+    console.log("\n1️⃣  Logging as admin...");
     const loginRes = await request("POST", "/api/auth/login", {
       email: "admin@depo.local",
       password: "Admin123!"
@@ -49,13 +68,14 @@ async function main() {
     const token = loginRes.data.token;
     console.log("✅ Login success");
 
-    // Create operador
-    console.log("\n2️⃣  Creating operador user...");
+    // Create directivo
+    console.log("\n2️⃣  Creating directivo user...");
     const createRes = await request("POST", "/api/users", {
-      nombre: "Operador Demo",
-      email: "operador@depo.local",
-      password: "Operador123!",
-      role: "operador"
+      nombre,
+      email,
+      password,
+      institucion,
+      role: "directivo"
     }, token);
 
     if (createRes.status !== 201) {
@@ -63,15 +83,12 @@ async function main() {
       process.exit(1);
     }
 
-    console.log("✅ Operador created successfully!");
+    console.log("✅ Directivo created successfully!");
     console.log("\n📋 Login credentials:");
-    console.log("   Email: operador@depo.local");
-    console.log("   Password: Operador123!");
-    console.log("\n✨ The operador can now see and create:");
-    console.log("   - Productos (Products)");
-    console.log("   - Movimientos (Movements)");
-    console.log("   - Ajustes (Adjustments)");
-    console.log("   - Auditoría (Audit logs)");
+    console.log(`   Email: ${email}`);
+    console.log(`   Password: ${password}`);
+    console.log(`   Institución: ${institucion}`);
+    console.log("\n✨ The directivo can now access system features");
 
   } catch (err) {
     console.error(" 💥 Error:", err.message);
