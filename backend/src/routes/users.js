@@ -47,6 +47,10 @@ router.post("/", authorizePermissions(PERMISSIONS.USERS_CREATE), async (req, res
       return res.status(400).json({ error: "La institución es obligatoria para rol directivo" });
     }
 
+    if (cueNormalized && cueNormalized.length !== 9) {
+      return res.status(400).json({ error: "El CUE debe tener exactamente 9 dígitos" });
+    }
+
     const existing = await get("SELECT id FROM users WHERE email = ?", [email]);
     if (existing) {
       return res.status(409).json({ error: "El email ya existe" });

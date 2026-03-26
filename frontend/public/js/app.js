@@ -195,8 +195,6 @@ function updateFormVisibilityByPermissions() {
   const createMovimientoForm = document.getElementById("createMovimientoForm");
   const createPedidoForm = document.getElementById("createPedidoForm");
   const createUserFormEl = document.getElementById("createUserForm");
-  const createInstitucionForm = document.getElementById("createInstitucionForm");
-  const asignacionMasivaForm = document.getElementById("asignacionMasivaForm");
 
   if (createProductForm?.parentElement) {
     createProductForm.parentElement.style.display = hasPermission("productos.create") ? "" : "none";
@@ -213,14 +211,6 @@ function updateFormVisibilityByPermissions() {
 
   if (createUserFormEl?.parentElement) {
     createUserFormEl.parentElement.style.display = hasPermission("users.create") ? "" : "none";
-  }
-
-  if (createInstitucionForm?.parentElement) {
-    createInstitucionForm.parentElement.style.display = hasPermission("instituciones.create") ? "" : "none";
-  }
-
-  if (asignacionMasivaForm?.parentElement) {
-    asignacionMasivaForm.parentElement.style.display = hasPermission("instituciones.asignar") ? "" : "none";
   }
 }
 
@@ -378,20 +368,51 @@ loginForm?.addEventListener("submit", async (e) => {
   await render();
 });
 
+// Buscar nombre de escuela por CUE
+document.getElementById("registerCue")?.addEventListener("blur", async (e) => {
+  const cue = e.target.value.trim();
+  const escuelaField = document.getElementById("registerEscuela");
+  const cueStatus = document.getElementById("cueStatus");
+  
+  if (!cue || cue.length !== 9) {
+    escuelaField.value = "";
+    cueStatus.textContent = "";
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/instituciones/public/cue/${cue}`);
+    const data = await res.json().catch(() => ({}));
+    
+    if (res.ok && data.nombre) {
+      escuelaField.value = data.nombre;
+      cueStatus.textContent = "✓ Escuela encontrada";
+      cueStatus.style.color = "#10b981";
+    } else {
+      escuelaField.value = "";
+      cueStatus.textContent = data.error || "Escuela no encontrada";
+      cueStatus.style.color = "#ef4444";
+    }
+  } catch (err) {
+    escuelaField.value = "";
+    cueStatus.textContent = "Error al buscar escuela";
+    cueStatus.style.color = "#ef4444";
+  }
+});
+
 registerForm?.addEventListener("submit", async (e) => {
   e.preventDefault();
   showMessage(registerMsg, "");
 
   const nombre = document.getElementById("registerNombre").value.trim();
-  const institucion = document.getElementById("registerInstitucion").value.trim();
   const cue = document.getElementById("registerCue").value.trim();
-  const email = document.getElementById("registerEmail").value.trim();
+  const numero = document.getElementById("registerNumero").value.trim();
   const password = document.getElementById("registerPassword").value;
 
   const res = await fetch("/api/auth/register", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ nombre, institucion, cue, email, password })
+    body: JSON.stringify({ nombre, cue, numero, password })
   });
 
   const data = await res.json().catch(() => ({}));
@@ -406,8 +427,22 @@ registerForm?.addEventListener("submit", async (e) => {
     return;
   }
 
+  // Hacer login automático después del registro
+  const loginRes = await fetch("/api/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cue, password })
+  });
+
+  const loginData = await loginRes.json().catch(() => ({}));
+  if (!loginRes.ok) {
+    showMessage(registerMsg, "Usuario creado pero hay error al iniciar sesión. Por favor inicia sesión manualmente.", "error");
+    return;
+  }
+
+  setSession(loginData.token, loginData.user);
   registerForm.reset();
-  showMessage(registerMsg, data.message || "Usuario creado correctamente", "success");
+  await render();
 });
 
 createUserForm?.addEventListener("submit", async (e) => {
@@ -976,84 +1011,6 @@ function populateAsigProductoSelect() {
     select.appendChild(option);
   });
 }
-
-// Crear institución
-document.getElementById("createInstitucionForm")?.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  if (institucionesMsg) institucionesMsg.textContent = "";
-
-  if (!hasPermission("instituciones.create")) {
-    showMessage(institucionesMsg, "No tiene permiso para crear instituciones", "error");
-    return;
-  }
-
-  const payload = {
-    cue: document.getElementById("instCue").value.trim(),
-    nombre: document.getElementById("instNombre").value.trim(),
-    nivel: document.getElementById("instNivel").value || null,
-    tipo: document.getElementById("instTipo").value || "publica",
-    matriculados: parseInt(document.getElementById("instMatriculados").value, 10) || 0,
-    direccion: document.getElementById("instDireccion").value.trim() || null,
-    localidad: document.getElementById("instLocalidad").value.trim() || null,
-    departamento: document.getElementById("instDepartamento").value.trim() || null,
-    telefono: document.getElementById("instTelefono").value.trim() || null,
-    email: document.getElementById("instEmail").value.trim() || null,
-    notas: document.getElementById("instNotas").value.trim() || null
-  };
-
-  const res = await fetch("/api/instituciones", {
-    method: "POST",
-    headers: authHeaders(),
-    body: JSON.stringify(payload)
-  });
-
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    showMessage(institucionesMsg, data.error || "No se pudo crear la institución", "error");
-    return;
-  }
-
-  document.getElementById("createInstitucionForm").reset();
-  showMessage(institucionesMsg, `Institución creada. Factor de asignación: ${data.factor_asignacion}x`, "success");
-  await loadInstituciones();
-});
-
-// Asignación masiva
-document.getElementById("asignacionMasivaForm")?.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  if (institucionesMsg) institucionesMsg.textContent = "";
-
-  if (!hasPermission("instituciones.asignar")) {
-    showMessage(institucionesMsg, "No tiene permiso para asignar stock", "error");
-    return;
-  }
-
-  const payload = {
-    producto_id: parseInt(document.getElementById("asigProductoId").value, 10),
-    cantidad_base: parseInt(document.getElementById("asigCantidadBase").value, 10),
-    periodo: document.getElementById("asigPeriodo").value.trim()
-  };
-
-  if (!payload.producto_id || !payload.cantidad_base || !payload.periodo) {
-    showMessage(institucionesMsg, "Complete todos los campos", "error");
-    return;
-  }
-
-  const res = await fetch("/api/instituciones/asignar-masivo", {
-    method: "POST",
-    headers: authHeaders(),
-    body: JSON.stringify(payload)
-  });
-
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    showMessage(institucionesMsg, data.error || "No se pudo realizar la asignación", "error");
-    return;
-  }
-
-  document.getElementById("asignacionMasivaForm").reset();
-  showMessage(institucionesMsg, data.message || "Asignación realizada correctamente", "success");
-});
 
 // Acciones en tabla de instituciones
 institucionesTbody?.addEventListener("click", async (e) => {

@@ -16,25 +16,32 @@ function helpCode() {
 
 router.post("/register", async (req, res) => {
   try {
-    const { nombre, institucion, cue, email, password } = req.body;
+    const { nombre, cue, numero, password } = req.body;
     const cueNormalized = normalizeCue(cue);
-    const emailNormalized = String(email || "").trim().toLowerCase();
+    const numeroNormalized = String(numero || "").replace(/\D/g, "");
 
-    if (!nombre || !cueNormalized || !emailNormalized || !password) {
-      return res.status(400).json({ error: "Nombre, CUE, email y contraseña son obligatorios" });
+    if (!nombre || !cueNormalized || !numeroNormalized || !password) {
+      return res.status(400).json({ error: "Nombre, CUE, número y contraseña son obligatorios" });
     }
 
-    if (cueNormalized.length < 6 || cueNormalized.length > 12) {
-      return res.status(400).json({ error: "El CUE debe tener entre 6 y 12 digitos" });
+    if (cueNormalized.length !== 9) {
+      return res.status(400).json({ error: "El CUE debe tener exactamente 9 dígitos" });
+    }
+
+    if (numeroNormalized.length < 6) {
+      return res.status(400).json({ error: "El número debe tener al menos 6 dígitos" });
     }
 
     if (password.length < 6) {
       return res.status(400).json({ error: "La contraseña debe tener al menos 6 caracteres" });
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(emailNormalized)) {
-      return res.status(400).json({ error: "El email no tiene un formato válido" });
+    const institucion = await get(
+      "SELECT id, nombre, activo FROM instituciones WHERE cue = ?",
+      [cueNormalized]
+    );
+    if (!institucion || !institucion.activo) {
+      return res.status(404).json({ error: "escuela no registrada" });
     }
 
     const existingCue = await get("SELECT id FROM users WHERE cue = ?", [cueNormalized]);
@@ -48,15 +55,16 @@ router.post("/register", async (req, res) => {
       });
     }
 
-    const existingEmail = await get("SELECT id FROM users WHERE email = ?", [emailNormalized]);
+    const emailGenerated = `${cueNormalized}.${numeroNormalized}@registro.local`;
+    const existingEmail = await get("SELECT id FROM users WHERE email = ?", [emailGenerated]);
     if (existingEmail) {
-      return res.status(409).json({ error: "El email ya está registrado" });
+      return res.status(409).json({ error: "Ya existe un registro para ese CUE y número" });
     }
 
     const hash = await bcrypt.hash(password, 10);
     const result = await run(
       "INSERT INTO users (nombre, email, cue, password_hash, role, institucion, activo) VALUES (?, ?, ?, ?, ?, ?, 1)",
-      [nombre.trim(), emailNormalized, cueNormalized, hash, "consulta", institucion || null]
+      [nombre.trim(), emailGenerated, cueNormalized, hash, "directivo", institucion.nombre]
     );
 
     return res.status(201).json({

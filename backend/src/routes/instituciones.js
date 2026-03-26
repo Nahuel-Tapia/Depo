@@ -34,6 +34,39 @@ function calcularCantidadAsignada(matriculados, cantidadBase = 10) {
   return Math.ceil(cantidadBase * factor);
 }
 
+// Endpoint público para obtener nombre de institución por CUE (sin autenticación)
+router.get("/public/cue/:cue", async (req, res) => {
+  try {
+    const { cue } = req.params;
+    const cueNormalized = String(cue || "").replace(/\D/g, "");
+    
+    if (cueNormalized.length !== 9) {
+      return res.status(400).json({ error: "CUE inválido" });
+    }
+
+    const institucion = await get(`
+      SELECT id, cue, nombre, activo
+      FROM instituciones WHERE cue = ?
+    `, [cueNormalized]);
+
+    if (!institucion) {
+      return res.status(404).json({ error: "Institución no encontrada" });
+    }
+
+    if (!institucion.activo) {
+      return res.status(404).json({ error: "Institución inactiva" });
+    }
+
+    return res.json({ 
+      cue: institucion.cue,
+      nombre: institucion.nombre 
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "No se pudo buscar la institución" });
+  }
+});
+
 router.use(authenticate);
 
 // Listar todas las instituciones
@@ -124,8 +157,8 @@ router.post("/", authorizePermissions(PERMISSIONS.INSTITUCIONES_CREATE), async (
     }
 
     const cueNormalized = String(cue).replace(/\D/g, "");
-    if (cueNormalized.length < 6) {
-      return res.status(400).json({ error: "CUE debe tener al menos 6 dígitos" });
+    if (cueNormalized.length !== 9) {
+      return res.status(400).json({ error: "CUE debe tener exactamente 9 dígitos" });
     }
 
     if (nivel && !NIVELES.includes(nivel)) {
