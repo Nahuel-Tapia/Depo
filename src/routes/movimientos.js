@@ -15,7 +15,7 @@ router.get("/", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW), async (req, 
     let query = `
       SELECT 
         m.id, m.producto_id, p.codigo, p.nombre,
-        m.tipo, m.cantidad, m.motivo, m.proveedor, m.cue,
+        m.tipo, m.cantidad, m.motivo, m.proveedor, m.cue, m.pedido_id,
         u.nombre as usuario_nombre, u.email,
         m.created_at
       FROM movimientos m
@@ -53,7 +53,7 @@ router.get("/:id", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW), async (re
     const movimiento = await get(
       `SELECT 
         m.id, m.producto_id, p.codigo, p.nombre,
-        m.tipo, m.cantidad, m.motivo,
+        m.tipo, m.cantidad, m.motivo, m.pedido_id,
         u.nombre as usuario_nombre, u.email,
         m.created_at
       FROM movimientos m

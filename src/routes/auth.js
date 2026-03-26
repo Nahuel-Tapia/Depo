@@ -16,7 +16,7 @@ function helpCode() {
 
 router.post("/register", async (req, res) => {
   try {
-    const { nombre, cue, email, password } = req.body;
+    const { nombre, institucion, cue, email, password } = req.body;
     const cueNormalized = normalizeCue(cue);
     const emailNormalized = String(email || "").trim().toLowerCase();
 
@@ -55,8 +55,8 @@ router.post("/register", async (req, res) => {
 
     const hash = await bcrypt.hash(password, 10);
     const result = await run(
-      "INSERT INTO users (nombre, email, cue, password_hash, role, activo) VALUES (?, ?, ?, ?, ?, 1)",
-      [nombre.trim(), emailNormalized, cueNormalized, hash, "consulta"]
+      "INSERT INTO users (nombre, email, cue, password_hash, role, institucion, activo) VALUES (?, ?, ?, ?, ?, ?, 1)",
+      [nombre.trim(), emailNormalized, cueNormalized, hash, "consulta", institucion || null]
     );
 
     return res.status(201).json({

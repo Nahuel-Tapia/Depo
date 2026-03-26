@@ -4,6 +4,7 @@ const state = {
   permissions: [],
   productos: [],
   movimientos: [],
+  pedidos: [],
   users: []
 };
 
@@ -18,6 +19,7 @@ const adminMsg = document.getElementById("adminMsg");
 const currentUser = document.getElementById("currentUser");
 const permissionsList = document.getElementById("permissionsList");
 const usersTbody = document.getElementById("usersTbody");
+const pedidosTbody = document.getElementById("pedidosTbody");
 const logoutBtn = document.getElementById("logoutBtn");
 const createUserForm = document.getElementById("createUserForm");
 
@@ -160,6 +162,7 @@ async function render() {
   // Cargar datos iniciales
   await loadProductos();
   await loadMovimientos();
+  await loadPedidos();
   await loadUsers();
 }
 
@@ -167,6 +170,7 @@ function updateTabsVisibility() {
   const tabs = {
     productos: ["productos.view"],
     movimientos: ["movimientos.view"],
+    pedidos: ["pedidos.view"],
     usuarios: ["users.read"]
   };
 
@@ -186,6 +190,7 @@ function updateTabsVisibility() {
 function updateFormVisibilityByPermissions() {
   const createProductForm = document.getElementById("createProductForm");
   const createMovimientoForm = document.getElementById("createMovimientoForm");
+  const createPedidoForm = document.getElementById("createPedidoForm");
   const createUserFormEl = document.getElementById("createUserForm");
 
   if (createProductForm?.parentElement) {
@@ -194,6 +199,10 @@ function updateFormVisibilityByPermissions() {
 
   if (createMovimientoForm?.parentElement) {
     createMovimientoForm.parentElement.style.display = hasPermission("movimientos.create") ? "" : "none";
+  }
+
+  if (createPedidoForm?.parentElement) {
+    createPedidoForm.parentElement.style.display = hasPermission("pedidos.create") ? "" : "none";
   }
 
   if (createUserFormEl?.parentElement) {
@@ -350,6 +359,7 @@ registerForm?.addEventListener("submit", async (e) => {
   showMessage(registerMsg, "");
 
   const nombre = document.getElementById("registerNombre").value.trim();
+  const institucion = document.getElementById("registerInstitucion").value.trim();
   const cue = document.getElementById("registerCue").value.trim();
   const email = document.getElementById("registerEmail").value.trim();
   const password = document.getElementById("registerPassword").value;
@@ -357,7 +367,7 @@ registerForm?.addEventListener("submit", async (e) => {
   const res = await fetch("/api/auth/register", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ nombre, cue, email, password })
+    body: JSON.stringify({ nombre, institucion, cue, email, password })
   });
 
   const data = await res.json().catch(() => ({}));
@@ -499,7 +509,8 @@ function renderProductos() {
 function updateProductoSelects() {
   const selects = [
     document.getElementById("movProductoId"),
-    document.getElementById("ajuProductoId")
+    document.getElementById("ajuProductoId"),
+    document.getElementById("pedidoProductoId")
   ];
   
   selects.forEach(sel => {
@@ -702,6 +713,144 @@ document.getElementById("createMovimientoForm")?.addEventListener("submit", asyn
       );
     }
   }
+});
+
+// ============ PEDIDOS ============
+async function loadPedidos() {
+  if (!hasPermission("pedidos.view")) return;
+
+  const res = await fetch("/api/pedidos", { headers: authHeaders() });
+  const result = await processApiResponse(res);
+  if (!result.ok) {
+    const pedidosMsg = document.getElementById("pedidosMsg");
+    if (pedidosMsg) {
+      pedidosMsg.textContent = result.error === "Forbidden"
+        ? "No tiene permiso para ver pedidos"
+        : "No se pudieron cargar pedidos";
+    }
+    return;
+  }
+
+  const data = await res.json();
+  state.pedidos = data.pedidos || [];
+  renderPedidos();
+}
+
+function renderPedidos() {
+  if (!pedidosTbody) return;
+  pedidosTbody.innerHTML = "";
+
+  state.pedidos.forEach((pedido) => {
+    const canManage = hasPermission("pedidos.manage");
+    const canCancel = hasPermission("pedidos.create") && pedido.estado === "pendiente";
+    const actions = [];
+
+    if (canManage && pedido.estado === "pendiente") {
+      actions.push(`<button data-action="aprobar-pedido" data-id="${pedido.id}">Aprobar</button>`);
+      actions.push(`<button data-action="rechazar-pedido" data-id="${pedido.id}">Rechazar</button>`);
+    }
+
+    if (canManage && pedido.estado !== "entregado" && pedido.estado !== "rechazado") {
+      actions.push(`<button data-action="entregar-pedido" data-id="${pedido.id}">Entregar</button>`);
+    }
+
+    if (!canManage && canCancel) {
+      actions.push(`<button data-action="cancelar-pedido" data-id="${pedido.id}">Cancelar</button>`);
+    }
+
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${pedido.producto_nombre || "-"}</td>
+      <td>${pedido.cantidad}</td>
+      <td>${pedido.institucion || "-"}</td>
+      <td><span class="badge">${pedido.estado}</span></td>
+      <td>${pedido.usuario_nombre || "-"}</td>
+      <td>${pedido.notas || "-"}</td>
+      <td>${new Date(pedido.created_at).toLocaleDateString()}</td>
+      <td><div class="inline-actions">${actions.join("")}</div></td>
+    `;
+    pedidosTbody.appendChild(tr);
+  });
+}
+
+document.getElementById("createPedidoForm")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const pedidosMsg = document.getElementById("pedidosMsg");
+  pedidosMsg.textContent = "";
+
+  if (!hasPermission("pedidos.create")) {
+    pedidosMsg.textContent = "No tiene permiso para crear pedidos";
+    return;
+  }
+
+  const payload = {
+    producto_id: parseInt(document.getElementById("pedidoProductoId").value, 10),
+    cantidad: parseInt(document.getElementById("pedidoCantidad").value, 10),
+    notas: document.getElementById("pedidoNotas").value.trim() || null
+  };
+
+  const res = await fetch("/api/pedidos", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify(payload)
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    pedidosMsg.textContent = data.error || "No se pudo crear el pedido";
+    return;
+  }
+
+  document.getElementById("createPedidoForm").reset();
+  pedidosMsg.textContent = "Pedido creado correctamente";
+  await loadPedidos();
+});
+
+pedidosTbody?.addEventListener("click", async (e) => {
+  const btn = e.target.closest("button");
+  if (!btn) return;
+
+  const { id, action } = btn.dataset;
+  if (!id || !action) return;
+
+  const pedidosMsg = document.getElementById("pedidosMsg");
+  pedidosMsg.textContent = "";
+
+  let url = null;
+  let options = null;
+
+  if (action === "cancelar-pedido") {
+    url = `/api/pedidos/${id}/cancelar`;
+    options = { method: "PATCH", headers: authHeaders() };
+  }
+
+  if (action === "aprobar-pedido") {
+    url = `/api/pedidos/${id}/estado`;
+    options = { method: "PATCH", headers: authHeaders(), body: JSON.stringify({ estado: "aprobado" }) };
+  }
+
+  if (action === "rechazar-pedido") {
+    url = `/api/pedidos/${id}/estado`;
+    options = { method: "PATCH", headers: authHeaders(), body: JSON.stringify({ estado: "rechazado" }) };
+  }
+
+  if (action === "entregar-pedido") {
+    url = `/api/pedidos/${id}/estado`;
+    options = { method: "PATCH", headers: authHeaders(), body: JSON.stringify({ estado: "entregado" }) };
+  }
+
+  if (!url || !options) return;
+
+  const res = await fetch(url, options);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    pedidosMsg.textContent = data.error || "No se pudo actualizar el pedido";
+    return;
+  }
+
+  await loadPedidos();
+  await loadProductos();
+  await loadMovimientos();
 });
 
 // ============ AUDITORÍA ============
