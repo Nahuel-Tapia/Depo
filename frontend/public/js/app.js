@@ -5,7 +5,8 @@ const state = {
   productos: [],
   movimientos: [],
   pedidos: [],
-  users: []
+  users: [],
+  instituciones: []
 };
 
 const loginCard = document.getElementById("loginCard");
@@ -164,6 +165,7 @@ async function render() {
   await loadMovimientos();
   await loadPedidos();
   await loadUsers();
+  await loadInstituciones();
 }
 
 function updateTabsVisibility() {
@@ -171,6 +173,7 @@ function updateTabsVisibility() {
     productos: ["productos.view"],
     movimientos: ["movimientos.view"],
     pedidos: ["pedidos.view"],
+    instituciones: ["instituciones.view"],
     usuarios: ["users.read"]
   };
 
@@ -192,6 +195,8 @@ function updateFormVisibilityByPermissions() {
   const createMovimientoForm = document.getElementById("createMovimientoForm");
   const createPedidoForm = document.getElementById("createPedidoForm");
   const createUserFormEl = document.getElementById("createUserForm");
+  const createInstitucionForm = document.getElementById("createInstitucionForm");
+  const asignacionMasivaForm = document.getElementById("asignacionMasivaForm");
 
   if (createProductForm?.parentElement) {
     createProductForm.parentElement.style.display = hasPermission("productos.create") ? "" : "none";
@@ -208,6 +213,14 @@ function updateFormVisibilityByPermissions() {
 
   if (createUserFormEl?.parentElement) {
     createUserFormEl.parentElement.style.display = hasPermission("users.create") ? "" : "none";
+  }
+
+  if (createInstitucionForm?.parentElement) {
+    createInstitucionForm.parentElement.style.display = hasPermission("instituciones.create") ? "" : "none";
+  }
+
+  if (asignacionMasivaForm?.parentElement) {
+    asignacionMasivaForm.parentElement.style.display = hasPermission("instituciones.asignar") ? "" : "none";
   }
 }
 
@@ -890,5 +903,259 @@ pedidosTbody?.addEventListener("click", async (e) => {
 // ============ AUDITORÍA ============
 
 
+
+// ============ INSTITUCIONES ============
+const institucionesTbody = document.getElementById("institucionesTbody");
+const institucionesMsg = document.getElementById("institucionesMsg");
+
+async function loadInstituciones() {
+  if (!hasPermission("instituciones.view")) return;
+
+  const res = await fetch("/api/instituciones", { headers: authHeaders() });
+  const result = await processApiResponse(res);
+  if (!result.ok) {
+    if (institucionesMsg) {
+      institucionesMsg.textContent = result.error === "Forbidden"
+        ? "No tiene permiso para ver instituciones"
+        : "No se pudieron cargar instituciones";
+    }
+    return;
+  }
+
+  const data = await res.json();
+  state.instituciones = data.instituciones || [];
+  renderInstituciones();
+  populateAsigProductoSelect();
+}
+
+function renderInstituciones() {
+  if (!institucionesTbody) return;
+  institucionesTbody.innerHTML = "";
+
+  const canEdit = hasPermission("instituciones.edit");
+  const canDelete = hasPermission("instituciones.delete");
+  const canAsignar = hasPermission("instituciones.asignar");
+
+  state.instituciones.forEach((inst) => {
+    const actions = [];
+    if (canEdit) {
+      actions.push(`<button data-action="edit-inst" data-id="${inst.id}">Editar</button>`);
+      actions.push(`<button data-action="toggle-inst" data-id="${inst.id}" data-active="${inst.activo}">${inst.activo ? "Desactivar" : "Activar"}</button>`);
+    }
+    if (canAsignar) {
+      actions.push(`<button data-action="ver-asignaciones" data-id="${inst.id}">Asignaciones</button>`);
+    }
+    if (canDelete) {
+      actions.push(`<button data-action="delete-inst" data-id="${inst.id}">Eliminar</button>`);
+    }
+
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${inst.cue}</td>
+      <td>${inst.nombre}</td>
+      <td>${inst.nivel || "-"}</td>
+      <td>${inst.localidad || "-"}</td>
+      <td>${inst.matriculados}</td>
+      <td>${inst.factor_asignacion}x</td>
+      <td>${inst.activo ? "Sí" : "No"}</td>
+      <td><div class="inline-actions">${actions.join("")}</div></td>
+    `;
+    institucionesTbody.appendChild(tr);
+  });
+}
+
+function populateAsigProductoSelect() {
+  const select = document.getElementById("asigProductoId");
+  if (!select) return;
+
+  select.innerHTML = '<option value="">Seleccionar producto...</option>';
+  state.productos.forEach((p) => {
+    const option = document.createElement("option");
+    option.value = p.id;
+    option.textContent = `${p.codigo} - ${p.nombre} (Stock: ${p.stock_actual})`;
+    select.appendChild(option);
+  });
+}
+
+// Crear institución
+document.getElementById("createInstitucionForm")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (institucionesMsg) institucionesMsg.textContent = "";
+
+  if (!hasPermission("instituciones.create")) {
+    showMessage(institucionesMsg, "No tiene permiso para crear instituciones", "error");
+    return;
+  }
+
+  const payload = {
+    cue: document.getElementById("instCue").value.trim(),
+    nombre: document.getElementById("instNombre").value.trim(),
+    nivel: document.getElementById("instNivel").value || null,
+    tipo: document.getElementById("instTipo").value || "publica",
+    matriculados: parseInt(document.getElementById("instMatriculados").value, 10) || 0,
+    direccion: document.getElementById("instDireccion").value.trim() || null,
+    localidad: document.getElementById("instLocalidad").value.trim() || null,
+    departamento: document.getElementById("instDepartamento").value.trim() || null,
+    telefono: document.getElementById("instTelefono").value.trim() || null,
+    email: document.getElementById("instEmail").value.trim() || null,
+    notas: document.getElementById("instNotas").value.trim() || null
+  };
+
+  const res = await fetch("/api/instituciones", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify(payload)
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    showMessage(institucionesMsg, data.error || "No se pudo crear la institución", "error");
+    return;
+  }
+
+  document.getElementById("createInstitucionForm").reset();
+  showMessage(institucionesMsg, `Institución creada. Factor de asignación: ${data.factor_asignacion}x`, "success");
+  await loadInstituciones();
+});
+
+// Asignación masiva
+document.getElementById("asignacionMasivaForm")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (institucionesMsg) institucionesMsg.textContent = "";
+
+  if (!hasPermission("instituciones.asignar")) {
+    showMessage(institucionesMsg, "No tiene permiso para asignar stock", "error");
+    return;
+  }
+
+  const payload = {
+    producto_id: parseInt(document.getElementById("asigProductoId").value, 10),
+    cantidad_base: parseInt(document.getElementById("asigCantidadBase").value, 10),
+    periodo: document.getElementById("asigPeriodo").value.trim()
+  };
+
+  if (!payload.producto_id || !payload.cantidad_base || !payload.periodo) {
+    showMessage(institucionesMsg, "Complete todos los campos", "error");
+    return;
+  }
+
+  const res = await fetch("/api/instituciones/asignar-masivo", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify(payload)
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    showMessage(institucionesMsg, data.error || "No se pudo realizar la asignación", "error");
+    return;
+  }
+
+  document.getElementById("asignacionMasivaForm").reset();
+  showMessage(institucionesMsg, data.message || "Asignación realizada correctamente", "success");
+});
+
+// Acciones en tabla de instituciones
+institucionesTbody?.addEventListener("click", async (e) => {
+  const btn = e.target.closest("button");
+  if (!btn) return;
+
+  const { id, action, active } = btn.dataset;
+  if (!id || !action) return;
+
+  if (action === "toggle-inst") {
+    const res = await fetch(`/api/instituciones/${id}`, {
+      method: "PATCH",
+      headers: authHeaders(),
+      body: JSON.stringify({ activo: active !== "1" })
+    });
+    if (res.ok) {
+      await loadInstituciones();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      showMessage(institucionesMsg, data.error || "No se pudo actualizar", "error");
+    }
+  }
+
+  if (action === "delete-inst") {
+    if (!confirm("¿Eliminar esta institución y sus asignaciones?")) return;
+    const res = await fetch(`/api/instituciones/${id}`, {
+      method: "DELETE",
+      headers: authHeaders()
+    });
+    if (res.ok) {
+      await loadInstituciones();
+      showMessage(institucionesMsg, "Institución eliminada", "success");
+    } else {
+      const data = await res.json().catch(() => ({}));
+      showMessage(institucionesMsg, data.error || "No se pudo eliminar", "error");
+    }
+  }
+
+  if (action === "ver-asignaciones") {
+    const inst = state.instituciones.find(i => i.id === parseInt(id, 10));
+    if (!inst) return;
+
+    // Obtener asignaciones
+    const res = await fetch(`/api/instituciones/${id}/asignaciones`, { headers: authHeaders() });
+    if (!res.ok) {
+      showMessage(institucionesMsg, "No se pudieron cargar asignaciones", "error");
+      return;
+    }
+
+    const data = await res.json();
+    const asignaciones = data.asignaciones || [];
+
+    let html = `<h4>Asignaciones de ${inst.nombre} (CUE: ${inst.cue})</h4>`;
+    if (asignaciones.length === 0) {
+      html += "<p>No hay asignaciones registradas.</p>";
+    } else {
+      html += "<table><thead><tr><th>Producto</th><th>Período</th><th>Asignado</th><th>Entregado</th><th>Pendiente</th></tr></thead><tbody>";
+      asignaciones.forEach(a => {
+        html += `<tr>
+          <td>${a.producto_nombre}</td>
+          <td>${a.periodo}</td>
+          <td>${a.cantidad_asignada}</td>
+          <td>${a.cantidad_entregada}</td>
+          <td>${a.pendiente}</td>
+        </tr>`;
+      });
+      html += "</tbody></table>";
+    }
+
+    // Mostrar en modal simple o alert
+    const modal = document.createElement("div");
+    modal.style.cssText = "position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000;";
+    modal.innerHTML = `
+      <div style="background:white;padding:24px;border-radius:8px;max-width:600px;max-height:80vh;overflow:auto;">
+        ${html}
+        <button onclick="this.closest('div').parentElement.remove()" style="margin-top:16px;">Cerrar</button>
+      </div>
+    `;
+    document.body.appendChild(modal);
+  }
+
+  if (action === "edit-inst") {
+    const inst = state.instituciones.find(i => i.id === parseInt(id, 10));
+    if (!inst) return;
+
+    const nuevoMatriculados = prompt(`Editar matrícula de ${inst.nombre}:`, inst.matriculados);
+    if (nuevoMatriculados === null) return;
+
+    const res = await fetch(`/api/instituciones/${id}`, {
+      method: "PATCH",
+      headers: authHeaders(),
+      body: JSON.stringify({ matriculados: parseInt(nuevoMatriculados, 10) || 0 })
+    });
+
+    if (res.ok) {
+      await loadInstituciones();
+      showMessage(institucionesMsg, "Institución actualizada", "success");
+    } else {
+      const data = await res.json().catch(() => ({}));
+      showMessage(institucionesMsg, data.error || "No se pudo actualizar", "error");
+    }
+  }
+});
 
 render();

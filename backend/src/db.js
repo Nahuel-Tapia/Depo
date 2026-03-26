@@ -168,6 +168,45 @@ async function initDb() {
     )
   `);
 
+  // Tabla de instituciones/escuelas
+  await run(`
+    CREATE TABLE IF NOT EXISTS instituciones (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      cue TEXT NOT NULL UNIQUE,
+      nombre TEXT NOT NULL,
+      direccion TEXT,
+      localidad TEXT,
+      departamento TEXT,
+      telefono TEXT,
+      email TEXT,
+      nivel TEXT CHECK(nivel IN ('inicial', 'primario', 'secundario', 'superior', 'especial', 'adultos', 'otro')),
+      tipo TEXT CHECK(tipo IN ('publica', 'privada', 'municipal')) DEFAULT 'publica',
+      matriculados INTEGER NOT NULL DEFAULT 0,
+      factor_asignacion REAL NOT NULL DEFAULT 1.0,
+      activo INTEGER NOT NULL DEFAULT 1,
+      notas TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Tabla de asignaciones de stock por institución
+  await run(`
+    CREATE TABLE IF NOT EXISTS asignaciones_stock (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      institucion_id INTEGER NOT NULL,
+      producto_id INTEGER NOT NULL,
+      cantidad_asignada INTEGER NOT NULL DEFAULT 0,
+      cantidad_entregada INTEGER NOT NULL DEFAULT 0,
+      periodo TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (institucion_id) REFERENCES instituciones(id),
+      FOREIGN KEY (producto_id) REFERENCES productos(id),
+      UNIQUE(institucion_id, producto_id, periodo)
+    )
+  `);
+
   const admin = await get("SELECT id FROM users WHERE email = ?", ["admin@depo.local"]);
   if (!admin) {
     const hash = bcrypt.hashSync("Admin123!", 10);
