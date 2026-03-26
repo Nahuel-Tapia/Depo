@@ -19,7 +19,7 @@ const PORT = process.env.PORT || 4000;
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, "..", "public")));
+app.use(express.static(path.join(__dirname, "..", "..", "frontend", "public")));
 
 app.get("/api/health", (req, res) => {
   res.json({ ok: true });
@@ -35,15 +35,15 @@ app.use("/api/auditoria", auditoriaRoutes);
 app.use("/api/pedidos", pedidosRoutes);
 
 app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "..", "public", "index.html"));
+  res.sendFile(path.join(__dirname, "..", "..", "frontend", "public", "index.html"));
 });
 
 app.get("/registro", (req, res) => {
-  res.sendFile(path.join(__dirname, "..", "public", "registro.html"));
+  res.sendFile(path.join(__dirname, "..", "..", "frontend", "public", "registro.html"));
 });
 
 app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "..", "public", "index.html"));
+  res.sendFile(path.join(__dirname, "..", "..", "frontend", "public", "index.html"));
 });
 
 initDb()
