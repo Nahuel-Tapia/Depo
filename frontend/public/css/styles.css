@@ -346,17 +346,21 @@ td {
 }
 
 th {
-  background: var(--orange-soft);
+  background: linear-gradient(90deg, #ffe8cc 0%, #fff3e3 55%, #ffffff 100%);
   font-weight: 600;
   color: #374151;
 }
 
-tbody tr:nth-child(even) {
-  background: #fffcf8;
+tbody td {
+  background: linear-gradient(90deg, #fffaf4 0%, #ffffff 100%);
 }
 
-tbody tr:hover {
-  background: var(--orange-soft-2);
+tbody tr:nth-child(even) td {
+  background: linear-gradient(90deg, #fff5ea 0%, #ffffff 100%);
+}
+
+tbody tr:hover td {
+  background: linear-gradient(90deg, #ffeed8 0%, #ffffff 100%);
 }
 
 .badge {
