@@ -1,7 +1,7 @@
 const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const { get, run } = require("../db");
+const { get, run } = require("../db.pg");
 
 const router = express.Router();
 
@@ -16,16 +16,16 @@ function helpCode() {
 
 router.post("/register", async (req, res) => {
   try {
-    const { nombre, institucion, cue, email, password } = req.body;
-    const cueNormalized = normalizeCue(cue);
+    const { nombre, apellido, institucion, dni, email, password, telefono } = req.body;
+    const dniNormalized = normalizeCue(dni);
     const emailNormalized = String(email || "").trim().toLowerCase();
 
-    if (!nombre || !cueNormalized || !emailNormalized || !password) {
-      return res.status(400).json({ error: "Nombre, CUE, email y contraseña son obligatorios" });
+    if (!nombre || !dniNormalized || !emailNormalized || !password) {
+      return res.status(400).json({ error: "Nombre, DNI, email y contraseña son obligatorios" });
     }
 
-    if (cueNormalized.length < 6 || cueNormalized.length > 12) {
-      return res.status(400).json({ error: "El CUE debe tener entre 6 y 12 digitos" });
+    if (dniNormalized.length < 6 || dniNormalized.length > 12) {
+      return res.status(400).json({ error: "El DNI debe tener entre 6 y 12 digitos" });
     }
 
     if (password.length < 6) {
@@ -37,41 +37,41 @@ router.post("/register", async (req, res) => {
       return res.status(400).json({ error: "El email no tiene un formato válido" });
     }
 
-    const existingCue = await get("SELECT id FROM users WHERE cue = ?", [cueNormalized]);
-    if (existingCue) {
+    const existingDni = await get("SELECT id_usuario FROM usuario WHERE dni = ?", [dniNormalized]);
+    if (existingDni) {
       const code = helpCode();
       return res.status(409).json({
         ok: false,
-        error: "El CUE ya está registrado",
+        error: "El DNI ya está registrado",
         helpCode: code,
-        message: `El CUE ya está registrado. Número de ayuda: ${code}`
+        message: `El DNI ya está registrado. Número de ayuda: ${code}`
       });
     }
 
-    const existingEmail = await get("SELECT id FROM users WHERE email = ?", [emailNormalized]);
+    const existingEmail = await get("SELECT id_usuario FROM usuario WHERE email = ?", [emailNormalized]);
     if (existingEmail) {
       return res.status(409).json({ error: "El email ya está registrado" });
     }
 
     const hash = await bcrypt.hash(password, 10);
     const result = await run(
-      "INSERT INTO users (nombre, email, cue, password_hash, role, institucion, activo) VALUES (?, ?, ?, ?, ?, ?, 1)",
-      [nombre.trim(), emailNormalized, cueNormalized, hash, "consulta", institucion || null]
+      "INSERT INTO usuario (nombre, apellido, dni, email, password, telefono, id_institucion, role, activo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, TRUE)",
+      [nombre.trim(), apellido || null, dniNormalized, emailNormalized, hash, telefono || null, institucion || null, "consulta"]
     );
 
     return res.status(201).json({
       ok: true,
       id: result.lastID,
-      message: "Usuario creado correctamente. Ya puede iniciar sesión con su CUE"
+      message: "Usuario creado correctamente. Ya puede iniciar sesión con su DNI"
     });
   } catch (err) {
     if (String(err.message || "").includes("UNIQUE")) {
       const code = helpCode();
       return res.status(409).json({
         ok: false,
-        error: "El CUE ya está registrado",
+        error: "El DNI ya está registrado",
         helpCode: code,
-        message: `El CUE ya está registrado. Número de ayuda: ${code}`
+        message: `El DNI ya está registrado. Número de ayuda: ${code}`
       });
     }
     return res.status(500).json({ ok: false, error: "Error al registrar usuario" });
@@ -80,17 +80,17 @@ router.post("/register", async (req, res) => {
 
 router.post("/login", async (req, res) => {
   try {
-    const { email, cue, password } = req.body;
-    const cueNormalized = normalizeCue(cue);
-    const identifier = email || cueNormalized;
+    const { email, dni, password } = req.body;
+    const dniNormalized = normalizeCue(dni);
+    const identifier = email || dniNormalized;
 
     if (!identifier || !password) {
-      return res.status(400).json({ error: "CUE/Email y contraseña son obligatorios" });
+      return res.status(400).json({ error: "DNI/Email y contraseña son obligatorios" });
     }
 
-    const user = cueNormalized
-      ? await get("SELECT * FROM users WHERE cue = ?", [cueNormalized])
-      : await get("SELECT * FROM users WHERE email = ?", [email]);
+    const user = dniNormalized
+      ? await get("SELECT * FROM usuario WHERE dni = ?", [dniNormalized])
+      : await get("SELECT * FROM usuario WHERE email = ?", [email]);
     if (!user || !user.activo) {
       return res.status(401).json({
         code: "INVALID_CREDENTIALS",
@@ -98,7 +98,7 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    const ok = await bcrypt.compare(password, user.password_hash);
+    const ok = await bcrypt.compare(password, user.password);
     if (!ok) {
       return res.status(401).json({
         code: "INVALID_PASSWORD",
@@ -108,10 +108,11 @@ router.post("/login", async (req, res) => {
 
     const token = jwt.sign(
       {
-        sub: user.id,
+        sub: user.id_usuario,
         nombre: user.nombre,
+        apellido: user.apellido,
         email: user.email,
-        cue: user.cue,
+        dni: user.dni,
         role: user.role
       },
       process.env.JWT_SECRET || "dev-secret",
@@ -123,10 +124,11 @@ router.post("/login", async (req, res) => {
       message: "Inicio de sesión correcto",
       token,
       user: {
-        id: user.id,
+        id: user.id_usuario,
         nombre: user.nombre,
+        apellido: user.apellido,
         email: user.email,
-        cue: user.cue,
+        dni: user.dni,
         role: user.role
       }
     });

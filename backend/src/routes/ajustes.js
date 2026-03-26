@@ -1,5 +1,5 @@
 const express = require("express");
-const { all, get, run } = require("../db");
+const { all, get, run } = require("../db.pg");
 const { authenticate, authorizePermissions } = require("../middleware/auth");
 const { PERMISSIONS } = require("../permissions");
 

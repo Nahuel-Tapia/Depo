@@ -1,45 +1,28 @@
-const path = require("path");
-const sqlite3 = require("sqlite3").verbose();
+require("dotenv").config({ path: require("path").join(__dirname, "..", "..", ".env") });
+const { Pool } = require("pg");
 const bcrypt = require("bcryptjs");
+const dbConfig = require("../src/config/database");
 
-const dbPath = path.join(__dirname, "..", "depo.sqlite");
-const db = new sqlite3.Database(dbPath);
-
-function run(sql, params = []) {
-  return new Promise((resolve, reject) => {
-    db.run(sql, params, function onRun(err) {
-      if (err) return reject(err);
-      resolve({ lastID: this.lastID, changes: this.changes });
-    });
-  });
-}
-
-function get(sql, params = []) {
-  return new Promise((resolve, reject) => {
-    db.get(sql, params, (err, row) => {
-      if (err) return reject(err);
-      resolve(row);
-    });
-  });
-}
+const pool = new Pool(dbConfig);
 
 async function main() {
   const email = "admin@depo.local";
   const password = "Admin123!";
   const hash = await bcrypt.hash(password, 10);
 
-  const existing = await get("SELECT id FROM users WHERE email = ?", [email]);
+  const existingResult = await pool.query("SELECT id_usuario FROM usuario WHERE email = $1", [email]);
+  const existing = existingResult.rows[0];
 
   if (existing) {
-    await run(
-      "UPDATE users SET nombre = ?, password_hash = ?, role = 'admin', activo = 1 WHERE id = ?",
-      ["Administrador Inicial", hash, existing.id]
+    await pool.query(
+      "UPDATE usuario SET nombre = $1, apellido = $2, password = $3, role = 'admin', activo = TRUE WHERE id_usuario = $4",
+      ["Administrador", "Inicial", hash, existing.id_usuario]
     );
     console.log("Admin actualizado.");
   } else {
-    await run(
-      "INSERT INTO users (nombre, email, password_hash, role, activo) VALUES (?, ?, ?, 'admin', 1)",
-      ["Administrador Inicial", email, hash]
+    await pool.query(
+      "INSERT INTO usuario (nombre, apellido, dni, email, password, role, activo, created_at) VALUES ($1, $2, $3, $4, $5, 'admin', TRUE, NOW())",
+      ["Administrador", "Inicial", "00000000", email, hash]
     );
     console.log("Admin creado.");
   }
@@ -55,5 +38,5 @@ main()
     process.exitCode = 1;
   })
   .finally(() => {
-    db.close();
+    pool.end();
   });
