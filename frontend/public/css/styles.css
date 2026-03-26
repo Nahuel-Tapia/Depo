@@ -3,6 +3,9 @@
   --text: #111827;
   --yellow: #f6d743;
   --orange: #f7931e;
+  --orange-soft: #fff6eb;
+  --orange-soft-2: #ffedd5;
+  --orange-border: #f8c98f;
   --red: #e53935;
   --card: #ffffff;
   --muted: #6b7280;
@@ -309,7 +312,9 @@ button.secondary {
 
 #permissionsList li {
   padding: 8px 12px;
-  background: white;
+  background: var(--orange-soft);
+  border: 1px solid var(--orange-border);
+  border-left: 4px solid #f4b36a;
   border-radius: 6px;
   font-size: 13px;
   color: #374151;
@@ -341,13 +346,17 @@ td {
 }
 
 th {
-  background: #f9fafb;
+  background: var(--orange-soft);
   font-weight: 600;
   color: #374151;
 }
 
+tbody tr:nth-child(even) {
+  background: #fffcf8;
+}
+
 tbody tr:hover {
-  background: #f9fafb;
+  background: var(--orange-soft-2);
 }
 
 .badge {
