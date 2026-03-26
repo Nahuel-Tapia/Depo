@@ -202,7 +202,8 @@ function updateFormVisibilityByPermissions() {
   }
 
   if (createPedidoForm?.parentElement) {
-    createPedidoForm.parentElement.style.display = hasPermission("pedidos.create") ? "" : "none";
+    const canCreatePedido = hasPermission("pedidos.create") && state.user?.role === "directivo";
+    createPedidoForm.parentElement.style.display = canCreatePedido ? "" : "none";
   }
 
   if (createUserFormEl?.parentElement) {
@@ -262,14 +263,24 @@ usersTbody?.addEventListener("click", async (e) => {
     const role = prompt("Nuevo rol (admin, directivo, operador, consulta):", "operador");
     if (!role) return;
 
+    let institucion = null;
+    if (role === "directivo") {
+      institucion = prompt("Institución del usuario (obligatoria para directivo):", "")?.trim() || "";
+      if (!institucion) {
+        adminMsg.textContent = "La institución es obligatoria para rol directivo";
+        return;
+      }
+    }
+
     const res = await fetch(`/api/users/${id}/role`, {
       method: "PATCH",
       headers: authHeaders(),
-      body: JSON.stringify({ role })
+      body: JSON.stringify({ role, institucion })
     });
 
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      adminMsg.textContent = "No se pudo actualizar rol";
+      adminMsg.textContent = data.error || "No se pudo actualizar rol";
       return;
     }
 
@@ -398,9 +409,15 @@ createUserForm?.addEventListener("submit", async (e) => {
   const payload = {
     nombre: document.getElementById("newNombre").value.trim(),
     email: document.getElementById("newEmail").value.trim(),
+    institucion: document.getElementById("newInstitucion")?.value.trim() || null,
     password: document.getElementById("newPassword").value,
     role: document.getElementById("newRole").value
   };
+
+  if (payload.role === "directivo" && !payload.institucion) {
+    adminMsg.textContent = "La institución es obligatoria para rol directivo";
+    return;
+  }
 
   const res = await fetch("/api/users", {
     method: "POST",
@@ -416,6 +433,12 @@ createUserForm?.addEventListener("submit", async (e) => {
 
   createUserForm.reset();
   loadUsers();
+});
+
+document.getElementById("newRole")?.addEventListener("change", (e) => {
+  const institucionInput = document.getElementById("newInstitucion");
+  if (!institucionInput) return;
+  institucionInput.required = e.target.value === "directivo";
 });
 
 logoutBtn?.addEventListener("click", () => {
@@ -508,22 +531,24 @@ function renderProductos() {
 
 function updateProductoSelects() {
   const selects = [
-    document.getElementById("movProductoId"),
-    document.getElementById("ajuProductoId"),
-    document.getElementById("pedidoProductoId")
+    { el: document.getElementById("movProductoId"), showStock: true },
+    { el: document.getElementById("ajuProductoId"), showStock: true },
+    { el: document.getElementById("pedidoProductoId"), showStock: hasPermission("pedidos.manage") }
   ];
-  
-  selects.forEach(sel => {
-    if (!sel) return;
-    const current = sel.value;
-    sel.innerHTML = '<option value="">Seleccionar producto...</option>';
+
+  selects.forEach(({ el, showStock }) => {
+    if (!el) return;
+    const current = el.value;
+    el.innerHTML = '<option value="">Seleccionar producto...</option>';
     state.productos.forEach(p => {
       const opt = document.createElement("option");
       opt.value = p.id;
-      opt.textContent = `${p.codigo} - ${p.nombre} (Stock: ${p.stock_actual})`;
-      sel.appendChild(opt);
+      opt.textContent = showStock
+        ? `${p.codigo} - ${p.nombre} (Stock: ${p.stock_actual})`
+        : `${p.codigo} - ${p.nombre}`;
+      el.appendChild(opt);
     });
-    sel.value = current;
+    el.value = current;
   });
 }
 
@@ -739,14 +764,22 @@ async function loadPedidos() {
 function renderPedidos() {
   if (!pedidosTbody) return;
   pedidosTbody.innerHTML = "";
+  const canViewStock = hasPermission("pedidos.manage");
+  const pedidosStockHeader = document.getElementById("pedidosStockHeader");
+  if (pedidosStockHeader) {
+    pedidosStockHeader.style.display = canViewStock ? "" : "none";
+  }
 
   state.pedidos.forEach((pedido) => {
     const canManage = hasPermission("pedidos.manage");
     const canCancel = hasPermission("pedidos.create") && pedido.estado === "pendiente";
+    const stockActual = Number(pedido.stock_actual || 0);
+    const stockSuficiente = stockActual >= Number(pedido.cantidad || 0);
     const actions = [];
 
     if (canManage && pedido.estado === "pendiente") {
-      actions.push(`<button data-action="aprobar-pedido" data-id="${pedido.id}">Aprobar</button>`);
+      const disabledAttr = stockSuficiente ? "" : "disabled title=\"Stock insuficiente para aprobar\"";
+      actions.push(`<button data-action="aprobar-pedido" data-id="${pedido.id}" ${disabledAttr}>Aprobar</button>`);
       actions.push(`<button data-action="rechazar-pedido" data-id="${pedido.id}">Rechazar</button>`);
     }
 
@@ -762,6 +795,7 @@ function renderPedidos() {
     tr.innerHTML = `
       <td>${pedido.producto_nombre || "-"}</td>
       <td>${pedido.cantidad}</td>
+      ${canViewStock ? `<td>${stockActual}</td>` : ""}
       <td>${pedido.institucion || "-"}</td>
       <td><span class="badge">${pedido.estado}</span></td>
       <td>${pedido.usuario_nombre || "-"}</td>

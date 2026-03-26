@@ -34,12 +34,17 @@ router.post("/", authorizePermissions(PERMISSIONS.USERS_CREATE), async (req, res
   try {
     const { nombre, email, cue, password, role, institucion } = req.body;
     const cueNormalized = normalizeCue(cue);
+    const institucionNormalized = String(institucion || "").trim();
     if (!nombre || !email || !password || !role) {
       return res.status(400).json({ error: "Faltan campos obligatorios" });
     }
 
     if (!VALID_ROLES.includes(role)) {
       return res.status(400).json({ error: "Rol inválido" });
+    }
+
+    if (role === "directivo" && !institucionNormalized) {
+      return res.status(400).json({ error: "La institución es obligatoria para rol directivo" });
     }
 
     const existing = await get("SELECT id FROM users WHERE email = ?", [email]);
@@ -57,7 +62,7 @@ router.post("/", authorizePermissions(PERMISSIONS.USERS_CREATE), async (req, res
     const hash = await bcrypt.hash(password, 10);
     const result = await run(
       "INSERT INTO users (nombre, email, cue, password_hash, role, institucion, activo) VALUES (?, ?, ?, ?, ?, ?, 1)",
-      [nombre, email, cueNormalized, hash, role, institucion || null]
+      [nombre, email, cueNormalized, hash, role, institucionNormalized || null]
     );
 
     return res.status(201).json({ id: result.lastID });
@@ -72,13 +77,25 @@ router.patch(
   async (req, res) => {
     try {
       const { id } = req.params;
-      const { role } = req.body;
+      const { role, institucion } = req.body;
+      const institucionNormalized = String(institucion || "").trim();
 
       if (!VALID_ROLES.includes(role)) {
         return res.status(400).json({ error: "Rol inválido" });
       }
 
-      await run("UPDATE users SET role = ? WHERE id = ?", [role, id]);
+      const user = await get("SELECT id, institucion FROM users WHERE id = ?", [id]);
+      if (!user) {
+        return res.status(404).json({ error: "Usuario no encontrado" });
+      }
+
+      const finalInstitucion = institucionNormalized || String(user.institucion || "").trim() || null;
+
+      if (role === "directivo" && !finalInstitucion) {
+        return res.status(400).json({ error: "La institución es obligatoria para rol directivo" });
+      }
+
+      await run("UPDATE users SET role = ?, institucion = ? WHERE id = ?", [role, finalInstitucion, id]);
       return res.json({ ok: true });
     } catch (err) {
       return res.status(500).json({ error: "No se pudo actualizar el rol" });

@@ -217,6 +217,7 @@
               <tr>
                 <th>Producto</th>
                 <th>Cantidad</th>
+                <th id="pedidosStockHeader">Stock Actual</th>
                 <th>Institución</th>
                 <th>Estado</th>
                 <th>Solicitado por</th>
@@ -255,6 +256,10 @@
                   <option value="directivo">Directivo</option>
                   <option value="admin">Administrador</option>
                 </select>
+              </div>
+              <div>
+                <label>Institución</label>
+                <input type="text" id="newInstitucion" placeholder="Obligatoria para directivo" />
               </div>
               <div style="grid-column: 1 / -1;">
                 <button type="submit">Crear usuario</button>

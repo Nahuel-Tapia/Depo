@@ -13,6 +13,7 @@ router.get("/", authorizePermissions(PERMISSIONS.PEDIDOS_VIEW), async (req, res)
     let query = `
       SELECT p.id, p.usuario_id, p.producto_id, pr.nombre as producto_nombre, 
              p.cantidad, p.institucion, p.estado, p.notas, p.created_at, p.updated_at,
+             pr.stock_actual,
              u.nombre as usuario_nombre
       FROM pedidos p
       JOIN productos pr ON p.producto_id = pr.id
@@ -171,6 +172,12 @@ router.patch(
 
       if (pedido.estado === estado) {
         return res.json({ ok: true, unchanged: true });
+      }
+
+      if (estado === "aprobado" && pedido.stock_actual < pedido.cantidad) {
+        return res.status(400).json({
+          error: `No se puede aprobar. Stock insuficiente (disponible: ${pedido.stock_actual})`
+        });
       }
 
       // Al marcar como entregado, impactar stock y registrar movimiento asociado.
