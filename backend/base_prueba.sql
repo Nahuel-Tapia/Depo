@@ -11,9 +11,16 @@ CREATE TYPE tipo_bien AS ENUM ('consumible', 'patrimonial');
 CREATE TABLE edificio (
     id_edificio SERIAL PRIMARY KEY,
     cui VARCHAR(20) UNIQUE,
+    calle VARCHAR(50),
+    numero_puerta VARCHAR(20),
     direccion VARCHAR(100),
     localidad VARCHAR(50),
-    departamento VARCHAR(50)
+    departamento VARCHAR(50),
+    codigo_postal INTEGER,
+    latitud NUMERIC,
+    longitud NUMERIC,
+    te_voip VARCHAR(30),
+    letra_zona VARCHAR(5)
 );
 
 CREATE TABLE institucion (
@@ -21,6 +28,11 @@ CREATE TABLE institucion (
     nombre VARCHAR(100) NOT NULL,
     cue VARCHAR(20) UNIQUE,
     id_edificio INT,
+    establecimiento_cabecera VARCHAR(100),
+    nivel_educativo VARCHAR(50),
+    categoria VARCHAR(20),
+    ambito VARCHAR(20),
+    activo BOOLEAN DEFAULT TRUE,
     FOREIGN KEY (id_edificio) REFERENCES edificio(id_edificio)
 );
 

@@ -905,6 +905,57 @@ pedidosTbody?.addEventListener("click", async (e) => {
 // ============ INSTITUCIONES ============
 const institucionesTbody = document.getElementById("institucionesTbody");
 const institucionesMsg = document.getElementById("institucionesMsg");
+const abrirCrearInstitucionBtn = document.getElementById("abrirCrearInstitucionBtn");
+const modalCrearInstitucion = document.getElementById("modalCrearInstitucion");
+const cerrarModalCrearInst = document.getElementById("cerrarModalCrearInst");
+const formCrearInstitucion = document.getElementById("formCrearInstitucion");
+const crearInstitucionMsg = document.getElementById("crearInstitucionMsg");
+
+abrirCrearInstitucionBtn?.addEventListener("click", () => {
+  if (modalCrearInstitucion) modalCrearInstitucion.style.display = "flex";
+  if (crearInstitucionMsg) crearInstitucionMsg.textContent = "";
+  formCrearInstitucion?.reset();
+});
+
+cerrarModalCrearInst?.addEventListener("click", () => {
+  if (modalCrearInstitucion) modalCrearInstitucion.style.display = "none";
+});
+
+formCrearInstitucion?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!hasPermission("instituciones.create")) {
+    crearInstitucionMsg.textContent = "No tiene permiso para crear instituciones";
+    return;
+  }
+  // Validación básica
+  const cue = document.getElementById("nuevoCue").value.trim();
+  const cui = document.getElementById("nuevoCui").value.trim();
+  const nombre = document.getElementById("nuevoNombreInst").value.trim();
+  const nivel = document.getElementById("nuevoNivel").value.trim();
+  const categoria = document.getElementById("nuevaCategoria").value.trim();
+  const ambito = document.getElementById("nuevoAmbito").value.trim();
+  const cabecera = document.getElementById("nuevoCabecera").value.trim();
+  if (!cue || !cui || !nombre || !nivel || !categoria || !ambito || !cabecera) {
+    crearInstitucionMsg.textContent = "Todos los campos son obligatorios";
+    return;
+  }
+  // Enviar al backend
+  const res = await fetch("/api/instituciones", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ cue, cui, nombre, nivel_educativo: nivel, categoria, ambito, establecimiento_cabecera: cabecera })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    crearInstitucionMsg.textContent = data.error || "No se pudo crear la institución";
+    return;
+  }
+  crearInstitucionMsg.textContent = "Institución creada correctamente";
+  setTimeout(() => {
+    if (modalCrearInstitucion) modalCrearInstitucion.style.display = "none";
+    loadInstituciones();
+  }, 1000);
+});
 
 // Carga el dropdown de instituciones para el formulario de usuarios
 async function loadInstitucionesDropdown() {

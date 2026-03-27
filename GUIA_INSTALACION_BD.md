@@ -1,4 +1,4 @@
-# Guía de Instalación - Base de Datos DEPO Stock
+no# Guía de Instalación - Base de Datos DEPO Stock
 
 ## Requisitos Previos
 
