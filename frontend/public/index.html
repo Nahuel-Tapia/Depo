@@ -75,30 +75,22 @@
           <div style="background: #f9fafb; padding: 24px; border-radius: 8px; margin-bottom: 32px;">
             <form id="createProductForm" class="grid">
               <div>
-                <label>Código</label>
-                <input type="text" id="productoCodigo" placeholder="Ej: PROD-0001" required />
+                <label>Nombre del producto</label>
+                <input type="text" id="productoNombre" placeholder="Ej: Resma A4" required />
               </div>
               <div>
-                <label>Nombre</label>
-                <input type="text" id="productoNombre" placeholder="Nombre del producto" required />
+                <label>Unidad de medida</label>
+                <input type="text" id="productoUnidad" placeholder="Ej: unidad, kg, litro" value="unidad" />
               </div>
               <div>
-                <label>Tipo de producto</label>
-                <select id="productoTipo" required>
-                  <option value="">Seleccionar tipo</option>
-                  <option value="Bazar">Bazar</option>
-                  <option value="Inmuebles">Inmuebles</option>
-                  <option value="Insumos">Insumos</option>
-                  <option value="Libreria">Libreria</option>
+                <label>Stock mínimo</label>
+                <input type="number" id="productoStockMin" placeholder="0" min="0" value="0" />
+              </div>
+              <div>
+                <label>Categoría</label>
+                <select id="productoCategoria">
+                  <option value="">-- Sin categoría --</option>
                 </select>
-              </div>
-              <div>
-                <label>Descripción</label>
-                <input type="text" id="productoDescripcion" placeholder="Detalles adicionales" />
-              </div>
-              <div>
-                <label>Proveedor</label>
-                <input type="text" id="productoProveedor" placeholder="Nombre del proveedor" />
               </div>
               <div style="grid-column: 1 / -1;">
                 <button type="submit">Crear producto</button>
@@ -112,12 +104,11 @@
           <table>
             <thead>
               <tr>
-                <th>Código</th>
+                <th>ID</th>
                 <th>Nombre</th>
-                <th>Tipo</th>
-                <th>Stock</th>
-                <th>Estado Stock</th>
-                <th>Proveedor</th>
+                <th>Unidad</th>
+                <th>Stock Mín.</th>
+                <th>Categoría</th>
                 <th>Acciones</th>
               </tr>
             </thead>
@@ -141,8 +132,10 @@
                 <label>Tipo de Movimiento</label>
                 <select id="movTipo" required>
                   <option value="">Seleccionar tipo...</option>
-                  <option value="entrada">Entrada</option>
-                  <option value="salida">Salida</option>
+                  <option value="ingreso">Ingreso</option>
+                  <option value="egreso">Egreso</option>
+                  <option value="ajuste">Ajuste</option>
+                  <option value="devolucion">Devolución</option>
                 </select>
               </div>
               <div>
@@ -151,15 +144,7 @@
               </div>
               <div>
                 <label>Motivo</label>
-                <input type="text" id="movMotivo" placeholder="Ej: Compra, Devolución" />
-              </div>
-              <div id="proveedorField" class="hidden">
-                <label>Proveedor</label>
-                <input type="text" id="movProveedor" placeholder="Nombre del proveedor" />
-              </div>
-              <div id="cueField" class="hidden">
-                <label>CUE/CUI</label>
-                <input type="text" id="movCue" placeholder="Código identificador" />
+                <input type="text" id="movMotivo" placeholder="Ej: Compra, Ajuste inventario" />
               </div>
               <div style="grid-column: 1 / -1;">
                 <button type="submit">Registrar movimiento</button>
@@ -175,8 +160,6 @@
                 <th>Tipo</th>
                 <th>Cantidad</th>
                 <th>Motivo</th>
-                <th>Proveedor</th>
-                <th>CUE/CUI</th>
                 <th>Registrado por</th>
                 <th>Fecha</th>
               </tr>

@@ -52,6 +52,7 @@ async function run(sql, params = []) {
     else if (table === 'rol') idField = 'id_rol';
     else if (table === 'categoria') idField = 'id_categoria';
     else if (table === 'edificio') idField = 'id_edificio';
+    else if (table === 'movimiento_stock') idField = 'id_movimiento';
     finalSql = adaptedSql.replace(/;?\s*$/, ` RETURNING ${idField} as id`);
   }
   const result = await pool.query(finalSql, params);

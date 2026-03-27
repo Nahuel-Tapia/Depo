@@ -4,16 +4,24 @@ const { authenticate, authorizePermissions } = require("../middleware/auth");
 const { PERMISSIONS } = require("../permissions");
 
 const router = express.Router();
-const TIPOS_PRODUCTO = ["Bazar", "Inmuebles", "Insumos", "Libreria"];
 
 router.use(authenticate);
 
 // Listar productos
 router.get("/", authorizePermissions(PERMISSIONS.PRODUCTOS_VIEW), async (req, res) => {
   try {
-    const productos = await all(
-      "SELECT id, codigo, nombre, tipo, descripcion, proveedor, stock_actual, created_at, updated_at FROM productos ORDER BY id DESC"
-    );
+    const productos = await all(`
+      SELECT 
+        p.id_producto as id,
+        p.nombre,
+        p.unidad_medida,
+        p.stock_minimo,
+        p.id_categoria,
+        c.nombre as categoria_nombre
+      FROM producto p
+      LEFT JOIN categoria c ON p.id_categoria = c.id_categoria
+      ORDER BY p.id_producto DESC
+    `);
     return res.json({ productos });
   } catch (err) {
     console.error(err);
@@ -21,14 +29,33 @@ router.get("/", authorizePermissions(PERMISSIONS.PRODUCTOS_VIEW), async (req, re
   }
 });
 
+// Listar categorías (para dropdown)
+router.get("/categorias", authorizePermissions(PERMISSIONS.PRODUCTOS_VIEW), async (req, res) => {
+  try {
+    const categorias = await all("SELECT id_categoria as id, nombre, tipo_bien FROM categoria ORDER BY nombre");
+    return res.json({ categorias });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "No se pudo listar categorías" });
+  }
+});
+
 // Obtener un producto
 router.get("/:id", authorizePermissions(PERMISSIONS.PRODUCTOS_VIEW), async (req, res) => {
   try {
     const { id } = req.params;
-    const producto = await get(
-      "SELECT id, codigo, nombre, tipo, descripcion, proveedor, stock_actual, created_at, updated_at FROM productos WHERE id = ?",
-      [id]
-    );
+    const producto = await get(`
+      SELECT 
+        p.id_producto as id,
+        p.nombre,
+        p.unidad_medida,
+        p.stock_minimo,
+        p.id_categoria,
+        c.nombre as categoria_nombre
+      FROM producto p
+      LEFT JOIN categoria c ON p.id_categoria = c.id_categoria
+      WHERE p.id_producto = ?
+    `, [id]);
     if (!producto) {
       return res.status(404).json({ error: "Producto no encontrado" });
     }
@@ -42,34 +69,20 @@ router.get("/:id", authorizePermissions(PERMISSIONS.PRODUCTOS_VIEW), async (req,
 // Crear producto
 router.post("/", authorizePermissions(PERMISSIONS.PRODUCTOS_CREATE), async (req, res) => {
   try {
-    const { codigo, nombre, tipo, descripcion, proveedor } = req.body;
-    if (!codigo || !nombre) {
-      return res.status(400).json({ error: "Faltan campos obligatorios" });
-    }
-
-    if (!tipo || !TIPOS_PRODUCTO.includes(tipo)) {
-      return res.status(400).json({ error: "Tipo de producto invalido" });
-    }
-
-    const existing = await get("SELECT id FROM productos WHERE codigo = ?", [codigo]);
-    if (existing) {
-      return res.status(409).json({ error: "El código de producto ya existe" });
+    const { nombre, unidad_medida, stock_minimo, id_categoria } = req.body;
+    
+    if (!nombre) {
+      return res.status(400).json({ error: "El nombre es obligatorio" });
     }
 
     const result = await run(
-      "INSERT INTO productos (codigo, nombre, tipo, descripcion, proveedor, stock_actual) VALUES (?, ?, ?, ?, ?, 0)",
-      [codigo, nombre, tipo, descripcion || null, proveedor || null]
-    );
-
-    // Auditoría
-    await run(
-      "INSERT INTO auditoria (usuario_id, entidad, accion, id_registro, cambios) VALUES (?, ?, ?, ?, ?)",
-      [req.user.sub, "productos", "CREATE", result.lastID, JSON.stringify({ codigo, nombre, tipo, descripcion, proveedor })]
+      "INSERT INTO producto (nombre, unidad_medida, stock_minimo, id_categoria) VALUES (?, ?, ?, ?)",
+      [nombre, unidad_medida || 'unidad', parseInt(stock_minimo) || 0, id_categoria || null]
     );
 
     return res.status(201).json({ id: result.lastID });
   } catch (err) {
-    console.error(err);
+    console.error("Error creando producto:", err);
     return res.status(500).json({ error: "No se pudo crear el producto" });
   }
 });
@@ -78,9 +91,9 @@ router.post("/", authorizePermissions(PERMISSIONS.PRODUCTOS_CREATE), async (req,
 router.patch("/:id", authorizePermissions(PERMISSIONS.PRODUCTOS_EDIT), async (req, res) => {
   try {
     const { id } = req.params;
-    const { nombre, tipo, descripcion, proveedor } = req.body;
+    const { nombre, unidad_medida, stock_minimo, id_categoria } = req.body;
 
-    const producto = await get("SELECT * FROM productos WHERE id = ?", [id]);
+    const producto = await get("SELECT * FROM producto WHERE id_producto = ?", [id]);
     if (!producto) {
       return res.status(404).json({ error: "Producto no encontrado" });
     }
@@ -92,44 +105,28 @@ router.patch("/:id", authorizePermissions(PERMISSIONS.PRODUCTOS_EDIT), async (re
       updates.push("nombre = ?");
       params.push(nombre);
     }
-    if (tipo !== undefined) {
-      if (!TIPOS_PRODUCTO.includes(tipo)) {
-        return res.status(400).json({ error: "Tipo de producto invalido" });
-      }
-      updates.push("tipo = ?");
-      params.push(tipo);
+    if (unidad_medida !== undefined) {
+      updates.push("unidad_medida = ?");
+      params.push(unidad_medida);
     }
-    if (descripcion !== undefined) {
-      updates.push("descripcion = ?");
-      params.push(descripcion);
+    if (stock_minimo !== undefined) {
+      updates.push("stock_minimo = ?");
+      params.push(parseInt(stock_minimo) || 0);
     }
-    if (proveedor !== undefined) {
-      updates.push("proveedor = ?");
-      params.push(proveedor);
+    if (id_categoria !== undefined) {
+      updates.push("id_categoria = ?");
+      params.push(id_categoria || null);
     }
 
     if (updates.length === 0) {
       return res.status(400).json({ error: "No hay campos para actualizar" });
     }
 
-    updates.push("updated_at = CURRENT_TIMESTAMP");
     params.push(id);
 
     await run(
-      `UPDATE productos SET ${updates.join(", ")} WHERE id = ?`,
+      `UPDATE producto SET ${updates.join(", ")} WHERE id_producto = ?`,
       params
-    );
-
-    // Auditoría
-    const cambios = {};
-    if (nombre !== undefined) cambios.nombre = { antes: producto.nombre, despues: nombre };
-    if (tipo !== undefined) cambios.tipo = { antes: producto.tipo, despues: tipo };
-    if (descripcion !== undefined) cambios.descripcion = { antes: producto.descripcion, despues: descripcion };
-    if (proveedor !== undefined) cambios.proveedor = { antes: producto.proveedor, despues: proveedor };
-
-    await run(
-      "INSERT INTO auditoria (usuario_id, entidad, accion, id_registro, cambios) VALUES (?, ?, ?, ?, ?)",
-      [req.user.sub, "productos", "UPDATE", id, JSON.stringify(cambios)]
     );
 
     return res.json({ ok: true });
@@ -144,28 +141,12 @@ router.delete("/:id", authorizePermissions(PERMISSIONS.PRODUCTOS_DELETE), async 
   try {
     const { id } = req.params;
 
-    const producto = await get("SELECT * FROM productos WHERE id = ?", [id]);
+    const producto = await get("SELECT * FROM producto WHERE id_producto = ?", [id]);
     if (!producto) {
       return res.status(404).json({ error: "Producto no encontrado" });
     }
 
-    // Verificar que no haya movimientos o ajustes
-    const movimientos = await get("SELECT COUNT(*) as count FROM movimientos WHERE producto_id = ?", [id]);
-    const ajustes = await get("SELECT COUNT(*) as count FROM ajustes WHERE producto_id = ?", [id]);
-
-    if (movimientos.count > 0 || ajustes.count > 0) {
-      // Delete related records first
-      await run("DELETE FROM movimientos WHERE producto_id = ?", [id]);
-      await run("DELETE FROM ajustes WHERE producto_id = ?", [id]);
-    }
-
-    await run("DELETE FROM productos WHERE id = ?", [id]);
-
-    // Auditoría
-    await run(
-      "INSERT INTO auditoria (usuario_id, entidad, accion, id_registro, cambios) VALUES (?, ?, ?, ?, ?)",
-      [req.user.sub, "productos", "DELETE", id, JSON.stringify({ producto, movimientos_eliminados: movimientos.count, ajustes_eliminados: ajustes.count })]
-    );
+    await run("DELETE FROM producto WHERE id_producto = ?", [id]);
 
     return res.json({ ok: true });
   } catch (err) {

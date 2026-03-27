@@ -513,6 +513,9 @@ tabButtons.forEach(btn => {
 async function loadProductos() {
   if (!hasPermission("productos.view")) return;
   
+  // Cargar categorías para el dropdown
+  await loadCategoriasDropdown();
+  
   const res = await fetch("/api/productos", { headers: authHeaders() });
   const result = await processApiResponse(res);
   if (!result.ok) {
@@ -528,35 +531,40 @@ async function loadProductos() {
   updateProductoSelects();
 }
 
+async function loadCategoriasDropdown() {
+  const select = document.getElementById("productoCategoria");
+  if (!select) return;
+  
+  try {
+    const res = await fetch("/api/productos/categorias", { headers: authHeaders() });
+    if (res.ok) {
+      const data = await res.json();
+      const categorias = data.categorias || [];
+      select.innerHTML = '<option value="">-- Sin categoría --</option>';
+      categorias.forEach(cat => {
+        const opt = document.createElement("option");
+        opt.value = cat.id;
+        opt.textContent = cat.nombre;
+        select.appendChild(opt);
+      });
+    }
+  } catch (err) {
+    console.error("Error cargando categorías:", err);
+  }
+}
+
 function renderProductos() {
   const tbody = document.getElementById("productosTbody");
   tbody.innerHTML = "";
   
   state.productos.forEach(p => {
-    let stockStatus = "";
-    let color = "";
-    if (p.stock_actual === 0) {
-      stockStatus = "Sin stock";
-      color = "red";
-    } else if (p.stock_actual < 10) {
-      stockStatus = "Bajo stock";
-      color = "red";
-    } else if (p.stock_actual <= 20) {
-      stockStatus = "Medio stock";
-      color = "#ff9900";
-    } else {
-      stockStatus = "Buen stock";
-      color = "green";
-    }
-    
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${p.codigo}</td>
+      <td>${p.id}</td>
       <td>${p.nombre}</td>
-      <td>${p.tipo || "-"}</td>
-      <td>${p.stock_actual}</td>
-      <td style="color: ${color};">${stockStatus}</td>
-      <td>${p.proveedor || "-"}</td>
+      <td>${p.unidad_medida || "unidad"}</td>
+      <td>${p.stock_minimo || 0}</td>
+      <td>${p.categoria_nombre || "-"}</td>
       <td>
         <div class="inline-actions">
           ${hasPermission("productos.edit") ? `<button class="edit-producto" data-id="${p.id}">Editar</button>` : ""}
@@ -579,9 +587,9 @@ function renderProductos() {
 
 function updateProductoSelects() {
   const selects = [
-    { el: document.getElementById("movProductoId"), showStock: true },
-    { el: document.getElementById("ajuProductoId"), showStock: true },
-    { el: document.getElementById("pedidoProductoId"), showStock: hasPermission("pedidos.manage") }
+    { el: document.getElementById("movProductoId"), showStock: false },
+    { el: document.getElementById("ajuProductoId"), showStock: false },
+    { el: document.getElementById("pedidoProductoId"), showStock: false }
   ];
 
   selects.forEach(({ el, showStock }) => {
@@ -591,9 +599,7 @@ function updateProductoSelects() {
     state.productos.forEach(p => {
       const opt = document.createElement("option");
       opt.value = p.id;
-      opt.textContent = showStock
-        ? `${p.codigo} - ${p.nombre} (Stock: ${p.stock_actual})`
-        : `${p.codigo} - ${p.nombre}`;
+      opt.textContent = `${p.nombre} (${p.unidad_medida || 'unidad'})`;
       el.appendChild(opt);
     });
     el.value = current;
@@ -611,11 +617,10 @@ document.getElementById("createProductForm")?.addEventListener("submit", async (
   }
   
   const payload = {
-    codigo: document.getElementById("productoCodigo").value.trim(),
     nombre: document.getElementById("productoNombre").value.trim(),
-    tipo: document.getElementById("productoTipo").value,
-    descripcion: document.getElementById("productoDescripcion").value.trim() || "",
-    proveedor: document.getElementById("productoProveedor").value.trim() || null
+    unidad_medida: document.getElementById("productoUnidad").value.trim() || "unidad",
+    stock_minimo: parseInt(document.getElementById("productoStockMin").value) || 0,
+    id_categoria: document.getElementById("productoCategoria").value || null
   };
   
   const res = await fetch("/api/productos", {
@@ -697,45 +702,16 @@ function renderMovimientos() {
   state.movimientos.forEach(m => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${m.codigo} - ${m.nombre}</td>
+      <td>${m.producto_nombre || "-"}</td>
       <td><span class="badge badge-${m.tipo}">${m.tipo}</span></td>
       <td>${m.cantidad}</td>
       <td>${m.motivo || "-"}</td>
-      <td>${m.proveedor || "-"}</td>
-      <td>${m.cue || "-"}</td>
-      <td>${m.usuario_nombre}</td>
+      <td>${m.usuario_nombre || "-"}</td>
       <td>${new Date(m.created_at).toLocaleDateString()}</td>
     `;
     tbody.appendChild(tr);
   });
 }
-
-document.getElementById("movTipo")?.addEventListener("change", (e) => {
-  const tipo = e.target.value;
-  const proveedorField = document.getElementById("proveedorField");
-  const cueField = document.getElementById("cueField");
-  const movProveedor = document.getElementById("movProveedor");
-  const movCue = document.getElementById("movCue");
-
-  if (tipo === "entrada") {
-    proveedorField.classList.remove("hidden");
-    cueField.classList.add("hidden");
-    movProveedor.required = true;
-    movCue.required = false;
-    movCue.value = "";
-  } else if (tipo === "salida") {
-    proveedorField.classList.add("hidden");
-    cueField.classList.remove("hidden");
-    movProveedor.required = false;
-    movCue.required = true;
-    movProveedor.value = "";
-  } else {
-    proveedorField.classList.add("hidden");
-    cueField.classList.add("hidden");
-    movProveedor.required = false;
-    movCue.required = false;
-  }
-});
 
 document.getElementById("createMovimientoForm")?.addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -745,18 +721,18 @@ document.getElementById("createMovimientoForm")?.addEventListener("submit", asyn
   const tipo = document.getElementById("movTipo").value;
   const productoId = parseInt(document.getElementById("movProductoId").value);
   const cantidad = parseInt(document.getElementById("movCantidad").value);
+  
+  if (!productoId || !tipo || !cantidad) {
+    msg.textContent = "Complete todos los campos obligatorios";
+    return;
+  }
+  
   const payload = {
     producto_id: productoId,
     tipo: tipo,
     cantidad: cantidad,
     motivo: document.getElementById("movMotivo").value.trim() || null
   };
-  
-  if (tipo === "entrada") {
-    payload.proveedor = document.getElementById("movProveedor").value.trim() || null;
-  } else if (tipo === "salida") {
-    payload.cue = document.getElementById("movCue").value.trim() || null;
-  }
   
   const res = await fetch("/api/movimientos", {
     method: "POST",
@@ -771,21 +747,8 @@ document.getElementById("createMovimientoForm")?.addEventListener("submit", asyn
   }
   
   document.getElementById("createMovimientoForm").reset();
-  document.getElementById("movProveedor").required = false;
-  document.getElementById("movCue").required = false;
-  document.getElementById("proveedorField").classList.add("hidden");
-  document.getElementById("cueField").classList.add("hidden");
   await loadMovimientos();
   await loadProductos();
-
-  if (tipo === "salida") {
-    const productoActualizado = state.productos.find((p) => p.id === productoId);
-    if (productoActualizado && productoActualizado.stock_actual < 10) {
-      alert(
-        `Alerta de bajo stock: ${productoActualizado.nombre} (${productoActualizado.codigo}) quedo con ${productoActualizado.stock_actual} unidades.`
-      );
-    }
-  }
 });
 
 // ============ PEDIDOS ============

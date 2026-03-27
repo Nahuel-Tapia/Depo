@@ -5,6 +5,9 @@ const { PERMISSIONS } = require("../permissions");
 
 const router = express.Router();
 
+// Tipos válidos segun el ENUM de la BD
+const TIPOS_MOVIMIENTO = ["ingreso", "egreso", "ajuste", "devolucion"];
+
 router.use(authenticate);
 
 // Listar movimientos
@@ -14,34 +17,40 @@ router.get("/", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW), async (req, 
 
     let query = `
       SELECT 
-        m.id, m.producto_id, p.codigo, p.nombre,
-        m.tipo, m.cantidad, m.motivo, m.proveedor, m.cue, m.pedido_id,
-        u.nombre as usuario_nombre, u.email,
-        m.created_at
-      FROM movimientos m
-      JOIN productos p ON m.producto_id = p.id
-      JOIN users u ON m.usuario_id = u.id
+        m.id_movimiento as id,
+        m.id_producto,
+        p.nombre as producto_nombre,
+        m.tipo,
+        m.cantidad,
+        m.motivo,
+        u.nombre as usuario_nombre,
+        u.email as usuario_email,
+        m.fecha_movimiento as created_at
+      FROM movimiento_stock m
+      LEFT JOIN producto p ON m.id_producto = p.id_producto
+      LEFT JOIN usuario u ON m.id_usuario = u.id_usuario
       WHERE 1 = 1
     `;
     const params = [];
+    let paramIndex = 1;
 
     if (producto_id) {
-      query += " AND m.producto_id = ?";
+      query += ` AND m.id_producto = $${paramIndex++}`;
       params.push(producto_id);
     }
 
-    if (tipo && ["entrada", "salida"].includes(tipo)) {
-      query += " AND m.tipo = ?";
+    if (tipo && TIPOS_MOVIMIENTO.includes(tipo)) {
+      query += ` AND m.tipo = $${paramIndex++}`;
       params.push(tipo);
     }
 
-    query += " ORDER BY m.created_at DESC LIMIT ? OFFSET ?";
-    params.push(limit, offset);
+    query += ` ORDER BY m.fecha_movimiento DESC LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
+    params.push(parseInt(limit), parseInt(offset));
 
     const movimientos = await all(query, params);
     return res.json({ movimientos });
   } catch (err) {
-    console.error(err);
+    console.error("Error listando movimientos:", err);
     return res.status(500).json({ error: "No se pudo listar movimientos" });
   }
 });
@@ -50,18 +59,22 @@ router.get("/", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW), async (req, 
 router.get("/:id", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW), async (req, res) => {
   try {
     const { id } = req.params;
-    const movimiento = await get(
-      `SELECT 
-        m.id, m.producto_id, p.codigo, p.nombre,
-        m.tipo, m.cantidad, m.motivo, m.pedido_id,
-        u.nombre as usuario_nombre, u.email,
-        m.created_at
-      FROM movimientos m
-      JOIN productos p ON m.producto_id = p.id
-      JOIN users u ON m.usuario_id = u.id
-      WHERE m.id = ?`,
-      [id]
-    );
+    const movimiento = await get(`
+      SELECT 
+        m.id_movimiento as id,
+        m.id_producto,
+        p.nombre as producto_nombre,
+        m.tipo,
+        m.cantidad,
+        m.motivo,
+        u.nombre as usuario_nombre,
+        m.fecha_movimiento as created_at
+      FROM movimiento_stock m
+      LEFT JOIN producto p ON m.id_producto = p.id_producto
+      LEFT JOIN usuario u ON m.id_usuario = u.id_usuario
+      WHERE m.id_movimiento = ?
+    `, [id]);
+    
     if (!movimiento) {
       return res.status(404).json({ error: "Movimiento no encontrado" });
     }
@@ -72,86 +85,39 @@ router.get("/:id", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW), async (re
   }
 });
 
-// Crear movimiento (entrada o salida)
+// Crear movimiento
 router.post("/", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), async (req, res) => {
   try {
-    const { producto_id, tipo, cantidad, motivo, proveedor, cue } = req.body;
+    const { producto_id, tipo, cantidad, motivo } = req.body;
 
     if (!producto_id || !tipo || !cantidad) {
-      return res.status(400).json({ error: "Faltan campos obligatorios" });
+      return res.status(400).json({ error: "Faltan campos obligatorios (producto_id, tipo, cantidad)" });
     }
 
-    if (!["entrada", "salida"].includes(tipo)) {
-      return res.status(400).json({ error: "Tipo de movimiento inválido (entrada|salida)" });
+    if (!TIPOS_MOVIMIENTO.includes(tipo)) {
+      return res.status(400).json({ error: `Tipo inválido. Valores válidos: ${TIPOS_MOVIMIENTO.join(", ")}` });
     }
 
-    if (cantidad <= 0) {
-      return res.status(400).json({ error: "La cantidad debe ser mayor a 0" });
+    const cantidadNum = parseInt(cantidad);
+    if (isNaN(cantidadNum) || cantidadNum <= 0) {
+      return res.status(400).json({ error: "La cantidad debe ser un número mayor a 0" });
     }
 
-    if (tipo === "entrada" && !String(proveedor || "").trim()) {
-      return res.status(400).json({ error: "Proveedor es obligatorio para ingresos" });
-    }
-
-    if (tipo === "salida" && !String(cue || "").trim()) {
-      return res.status(400).json({ error: "CUE/CUI es obligatorio para salidas" });
-    }
-
-    // Obtener producto
-    const producto = await get("SELECT * FROM productos WHERE id = ?", [producto_id]);
+    // Verificar que el producto existe
+    const producto = await get("SELECT * FROM producto WHERE id_producto = ?", [producto_id]);
     if (!producto) {
       return res.status(404).json({ error: "Producto no encontrado" });
     }
 
-    // Validar si hay stock suficiente en caso de salida
-    if (tipo === "salida" && producto.stock_actual < cantidad) {
-      return res.status(400).json({ error: `Stock insuficiente. Disponible: ${producto.stock_actual}` });
-    }
-
     // Registrar movimiento
     const result = await run(
-      "INSERT INTO movimientos (producto_id, tipo, cantidad, usuario_id, motivo, proveedor, cue) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      [
-        producto_id,
-        tipo,
-        cantidad,
-        req.user.sub,
-        motivo || null,
-        proveedor ? String(proveedor).trim() : null,
-        cue ? String(cue).trim() : null
-      ]
-    );
-
-    // Actualizar stock del producto
-    const nuevoStock = tipo === "entrada" 
-      ? producto.stock_actual + cantidad 
-      : producto.stock_actual - cantidad;
-
-    await run("UPDATE productos SET stock_actual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", [nuevoStock, producto_id]);
-
-    // Auditoría
-    await run(
-      "INSERT INTO auditoria (usuario_id, entidad, accion, id_registro, cambios) VALUES (?, ?, ?, ?, ?)",
-      [
-        req.user.sub,
-        "movimientos",
-        "CREATE",
-        result.lastID,
-        JSON.stringify({
-          tipo,
-          cantidad,
-          producto_id,
-          stock_anterior: producto.stock_actual,
-          stock_nuevo: nuevoStock,
-          proveedor,
-          cue
-        })
-      ]
+      "INSERT INTO movimiento_stock (id_producto, tipo, cantidad, id_usuario, motivo) VALUES (?, ?, ?, ?, ?)",
+      [producto_id, tipo, cantidadNum, req.user.sub, motivo || null]
     );
 
     return res.status(201).json({ id: result.lastID });
   } catch (err) {
-    console.error(err);
+    console.error("Error creando movimiento:", err);
     return res.status(500).json({ error: "No se pudo crear el movimiento" });
   }
 });
@@ -159,22 +125,14 @@ router.post("/", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), async (re
 // Estadísticas de movimientos
 router.get("/stats/resumen", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW), async (req, res) => {
   try {
-    const { producto_id } = req.query;
-
-    let query = `
+    const stats = await get(`
       SELECT 
-        SUM(CASE WHEN tipo = 'entrada' THEN cantidad ELSE 0 END) as total_entradas,
-        SUM(CASE WHEN tipo = 'salida' THEN cantidad ELSE 0 END) as total_salidas
-      FROM movimientos
-    `;
-    const params = [];
-
-    if (producto_id) {
-      query += " WHERE producto_id = ?";
-      params.push(producto_id);
-    }
-
-    const stats = await get(query, params);
+        SUM(CASE WHEN tipo = 'ingreso' THEN cantidad ELSE 0 END) as total_ingresos,
+        SUM(CASE WHEN tipo = 'egreso' THEN cantidad ELSE 0 END) as total_egresos,
+        SUM(CASE WHEN tipo = 'ajuste' THEN cantidad ELSE 0 END) as total_ajustes,
+        SUM(CASE WHEN tipo = 'devolucion' THEN cantidad ELSE 0 END) as total_devoluciones
+      FROM movimiento_stock
+    `);
     return res.json({ stats });
   } catch (err) {
     console.error(err);
