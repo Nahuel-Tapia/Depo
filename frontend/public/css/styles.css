@@ -287,37 +287,37 @@ button.secondary {
   outline-offset: 2px;
 }
 
-.permissions-box {
-  border: 1.5px solid #fde68a;
-  background: #fffdf2;
+.stock-alert-box {
+  border: 1.5px solid #fca5a5;
+  background: #fef2f2;
   border-radius: 8px;
   padding: 24px;
   margin-bottom: 32px;
   margin-top: 24px;
 }
 
-.permissions-box h3 {
-  margin-top: 0;
-  margin-bottom: 16px;
+.stock-alert-title {
+  margin: 0 0 8px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #b91c1c;
+  font-weight: 800;
+  letter-spacing: 0.4px;
 }
 
-#permissionsList {
+.stock-alert-role {
   margin: 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 12px;
+  color: #dc2626;
+  font-weight: 700;
 }
 
-#permissionsList li {
-  padding: 8px 12px;
-  background: var(--orange-soft);
-  border: 1px solid var(--orange-border);
-  border-left: 4px solid #f4b36a;
-  border-radius: 6px;
-  font-size: 13px;
-  color: #374151;
+.stock-alert-triangle {
+  width: 0;
+  height: 0;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-bottom: 14px solid #dc2626;
 }
 
 .grid {
@@ -332,7 +332,7 @@ table {
   margin-bottom: 32px;
   width: 100%;
   border-collapse: collapse;
-  background: white;
+  background: rgb(255, 130, 0);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -398,6 +398,9 @@ tbody tr:hover td {
 }
 
 .tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   padding: 14px 20px;
   background: none;
   border: none;
@@ -409,6 +412,15 @@ tbody tr:hover td {
   width: auto;
   font-size: 14px;
   transition: all 0.3s ease;
+}
+
+.tab-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.tab-label {
+  line-height: 1;
 }
 
 .tab-btn:hover {
@@ -515,8 +527,13 @@ tbody tr:hover td {
   }
 
   .tab-btn {
+    gap: 6px;
     padding: 12px 16px;
     font-size: 12px;
+  }
+
+  .tab-icon {
+    font-size: 14px;
   }
 
   .grid {

@@ -52,19 +52,18 @@
         </div>
 
         <div class="tabs">
-          <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
-          <button class="tab-btn" data-tab="productos">Productos</button>
-          <button class="tab-btn" data-tab="movimientos">Movimientos</button>
-          <button class="tab-btn" data-tab="pedidos">Pedidos</button>
-          <button class="tab-btn" data-tab="instituciones">Instituciones</button>
-          <button class="tab-btn" data-tab="usuarios">Usuarios</button>
+          <button class="tab-btn active" data-tab="inicio"><span class="tab-icon" aria-hidden="true">🏠</span><span class="tab-label">Inicio</span></button>
+          <button class="tab-btn" data-tab="productos"><span class="tab-icon" aria-hidden="true">📦</span><span class="tab-label">Productos</span></button>
+          <button class="tab-btn" data-tab="movimientos"><span class="tab-icon" aria-hidden="true">📊</span><span class="tab-label">Movimientos</span></button>
+          <button class="tab-btn" data-tab="pedidos"><span class="tab-icon" aria-hidden="true">🧾</span><span class="tab-label">Pedidos</span></button>
+          <button class="tab-btn" data-tab="instituciones"><span class="tab-icon" aria-hidden="true">🏫</span><span class="tab-label">Instituciones</span></button>
+          <button class="tab-btn" data-tab="usuarios"><span class="tab-icon" aria-hidden="true">👥</span><span class="tab-label">Usuarios</span></button>
         </div>
 
-        <!-- DASHBOARD -->
-        <div class="tab-content active" id="dashboardTab">
-          <div class="permissions-box">
-            <h3>Permisos de tu rol</h3>
-            <ul id="permissionsList"></ul>
+        <!-- INICIO -->
+        <div class="tab-content active" id="inicioTab">
+          <div class="stock-alert-box" id="stockAlertBox">
+            <div id="roleStockAlert"></div>
           </div>
         </div>
 
@@ -216,7 +215,7 @@
 
         <!-- INSTITUCIONES -->
         <div class="tab-content hidden" id="institucionesTab">
-          <h2>Instituciones Registradas</h2>
+          <h2>Instituciones </h2>
           <table>
             <thead>
               <tr>
