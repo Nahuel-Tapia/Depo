@@ -217,6 +217,7 @@
         <!-- INSTITUCIONES -->
         <div class="tab-content hidden" id="institucionesTab">
           <h2>Instituciones Registradas</h2>
+          <button id="abrirCrearInstitucionBtn" style="margin-bottom:16px;">Crear institución</button>
           <table>
             <thead>
               <tr>
@@ -232,6 +233,26 @@
             </thead>
             <tbody id="institucionesTbody"></tbody>
           </table>
+          <!-- Modal para crear institución -->
+          <div id="modalCrearInstitucion" class="modal" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.4);z-index:1000;align-items:center;justify-content:center;">
+            <div style="background:#fff;padding:32px 24px 24px 24px;border-radius:10px;min-width:320px;max-width:95vw;position:relative;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
+              <h3 style="margin-top:0;">Crear nueva institución</h3>
+              <form id="formCrearInstitucion" class="grid" autocomplete="off">
+                <div><label>CUE</label><input type="text" id="nuevoCue" required maxlength="20" placeholder="Ej: 700038000" /></div>
+                <div><label>CUI (edificio)</label><input type="text" id="nuevoCui" required maxlength="20" placeholder="Ej: 7000001" /></div>
+                <div><label>Nombre</label><input type="text" id="nuevoNombreInst" required maxlength="100" placeholder="Nombre de la institución" /></div>
+                <div><label>Nivel educativo</label><input type="text" id="nuevoNivel" required maxlength="50" placeholder="Ej: Primario, Secundario" /></div>
+                <div><label>Categoría</label><input type="text" id="nuevaCategoria" required maxlength="20" placeholder="Ej: Primera, Segunda" /></div>
+                <div><label>Ámbito</label><input type="text" id="nuevoAmbito" required maxlength="20" placeholder="Ej: PUBLICO" /></div>
+                <div><label>Establecimiento cabecera</label><input type="text" id="nuevoCabecera" required maxlength="100" placeholder="(Si aplica)" /></div>
+                <div style="grid-column:1/-1;text-align:right;margin-top:16px;">
+                  <button type="submit">Crear</button>
+                  <button type="button" id="cerrarModalCrearInst" class="secondary" style="margin-left:8px;">Cerrar</button>
+                </div>
+                <div id="crearInstitucionMsg" class="msg" style="grid-column:1/-1;"></div>
+              </form>
+            </div>
+          </div>
         </div>
 
         <!-- USUARIOS -->
