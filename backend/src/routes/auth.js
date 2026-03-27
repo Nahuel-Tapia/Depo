@@ -5,9 +5,9 @@ const { get, run } = require("../db.pg");
 
 const router = express.Router();
 
-function normalizeCue(cue) {
-  if (!cue) return "";
-  return String(cue).replace(/\D/g, "");
+function normalizeDni(dni) {
+  if (!dni) return "";
+  return String(dni).replace(/\D/g, "");
 }
 
 function helpCode() {
@@ -17,7 +17,7 @@ function helpCode() {
 router.post("/register", async (req, res) => {
   try {
     const { nombre, apellido, institucion, dni, email, password, telefono } = req.body;
-    const dniNormalized = normalizeCue(dni);
+    const dniNormalized = normalizeDni(dni);
     const emailNormalized = String(email || "").trim().toLowerCase();
 
     if (!nombre || !dniNormalized || !emailNormalized || !password) {
@@ -30,11 +30,6 @@ router.post("/register", async (req, res) => {
 
     if (password.length < 6) {
       return res.status(400).json({ error: "La contraseña debe tener al menos 6 caracteres" });
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(emailNormalized)) {
-      return res.status(400).json({ error: "El email no tiene un formato válido" });
     }
 
     const existingDni = await get("SELECT id_usuario FROM usuario WHERE dni = ?", [dniNormalized]);
@@ -81,7 +76,7 @@ router.post("/register", async (req, res) => {
 router.post("/login", async (req, res) => {
   try {
     const { email, dni, password } = req.body;
-    const dniNormalized = normalizeCue(dni);
+    const dniNormalized = normalizeDni(dni);
     const identifier = email || dniNormalized;
 
     if (!identifier || !password) {

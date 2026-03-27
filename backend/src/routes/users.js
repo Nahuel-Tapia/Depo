@@ -34,6 +34,10 @@ router.post("/", authorizePermissions(PERMISSIONS.USERS_CREATE), async (req, res
   try {
     const { nombre, apellido, email, dni, password, role, telefono, institucion } = req.body;
     const dniNormalized = normalizeDni(dni);
+    
+    // Validar que institucion sea un número válido o null
+    const institucionId = institucion && !isNaN(parseInt(institucion)) ? parseInt(institucion) : null;
+    
     if (!nombre || !email || !password || !role) {
       return res.status(400).json({ error: "Faltan campos obligatorios" });
     }
@@ -42,7 +46,7 @@ router.post("/", authorizePermissions(PERMISSIONS.USERS_CREATE), async (req, res
       return res.status(400).json({ error: "Rol inválido" });
     }
 
-    if (role === "directivo" && !institucion) {
+    if (role === "directivo" && !institucionId) {
       return res.status(400).json({ error: "La institución es obligatoria para rol directivo" });
     }
 
@@ -61,11 +65,12 @@ router.post("/", authorizePermissions(PERMISSIONS.USERS_CREATE), async (req, res
     const hash = await bcrypt.hash(password, 10);
     const result = await run(
       "INSERT INTO usuario (nombre, apellido, email, dni, password, telefono, id_institucion, role, activo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, TRUE)",
-      [nombre, apellido || null, email, dniNormalized, hash, telefono || null, institucion || null, role]
+      [nombre, apellido || null, email, dniNormalized, hash, telefono || null, institucionId, role]
     );
 
     return res.status(201).json({ id: result.lastID });
   } catch (err) {
+    console.error("Error creando usuario:", err);
     return res.status(500).json({ error: "No se pudo crear el usuario" });
   }
 });
