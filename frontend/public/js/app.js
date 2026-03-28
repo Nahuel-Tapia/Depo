@@ -112,6 +112,10 @@ async function loadMyPermissions() {
 }
 
 function renderPermissions() {
+  if (!permissionsList) {
+    console.log("DEBUG: permissionsList es null, saltando renderPermissions");
+    return;
+  }
   permissionsList.innerHTML = "";
 
   if (state.permissions.length === 0) {
@@ -905,57 +909,6 @@ pedidosTbody?.addEventListener("click", async (e) => {
 // ============ INSTITUCIONES ============
 const institucionesTbody = document.getElementById("institucionesTbody");
 const institucionesMsg = document.getElementById("institucionesMsg");
-const abrirCrearInstitucionBtn = document.getElementById("abrirCrearInstitucionBtn");
-const modalCrearInstitucion = document.getElementById("modalCrearInstitucion");
-const cerrarModalCrearInst = document.getElementById("cerrarModalCrearInst");
-const formCrearInstitucion = document.getElementById("formCrearInstitucion");
-const crearInstitucionMsg = document.getElementById("crearInstitucionMsg");
-
-abrirCrearInstitucionBtn?.addEventListener("click", () => {
-  if (modalCrearInstitucion) modalCrearInstitucion.style.display = "flex";
-  if (crearInstitucionMsg) crearInstitucionMsg.textContent = "";
-  formCrearInstitucion?.reset();
-});
-
-cerrarModalCrearInst?.addEventListener("click", () => {
-  if (modalCrearInstitucion) modalCrearInstitucion.style.display = "none";
-});
-
-formCrearInstitucion?.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  if (!hasPermission("instituciones.create")) {
-    crearInstitucionMsg.textContent = "No tiene permiso para crear instituciones";
-    return;
-  }
-  // Validación básica
-  const cue = document.getElementById("nuevoCue").value.trim();
-  const cui = document.getElementById("nuevoCui").value.trim();
-  const nombre = document.getElementById("nuevoNombreInst").value.trim();
-  const nivel = document.getElementById("nuevoNivel").value.trim();
-  const categoria = document.getElementById("nuevaCategoria").value.trim();
-  const ambito = document.getElementById("nuevoAmbito").value.trim();
-  const cabecera = document.getElementById("nuevoCabecera").value.trim();
-  if (!cue || !cui || !nombre || !nivel || !categoria || !ambito || !cabecera) {
-    crearInstitucionMsg.textContent = "Todos los campos son obligatorios";
-    return;
-  }
-  // Enviar al backend
-  const res = await fetch("/api/instituciones", {
-    method: "POST",
-    headers: authHeaders(),
-    body: JSON.stringify({ cue, cui, nombre, nivel_educativo: nivel, categoria, ambito, establecimiento_cabecera: cabecera })
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    crearInstitucionMsg.textContent = data.error || "No se pudo crear la institución";
-    return;
-  }
-  crearInstitucionMsg.textContent = "Institución creada correctamente";
-  setTimeout(() => {
-    if (modalCrearInstitucion) modalCrearInstitucion.style.display = "none";
-    loadInstituciones();
-  }, 1000);
-});
 
 // Carga el dropdown de instituciones para el formulario de usuarios
 async function loadInstitucionesDropdown() {
@@ -984,10 +937,13 @@ async function loadInstituciones() {
   // Siempre cargar el dropdown para el form de usuarios
   await loadInstitucionesDropdown();
   
-  if (!hasPermission("instituciones.view")) return;
+  if (!hasPermission("instituciones.view")) {
+    return;
+  }
 
   const res = await fetch("/api/instituciones", { headers: authHeaders() });
   const result = await processApiResponse(res);
+  
   if (!result.ok) {
     if (institucionesMsg) {
       institucionesMsg.textContent = result.error === "Forbidden"
@@ -1003,18 +959,27 @@ async function loadInstituciones() {
   populateAsigProductoSelect();
 }
 
-function renderInstituciones() {
-  if (!institucionesTbody) return;
+function renderInstituciones(lista) {
+  if (!institucionesTbody) {
+    console.error("ERROR: institucionesTbody element not found");
+    return;
+  }
+  const items = lista !== undefined ? lista : state.instituciones;
   institucionesTbody.innerHTML = "";
+
+  const countEl = document.getElementById("institucionesCount");
+  if (countEl) {
+    countEl.textContent = `Mostrando ${items.length} de ${state.instituciones.length} instituciones`;
+  }
 
   const canEdit = hasPermission("instituciones.edit");
   const canDelete = hasPermission("instituciones.delete");
   const canAsignar = hasPermission("instituciones.asignar");
 
-  state.instituciones.forEach((inst) => {
+  items.forEach((inst) => {
     const actions = [];
     if (canEdit) {
-      actions.push(`<button data-action="edit-inst" data-id="${inst.id}">Editar</button>`);
+      actions.push(`<button data-action="edit-inst" data-id="${inst.id}">${inst.activo ? "Editar" : "Editar"}</button>`);
       actions.push(`<button data-action="toggle-inst" data-id="${inst.id}" data-active="${inst.activo}">${inst.activo ? "Desactivar" : "Activar"}</button>`);
     }
     if (canAsignar) {
@@ -1024,20 +989,50 @@ function renderInstituciones() {
       actions.push(`<button data-action="delete-inst" data-id="${inst.id}">Eliminar</button>`);
     }
 
+    const direccionCompleta = [inst.direccion, inst.localidad, inst.departamento]
+      .filter(Boolean).join(" - ") || "-";
+
     const tr = document.createElement("tr");
     tr.innerHTML = `
+      <td>${inst.id}</td>
       <td>${inst.cue}</td>
-      <td>${inst.nombre}</td>
+      <td>${inst.nombre.trim()}</td>
       <td>${inst.nivel || "-"}</td>
-      <td>${inst.localidad || "-"}</td>
-      <td>${inst.matriculados}</td>
-      <td>${inst.factor_asignacion}x</td>
-      <td>${inst.activo ? "Sí" : "No"}</td>
+      <td>${direccionCompleta}</td>
       <td><div class="inline-actions">${actions.join("")}</div></td>
     `;
     institucionesTbody.appendChild(tr);
   });
 }
+
+// Búsqueda de institución por CUE en la tabla de instituciones
+document.getElementById("btnBuscarCue")?.addEventListener("click", () => {
+  const cue = (document.getElementById("buscarCue")?.value || "").trim();
+  const msg = document.getElementById("institucionesMsg");
+  if (!cue) {
+    renderInstituciones();
+    return;
+  }
+  const encontradas = state.instituciones.filter(i => String(i.cue).includes(cue));
+  if (encontradas.length === 0) {
+    if (msg) showMessage(msg, `No se encontró ninguna institución con CUE "${cue}"`, "error");
+  } else {
+    if (msg) showMessage(msg, "");
+  }
+  renderInstituciones(encontradas);
+});
+
+document.getElementById("buscarCue")?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") document.getElementById("btnBuscarCue")?.click();
+});
+
+document.getElementById("btnLimpiarCue")?.addEventListener("click", () => {
+  const input = document.getElementById("buscarCue");
+  if (input) input.value = "";
+  const msg = document.getElementById("institucionesMsg");
+  if (msg) showMessage(msg, "");
+  renderInstituciones();
+});
 
 function populateAsigProductoSelect() {
   const select = document.getElementById("asigProductoId");

@@ -4,6 +4,7 @@ const path = require("path");
 const express = require("express");
 const cors = require("cors");
 const { initDb } = require("./db.pg");
+const { getDbConfigForLogs } = require("./config/database");
 
 const authRoutes = require("./routes/auth");
 const userRoutes = require("./routes/users");
@@ -56,6 +57,14 @@ initDb()
     });
   })
   .catch((err) => {
+    if (err && err.code === "28P01") {
+      const cfg = getDbConfigForLogs();
+      console.error("No se pudo conectar a PostgreSQL por credenciales inválidas (código 28P01).");
+      console.error(
+        `Conexión usada: host=${cfg.host} port=${cfg.port} db=${cfg.database} user=${cfg.user} password=${cfg.hasPassword ? "[definida]" : "[vacía]"}`
+      );
+      console.error("Definí DB_PASSWORD (o PGPASSWORD) en el archivo .env de la raíz del proyecto.");
+    }
     console.error("Error inicializando base de datos", err);
     process.exit(1);
   });

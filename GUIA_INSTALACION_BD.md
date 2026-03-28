@@ -1,4 +1,4 @@
-no# Guía de Instalación - Base de Datos DEPO Stock
+# Guía de Instalación - Base de Datos DEPO Stock
 
 ## Requisitos Previos
 
@@ -107,9 +107,9 @@ VALUES (
 
 ---
 
-## Paso 6: Configurar Variables de Entorno (Opcional)
+## Paso 6: Configurar Variables de Entorno
 
-Si tu contraseña de PostgreSQL es diferente a `postgres`, crear archivo `.env` en la raíz del proyecto:
+Crear o completar el archivo `.env` en la raíz del proyecto con los datos reales de tu instalación de PostgreSQL:
 
 ```env
 DB_HOST=localhost
@@ -151,8 +151,8 @@ El servidor estará disponible en: **http://localhost:4000**
 ## Solución de Problemas
 
 ### Error: "password authentication failed"
-- Verificar que la contraseña en `backend/src/config/database.js` coincida con tu PostgreSQL
-- O crear archivo `.env` con la contraseña correcta
+- Verificar que `DB_PASSWORD` en `.env` sea la contraseña real del usuario PostgreSQL definido en `DB_USER`
+- Si tu instalación usa otro usuario, actualizar también `DB_USER`
 
 ### Error: "database depo_stock does not exist"
 - Crear la base de datos siguiendo el Paso 2
