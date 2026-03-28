@@ -6,7 +6,8 @@ const state = {
   movimientos: [],
   pedidos: [],
   users: [],
-  instituciones: []
+  instituciones: [],
+  proveedores: []
 };
 
 const loginCard = document.getElementById("loginCard");
@@ -170,6 +171,7 @@ async function render() {
   await loadPedidos();
   await loadUsers();
   await loadInstituciones();
+  await loadProveedores();
 }
 
 function updateTabsVisibility() {
@@ -178,6 +180,7 @@ function updateTabsVisibility() {
     movimientos: ["movimientos.view"],
     pedidos: ["pedidos.view"],
     instituciones: ["instituciones.view"],
+    proveedores: ["proveedores.view"],
     usuarios: ["users.read"]
   };
 
@@ -1147,6 +1150,172 @@ institucionesTbody?.addEventListener("click", async (e) => {
       const data = await res.json().catch(() => ({}));
       showMessage(institucionesMsg, data.error || "No se pudo actualizar", "error");
     }
+  }
+});
+
+// ============ PROVEEDORES ============
+const proveedoresTbody = document.getElementById("proveedoresTbody");
+const proveedoresMsg = document.getElementById("proveedoresMsg");
+
+async function loadProveedores() {
+  if (!hasPermission("proveedores.view")) return;
+  const res = await fetch("/api/proveedores", { headers: authHeaders() });
+  const result = await processApiResponse(res);
+  if (!result.ok) return;
+  const data = await res.json();
+  state.proveedores = data.proveedores || [];
+  renderProveedores();
+}
+
+function renderProveedores() {
+  if (!proveedoresTbody) return;
+  proveedoresTbody.innerHTML = "";
+
+  // Ocultar form si no tiene permiso de crear
+  const formWrap = document.getElementById("proveedorFormWrap");
+  if (formWrap) formWrap.style.display = hasPermission("proveedores.create") ? "" : "none";
+
+  if (state.proveedores.length === 0) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td colspan="6" style="text-align:center; color:#9ca3af; padding:32px;">No hay proveedores registrados</td>`;
+    proveedoresTbody.appendChild(tr);
+    return;
+  }
+
+  const canEdit = hasPermission("proveedores.edit");
+  const canDelete = hasPermission("proveedores.delete");
+
+  state.proveedores.forEach((p) => {
+    const tr = document.createElement("tr");
+    tr.dataset.id = p.id;
+    tr.innerHTML = `
+      <td><strong>${p.nombre}</strong><br><small style="color:#6b7280">${p.cuit || ""}</small></td>
+      <td>${p.contacto || "-"}</td>
+      <td>${p.telefono || "-"}</td>
+      <td>${p.email || "-"}</td>
+      <td>${p.categoria || "-"}</td>
+      <td>
+        <div class="inline-actions">
+          ${canEdit ? `<button data-action="edit-prov" data-id="${p.id}" title="Editar" style="padding:6px 10px;">✏️</button>` : ""}
+          ${canDelete ? `<button data-action="delete-prov" data-id="${p.id}" title="Eliminar" style="padding:6px 10px; background:#ef4444;">🗑️</button>` : ""}
+        </div>
+      </td>
+    `;
+    proveedoresTbody.appendChild(tr);
+  });
+}
+
+// Crear proveedor
+document.getElementById("createProveedorForm")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  showMessage(proveedoresMsg, "");
+
+  const payload = {
+    nombre: document.getElementById("provNombre").value.trim(),
+    cuit: document.getElementById("provCuit").value.trim() || null,
+    contacto: document.getElementById("provContacto").value.trim() || null,
+    telefono: document.getElementById("provTelefono").value.trim() || null,
+    email: document.getElementById("provEmail").value.trim() || null,
+    categoria: document.getElementById("provCategoria").value.trim() || null
+  };
+
+  const res = await fetch("/api/proveedores", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    showMessage(proveedoresMsg, data.error || "No se pudo crear el proveedor", "error");
+    return;
+  }
+
+  document.getElementById("createProveedorForm").reset();
+  document.getElementById("proveedorFormWrap").removeAttribute("open");
+  showMessage(proveedoresMsg, "Proveedor creado correctamente", "success");
+  await loadProveedores();
+});
+
+// Editar / Eliminar desde tabla
+proveedoresTbody?.addEventListener("click", async (e) => {
+  const btn = e.target.closest("button");
+  if (!btn) return;
+  const { action, id } = btn.dataset;
+  if (!action || !id) return;
+
+  if (action === "delete-prov") {
+    if (!confirm("\u00bfEliminar este proveedor?")) return;
+    const res = await fetch(`/api/proveedores/${id}`, { method: "DELETE", headers: authHeaders() });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      showMessage(proveedoresMsg, data.error || "No se pudo eliminar", "error");
+      return;
+    }
+    showMessage(proveedoresMsg, "Proveedor eliminado", "success");
+    await loadProveedores();
+  }
+
+  if (action === "edit-prov") {
+    const prov = state.proveedores.find(p => String(p.id) === String(id));
+    if (!prov) return;
+
+    // Modal inline de edici\u00f3n
+    const existing = document.getElementById("editProvModal");
+    if (existing) existing.remove();
+
+    const modal = document.createElement("div");
+    modal.id = "editProvModal";
+    modal.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;z-index:1000;";
+    modal.innerHTML = `
+      <div style="background:white;padding:28px;border-radius:10px;min-width:380px;max-width:520px;width:90%;">
+        <h3 style="margin-bottom:20px;">Editar proveedor</h3>
+        <div class="grid" style="gap:12px;">
+          <div><label>Empresa *</label><input id="ep_nombre" value="${prov.nombre}" style="width:100%;" /></div>
+          <div><label>CUIT</label><input id="ep_cuit" value="${prov.cuit || ""}" style="width:100%;" /></div>
+          <div><label>Contacto</label><input id="ep_contacto" value="${prov.contacto || ""}" style="width:100%;" /></div>
+          <div><label>Tel\u00e9fono</label><input id="ep_telefono" value="${prov.telefono || ""}" style="width:100%;" /></div>
+          <div><label>Email</label><input id="ep_email" value="${prov.email || ""}" style="width:100%;" /></div>
+          <div><label>Categor\u00eda</label><input id="ep_categoria" value="${prov.categoria || ""}" style="width:100%;" /></div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end;">
+          <button id="ep_cancel" class="secondary">Cancelar</button>
+          <button id="ep_save">Guardar cambios</button>
+        </div>
+        <div id="ep_msg" class="msg" style="margin-top:10px;"></div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    document.getElementById("ep_cancel").onclick = () => modal.remove();
+    modal.addEventListener("click", (ev) => { if (ev.target === modal) modal.remove(); });
+
+    document.getElementById("ep_save").onclick = async () => {
+      const payload = {
+        nombre: document.getElementById("ep_nombre").value.trim(),
+        cuit: document.getElementById("ep_cuit").value.trim() || null,
+        contacto: document.getElementById("ep_contacto").value.trim() || null,
+        telefono: document.getElementById("ep_telefono").value.trim() || null,
+        email: document.getElementById("ep_email").value.trim() || null,
+        categoria: document.getElementById("ep_categoria").value.trim() || null
+      };
+      if (!payload.nombre) {
+        document.getElementById("ep_msg").textContent = "El nombre es obligatorio";
+        return;
+      }
+      const res = await fetch(`/api/proveedores/${id}`, {
+        method: "PATCH",
+        headers: authHeaders(),
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        document.getElementById("ep_msg").textContent = data.error || "No se pudo guardar";
+        return;
+      }
+      modal.remove();
+      showMessage(proveedoresMsg, "Proveedor actualizado", "success");
+      await loadProveedores();
+    };
   }
 });
 

@@ -57,6 +57,7 @@
           <button class="tab-btn" data-tab="movimientos"><span class="tab-icon" aria-hidden="true">📊</span><span class="tab-label">Movimientos</span></button>
           <button class="tab-btn" data-tab="pedidos"><span class="tab-icon" aria-hidden="true">🧾</span><span class="tab-label">Pedidos</span></button>
           <button class="tab-btn" data-tab="instituciones"><span class="tab-icon" aria-hidden="true">🏫</span><span class="tab-label">Instituciones</span></button>
+          <button class="tab-btn" data-tab="proveedores"><span class="tab-icon" aria-hidden="true">🏭</span><span class="tab-label">Proveedores</span></button>
           <button class="tab-btn" data-tab="usuarios"><span class="tab-icon" aria-hidden="true">👥</span><span class="tab-label">Usuarios</span></button>
         </div>
 
@@ -245,6 +246,66 @@
                 </tr>
               </thead>
               <tbody id="institucionesTbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- PROVEEDORES -->
+        <div class="tab-content hidden" id="proveedoresTab">
+          <h2>Proveedores</h2>
+
+          <div id="proveedoresMsg" class="msg" style="margin-bottom: 16px;"></div>
+
+          <!-- Formulario nueva empresa -->
+          <details id="proveedorFormWrap" style="margin-bottom: 24px;">
+            <summary style="cursor:pointer; font-weight:600; padding: 10px 0;">+ Agregar proveedor</summary>
+            <div style="background:#f9fafb; padding:20px; border-radius:8px; margin-top:12px;">
+              <form id="createProveedorForm" class="grid">
+                <div>
+                  <label>Empresa *</label>
+                  <input type="text" id="provNombre" placeholder="Ej: Distribuidora del Norte" required />
+                </div>
+                <div>
+                  <label>CUIT</label>
+                  <input type="text" id="provCuit" placeholder="Ej: 30-12345678-9" />
+                </div>
+                <div>
+                  <label>Contacto</label>
+                  <input type="text" id="provContacto" placeholder="Nombre del contacto" />
+                </div>
+                <div>
+                  <label>Teléfono</label>
+                  <input type="text" id="provTelefono" placeholder="Ej: 0351-123456" />
+                </div>
+                <div>
+                  <label>Email</label>
+                  <input type="email" id="provEmail" placeholder="proveedor@empresa.com" />
+                </div>
+                <div>
+                  <label>Categoría</label>
+                  <input type="text" id="provCategoria" placeholder="Ej: Librería, Informática" />
+                </div>
+                <div style="grid-column: 1 / -1;">
+                  <button type="submit">Guardar proveedor</button>
+                </div>
+              </form>
+            </div>
+          </details>
+
+          <!-- Tabla -->
+          <div style="overflow-x: auto;">
+            <table id="proveedoresTable">
+              <thead>
+                <tr>
+                  <th>Empresa</th>
+                  <th>Contacto</th>
+                  <th>Teléfono</th>
+                  <th>Email</th>
+                  <th>Categoría</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="proveedoresTbody"></tbody>
             </table>
           </div>
         </div>

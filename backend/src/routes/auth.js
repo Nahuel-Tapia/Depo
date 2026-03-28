@@ -16,57 +16,62 @@ function helpCode() {
 
 router.post("/register", async (req, res) => {
   try {
-    const { nombre, apellido, institucion, dni, email, password, telefono } = req.body;
-    const dniNormalized = normalizeDni(dni);
-    const emailNormalized = String(email || "").trim().toLowerCase();
+    const { nombre, cue, numero, password } = req.body;
 
-    if (!nombre || !dniNormalized || !emailNormalized || !password) {
-      return res.status(400).json({ error: "Nombre, DNI, email y contraseña son obligatorios" });
+    if (!nombre || !cue || !password) {
+      return res.status(400).json({ error: "Nombre, CUE y contraseña son obligatorios" });
     }
 
-    if (dniNormalized.length < 6 || dniNormalized.length > 12) {
-      return res.status(400).json({ error: "El DNI debe tener entre 6 y 12 digitos" });
+    const cueNormalized = String(cue).replace(/\D/g, "");
+    if (cueNormalized.length !== 9) {
+      return res.status(400).json({ error: "El CUE debe tener exactamente 9 dígitos" });
     }
 
     if (password.length < 6) {
       return res.status(400).json({ error: "La contraseña debe tener al menos 6 caracteres" });
     }
 
-    const existingDni = await get("SELECT id_usuario FROM usuario WHERE dni = ?", [dniNormalized]);
-    if (existingDni) {
+    // Verificar que la institución existe
+    const institucion = await get(
+      "SELECT id_institucion FROM institucion WHERE cue = ?",
+      [cueNormalized]
+    );
+    if (!institucion) {
+      return res.status(404).json({ error: "No se encontró una institución con ese CUE" });
+    }
+
+    // Verificar que el CUE no esté ya registrado como usuario
+    const existing = await get("SELECT id_usuario FROM usuario WHERE dni = ?", [cueNormalized]);
+    if (existing) {
       const code = helpCode();
       return res.status(409).json({
         ok: false,
-        error: "El DNI ya está registrado",
+        error: "Ya existe un usuario registrado con ese CUE",
         helpCode: code,
-        message: `El DNI ya está registrado. Número de ayuda: ${code}`
+        message: `Ya existe un usuario registrado con ese CUE. Número de ayuda: ${code}`
       });
-    }
-
-    const existingEmail = await get("SELECT id_usuario FROM usuario WHERE email = ?", [emailNormalized]);
-    if (existingEmail) {
-      return res.status(409).json({ error: "El email ya está registrado" });
     }
 
     const hash = await bcrypt.hash(password, 10);
     const result = await run(
-      "INSERT INTO usuario (nombre, apellido, dni, email, password, telefono, id_institucion, role, activo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, TRUE)",
-      [nombre.trim(), apellido || null, dniNormalized, emailNormalized, hash, telefono || null, institucion || null, "consulta"]
+      "INSERT INTO usuario (nombre, dni, password, telefono, id_institucion, role, activo) VALUES (?, ?, ?, ?, ?, ?, TRUE)",
+      [nombre.trim(), cueNormalized, hash, numero || null, institucion.id_institucion, "directivo"]
     );
 
     return res.status(201).json({
       ok: true,
       id: result.lastID,
-      message: "Usuario creado correctamente. Ya puede iniciar sesión con su DNI"
+      message: "Usuario creado correctamente. Ya puede iniciar sesión con su CUE"
     });
   } catch (err) {
+    console.error(err);
     if (String(err.message || "").includes("UNIQUE")) {
       const code = helpCode();
       return res.status(409).json({
         ok: false,
-        error: "El DNI ya está registrado",
+        error: "Ya existe un usuario registrado con ese CUE",
         helpCode: code,
-        message: `El DNI ya está registrado. Número de ayuda: ${code}`
+        message: `Ya existe un usuario registrado con ese CUE. Número de ayuda: ${code}`
       });
     }
     return res.status(500).json({ ok: false, error: "Error al registrar usuario" });
@@ -75,9 +80,11 @@ router.post("/register", async (req, res) => {
 
 router.post("/login", async (req, res) => {
   try {
-    const { email, dni, password } = req.body;
-    const dniNormalized = normalizeDni(dni);
-    const identifier = email || dniNormalized;
+    const { email, dni, cue, password } = req.body;
+    // Acepta dni, cue, o un email que sea puramente numérico como identificador por DNI
+    const rawNumeric = dni || cue || (/^\d+$/.test(String(email || "").trim()) ? String(email).trim() : "");
+    const dniNormalized = normalizeDni(rawNumeric);
+    const identifier = dniNormalized || (email ? String(email).trim().toLowerCase() : "");
 
     if (!identifier || !password) {
       return res.status(400).json({ error: "DNI/Email y contraseña son obligatorios" });
@@ -85,7 +92,7 @@ router.post("/login", async (req, res) => {
 
     const user = dniNormalized
       ? await get("SELECT * FROM usuario WHERE dni = ?", [dniNormalized])
-      : await get("SELECT * FROM usuario WHERE email = ?", [email]);
+      : await get("SELECT * FROM usuario WHERE email = ?", [String(email).trim().toLowerCase()]);
     if (!user || !user.activo) {
       return res.status(401).json({
         code: "INVALID_CREDENTIALS",
