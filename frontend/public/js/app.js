@@ -1320,3 +1320,34 @@ proveedoresTbody?.addEventListener("click", async (e) => {
 });
 
 render();
+
+// ============ MODALES ============
+function openModal(id) {
+  const el = document.getElementById(id);
+  if (el) {
+    el.classList.remove("hidden");
+    document.body.style.overflow = "hidden";
+  }
+}
+
+function closeModal(id) {
+  const el = document.getElementById(id);
+  if (el) {
+    el.classList.add("hidden");
+    document.body.style.overflow = "";
+  }
+}
+
+document.getElementById("btnAgregarProducto")?.addEventListener("click", () => openModal("modalProducto"));
+document.getElementById("closeModalProducto")?.addEventListener("click", () => closeModal("modalProducto"));
+document.getElementById("cancelModalProducto")?.addEventListener("click", () => closeModal("modalProducto"));
+document.getElementById("modalProducto")?.addEventListener("click", (e) => {
+  if (e.target === e.currentTarget) closeModal("modalProducto");
+});
+
+document.getElementById("btnAgregarProveedor")?.addEventListener("click", () => openModal("modalProveedor"));
+document.getElementById("closeModalProveedor")?.addEventListener("click", () => closeModal("modalProveedor"));
+document.getElementById("cancelModalProveedor")?.addEventListener("click", () => closeModal("modalProveedor"));
+document.getElementById("modalProveedor")?.addEventListener("click", (e) => {
+  if (e.target === e.currentTarget) closeModal("modalProveedor");
+});
