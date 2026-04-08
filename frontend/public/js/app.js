@@ -7,7 +7,8 @@ const state = {
   pedidos: [],
   users: [],
   instituciones: [],
-  proveedores: []
+  proveedores: [],
+  loteMovimientos: [] // Array de {producto_id, cantidad, nombre}
 };
 
 const loginCard = document.getElementById("loginCard");
@@ -542,6 +543,11 @@ tabButtons.forEach(btn => {
     // Actualizar contenido
     tabContents.forEach(tc => tc.classList.add("hidden"));
     document.getElementById(tabName + "Tab").classList.remove("hidden");
+    
+    // Limpiar lote cuando se va a movimientos
+    if (tabName === "movimientos") {
+      clearLote();
+    }
   });
 });
 
@@ -623,7 +629,7 @@ function renderProductos() {
 
 function updateProductoSelects() {
   const selects = [
-    { el: document.getElementById("movProductoId"), showStock: false },
+    { el: document.getElementById("loteProductoId"), showStock: false },
     { el: document.getElementById("ajuProductoId"), showStock: false },
     { el: document.getElementById("pedidoProductoId"), showStock: false }
   ];
@@ -749,28 +755,89 @@ function renderMovimientos() {
   });
 }
 
+// Funciones para manejar el lote de movimientos
+function renderLote() {
+  const tbody = document.getElementById("loteTbody");
+  tbody.innerHTML = "";
+  
+  state.loteMovimientos.forEach((item, index) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td style="border: 1px solid #ddd; padding: 8px;">${item.nombre}</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">${item.cantidad}</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">
+        <button type="button" onclick="removeFromLote(${index})" class="secondary">Remover</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function addToLote() {
+  const productoId = parseInt(document.getElementById("loteProductoId").value);
+  const cantidad = parseInt(document.getElementById("loteCantidad").value);
+  
+  if (!productoId || !cantidad || cantidad <= 0) {
+    alert("Seleccione un producto y una cantidad válida");
+    return;
+  }
+  
+  // Verificar si el producto ya está en el lote
+  const existing = state.loteMovimientos.find(item => item.producto_id === productoId);
+  if (existing) {
+    existing.cantidad += cantidad;
+  } else {
+    const producto = state.productos.find(p => p.id === productoId);
+    state.loteMovimientos.push({
+      producto_id: productoId,
+      cantidad: cantidad,
+      nombre: producto ? producto.nombre : "Producto desconocido"
+    });
+  }
+  
+  renderLote();
+  document.getElementById("loteProductoId").value = "";
+  document.getElementById("loteCantidad").value = "";
+}
+
+function removeFromLote(index) {
+  state.loteMovimientos.splice(index, 1);
+  renderLote();
+}
+
+function clearLote() {
+  state.loteMovimientos = [];
+  renderLote();
+}
+
 document.getElementById("createMovimientoForm")?.addEventListener("submit", async (e) => {
   e.preventDefault();
   const msg = document.getElementById("movimientosMsg");
   msg.textContent = "";
   
   const tipo = document.getElementById("movTipo").value;
-  const productoId = parseInt(document.getElementById("movProductoId").value);
-  const cantidad = parseInt(document.getElementById("movCantidad").value);
+  const motivo = document.getElementById("movMotivo").value.trim() || null;
   
-  if (!productoId || !tipo || !cantidad) {
-    msg.textContent = "Complete todos los campos obligatorios";
+  if (!tipo) {
+    msg.textContent = "Seleccione un tipo de movimiento";
+    return;
+  }
+  
+  if (state.loteMovimientos.length === 0) {
+    msg.textContent = "Agregue al menos un producto al lote";
     return;
   }
   
   const payload = {
-    producto_id: productoId,
     tipo: tipo,
-    cantidad: cantidad,
-    motivo: document.getElementById("movMotivo").value.trim() || null
+    motivo: motivo,
+    movimientos: state.loteMovimientos.map(item => ({
+      producto_id: item.producto_id,
+      cantidad: item.cantidad
+    }))
   };
   
-  const res = await fetch("/api/movimientos", {
+  const res = await fetch("/api/movimientos/lote", {
     method: "POST",
     headers: authHeaders(),
     body: JSON.stringify(payload)
@@ -778,14 +845,17 @@ document.getElementById("createMovimientoForm")?.addEventListener("submit", asyn
   
   if (!res.ok) {
     const data = await res.json();
-    msg.textContent = data.error || "Error al registrar movimiento";
+    msg.textContent = data.error || "Error al registrar lote de movimientos";
     return;
   }
   
   document.getElementById("createMovimientoForm").reset();
+  clearLote();
   await loadMovimientos();
   await loadProductos();
 });
+
+document.getElementById("addToLoteBtn")?.addEventListener("click", addToLote);
 
 // ============ PEDIDOS ============
 async function loadPedidos() {

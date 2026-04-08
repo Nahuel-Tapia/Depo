@@ -118,16 +118,10 @@
 
         <!-- MOVIMIENTOS -->
         <div class="tab-content hidden" id="movimientosTab">
-          <h2>Registro de Movimientos</h2>
+          <h2>Registro de Movimientos por Lote</h2>
           
           <div style="background: #f9fafb; padding: 24px; border-radius: 8px; margin-bottom: 32px;">
             <form id="createMovimientoForm" class="grid">
-              <div>
-                <label>Producto</label>
-                <select id="movProductoId" required>
-                  <option value="">Seleccionar producto...</option>
-                </select>
-              </div>
               <div>
                 <label>Tipo de Movimiento</label>
                 <select id="movTipo" required>
@@ -139,15 +133,44 @@
                 </select>
               </div>
               <div>
-                <label>Cantidad</label>
-                <input type="number" id="movCantidad" placeholder="0" min="1" required />
-              </div>
-              <div>
                 <label>Motivo</label>
                 <input type="text" id="movMotivo" placeholder="Ej: Compra, Ajuste inventario" />
               </div>
               <div style="grid-column: 1 / -1;">
-                <button type="submit">Registrar movimiento</button>
+                <h3>Agregar Productos al Lote</h3>
+                <div class="grid" style="margin-bottom: 16px;">
+                  <div>
+                    <label>Producto</label>
+                    <select id="loteProductoId">
+                      <option value="">Seleccionar producto...</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label>Cantidad</label>
+                    <input type="number" id="loteCantidad" placeholder="0" min="1" />
+                  </div>
+                  <div style="align-self: end;">
+                    <button type="button" id="addToLoteBtn">Agregar al Lote</button>
+                  </div>
+                </div>
+              </div>
+              <div style="grid-column: 1 / -1;">
+                <h4>Productos en el Lote:</h4>
+                <table id="loteTable" style="width: 100%; border-collapse: collapse;">
+                  <thead>
+                    <tr style="background: #f0f0f0;">
+                      <th style="border: 1px solid #ddd; padding: 8px;">Producto</th>
+                      <th style="border: 1px solid #ddd; padding: 8px;">Cantidad</th>
+                      <th style="border: 1px solid #ddd; padding: 8px;">Acción</th>
+                    </tr>
+                  </thead>
+                  <tbody id="loteTbody">
+                    <!-- Productos agregados aparecerán aquí -->
+                  </tbody>
+                </table>
+              </div>
+              <div style="grid-column: 1 / -1;">
+                <button type="submit" id="registerLoteBtn">Registrar Lote de Movimientos</button>
               </div>
             </form>
           </div>

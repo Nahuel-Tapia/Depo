@@ -122,6 +122,52 @@ router.post("/", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), async (re
   }
 });
 
+// Crear lote de movimientos
+router.post("/lote", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), async (req, res) => {
+  try {
+    const { tipo, motivo, movimientos } = req.body;
+
+    if (!tipo || !movimientos || !Array.isArray(movimientos) || movimientos.length === 0) {
+      return res.status(400).json({ error: "Faltan campos obligatorios (tipo, movimientos array)" });
+    }
+
+    if (!TIPOS_MOVIMIENTO.includes(tipo)) {
+      return res.status(400).json({ error: `Tipo inválido. Valores válidos: ${TIPOS_MOVIMIENTO.join(", ")}` });
+    }
+
+    // Validar cada movimiento
+    for (const mov of movimientos) {
+      if (!mov.producto_id || !mov.cantidad) {
+        return res.status(400).json({ error: "Cada movimiento debe tener producto_id y cantidad" });
+      }
+      const cantidadNum = parseInt(mov.cantidad);
+      if (isNaN(cantidadNum) || cantidadNum <= 0) {
+        return res.status(400).json({ error: "La cantidad debe ser un número mayor a 0" });
+      }
+      // Verificar que el producto existe
+      const producto = await get("SELECT * FROM producto WHERE id_producto = ?", [mov.producto_id]);
+      if (!producto) {
+        return res.status(404).json({ error: `Producto con id ${mov.producto_id} no encontrado` });
+      }
+    }
+
+    // Insertar movimientos en una transacción
+    const ids = [];
+    for (const mov of movimientos) {
+      const result = await run(
+        "INSERT INTO movimiento_stock (id_producto, tipo, cantidad, id_usuario, motivo) VALUES (?, ?, ?, ?, ?)",
+        [mov.producto_id, tipo, parseInt(mov.cantidad), req.user.sub, motivo || null]
+      );
+      ids.push(result.lastID);
+    }
+
+    return res.status(201).json({ ids });
+  } catch (err) {
+    console.error("Error creando lote de movimientos:", err);
+    return res.status(500).json({ error: "No se pudo crear el lote de movimientos" });
+  }
+});
+
 // Estadísticas de movimientos
 router.get("/stats/resumen", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW), async (req, res) => {
   try {
