@@ -48,7 +48,7 @@ function parseCsv(filePath) {
 async function importData() {
   const client = await pool.connect();
   try {
-    await client.query("BEGIN");
+    // NO usar transacción global - ejecutar sin BEGIN/COMMIT
 
     // 1. Leer CSVs
     const direcciones = parseCsv(
@@ -65,91 +65,110 @@ async function importData() {
     console.log(`Edificios: ${edificios.length}`);
     console.log(`Instituciones: ${instituciones.length}`);
 
-    // 2. Insertar direcciones (manteniendo id_direccion original)
-    console.log("\nImportando direcciones...");
-    let direccionesInsertadas = 0;
+    // 2. Crear un mapa de id_direccion → datos de dirección para fusionarlos con edificios
+    console.log("\nProcesando datos...");
+    const direccionesMap = {};
     for (const d of direcciones) {
-      await client.query(
-        `INSERT INTO direccion (id_direccion, calle, numero_puerta, localidad, departamento, codigo_postal, latitud, longitud, te_voip, letra_zona)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-         ON CONFLICT (id_direccion) DO NOTHING`,
-        [
-          parseInt(d.id_direccion),
-          d.calle || null,
-          d.numero_puerta || null,
-          d.localidad || null,
-          d.departamento || null,
-          d.codigo_postal ? parseInt(d.codigo_postal) : null,
-          d.latitud ? parseFloat(d.latitud) : null,
-          d.longitud ? parseFloat(d.longitud) : null,
-          d.te_voip || null,
-          d.letra_zona || null,
-        ]
-      );
-      direccionesInsertadas++;
+      direccionesMap[parseInt(d.id_direccion)] = {
+        calle: d.calle || null,
+        numero_puerta: d.numero_puerta || null,
+        localidad: d.localidad || null,
+        departamento: d.departamento || null,
+        codigo_postal: d.codigo_postal ? parseInt(d.codigo_postal) : null,
+        latitud: d.latitud ? parseFloat(d.latitud) : null,
+        longitud: d.longitud ? parseFloat(d.longitud) : null,
+        te_voip: d.te_voip || null,
+        letra_zona: d.letra_zona || null,
+      };
     }
-    await client.query(
-      `SELECT setval('direccion_id_direccion_seq', (SELECT MAX(id_direccion) FROM direccion))`
-    );
-    console.log(`Direcciones insertadas: ${direccionesInsertadas}`);
 
-    // 3. Insertar edificios (manteniendo id_edificio original para FK con instituciones)
+    // 3. Insertar edificios con sus datos de dirección combinados
     console.log("\nImportando edificios...");
     let edificiosInsertados = 0;
     for (const e of edificios) {
-      await client.query(
-        `INSERT INTO edificio (id_edificio, cui, id_direccion)
-         VALUES ($1, $2, $3)
-         ON CONFLICT (id_edificio) DO NOTHING`,
-        [
-          parseInt(e.id_edificio),
-          e.cui || null,
-          e.id_direccion ? parseInt(e.id_direccion) : null,
-        ]
-      );
-      edificiosInsertados++;
+      try {
+        const dirData = direccionesMap[parseInt(e.id_direccion)] || {};
+        await client.query(
+          `INSERT INTO edificio (id_edificio, cui, calle, numero_puerta, direccion, localidad, departamento, codigo_postal, latitud, longitud, te_voip, letra_zona)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+           ON CONFLICT (id_edificio) DO NOTHING`,
+          [
+            parseInt(e.id_edificio),
+            e.cui || null,
+            dirData.calle,
+            dirData.numero_puerta,
+            e.direccion || null, // campo dirección general
+            dirData.localidad,
+            dirData.departamento,
+            dirData.codigo_postal,
+            dirData.latitud,
+            dirData.longitud,
+            dirData.te_voip,
+            dirData.letra_zona,
+          ]
+        );
+        edificiosInsertados++;
+      } catch (err) {
+        console.error(`Error insertando edificio ${e.id_edificio}:`, err.message);
+      }
     }
     await client.query(
       `SELECT setval('edificio_id_edificio_seq', (SELECT MAX(id_edificio) FROM edificio))`
     );
     console.log(`Edificios insertados: ${edificiosInsertados}`);
 
-    // 4. Insertar instituciones (id auto-generado, ignorando id_institucion del CSV)
+    // 4. Insertar instituciones
     console.log("\nImportando instituciones...");
     let institucionesInsertadas = 0;
     let duplicadosIgnorados = 0;
+    let erroresInserccion = 0;
     for (const inst of instituciones) {
-      const res = await client.query(
-        `INSERT INTO institucion (nombre, cue, id_edificio, establecimiento_cabecera, nivel_educativo, categoria, ambito)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)
-           ON CONFLICT (cue, nivel_educativo) DO NOTHING
-           RETURNING id_institucion`,
-        [
-          inst.nombre,
-          inst.cue,
-          inst.id_edificio ? parseInt(inst.id_edificio) : null,
-          inst.establecimiento_cabecera || null,
-          inst.nivel_educativo || null,
-          inst.categoria || null,
-          inst.ambito || null,
-        ]
-      );
-      if (res.rowCount > 0) {
-        institucionesInsertadas++;
-      } else {
-        duplicadosIgnorados++;
-        console.log(
-          `  Duplicado ignorado: ${inst.nombre} (CUE: ${inst.cue}, Nivel: ${inst.nivel_educativo})`
+      try {
+        // Verificar si ya existe
+        const existente = await client.query(
+          `SELECT id_institucion FROM institucion WHERE cue = $1 AND nivel_educativo = $2`,
+          [inst.cue, inst.nivel_educativo || null]
         );
+        
+        if (existente.rows.length === 0) {
+          const res = await client.query(
+            `INSERT INTO institucion (nombre, cue, id_edificio, establecimiento_cabecera, nivel_educativo, categoria, ambito)
+               VALUES ($1, $2, $3, $4, $5, $6, $7)
+               RETURNING id_institucion`,
+            [
+              inst.nombre,
+              inst.cue,
+              inst.id_edificio ? parseInt(inst.id_edificio) : null,
+              inst.establecimiento_cabecera || null,
+              inst.nivel_educativo || null,
+              inst.categoria || null,
+              inst.ambito || null,
+            ]
+          );
+          if (res.rowCount > 0) {
+            institucionesInsertadas++;
+          }
+        } else {
+          duplicadosIgnorados++;
+        }
+      } catch (e) {
+        erroresInserccion++;
+        if (erroresInserccion <= 5) {
+          console.error(
+            `  Error insertando: ${inst.nombre} (CUE: ${inst.cue})`,
+            e.message.substring(0, 100)
+          );
+        }
       }
     }
     console.log(`Instituciones insertadas: ${institucionesInsertadas}`);
     console.log(`Duplicados ignorados: ${duplicadosIgnorados}`);
+    if (erroresInserccion > 5) {
+      console.log(`Errores omitidos en la salida: ${erroresInserccion - 5}`);
+    }
 
-    await client.query("COMMIT");
     console.log("\n¡Importación completada exitosamente!");
   } catch (err) {
-    await client.query("ROLLBACK");
     console.error("Error en la importación:", err.message);
     process.exit(1);
   } finally {
