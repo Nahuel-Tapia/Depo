@@ -202,13 +202,23 @@ CREATE TABLE movimiento_stock (
     id_detalle_ingreso INT,
     id_detalle_orden INT,
     fecha_movimiento TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    -- Nuevos campos para movimientos directos
+    estado_producto VARCHAR(50), -- estado del producto (nuevo, usado, dañado, etc.)
+    cargo_retira VARCHAR(50), -- cargo de quien retira (director/a, vicedirector/a, etc.)
+    id_institucion INT, -- institución que recibe el egreso
+    id_usuario INT, -- usuario que registra el movimiento
+    motivo TEXT, -- motivo del movimiento
     FOREIGN KEY (id_producto) REFERENCES producto(id_producto),
     FOREIGN KEY (id_detalle_ingreso) REFERENCES detalle_ingreso(id_detalle_ingreso),
     FOREIGN KEY (id_detalle_orden) REFERENCES detalle_orden(id_detalle_orden),
+    FOREIGN KEY (id_institucion) REFERENCES institucion(id_institucion),
+    FOREIGN KEY (id_usuario) REFERENCES usuario(id_usuario),
     CONSTRAINT chk_movimiento_origen CHECK (
         (id_detalle_ingreso IS NOT NULL AND id_detalle_orden IS NULL)
         OR
         (id_detalle_ingreso IS NULL AND id_detalle_orden IS NOT NULL)
+        OR
+        (id_detalle_ingreso IS NULL AND id_detalle_orden IS NULL) -- movimientos directos
     )
 );
 

@@ -8,7 +8,9 @@ const state = {
   users: [],
   instituciones: [],
   proveedores: [],
-  loteMovimientos: [] // Array de {producto_id, cantidad, nombre}
+  loteMovimientos: [], // Array de {producto_id, cantidad, nombre}
+  loteEgreso: [], // Array de {producto_id, cantidad, nombre, estado}
+  loteIngreso: [] // Array de {producto_id, cantidad, nombre, estado}
 };
 
 const loginCard = document.getElementById("loginCard");
@@ -547,6 +549,10 @@ tabButtons.forEach(btn => {
     // Limpiar lote cuando se va a movimientos
     if (tabName === "movimientos") {
       clearLote();
+      clearEgreso();
+      clearIngreso();
+      initSubTabs();
+      loadInstitucionesDropdown();
     }
   });
 });
@@ -630,6 +636,8 @@ function renderProductos() {
 function updateProductoSelects() {
   const selects = [
     { el: document.getElementById("loteProductoId"), showStock: false },
+    { el: document.getElementById("egresoProductoId"), showStock: false },
+    { el: document.getElementById("ingresoProductoId"), showStock: false },
     { el: document.getElementById("ajuProductoId"), showStock: false },
     { el: document.getElementById("pedidoProductoId"), showStock: false }
   ];
@@ -742,14 +750,20 @@ function renderMovimientos() {
   tbody.innerHTML = "";
   
   state.movimientos.forEach(m => {
+    const institucionCargo = m.institucion_nombre && m.cargo_retira 
+      ? `${m.institucion_nombre} (${m.cargo_retira})` 
+      : m.institucion_nombre || m.cargo_retira || "-";
+    
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${m.producto_nombre || "-"}</td>
       <td><span class="badge badge-${m.tipo}">${m.tipo}</span></td>
       <td>${m.cantidad}</td>
+      <td>${m.estado_producto || "-"}</td>
+      <td>${institucionCargo}</td>
       <td>${m.motivo || "-"}</td>
       <td>${m.usuario_nombre || "-"}</td>
-      <td>${new Date(m.created_at).toLocaleDateString()}</td>
+      <td>${new Date(m.fecha_movimiento).toLocaleDateString()}</td>
     `;
     tbody.appendChild(tr);
   });
@@ -810,6 +824,130 @@ function clearLote() {
   renderLote();
 }
 
+// Funciones para manejar sub-pestañas
+function initSubTabs() {
+  const subTabButtons = document.querySelectorAll(".sub-tab-btn");
+  const subTabContents = document.querySelectorAll(".sub-tab-content");
+
+  subTabButtons.forEach(btn => {
+    btn.addEventListener("click", () => {
+      const subTabName = btn.dataset.subtab;
+      
+      // Actualizar botones
+      subTabButtons.forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      
+      // Actualizar contenido
+      subTabContents.forEach(tc => tc.classList.add("hidden"));
+      document.getElementById(subTabName + "SubTab").classList.remove("hidden");
+    });
+  });
+}
+
+// Funciones para EGRESO
+function renderEgreso() {
+  const tbody = document.getElementById("egresoTbody");
+  tbody.innerHTML = "";
+  
+  state.loteEgreso.forEach((item, index) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td style="border: 1px solid #ddd; padding: 8px;">${item.nombre}</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">${item.cantidad}</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">${item.estado}</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">
+        <button type="button" onclick="removeFromEgreso(${index})" class="secondary">Remover</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function addToEgreso() {
+  const productoId = parseInt(document.getElementById("egresoProductoId").value);
+  const cantidad = parseInt(document.getElementById("egresoCantidad").value);
+  const estado = document.getElementById("egresoEstado").value;
+  
+  if (!productoId || !cantidad || cantidad <= 0) {
+    alert("Seleccione un producto y una cantidad válida");
+    return;
+  }
+  
+  const producto = state.productos.find(p => p.id === productoId);
+  state.loteEgreso.push({
+    producto_id: productoId,
+    cantidad: cantidad,
+    nombre: producto ? producto.nombre : "Producto desconocido",
+    estado: estado
+  });
+  
+  renderEgreso();
+  document.getElementById("egresoProductoId").value = "";
+  document.getElementById("egresoCantidad").value = "";
+}
+
+function removeFromEgreso(index) {
+  state.loteEgreso.splice(index, 1);
+  renderEgreso();
+}
+
+function clearEgreso() {
+  state.loteEgreso = [];
+  renderEgreso();
+}
+
+// Funciones para INGRESO
+function renderIngreso() {
+  const tbody = document.getElementById("ingresoTbody");
+  tbody.innerHTML = "";
+  
+  state.loteIngreso.forEach((item, index) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td style="border: 1px solid #ddd; padding: 8px;">${item.nombre}</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">${item.cantidad}</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">${item.estado}</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">
+        <button type="button" onclick="removeFromIngreso(${index})" class="secondary">Remover</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function addToIngreso() {
+  const productoId = parseInt(document.getElementById("ingresoProductoId").value);
+  const cantidad = parseInt(document.getElementById("ingresoCantidad").value);
+  const estado = document.getElementById("ingresoEstado").value;
+  
+  if (!productoId || !cantidad || cantidad <= 0) {
+    alert("Seleccione un producto y una cantidad válida");
+    return;
+  }
+  
+  const producto = state.productos.find(p => p.id === productoId);
+  state.loteIngreso.push({
+    producto_id: productoId,
+    cantidad: cantidad,
+    nombre: producto ? producto.nombre : "Producto desconocido",
+    estado: estado
+  });
+  
+  renderIngreso();
+  document.getElementById("ingresoProductoId").value = "";
+  document.getElementById("ingresoCantidad").value = "";
+}
+
+function removeFromIngreso(index) {
+  state.loteIngreso.splice(index, 1);
+  renderIngreso();
+}
+
+function clearIngreso() {
+  state.loteIngreso = [];
+  renderIngreso();
+}
+
 document.getElementById("createMovimientoForm")?.addEventListener("submit", async (e) => {
   e.preventDefault();
   const msg = document.getElementById("movimientosMsg");
@@ -831,13 +969,14 @@ document.getElementById("createMovimientoForm")?.addEventListener("submit", asyn
   const payload = {
     tipo: tipo,
     motivo: motivo,
-    movimientos: state.loteMovimientos.map(item => ({
+    productos: state.loteMovimientos.map(item => ({
       producto_id: item.producto_id,
-      cantidad: item.cantidad
+      cantidad: item.cantidad,
+      estado: "nuevo" // estado por defecto para movimientos por lote
     }))
   };
   
-  const res = await fetch("/api/movimientos/lote", {
+  const res = await fetch("/api/movimientos/directo", {
     method: "POST",
     headers: authHeaders(),
     body: JSON.stringify(payload)
@@ -856,6 +995,93 @@ document.getElementById("createMovimientoForm")?.addEventListener("submit", asyn
 });
 
 document.getElementById("addToLoteBtn")?.addEventListener("click", addToLote);
+
+// Event listeners para EGRESO
+document.getElementById("addEgresoBtn")?.addEventListener("click", addToEgreso);
+
+document.getElementById("createEgresoForm")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById("movimientosMsg");
+  msg.textContent = "";
+  
+  const institucionId = parseInt(document.getElementById("egresoInstitucion").value);
+  const cargo = document.getElementById("egresoCargo").value;
+  const motivo = document.getElementById("egresoMotivo").value.trim() || null;
+  
+  if (!institucionId || !cargo) {
+    msg.textContent = "Seleccione institución y cargo";
+    return;
+  }
+  
+  if (state.loteEgreso.length === 0) {
+    msg.textContent = "Agregue al menos un producto al egreso";
+    return;
+  }
+  
+  const payload = {
+    tipo: "egreso",
+    institucion_id: institucionId,
+    cargo_retira: cargo,
+    motivo: motivo,
+    productos: state.loteEgreso
+  };
+  
+  const res = await fetch("/api/movimientos/directo", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify(payload)
+  });
+  
+  if (!res.ok) {
+    const data = await res.json();
+    msg.textContent = data.error || "Error al registrar egreso";
+    return;
+  }
+  
+  document.getElementById("createEgresoForm").reset();
+  clearEgreso();
+  await loadMovimientos();
+  await loadProductos();
+});
+
+// Event listeners para INGRESO
+document.getElementById("addIngresoBtn")?.addEventListener("click", addToIngreso);
+
+document.getElementById("createIngresoForm")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById("movimientosMsg");
+  msg.textContent = "";
+  
+  const motivo = document.getElementById("ingresoMotivo").value.trim() || null;
+  
+  if (state.loteIngreso.length === 0) {
+    msg.textContent = "Agregue al menos un producto al ingreso";
+    return;
+  }
+  
+  const payload = {
+    tipo: "ingreso",
+    motivo: motivo,
+    productos: state.loteIngreso
+  };
+  
+  const res = await fetch("/api/movimientos/directo", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify(payload)
+  });
+  
+  if (!res.ok) {
+    const data = await res.json();
+    msg.textContent = data.error || "Error al registrar ingreso";
+    return;
+  }
+  
+  document.getElementById("createIngresoForm").reset();
+  clearIngreso();
+  await loadMovimientos();
+  await loadProductos();
+});
 
 // ============ PEDIDOS ============
 async function loadPedidos() {
@@ -1014,21 +1240,27 @@ const institucionesMsg = document.getElementById("institucionesMsg");
 
 // Carga el dropdown de instituciones para el formulario de usuarios
 async function loadInstitucionesDropdown() {
-  const select = document.getElementById("newInstitucion");
-  if (!select) return;
+  const selects = [
+    document.getElementById("newInstitucion"),
+    document.getElementById("egresoInstitucion")
+  ];
   
   try {
     const res = await fetch("/api/instituciones/public/list");
     const data = await res.json();
     const instituciones = data.instituciones || [];
     
-    // Mantener la primera opción
-    select.innerHTML = '<option value="">-- Seleccionar (obligatorio para directivo) --</option>';
-    instituciones.forEach(inst => {
-      const opt = document.createElement("option");
-      opt.value = inst.id;
-      opt.textContent = inst.nombre;
-      select.appendChild(opt);
+    selects.forEach(select => {
+      if (!select) return;
+      // Mantener la primera opción
+      const firstOption = select.querySelector("option")?.textContent || "Seleccionar institución...";
+      select.innerHTML = `<option value="">${firstOption}</option>`;
+      instituciones.forEach(inst => {
+        const opt = document.createElement("option");
+        opt.value = inst.id;
+        opt.textContent = inst.nombre;
+        select.appendChild(opt);
+      });
     });
   } catch (err) {
     console.error("Error cargando instituciones:", err);

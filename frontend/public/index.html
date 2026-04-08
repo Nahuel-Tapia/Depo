@@ -118,61 +118,147 @@
 
         <!-- MOVIMIENTOS -->
         <div class="tab-content hidden" id="movimientosTab">
-          <h2>Registro de Movimientos por Lote</h2>
+          <h2>Registro de Movimientos</h2>
           
-          <div style="background: #f9fafb; padding: 24px; border-radius: 8px; margin-bottom: 32px;">
-            <form id="createMovimientoForm" class="grid">
-              <div>
-                <label>Tipo de Movimiento</label>
-                <select id="movTipo" required>
-                  <option value="">Seleccionar tipo...</option>
-                  <option value="ingreso">Ingreso</option>
-                  <option value="egreso">Egreso</option>
-                  <option value="ajuste">Ajuste</option>
-                  <option value="devolucion">Devolución</option>
-                </select>
-              </div>
-              <div>
-                <label>Motivo</label>
-                <input type="text" id="movMotivo" placeholder="Ej: Compra, Ajuste inventario" />
-              </div>
-              <div style="grid-column: 1 / -1;">
-                <h3>Agregar Productos al Lote</h3>
-                <div class="grid" style="margin-bottom: 16px;">
-                  <div>
-                    <label>Producto</label>
-                    <select id="loteProductoId">
-                      <option value="">Seleccionar producto...</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label>Cantidad</label>
-                    <input type="number" id="loteCantidad" placeholder="0" min="1" />
-                  </div>
-                  <div style="align-self: end;">
-                    <button type="button" id="addToLoteBtn">Agregar al Lote</button>
+          <!-- Sub-pestañas para EGRESO e INGRESO -->
+          <div class="sub-tabs">
+            <button class="sub-tab-btn active" data-subtab="egreso">EGRESO</button>
+            <button class="sub-tab-btn" data-subtab="ingreso">INGRESO</button>
+          </div>
+
+          <!-- EGRESO -->
+          <div class="sub-tab-content active" id="egresoSubTab">
+            <h3>Egreso de Productos</h3>
+            <div style="background: #f9fafb; padding: 24px; border-radius: 8px; margin-bottom: 32px;">
+              <form id="createEgresoForm" class="grid">
+                <div>
+                  <label>Institución</label>
+                  <select id="egresoInstitucion" required>
+                    <option value="">Seleccionar institución...</option>
+                  </select>
+                </div>
+                <div>
+                  <label>Cargo de quien retira</label>
+                  <select id="egresoCargo" required>
+                    <option value="">Seleccionar cargo...</option>
+                    <option value="director/a">Director/a</option>
+                    <option value="vicedirector/a">Vicedirector/a</option>
+                    <option value="secretario/a">Secretario/a</option>
+                    <option value="rector/a">Rector/a</option>
+                    <option value="maestro/a a cargo">Maestro/a a cargo</option>
+                  </select>
+                </div>
+                <div style="grid-column: 1 / -1;">
+                  <h4>Productos a egresar</h4>
+                  <div class="grid" style="margin-bottom: 16px;">
+                    <div>
+                      <label>Producto</label>
+                      <select id="egresoProductoId">
+                        <option value="">Seleccionar producto...</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label>Cantidad</label>
+                      <input type="number" id="egresoCantidad" placeholder="0" min="1" />
+                    </div>
+                    <div>
+                      <label>Estado del producto</label>
+                      <select id="egresoEstado">
+                        <option value="nuevo">Nuevo</option>
+                        <option value="usado">Usado</option>
+                        <option value="dañado">Dañado</option>
+                        <option value="reparado">Reparado</option>
+                      </select>
+                    </div>
+                    <div style="align-self: end;">
+                      <button type="button" id="addEgresoBtn">Agregar al Egreso</button>
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div style="grid-column: 1 / -1;">
-                <h4>Productos en el Lote:</h4>
-                <table id="loteTable" style="width: 100%; border-collapse: collapse;">
-                  <thead>
-                    <tr style="background: #f0f0f0;">
-                      <th style="border: 1px solid #ddd; padding: 8px;">Producto</th>
-                      <th style="border: 1px solid #ddd; padding: 8px;">Cantidad</th>
-                      <th style="border: 1px solid #ddd; padding: 8px;">Acción</th>
-                    </tr>
-                  </thead>
-                  <tbody id="loteTbody">
-                    <!-- Productos agregados aparecerán aquí -->
-                  </tbody>
-                </table>
-              </div>
-              <div style="grid-column: 1 / -1;">
-                <button type="submit" id="registerLoteBtn">Registrar Lote de Movimientos</button>
-              </div>
-            </form>
+                <div style="grid-column: 1 / -1;">
+                  <h4>Productos en el Egreso:</h4>
+                  <table id="egresoTable" style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                      <tr style="background: #f0f0f0;">
+                        <th style="border: 1px solid #ddd; padding: 8px;">Producto</th>
+                        <th style="border: 1px solid #ddd; padding: 8px;">Cantidad</th>
+                        <th style="border: 1px solid #ddd; padding: 8px;">Estado</th>
+                        <th style="border: 1px solid #ddd; padding: 8px;">Acción</th>
+                      </tr>
+                    </thead>
+                    <tbody id="egresoTbody">
+                      <!-- Productos agregados aparecerán aquí -->
+                    </tbody>
+                  </table>
+                </div>
+                <div style="grid-column: 1 / -1;">
+                  <label>Motivo del egreso</label>
+                  <input type="text" id="egresoMotivo" placeholder="Motivo del egreso" />
+                </div>
+                <div style="grid-column: 1 / -1;">
+                  <button type="submit" id="registerEgresoBtn">Registrar Egreso</button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <!-- INGRESO -->
+          <div class="sub-tab-content hidden" id="ingresoSubTab">
+            <h3>Ingreso de Productos</h3>
+            <div style="background: #f9fafb; padding: 24px; border-radius: 8px; margin-bottom: 32px;">
+              <form id="createIngresoForm" class="grid">
+                <div style="grid-column: 1 / -1;">
+                  <h4>Productos a ingresar</h4>
+                  <div class="grid" style="margin-bottom: 16px;">
+                    <div>
+                      <label>Producto</label>
+                      <select id="ingresoProductoId">
+                        <option value="">Seleccionar producto...</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label>Cantidad</label>
+                      <input type="number" id="ingresoCantidad" placeholder="0" min="1" />
+                    </div>
+                    <div>
+                      <label>Estado del producto</label>
+                      <select id="ingresoEstado">
+                        <option value="nuevo">Nuevo</option>
+                        <option value="usado">Usado</option>
+                        <option value="dañado">Dañado</option>
+                        <option value="reparado">Reparado</option>
+                      </select>
+                    </div>
+                    <div style="align-self: end;">
+                      <button type="button" id="addIngresoBtn">Agregar al Ingreso</button>
+                    </div>
+                  </div>
+                </div>
+                <div style="grid-column: 1 / -1;">
+                  <h4>Productos en el Ingreso:</h4>
+                  <table id="ingresoTable" style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                      <tr style="background: #f0f0f0;">
+                        <th style="border: 1px solid #ddd; padding: 8px;">Producto</th>
+                        <th style="border: 1px solid #ddd; padding: 8px;">Cantidad</th>
+                        <th style="border: 1px solid #ddd; padding: 8px;">Estado</th>
+                        <th style="border: 1px solid #ddd; padding: 8px;">Acción</th>
+                      </tr>
+                    </thead>
+                    <tbody id="ingresoTbody">
+                      <!-- Productos agregados aparecerán aquí -->
+                    </tbody>
+                  </table>
+                </div>
+                <div style="grid-column: 1 / -1;">
+                  <label>Motivo del ingreso</label>
+                  <input type="text" id="ingresoMotivo" placeholder="Motivo del ingreso" />
+                </div>
+                <div style="grid-column: 1 / -1;">
+                  <button type="submit" id="registerIngresoBtn">Registrar Ingreso</button>
+                </div>
+              </form>
+            </div>
           </div>
           
           <div id="movimientosMsg" class="msg"></div>
@@ -182,6 +268,8 @@
                 <th>Producto</th>
                 <th>Tipo</th>
                 <th>Cantidad</th>
+                <th>Estado</th>
+                <th>Institución/Cargo</th>
                 <th>Motivo</th>
                 <th>Registrado por</th>
                 <th>Fecha</th>

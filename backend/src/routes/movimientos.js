@@ -22,6 +22,9 @@ router.get("/", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW), async (req, 
         p.nombre as producto_nombre,
         m.tipo,
         m.cantidad,
+        m.estado_producto,
+        m.cargo_retira,
+        i.nombre as institucion_nombre,
         m.motivo,
         u.nombre as usuario_nombre,
         u.email as usuario_email,
@@ -29,6 +32,7 @@ router.get("/", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW), async (req, 
       FROM movimiento_stock m
       LEFT JOIN producto p ON m.id_producto = p.id_producto
       LEFT JOIN usuario u ON m.id_usuario = u.id_usuario
+      LEFT JOIN institucion i ON m.id_institucion = i.id_institucion
       WHERE 1 = 1
     `;
     const params = [];
@@ -66,12 +70,16 @@ router.get("/:id", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW), async (re
         p.nombre as producto_nombre,
         m.tipo,
         m.cantidad,
+        m.estado_producto,
+        m.cargo_retira,
+        i.nombre as institucion_nombre,
         m.motivo,
         u.nombre as usuario_nombre,
         m.fecha_movimiento as created_at
       FROM movimiento_stock m
       LEFT JOIN producto p ON m.id_producto = p.id_producto
       LEFT JOIN usuario u ON m.id_usuario = u.id_usuario
+      LEFT JOIN institucion i ON m.id_institucion = i.id_institucion
       WHERE m.id_movimiento = ?
     `, [id]);
     
@@ -165,6 +173,69 @@ router.post("/lote", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), async
   } catch (err) {
     console.error("Error creando lote de movimientos:", err);
     return res.status(500).json({ error: "No se pudo crear el lote de movimientos" });
+  }
+});
+
+// Crear movimiento directo (egreso/ingreso)
+router.post("/directo", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), async (req, res) => {
+  try {
+    const { tipo, institucion_id, cargo_retira, motivo, productos } = req.body;
+
+    if (!tipo || !productos || !Array.isArray(productos) || productos.length === 0) {
+      return res.status(400).json({ error: "Faltan campos obligatorios (tipo, productos array)" });
+    }
+
+    if (!TIPOS_MOVIMIENTO.includes(tipo)) {
+      return res.status(400).json({ error: `Tipo inválido. Valores válidos: ${TIPOS_MOVIMIENTO.join(", ")}` });
+    }
+
+    // Para egresos, validar institución y cargo
+    if (tipo === "egreso") {
+      if (!institucion_id || !cargo_retira) {
+        return res.status(400).json({ error: "Para egresos se requiere institución y cargo de quien retira" });
+      }
+    }
+
+    // Validar cada producto
+    for (const prod of productos) {
+      if (!prod.producto_id || !prod.cantidad || !prod.estado) {
+        return res.status(400).json({ error: "Cada producto debe tener producto_id, cantidad y estado" });
+      }
+      const cantidadNum = parseInt(prod.cantidad);
+      if (isNaN(cantidadNum) || cantidadNum <= 0) {
+        return res.status(400).json({ error: "La cantidad debe ser un número mayor a 0" });
+      }
+      // Verificar que el producto existe
+      const producto = await get("SELECT * FROM producto WHERE id_producto = ?", [prod.producto_id]);
+      if (!producto) {
+        return res.status(404).json({ error: `Producto con id ${prod.producto_id} no encontrado` });
+      }
+    }
+
+    // Insertar movimientos
+    const ids = [];
+    for (const prod of productos) {
+      const result = await run(
+        `INSERT INTO movimiento_stock (id_producto, tipo, cantidad, estado_producto, cargo_retira, id_institucion, id_usuario, motivo, fecha_movimiento)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+        [
+          prod.producto_id,
+          tipo,
+          parseInt(prod.cantidad),
+          prod.estado,
+          tipo === "egreso" ? cargo_retira : null,
+          tipo === "egreso" ? institucion_id : null,
+          req.user.sub,
+          motivo || null
+        ]
+      );
+      ids.push(result.lastID);
+    }
+
+    return res.status(201).json({ ids });
+  } catch (err) {
+    console.error("Error creando movimiento directo:", err);
+    return res.status(500).json({ error: "No se pudo crear el movimiento directo" });
   }
 });
 

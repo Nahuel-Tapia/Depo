@@ -473,6 +473,42 @@ tbody tr:hover td {
   display: none;
 }
 
+.sub-tabs {
+  display: flex;
+  border-bottom: 1px solid #e5e7eb;
+  margin-bottom: 24px;
+}
+
+.sub-tab-btn {
+  padding: 12px 24px;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--muted);
+  font-size: 16px;
+  transition: all 0.3s ease;
+}
+
+.sub-tab-btn:hover {
+  color: var(--text);
+}
+
+.sub-tab-btn.active {
+  color: var(--orange);
+  border-bottom-color: var(--orange);
+}
+
+.sub-tab-content {
+  display: block;
+  animation: fadeIn 0.3s ease-in;
+}
+
+.sub-tab-content.hidden {
+  display: none;
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;
