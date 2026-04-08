@@ -16,10 +16,10 @@ function helpCode() {
 
 router.post("/register", async (req, res) => {
   try {
-    const { nombre, cue, numero, password } = req.body;
+    const { nombre, cue, nivel_educativo, numero, password } = req.body;
 
-    if (!nombre || !cue || !password) {
-      return res.status(400).json({ error: "Nombre, CUE y contraseña son obligatorios" });
+    if (!nombre || !cue || !nivel_educativo || !password) {
+      return res.status(400).json({ error: "Nombre, CUE, nivel educativo y contraseña son obligatorios" });
     }
 
     const cueNormalized = String(cue).replace(/\D/g, "");
@@ -31,24 +31,24 @@ router.post("/register", async (req, res) => {
       return res.status(400).json({ error: "La contraseña debe tener al menos 6 caracteres" });
     }
 
-    // Verificar que la institución existe
+    // Verificar que la institución existe con ese CUE y nivel educativo
     const institucion = await get(
-      "SELECT id_institucion FROM institucion WHERE cue = ?",
-      [cueNormalized]
+      "SELECT id_institucion FROM institucion WHERE cue = ? AND nivel_educativo = ?",
+      [cueNormalized, nivel_educativo]
     );
     if (!institucion) {
-      return res.status(404).json({ error: "No se encontró una institución con ese CUE" });
+      return res.status(404).json({ error: "No se encontró una institución con ese CUE y nivel educativo" });
     }
 
-    // Verificar que el CUE no esté ya registrado como usuario
-    const existing = await get("SELECT id_usuario FROM usuario WHERE dni = ?", [cueNormalized]);
+    // Verificar que no exista ya un usuario para esa institución+nivel
+    const existing = await get("SELECT id_usuario FROM usuario WHERE id_institucion = ?", [institucion.id_institucion]);
     if (existing) {
       const code = helpCode();
       return res.status(409).json({
         ok: false,
-        error: "Ya existe un usuario registrado con ese CUE",
+        error: "Ya existe un usuario registrado para esa institución y nivel educativo",
         helpCode: code,
-        message: `Ya existe un usuario registrado con ese CUE. Número de ayuda: ${code}`
+        message: `Ya existe un usuario registrado para esa institución y nivel educativo. Número de ayuda: ${code}`
       });
     }
 

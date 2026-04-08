@@ -11,11 +11,11 @@ CREATE TYPE tipo_bien AS ENUM ('consumible', 'patrimonial');
 CREATE TABLE edificio (
     id_edificio SERIAL PRIMARY KEY,
     cui VARCHAR(20) UNIQUE,
-    calle VARCHAR(50),
+    calle VARCHAR(150),
     numero_puerta VARCHAR(20),
-    direccion VARCHAR(100),
-    localidad VARCHAR(50),
-    departamento VARCHAR(50),
+    direccion VARCHAR(200),
+    localidad VARCHAR(100),
+    departamento VARCHAR(100),
     codigo_postal INTEGER,
     latitud NUMERIC,
     longitud NUMERIC,
@@ -25,15 +25,16 @@ CREATE TABLE edificio (
 
 CREATE TABLE institucion (
     id_institucion SERIAL PRIMARY KEY,
-    nombre VARCHAR(100) NOT NULL,
-    cue VARCHAR(20) UNIQUE,
+    nombre VARCHAR(200) NOT NULL,
+    cue VARCHAR(20) NOT NULL,
     id_edificio INT,
     establecimiento_cabecera VARCHAR(100),
     nivel_educativo VARCHAR(50),
     categoria VARCHAR(20),
     ambito VARCHAR(20),
     activo BOOLEAN DEFAULT TRUE,
-    FOREIGN KEY (id_edificio) REFERENCES edificio(id_edificio)
+    FOREIGN KEY (id_edificio) REFERENCES edificio(id_edificio),
+    UNIQUE(cue, nivel_educativo)
 );
 
 
@@ -54,6 +55,9 @@ CREATE TABLE usuario (
     password VARCHAR(255),
     telefono VARCHAR(20),
     id_institucion INT,
+    role VARCHAR(50),
+    activo BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (id_institucion) REFERENCES institucion(id_institucion)
 );
 
@@ -198,16 +202,25 @@ CREATE TABLE movimiento_stock (
     id_detalle_ingreso INT,
     id_detalle_orden INT,
     fecha_movimiento TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    -- Nuevos campos para movimientos directos
+    estado_producto VARCHAR(50), -- estado del producto (nuevo, usado, dañado, etc.)
+    cargo_retira VARCHAR(50), -- cargo de quien retira (director/a, vicedirector/a, etc.)
+    id_institucion INT, -- institución que recibe el egreso
+    id_usuario INT, -- usuario que registra el movimiento
+    motivo TEXT, -- motivo del movimiento
     FOREIGN KEY (id_producto) REFERENCES producto(id_producto),
     FOREIGN KEY (id_detalle_ingreso) REFERENCES detalle_ingreso(id_detalle_ingreso),
     FOREIGN KEY (id_detalle_orden) REFERENCES detalle_orden(id_detalle_orden),
+    FOREIGN KEY (id_institucion) REFERENCES institucion(id_institucion),
+    FOREIGN KEY (id_usuario) REFERENCES usuario(id_usuario),
     CONSTRAINT chk_movimiento_origen CHECK (
         (id_detalle_ingreso IS NOT NULL AND id_detalle_orden IS NULL)
         OR
         (id_detalle_ingreso IS NULL AND id_detalle_orden IS NOT NULL)
+        OR
+        (id_detalle_ingreso IS NULL AND id_detalle_orden IS NULL) -- movimientos directos
     )
 );
-
 
 -- ÍNDICES 
 

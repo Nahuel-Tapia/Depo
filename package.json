@@ -7,7 +7,9 @@
     "build": "node --check backend/src/server.js",
     "start": "node backend/src/server.js",
     "dev": "node backend/src/server.js",
+    "setup": "node backend/scripts/setup-database.js",
     "db:create": "node backend/scripts/create-database.js",
+    "db:import": "node backend/scripts/import-data.js",
     "reset-admin": "node backend/scripts/reset-admin.js",
     "create-operador": "node backend/scripts/create-operador.js"
   },

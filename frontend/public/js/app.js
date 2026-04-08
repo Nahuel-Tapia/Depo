@@ -7,7 +7,10 @@ const state = {
   pedidos: [],
   users: [],
   instituciones: [],
-  proveedores: []
+  proveedores: [],
+  loteMovimientos: [], // Array de {producto_id, cantidad, nombre}
+  loteEgreso: [], // Array de {producto_id, cantidad, nombre, estado}
+  loteIngreso: [] // Array de {producto_id, cantidad, nombre, estado}
 };
 
 const loginCard = document.getElementById("loginCard");
@@ -375,15 +378,18 @@ loginForm?.addEventListener("submit", async (e) => {
   await render();
 });
 
-// Buscar nombre de escuela por CUE
+// Buscar nombre de escuela por CUE y cargar modalidades
 document.getElementById("registerCue")?.addEventListener("blur", async (e) => {
   const cue = e.target.value.trim();
   const escuelaField = document.getElementById("registerEscuela");
   const cueStatus = document.getElementById("cueStatus");
+  const nivelContainer = document.getElementById("nivelContainer");
+  const nivelSelect = document.getElementById("registerNivel");
   
   if (!cue || cue.length !== 9) {
     escuelaField.value = "";
     cueStatus.textContent = "";
+    if (nivelContainer) nivelContainer.style.display = "none";
     return;
   }
 
@@ -395,15 +401,35 @@ document.getElementById("registerCue")?.addEventListener("blur", async (e) => {
       escuelaField.value = data.nombre;
       cueStatus.textContent = "✓ Escuela encontrada";
       cueStatus.style.color = "#10b981";
+
+      // Cargar modalidades en el select
+      if (data.modalidades && data.modalidades.length > 1 && nivelSelect) {
+        nivelSelect.innerHTML = '<option value="">Seleccione un nivel</option>';
+        data.modalidades.forEach(m => {
+          const opt = document.createElement("option");
+          opt.value = m.nivel_educativo;
+          opt.textContent = m.nivel_educativo;
+          nivelSelect.appendChild(opt);
+        });
+        nivelContainer.style.display = "block";
+      } else if (data.modalidades && data.modalidades.length === 1 && nivelSelect) {
+        // Si solo hay una modalidad, seleccionarla automáticamente
+        nivelSelect.innerHTML = `<option value="${data.modalidades[0].nivel_educativo}">${data.modalidades[0].nivel_educativo}</option>`;
+        nivelContainer.style.display = "block";
+      } else {
+        nivelContainer.style.display = "none";
+      }
     } else {
       escuelaField.value = "";
       cueStatus.textContent = data.error || "Escuela no encontrada";
       cueStatus.style.color = "#ef4444";
+      if (nivelContainer) nivelContainer.style.display = "none";
     }
   } catch (err) {
     escuelaField.value = "";
     cueStatus.textContent = "Error al buscar escuela";
     cueStatus.style.color = "#ef4444";
+    if (nivelContainer) nivelContainer.style.display = "none";
   }
 });
 
@@ -413,13 +439,19 @@ registerForm?.addEventListener("submit", async (e) => {
 
   const nombre = document.getElementById("registerNombre").value.trim();
   const cue = document.getElementById("registerCue").value.trim();
+  const nivel_educativo = document.getElementById("registerNivel")?.value || "";
   const numero = document.getElementById("registerNumero").value.trim();
   const password = document.getElementById("registerPassword").value;
+
+  if (!nivel_educativo) {
+    showMessage(registerMsg, "Debe seleccionar un nivel educativo", "error");
+    return;
+  }
 
   const res = await fetch("/api/auth/register", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ nombre, cue, numero, password })
+    body: JSON.stringify({ nombre, cue, nivel_educativo, numero, password })
   });
 
   const data = await res.json().catch(() => ({}));
@@ -513,8 +545,19 @@ tabButtons.forEach(btn => {
     // Actualizar contenido
     tabContents.forEach(tc => tc.classList.add("hidden"));
     document.getElementById(tabName + "Tab").classList.remove("hidden");
+    
+    // Limpiar lote cuando se va a movimientos
+    if (tabName === "movimientos") {
+      clearLote();
+      clearEgreso();
+      clearIngreso();
+      initSubTabs();
+      loadInstitucionesDropdown();
+    }
   });
 });
+
+initSubTabs();
 
 // ============ PRODUCTOS ============
 async function loadProductos() {
@@ -593,23 +636,37 @@ function renderProductos() {
 }
 
 function updateProductoSelects() {
-  const selects = [
-    { el: document.getElementById("movProductoId"), showStock: false },
-    { el: document.getElementById("ajuProductoId"), showStock: false },
-    { el: document.getElementById("pedidoProductoId"), showStock: false }
+  const elements = [
+    document.getElementById("loteProductoId"),
+    document.getElementById("egresoProductoId"),
+    document.getElementById("ingresoProductoId"),
+    document.getElementById("ajuProductoId"),
+    document.getElementById("pedidoProductoId")
   ];
 
-  selects.forEach(({ el, showStock }) => {
+  elements.forEach(el => {
     if (!el) return;
-    const current = el.value;
-    el.innerHTML = '<option value="">Seleccionar producto...</option>';
-    state.productos.forEach(p => {
-      const opt = document.createElement("option");
-      opt.value = p.id;
-      opt.textContent = `${p.nombre} (${p.unidad_medida || 'unidad'})`;
-      el.appendChild(opt);
-    });
-    el.value = current;
+    if (el.tagName === "SELECT") {
+      const current = el.value;
+      el.innerHTML = '<option value="">Seleccionar producto...</option>';
+      state.productos.forEach(p => {
+        const opt = document.createElement("option");
+        opt.value = p.id;
+        opt.textContent = `${p.nombre} (${p.unidad_medida || 'unidad'})`;
+        el.appendChild(opt);
+      });
+      el.value = current;
+    } else if (el.tagName === "INPUT") {
+      const datalist = document.getElementById(`${el.id}List`);
+      if (!datalist) return;
+      datalist.innerHTML = "";
+      state.productos.forEach(p => {
+        const opt = document.createElement("option");
+        opt.value = p.nombre;
+        opt.textContent = `${p.nombre} (${p.unidad_medida || 'unidad'})`;
+        datalist.appendChild(opt);
+      });
+    }
   });
 }
 
@@ -707,17 +764,213 @@ function renderMovimientos() {
   tbody.innerHTML = "";
   
   state.movimientos.forEach(m => {
+    const institucionCargo = m.institucion_nombre && m.cargo_retira 
+      ? `${m.institucion_nombre} (${m.cargo_retira})` 
+      : m.institucion_nombre || m.cargo_retira || "-";
+    
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${m.producto_nombre || "-"}</td>
       <td><span class="badge badge-${m.tipo}">${m.tipo}</span></td>
       <td>${m.cantidad}</td>
+      <td>${m.estado_producto || "-"}</td>
+      <td>${institucionCargo}</td>
       <td>${m.motivo || "-"}</td>
       <td>${m.usuario_nombre || "-"}</td>
-      <td>${new Date(m.created_at).toLocaleDateString()}</td>
+      <td>${new Date(m.fecha_movimiento).toLocaleDateString()}</td>
     `;
     tbody.appendChild(tr);
   });
+}
+
+// Funciones para manejar el lote de movimientos
+function renderLote() {
+  const tbody = document.getElementById("loteTbody");
+  tbody.innerHTML = "";
+  
+  state.loteMovimientos.forEach((item, index) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td style="border: 1px solid #ddd; padding: 8px;">${item.nombre}</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">${item.cantidad}</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">
+        <button type="button" onclick="removeFromLote(${index})" class="secondary">Remover</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function addToLote() {
+  const productoId = parseInt(document.getElementById("loteProductoId").value);
+  const cantidad = parseInt(document.getElementById("loteCantidad").value);
+  
+  if (!productoId || !cantidad || cantidad <= 0) {
+    alert("Seleccione un producto y una cantidad válida");
+    return;
+  }
+  
+  // Verificar si el producto ya está en el lote
+  const existing = state.loteMovimientos.find(item => item.producto_id === productoId);
+  if (existing) {
+    existing.cantidad += cantidad;
+  } else {
+    const producto = state.productos.find(p => p.id === productoId);
+    state.loteMovimientos.push({
+      producto_id: productoId,
+      cantidad: cantidad,
+      nombre: producto ? producto.nombre : "Producto desconocido"
+    });
+  }
+  
+  renderLote();
+  document.getElementById("loteProductoId").value = "";
+  document.getElementById("loteCantidad").value = "";
+}
+
+function removeFromLote(index) {
+  state.loteMovimientos.splice(index, 1);
+  renderLote();
+}
+
+function clearLote() {
+  state.loteMovimientos = [];
+  renderLote();
+}
+
+// Funciones para manejar sub-pestañas
+function initSubTabs() {
+  const subTabsContainer = document.querySelector(".sub-tabs");
+  const subTabContents = document.querySelectorAll(".sub-tab-content");
+  if (!subTabsContainer || subTabsContainer.dataset.initialized === "true") return;
+
+  subTabsContainer.dataset.initialized = "true";
+
+  subTabsContainer.addEventListener("click", (event) => {
+    const btn = event.target.closest(".sub-tab-btn");
+    if (!btn) return;
+
+    const subTabName = btn.dataset.subtab;
+    if (!subTabName) return;
+
+    const subTabButtons = subTabsContainer.querySelectorAll(".sub-tab-btn");
+    subTabButtons.forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+
+    subTabContents.forEach(tc => tc.classList.add("hidden"));
+    const targetContent = document.getElementById(subTabName + "SubTab");
+    if (targetContent) {
+      targetContent.classList.remove("hidden");
+    }
+  });
+}
+
+// Funciones para EGRESO
+function renderEgreso() {
+  const tbody = document.getElementById("egresoTbody");
+  tbody.innerHTML = "";
+  
+  state.loteEgreso.forEach((item, index) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td style="border: 1px solid #ddd; padding: 8px;">${item.nombre}</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">${item.cantidad}</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">${item.estado}</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">
+        <button type="button" onclick="removeFromEgreso(${index})" class="secondary">Remover</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function addToEgreso() {
+  const productoInput = document.getElementById("egresoProductoId").value.trim();
+  const cantidad = parseInt(document.getElementById("egresoCantidad").value);
+  const estado = document.getElementById("egresoEstado").value;
+  
+  const producto = state.productos.find(p => p.nombre.toLowerCase() === productoInput.toLowerCase());
+  const productoId = producto ? producto.id : null;
+
+  if (!productoId || !cantidad || cantidad <= 0) {
+    alert("Seleccione un producto válido y una cantidad válida");
+    return;
+  }
+  
+  state.loteEgreso.push({
+    producto_id: productoId,
+    cantidad: cantidad,
+    nombre: producto.nombre,
+    estado: estado
+  });
+  
+  renderEgreso();
+  document.getElementById("egresoProductoId").value = "";
+  document.getElementById("egresoCantidad").value = "";
+}
+
+function removeFromEgreso(index) {
+  state.loteEgreso.splice(index, 1);
+  renderEgreso();
+}
+
+function clearEgreso() {
+  state.loteEgreso = [];
+  renderEgreso();
+}
+
+// Funciones para INGRESO
+function renderIngreso() {
+  const tbody = document.getElementById("ingresoTbody");
+  tbody.innerHTML = "";
+  
+  state.loteIngreso.forEach((item, index) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td style="border: 1px solid #ddd; padding: 8px;">${item.nombre}</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">${item.cantidad}</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">${item.estado}</td>
+      <td style="border: 1px solid #ddd; padding: 8px;">
+        <button type="button" onclick="removeFromIngreso(${index})" class="secondary">Remover</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function addToIngreso() {
+  const productoInput = document.getElementById("ingresoProductoId").value.trim();
+  const cantidad = parseInt(document.getElementById("ingresoCantidad").value);
+  const estado = document.getElementById("ingresoEstado").value;
+  
+  const producto = state.productos.find(p => p.nombre.toLowerCase() === productoInput.toLowerCase());
+  const productoId = producto ? producto.id : null;
+
+  if (!productoId || !cantidad || cantidad <= 0) {
+    alert("Seleccione un producto válido y una cantidad válida");
+    return;
+  }
+  
+  state.loteIngreso.push({
+    producto_id: productoId,
+    cantidad: cantidad,
+    nombre: producto.nombre,
+    estado: estado
+  });
+  
+  renderIngreso();
+  document.getElementById("ingresoProductoId").value = "";
+  document.getElementById("ingresoCantidad").value = "";
+}
+
+function removeFromIngreso(index) {
+  state.loteIngreso.splice(index, 1);
+  renderIngreso();
+}
+
+function clearIngreso() {
+  state.loteIngreso = [];
+  renderIngreso();
 }
 
 document.getElementById("createMovimientoForm")?.addEventListener("submit", async (e) => {
@@ -726,22 +979,29 @@ document.getElementById("createMovimientoForm")?.addEventListener("submit", asyn
   msg.textContent = "";
   
   const tipo = document.getElementById("movTipo").value;
-  const productoId = parseInt(document.getElementById("movProductoId").value);
-  const cantidad = parseInt(document.getElementById("movCantidad").value);
+  const motivo = document.getElementById("movMotivo").value.trim() || null;
   
-  if (!productoId || !tipo || !cantidad) {
-    msg.textContent = "Complete todos los campos obligatorios";
+  if (!tipo) {
+    msg.textContent = "Seleccione un tipo de movimiento";
+    return;
+  }
+  
+  if (state.loteMovimientos.length === 0) {
+    msg.textContent = "Agregue al menos un producto al lote";
     return;
   }
   
   const payload = {
-    producto_id: productoId,
     tipo: tipo,
-    cantidad: cantidad,
-    motivo: document.getElementById("movMotivo").value.trim() || null
+    motivo: motivo,
+    productos: state.loteMovimientos.map(item => ({
+      producto_id: item.producto_id,
+      cantidad: item.cantidad,
+      estado: "nuevo" // estado por defecto para movimientos por lote
+    }))
   };
   
-  const res = await fetch("/api/movimientos", {
+  const res = await fetch("/api/movimientos/directo", {
     method: "POST",
     headers: authHeaders(),
     body: JSON.stringify(payload)
@@ -749,11 +1009,104 @@ document.getElementById("createMovimientoForm")?.addEventListener("submit", asyn
   
   if (!res.ok) {
     const data = await res.json();
-    msg.textContent = data.error || "Error al registrar movimiento";
+    msg.textContent = data.error || "Error al registrar lote de movimientos";
     return;
   }
   
   document.getElementById("createMovimientoForm").reset();
+  clearLote();
+  await loadMovimientos();
+  await loadProductos();
+});
+
+document.getElementById("addToLoteBtn")?.addEventListener("click", addToLote);
+
+// Event listeners para EGRESO
+document.getElementById("addEgresoBtn")?.addEventListener("click", addToEgreso);
+
+document.getElementById("createEgresoForm")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById("movimientosMsg");
+  msg.textContent = "";
+  
+  const institucionInput = document.getElementById("egresoInstitucion").value.trim();
+  const cargo = document.getElementById("egresoCargo").value;
+  const motivo = document.getElementById("egresoMotivo").value.trim() || null;
+  
+  const institucionMatch = state.instituciones.find(inst => inst.nombre.toLowerCase() === institucionInput.toLowerCase());
+  const institucionId = institucionMatch ? institucionMatch.id : null;
+
+  if (!institucionId || !cargo) {
+    msg.textContent = "Seleccione institución válida y cargo";
+    return;
+  }
+  
+  if (state.loteEgreso.length === 0) {
+    msg.textContent = "Agregue al menos un producto al egreso";
+    return;
+  }
+  
+  const payload = {
+    tipo: "egreso",
+    institucion_id: institucionId,
+    cargo_retira: cargo,
+    motivo: motivo,
+    productos: state.loteEgreso
+  };
+  
+  const res = await fetch("/api/movimientos/directo", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify(payload)
+  });
+  
+  if (!res.ok) {
+    const data = await res.json();
+    msg.textContent = data.error || "Error al registrar egreso";
+    return;
+  }
+  
+  document.getElementById("createEgresoForm").reset();
+  clearEgreso();
+  await loadMovimientos();
+  await loadProductos();
+});
+
+// Event listeners para INGRESO
+document.getElementById("addIngresoBtn")?.addEventListener("click", addToIngreso);
+
+document.getElementById("createIngresoForm")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById("movimientosMsg");
+  msg.textContent = "";
+  
+  const motivo = document.getElementById("ingresoMotivo").value.trim() || null;
+  
+  if (state.loteIngreso.length === 0) {
+    msg.textContent = "Agregue al menos un producto al ingreso";
+    return;
+  }
+  
+  const payload = {
+    tipo: "ingreso",
+    motivo: motivo,
+    productos: state.loteIngreso
+  };
+  
+  const res = await fetch("/api/movimientos/directo", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify(payload)
+  });
+  
+  if (!res.ok) {
+    const data = await res.json();
+    msg.textContent = data.error || "Error al registrar ingreso";
+    return;
+  }
+  
+  document.getElementById("createIngresoForm").reset();
+  clearIngreso();
   await loadMovimientos();
   await loadProductos();
 });
@@ -835,11 +1188,19 @@ document.getElementById("createPedidoForm")?.addEventListener("submit", async (e
     return;
   }
 
+  const pedidoInput = document.getElementById("pedidoProductoId").value.trim();
+  const productoPedido = state.productos.find(p => p.nombre.toLowerCase() === pedidoInput.toLowerCase());
+
   const payload = {
-    producto_id: parseInt(document.getElementById("pedidoProductoId").value, 10),
+    producto_id: productoPedido ? productoPedido.id : null,
     cantidad: parseInt(document.getElementById("pedidoCantidad").value, 10),
     notas: document.getElementById("pedidoNotas").value.trim() || null
   };
+
+  if (!payload.producto_id) {
+    pedidosMsg.textContent = "Seleccione un producto válido";
+    return;
+  }
 
   const res = await fetch("/api/pedidos", {
     method: "POST",
@@ -915,22 +1276,38 @@ const institucionesMsg = document.getElementById("institucionesMsg");
 
 // Carga el dropdown de instituciones para el formulario de usuarios
 async function loadInstitucionesDropdown() {
-  const select = document.getElementById("newInstitucion");
-  if (!select) return;
+  const selects = [
+    document.getElementById("newInstitucion")
+  ];
+  const datalist = document.getElementById("egresoInstitucionList");
   
   try {
     const res = await fetch("/api/instituciones/public/list");
     const data = await res.json();
     const instituciones = data.instituciones || [];
+    state.instituciones = instituciones;
     
-    // Mantener la primera opción
-    select.innerHTML = '<option value="">-- Seleccionar (obligatorio para directivo) --</option>';
-    instituciones.forEach(inst => {
-      const opt = document.createElement("option");
-      opt.value = inst.id;
-      opt.textContent = inst.nombre;
-      select.appendChild(opt);
+    selects.forEach(select => {
+      if (!select) return;
+      // Mantener la primera opción
+      const firstOption = select.querySelector("option")?.textContent || "Seleccionar institución...";
+      select.innerHTML = `<option value="">${firstOption}</option>`;
+      instituciones.forEach(inst => {
+        const opt = document.createElement("option");
+        opt.value = inst.id;
+        opt.textContent = inst.nombre;
+        select.appendChild(opt);
+      });
     });
+
+    if (datalist) {
+      datalist.innerHTML = "";
+      instituciones.forEach(inst => {
+        const opt = document.createElement("option");
+        opt.value = inst.nombre;
+        datalist.appendChild(opt);
+      });
+    }
   } catch (err) {
     console.error("Error cargando instituciones:", err);
   }
