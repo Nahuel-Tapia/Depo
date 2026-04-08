@@ -54,6 +54,9 @@ CREATE TABLE usuario (
     password VARCHAR(255),
     telefono VARCHAR(20),
     id_institucion INT,
+    role VARCHAR(50),
+    activo BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (id_institucion) REFERENCES institucion(id_institucion)
 );
 
@@ -207,7 +210,6 @@ CREATE TABLE movimiento_stock (
         (id_detalle_ingreso IS NULL AND id_detalle_orden IS NOT NULL)
     )
 );
-
 
 -- ÍNDICES 
 
