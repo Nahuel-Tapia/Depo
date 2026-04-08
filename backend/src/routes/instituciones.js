@@ -34,7 +34,7 @@ function calcularCantidadAsignada(matriculados, cantidadBase = 10) {
   return Math.ceil(cantidadBase * factor);
 }
 
-// Endpoint público para obtener nombre de institución por CUE (sin autenticación)
+// Endpoint público para obtener instituciones por CUE (sin autenticación)
 router.get("/public/cue/:cue", async (req, res) => {
   try {
     const { cue } = req.params;
@@ -44,22 +44,22 @@ router.get("/public/cue/:cue", async (req, res) => {
       return res.status(400).json({ error: "CUE inválido" });
     }
 
-    const institucion = await get(`
-      SELECT id, cue, nombre, activo
-      FROM instituciones WHERE cue = ?
+    const instituciones = await all(`
+      SELECT id_institucion as id, cue, nombre, nivel_educativo, activo
+      FROM institucion WHERE cue = ? AND activo = TRUE
     `, [cueNormalized]);
 
-    if (!institucion) {
+    if (!instituciones || instituciones.length === 0) {
       return res.status(404).json({ error: "Institución no encontrada" });
     }
 
-    if (!institucion.activo) {
-      return res.status(404).json({ error: "Institución inactiva" });
-    }
-
     return res.json({ 
-      cue: institucion.cue,
-      nombre: institucion.nombre 
+      cue: cueNormalized,
+      nombre: instituciones[0].nombre,
+      modalidades: instituciones.map(i => ({
+        id: i.id,
+        nivel_educativo: i.nivel_educativo
+      }))
     });
   } catch (err) {
     console.error(err);
@@ -134,11 +134,11 @@ router.get("/:id", authorizePermissions(PERMISSIONS.INSTITUCIONES_VIEW), async (
   }
 });
 
-// Buscar institución por CUE
+// Buscar instituciones por CUE (puede devolver múltiples modalidades)
 router.get("/cue/:cue", authorizePermissions(PERMISSIONS.INSTITUCIONES_VIEW), async (req, res) => {
   try {
     const { cue } = req.params;
-    const institucion = await get(`
+    const instituciones = await all(`
       SELECT 
         id, cue, nombre, direccion, localidad, departamento, 
         telefono, email, nivel, tipo, matriculados, 
@@ -146,11 +146,11 @@ router.get("/cue/:cue", authorizePermissions(PERMISSIONS.INSTITUCIONES_VIEW), as
       FROM instituciones WHERE cue = ?
     `, [cue]);
 
-    if (!institucion) {
+    if (!instituciones || instituciones.length === 0) {
       return res.status(404).json({ error: "Institución no encontrada" });
     }
 
-    return res.json({ institucion });
+    return res.json({ instituciones });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: "No se pudo buscar la institución" });
@@ -182,9 +182,9 @@ router.post("/", authorizePermissions(PERMISSIONS.INSTITUCIONES_CREATE), async (
       return res.status(400).json({ error: "Tipo inválido" });
     }
 
-    const existing = await get("SELECT id FROM instituciones WHERE cue = ?", [cueNormalized]);
+    const existing = await get("SELECT id FROM instituciones WHERE cue = ? AND nivel = ?", [cueNormalized, nivel || null]);
     if (existing) {
-      return res.status(409).json({ error: "Ya existe una institución con ese CUE" });
+      return res.status(409).json({ error: "Ya existe una institución con ese CUE y nivel educativo" });
     }
 
     const matriculadosNum = parseInt(matriculados, 10) || 0;

@@ -25,15 +25,16 @@ CREATE TABLE edificio (
 
 CREATE TABLE institucion (
     id_institucion SERIAL PRIMARY KEY,
-    nombre VARCHAR(100) NOT NULL,
-    cue VARCHAR(20) UNIQUE,
+    nombre VARCHAR(200) NOT NULL,
+    cue VARCHAR(20) NOT NULL,
     id_edificio INT,
     establecimiento_cabecera VARCHAR(100),
     nivel_educativo VARCHAR(50),
     categoria VARCHAR(20),
     ambito VARCHAR(20),
     activo BOOLEAN DEFAULT TRUE,
-    FOREIGN KEY (id_edificio) REFERENCES edificio(id_edificio)
+    FOREIGN KEY (id_edificio) REFERENCES edificio(id_edificio),
+    UNIQUE(cue, nivel_educativo)
 );
 
 

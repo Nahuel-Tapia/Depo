@@ -375,15 +375,18 @@ loginForm?.addEventListener("submit", async (e) => {
   await render();
 });
 
-// Buscar nombre de escuela por CUE
+// Buscar nombre de escuela por CUE y cargar modalidades
 document.getElementById("registerCue")?.addEventListener("blur", async (e) => {
   const cue = e.target.value.trim();
   const escuelaField = document.getElementById("registerEscuela");
   const cueStatus = document.getElementById("cueStatus");
+  const nivelContainer = document.getElementById("nivelContainer");
+  const nivelSelect = document.getElementById("registerNivel");
   
   if (!cue || cue.length !== 9) {
     escuelaField.value = "";
     cueStatus.textContent = "";
+    if (nivelContainer) nivelContainer.style.display = "none";
     return;
   }
 
@@ -395,15 +398,35 @@ document.getElementById("registerCue")?.addEventListener("blur", async (e) => {
       escuelaField.value = data.nombre;
       cueStatus.textContent = "✓ Escuela encontrada";
       cueStatus.style.color = "#10b981";
+
+      // Cargar modalidades en el select
+      if (data.modalidades && data.modalidades.length > 1 && nivelSelect) {
+        nivelSelect.innerHTML = '<option value="">Seleccione un nivel</option>';
+        data.modalidades.forEach(m => {
+          const opt = document.createElement("option");
+          opt.value = m.nivel_educativo;
+          opt.textContent = m.nivel_educativo;
+          nivelSelect.appendChild(opt);
+        });
+        nivelContainer.style.display = "block";
+      } else if (data.modalidades && data.modalidades.length === 1 && nivelSelect) {
+        // Si solo hay una modalidad, seleccionarla automáticamente
+        nivelSelect.innerHTML = `<option value="${data.modalidades[0].nivel_educativo}">${data.modalidades[0].nivel_educativo}</option>`;
+        nivelContainer.style.display = "block";
+      } else {
+        nivelContainer.style.display = "none";
+      }
     } else {
       escuelaField.value = "";
       cueStatus.textContent = data.error || "Escuela no encontrada";
       cueStatus.style.color = "#ef4444";
+      if (nivelContainer) nivelContainer.style.display = "none";
     }
   } catch (err) {
     escuelaField.value = "";
     cueStatus.textContent = "Error al buscar escuela";
     cueStatus.style.color = "#ef4444";
+    if (nivelContainer) nivelContainer.style.display = "none";
   }
 });
 
@@ -413,13 +436,19 @@ registerForm?.addEventListener("submit", async (e) => {
 
   const nombre = document.getElementById("registerNombre").value.trim();
   const cue = document.getElementById("registerCue").value.trim();
+  const nivel_educativo = document.getElementById("registerNivel")?.value || "";
   const numero = document.getElementById("registerNumero").value.trim();
   const password = document.getElementById("registerPassword").value;
+
+  if (!nivel_educativo) {
+    showMessage(registerMsg, "Debe seleccionar un nivel educativo", "error");
+    return;
+  }
 
   const res = await fetch("/api/auth/register", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ nombre, cue, numero, password })
+    body: JSON.stringify({ nombre, cue, nivel_educativo, numero, password })
   });
 
   const data = await res.json().catch(() => ({}));
