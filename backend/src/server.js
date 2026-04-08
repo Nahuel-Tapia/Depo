@@ -22,7 +22,13 @@ const PORT = process.env.PORT || 4000;
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, "..", "..", "frontend", "public")));
+
+// Servir el build de React (frontend/dist) si existe, sino caer a frontend/public
+const frontendDistPath = path.join(__dirname, "..", "..", "frontend", "dist");
+const frontendPublicPath = path.join(__dirname, "..", "..", "frontend", "public");
+const fs = require("fs");
+const staticPath = fs.existsSync(frontendDistPath) ? frontendDistPath : frontendPublicPath;
+app.use(express.static(staticPath));
 
 app.get("/api/health", (req, res) => {
   res.json({ ok: true });
@@ -40,15 +46,11 @@ app.use("/api/instituciones", institucionesRoutes);
 app.use("/api/proveedores", proveedoresRoutes);
 
 app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "..", "..", "frontend", "public", "index.html"));
-});
-
-app.get("/registro", (req, res) => {
-  res.sendFile(path.join(__dirname, "..", "..", "frontend", "public", "registro.html"));
+  res.sendFile(path.join(staticPath, "index.html"));
 });
 
 app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "..", "..", "frontend", "public", "index.html"));
+  res.sendFile(path.join(staticPath, "index.html"));
 });
 
 initDb()
