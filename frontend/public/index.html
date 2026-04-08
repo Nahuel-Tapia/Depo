@@ -133,9 +133,8 @@
               <form id="createEgresoForm" class="grid">
                 <div>
                   <label>Institución</label>
-                  <select id="egresoInstitucion" required>
-                    <option value="">Seleccionar institución...</option>
-                  </select>
+                  <input list="egresoInstitucionList" id="egresoInstitucion" required placeholder="Escriba para buscar institución..." autocomplete="off" />
+                  <datalist id="egresoInstitucionList"></datalist>
                 </div>
                 <div>
                   <label>Cargo de quien retira</label>
@@ -153,9 +152,8 @@
                   <div class="grid" style="margin-bottom: 16px;">
                     <div>
                       <label>Producto</label>
-                      <select id="egresoProductoId">
-                        <option value="">Seleccionar producto...</option>
-                      </select>
+                      <input list="egresoProductoList" id="egresoProductoId" placeholder="Escriba para buscar producto..." autocomplete="off" />
+                      <datalist id="egresoProductoList"></datalist>
                     </div>
                     <div>
                       <label>Cantidad</label>
@@ -212,9 +210,8 @@
                   <div class="grid" style="margin-bottom: 16px;">
                     <div>
                       <label>Producto</label>
-                      <select id="ingresoProductoId">
-                        <option value="">Seleccionar producto...</option>
-                      </select>
+                      <input list="ingresoProductoList" id="ingresoProductoId" placeholder="Escriba para buscar producto..." autocomplete="off" />
+                      <datalist id="ingresoProductoList"></datalist>
                     </div>
                     <div>
                       <label>Cantidad</label>
@@ -287,9 +284,8 @@
             <form id="createPedidoForm" class="grid">
               <div>
                 <label>Producto</label>
-                <select id="pedidoProductoId" required>
-                  <option value="">Seleccionar producto...</option>
-                </select>
+                <input list="pedidoProductoList" id="pedidoProductoId" required placeholder="Escriba para buscar producto..." autocomplete="off" />
+                <datalist id="pedidoProductoList"></datalist>
               </div>
               <div>
                 <label>Cantidad</label>

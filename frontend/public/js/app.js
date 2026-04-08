@@ -557,6 +557,8 @@ tabButtons.forEach(btn => {
   });
 });
 
+initSubTabs();
+
 // ============ PRODUCTOS ============
 async function loadProductos() {
   if (!hasPermission("productos.view")) return;
@@ -634,25 +636,37 @@ function renderProductos() {
 }
 
 function updateProductoSelects() {
-  const selects = [
-    { el: document.getElementById("loteProductoId"), showStock: false },
-    { el: document.getElementById("egresoProductoId"), showStock: false },
-    { el: document.getElementById("ingresoProductoId"), showStock: false },
-    { el: document.getElementById("ajuProductoId"), showStock: false },
-    { el: document.getElementById("pedidoProductoId"), showStock: false }
+  const elements = [
+    document.getElementById("loteProductoId"),
+    document.getElementById("egresoProductoId"),
+    document.getElementById("ingresoProductoId"),
+    document.getElementById("ajuProductoId"),
+    document.getElementById("pedidoProductoId")
   ];
 
-  selects.forEach(({ el, showStock }) => {
+  elements.forEach(el => {
     if (!el) return;
-    const current = el.value;
-    el.innerHTML = '<option value="">Seleccionar producto...</option>';
-    state.productos.forEach(p => {
-      const opt = document.createElement("option");
-      opt.value = p.id;
-      opt.textContent = `${p.nombre} (${p.unidad_medida || 'unidad'})`;
-      el.appendChild(opt);
-    });
-    el.value = current;
+    if (el.tagName === "SELECT") {
+      const current = el.value;
+      el.innerHTML = '<option value="">Seleccionar producto...</option>';
+      state.productos.forEach(p => {
+        const opt = document.createElement("option");
+        opt.value = p.id;
+        opt.textContent = `${p.nombre} (${p.unidad_medida || 'unidad'})`;
+        el.appendChild(opt);
+      });
+      el.value = current;
+    } else if (el.tagName === "INPUT") {
+      const datalist = document.getElementById(`${el.id}List`);
+      if (!datalist) return;
+      datalist.innerHTML = "";
+      state.productos.forEach(p => {
+        const opt = document.createElement("option");
+        opt.value = p.nombre;
+        opt.textContent = `${p.nombre} (${p.unidad_medida || 'unidad'})`;
+        datalist.appendChild(opt);
+      });
+    }
   });
 }
 
@@ -826,21 +840,28 @@ function clearLote() {
 
 // Funciones para manejar sub-pestañas
 function initSubTabs() {
-  const subTabButtons = document.querySelectorAll(".sub-tab-btn");
+  const subTabsContainer = document.querySelector(".sub-tabs");
   const subTabContents = document.querySelectorAll(".sub-tab-content");
+  if (!subTabsContainer || subTabsContainer.dataset.initialized === "true") return;
 
-  subTabButtons.forEach(btn => {
-    btn.addEventListener("click", () => {
-      const subTabName = btn.dataset.subtab;
-      
-      // Actualizar botones
-      subTabButtons.forEach(b => b.classList.remove("active"));
-      btn.classList.add("active");
-      
-      // Actualizar contenido
-      subTabContents.forEach(tc => tc.classList.add("hidden"));
-      document.getElementById(subTabName + "SubTab").classList.remove("hidden");
-    });
+  subTabsContainer.dataset.initialized = "true";
+
+  subTabsContainer.addEventListener("click", (event) => {
+    const btn = event.target.closest(".sub-tab-btn");
+    if (!btn) return;
+
+    const subTabName = btn.dataset.subtab;
+    if (!subTabName) return;
+
+    const subTabButtons = subTabsContainer.querySelectorAll(".sub-tab-btn");
+    subTabButtons.forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+
+    subTabContents.forEach(tc => tc.classList.add("hidden"));
+    const targetContent = document.getElementById(subTabName + "SubTab");
+    if (targetContent) {
+      targetContent.classList.remove("hidden");
+    }
   });
 }
 
@@ -864,20 +885,22 @@ function renderEgreso() {
 }
 
 function addToEgreso() {
-  const productoId = parseInt(document.getElementById("egresoProductoId").value);
+  const productoInput = document.getElementById("egresoProductoId").value.trim();
   const cantidad = parseInt(document.getElementById("egresoCantidad").value);
   const estado = document.getElementById("egresoEstado").value;
   
+  const producto = state.productos.find(p => p.nombre.toLowerCase() === productoInput.toLowerCase());
+  const productoId = producto ? producto.id : null;
+
   if (!productoId || !cantidad || cantidad <= 0) {
-    alert("Seleccione un producto y una cantidad válida");
+    alert("Seleccione un producto válido y una cantidad válida");
     return;
   }
   
-  const producto = state.productos.find(p => p.id === productoId);
   state.loteEgreso.push({
     producto_id: productoId,
     cantidad: cantidad,
-    nombre: producto ? producto.nombre : "Producto desconocido",
+    nombre: producto.nombre,
     estado: estado
   });
   
@@ -916,20 +939,22 @@ function renderIngreso() {
 }
 
 function addToIngreso() {
-  const productoId = parseInt(document.getElementById("ingresoProductoId").value);
+  const productoInput = document.getElementById("ingresoProductoId").value.trim();
   const cantidad = parseInt(document.getElementById("ingresoCantidad").value);
   const estado = document.getElementById("ingresoEstado").value;
   
+  const producto = state.productos.find(p => p.nombre.toLowerCase() === productoInput.toLowerCase());
+  const productoId = producto ? producto.id : null;
+
   if (!productoId || !cantidad || cantidad <= 0) {
-    alert("Seleccione un producto y una cantidad válida");
+    alert("Seleccione un producto válido y una cantidad válida");
     return;
   }
   
-  const producto = state.productos.find(p => p.id === productoId);
   state.loteIngreso.push({
     producto_id: productoId,
     cantidad: cantidad,
-    nombre: producto ? producto.nombre : "Producto desconocido",
+    nombre: producto.nombre,
     estado: estado
   });
   
@@ -1004,12 +1029,15 @@ document.getElementById("createEgresoForm")?.addEventListener("submit", async (e
   const msg = document.getElementById("movimientosMsg");
   msg.textContent = "";
   
-  const institucionId = parseInt(document.getElementById("egresoInstitucion").value);
+  const institucionInput = document.getElementById("egresoInstitucion").value.trim();
   const cargo = document.getElementById("egresoCargo").value;
   const motivo = document.getElementById("egresoMotivo").value.trim() || null;
   
+  const institucionMatch = state.instituciones.find(inst => inst.nombre.toLowerCase() === institucionInput.toLowerCase());
+  const institucionId = institucionMatch ? institucionMatch.id : null;
+
   if (!institucionId || !cargo) {
-    msg.textContent = "Seleccione institución y cargo";
+    msg.textContent = "Seleccione institución válida y cargo";
     return;
   }
   
@@ -1160,11 +1188,19 @@ document.getElementById("createPedidoForm")?.addEventListener("submit", async (e
     return;
   }
 
+  const pedidoInput = document.getElementById("pedidoProductoId").value.trim();
+  const productoPedido = state.productos.find(p => p.nombre.toLowerCase() === pedidoInput.toLowerCase());
+
   const payload = {
-    producto_id: parseInt(document.getElementById("pedidoProductoId").value, 10),
+    producto_id: productoPedido ? productoPedido.id : null,
     cantidad: parseInt(document.getElementById("pedidoCantidad").value, 10),
     notas: document.getElementById("pedidoNotas").value.trim() || null
   };
+
+  if (!payload.producto_id) {
+    pedidosMsg.textContent = "Seleccione un producto válido";
+    return;
+  }
 
   const res = await fetch("/api/pedidos", {
     method: "POST",
@@ -1241,14 +1277,15 @@ const institucionesMsg = document.getElementById("institucionesMsg");
 // Carga el dropdown de instituciones para el formulario de usuarios
 async function loadInstitucionesDropdown() {
   const selects = [
-    document.getElementById("newInstitucion"),
-    document.getElementById("egresoInstitucion")
+    document.getElementById("newInstitucion")
   ];
+  const datalist = document.getElementById("egresoInstitucionList");
   
   try {
     const res = await fetch("/api/instituciones/public/list");
     const data = await res.json();
     const instituciones = data.instituciones || [];
+    state.instituciones = instituciones;
     
     selects.forEach(select => {
       if (!select) return;
@@ -1262,6 +1299,15 @@ async function loadInstitucionesDropdown() {
         select.appendChild(opt);
       });
     });
+
+    if (datalist) {
+      datalist.innerHTML = "";
+      instituciones.forEach(inst => {
+        const opt = document.createElement("option");
+        opt.value = inst.nombre;
+        datalist.appendChild(opt);
+      });
+    }
   } catch (err) {
     console.error("Error cargando instituciones:", err);
   }
