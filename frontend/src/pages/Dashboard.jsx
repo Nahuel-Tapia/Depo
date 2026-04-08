@@ -9,13 +9,13 @@ import Proveedores from '../components/Proveedores'
 import Usuarios from '../components/Usuarios'
 
 const TABS = [
-  { key: 'inicio', label: 'Inicio', icon: '🏠', permission: null },
-  { key: 'productos', label: 'Productos', icon: '📦', permission: 'productos.view' },
-  { key: 'movimientos', label: 'Movimientos', icon: '📊', permission: 'movimientos.view' },
-  { key: 'pedidos', label: 'Pedidos', icon: '🧾', permission: 'pedidos.view' },
-  { key: 'instituciones', label: 'Instituciones', icon: '🏫', permission: 'instituciones.view' },
-  { key: 'proveedores', label: 'Proveedores', icon: '🏭', permission: 'proveedores.view' },
-  { key: 'usuarios', label: 'Usuarios', icon: '👥', permission: 'users.read' }
+  { key: 'inicio', label: 'Inicio', permission: null },
+  { key: 'productos', label: 'Productos', permission: 'productos.view' },
+  { key: 'movimientos', label: 'Movimientos', permission: 'movimientos.view' },
+  { key: 'pedidos', label: 'Pedidos', permission: 'pedidos.view' },
+  { key: 'instituciones', label: 'Instituciones', permission: 'instituciones.view' },
+  { key: 'proveedores', label: 'Proveedores', permission: 'proveedores.view' },
+  { key: 'usuarios', label: 'Usuarios', permission: 'users.read' }
 ]
 
 export default function Dashboard() {
@@ -51,13 +51,11 @@ export default function Dashboard() {
       <section className="card">
         <div className="topbar">
           <div className="logo-container">
-            <img src="http://prod.eduge.com.ar/assets/logoGobierno-D5M0tUR9.png" alt="Logo Gobierno" style={{ maxWidth: 300, height: 'auto' }} />
+            <img src="http://prod.eduge.com.ar/assets/logoGobierno-D5M0tUR9.png" alt="San Juan Gobierno" />
           </div>
           <div className="user-info">
-            <div>
-              <span id="currentUser">{userInitial}</span>
-            </div>
-            <button className="secondary" onClick={handleLogout}>Cerrar sesión</button>
+            <span id="currentUser">{userInitial}</span>
+            <button className="secondary" onClick={handleLogout} style={{ fontSize: '0.8rem' }}>Salir</button>
           </div>
         </div>
 
@@ -68,7 +66,6 @@ export default function Dashboard() {
               className={`tab-btn ${activeTab === tab.key ? 'active' : ''}`}
               onClick={() => setActiveTab(tab.key)}
             >
-              <span className="tab-icon" aria-hidden="true">{tab.icon}</span>
               <span className="tab-label">{tab.label}</span>
             </button>
           ))}

@@ -82,17 +82,18 @@ export default function Register() {
 
   return (
     <main className="container auth-container">
-      <section className="card auth-card">
-        <div style={{ maxWidth: 560, margin: '0 auto' }}>
+      <section className="card auth-card" style={{ width: 'min(480px, 100%)' }}>
+        <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <img
             src="http://prod.eduge.com.ar/assets/logoGobierno-D5M0tUR9.png"
-            alt="Logo Gobierno"
-            style={{ width: 300, height: 'auto', display: 'block', margin: '0 auto 32px' }}
+            alt="San Juan Gobierno"
+            style={{ height: 48, width: 'auto', marginBottom: 20 }}
           />
-          <h1 style={{ textAlign: 'center', marginBottom: 8 }}>Registro Directivo</h1>
-          <p className="subtitle" style={{ textAlign: 'center', marginBottom: 32 }}>
-            Ingrese sus datos con el CUE de su institución para acceder al sistema.
+          <h1 style={{ marginBottom: 4 }}>Registro Directivo</h1>
+          <p className="subtitle" style={{ marginBottom: 0 }}>
+            Ingrese el CUE de su institución
           </p>
+        </div>
 
           <form onSubmit={handleSubmit}>
             <div>
@@ -132,7 +133,9 @@ export default function Register() {
               <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="Mínimo 6 caracteres" />
             </div>
             <button type="submit">Registrarse</button>
-            <Link to="/" className="secondary auth-switch-btn auth-switch-link">Volver al inicio</Link>
+            <div style={{ textAlign: 'center', marginTop: 4 }}>
+              <Link to="/" className="secondary auth-switch-btn auth-switch-link" style={{ fontSize: '0.85rem' }}>← Volver al inicio</Link>
+            </div>
           </form>
 
           {msg.text && (
@@ -140,7 +143,6 @@ export default function Register() {
               {msg.text}
             </div>
           )}
-        </div>
       </section>
     </main>
   )
