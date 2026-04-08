@@ -4,6 +4,7 @@ const path = require("path");
 const express = require("express");
 const cors = require("cors");
 const { initDb } = require("./db.pg");
+const { getDbConfigForLogs } = require("./config/database");
 
 const authRoutes = require("./routes/auth");
 const userRoutes = require("./routes/users");
@@ -14,6 +15,7 @@ const ajustesRoutes = require("./routes/ajustes");
 const auditoriaRoutes = require("./routes/auditoria");
 const pedidosRoutes = require("./routes/pedidos");
 const institucionesRoutes = require("./routes/instituciones");
+const proveedoresRoutes = require("./routes/proveedores");
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -35,6 +37,7 @@ app.use("/api/ajustes", ajustesRoutes);
 app.use("/api/auditoria", auditoriaRoutes);
 app.use("/api/pedidos", pedidosRoutes);
 app.use("/api/instituciones", institucionesRoutes);
+app.use("/api/proveedores", proveedoresRoutes);
 
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "..", "..", "frontend", "public", "index.html"));
@@ -56,6 +59,14 @@ initDb()
     });
   })
   .catch((err) => {
+    if (err && err.code === "28P01") {
+      const cfg = getDbConfigForLogs();
+      console.error("No se pudo conectar a PostgreSQL por credenciales inválidas (código 28P01).");
+      console.error(
+        `Conexión usada: host=${cfg.host} port=${cfg.port} db=${cfg.database} user=${cfg.user} password=${cfg.hasPassword ? "[definida]" : "[vacía]"}`
+      );
+      console.error("Definí DB_PASSWORD (o PGPASSWORD) en el archivo .env de la raíz del proyecto.");
+    }
     console.error("Error inicializando base de datos", err);
     process.exit(1);
   });

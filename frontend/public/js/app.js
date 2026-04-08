@@ -6,7 +6,8 @@ const state = {
   movimientos: [],
   pedidos: [],
   users: [],
-  instituciones: []
+  instituciones: [],
+  proveedores: []
 };
 
 const loginCard = document.getElementById("loginCard");
@@ -112,6 +113,10 @@ async function loadMyPermissions() {
 }
 
 function renderPermissions() {
+  if (!permissionsList) {
+    console.log("DEBUG: permissionsList es null, saltando renderPermissions");
+    return;
+  }
   permissionsList.innerHTML = "";
 
   if (state.permissions.length === 0) {
@@ -166,6 +171,7 @@ async function render() {
   await loadPedidos();
   await loadUsers();
   await loadInstituciones();
+  await loadProveedores();
 }
 
 function updateTabsVisibility() {
@@ -174,6 +180,7 @@ function updateTabsVisibility() {
     movimientos: ["movimientos.view"],
     pedidos: ["pedidos.view"],
     instituciones: ["instituciones.view"],
+    proveedores: ["proveedores.view"],
     usuarios: ["users.read"]
   };
 
@@ -905,57 +912,6 @@ pedidosTbody?.addEventListener("click", async (e) => {
 // ============ INSTITUCIONES ============
 const institucionesTbody = document.getElementById("institucionesTbody");
 const institucionesMsg = document.getElementById("institucionesMsg");
-const abrirCrearInstitucionBtn = document.getElementById("abrirCrearInstitucionBtn");
-const modalCrearInstitucion = document.getElementById("modalCrearInstitucion");
-const cerrarModalCrearInst = document.getElementById("cerrarModalCrearInst");
-const formCrearInstitucion = document.getElementById("formCrearInstitucion");
-const crearInstitucionMsg = document.getElementById("crearInstitucionMsg");
-
-abrirCrearInstitucionBtn?.addEventListener("click", () => {
-  if (modalCrearInstitucion) modalCrearInstitucion.style.display = "flex";
-  if (crearInstitucionMsg) crearInstitucionMsg.textContent = "";
-  formCrearInstitucion?.reset();
-});
-
-cerrarModalCrearInst?.addEventListener("click", () => {
-  if (modalCrearInstitucion) modalCrearInstitucion.style.display = "none";
-});
-
-formCrearInstitucion?.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  if (!hasPermission("instituciones.create")) {
-    crearInstitucionMsg.textContent = "No tiene permiso para crear instituciones";
-    return;
-  }
-  // Validación básica
-  const cue = document.getElementById("nuevoCue").value.trim();
-  const cui = document.getElementById("nuevoCui").value.trim();
-  const nombre = document.getElementById("nuevoNombreInst").value.trim();
-  const nivel = document.getElementById("nuevoNivel").value.trim();
-  const categoria = document.getElementById("nuevaCategoria").value.trim();
-  const ambito = document.getElementById("nuevoAmbito").value.trim();
-  const cabecera = document.getElementById("nuevoCabecera").value.trim();
-  if (!cue || !cui || !nombre || !nivel || !categoria || !ambito || !cabecera) {
-    crearInstitucionMsg.textContent = "Todos los campos son obligatorios";
-    return;
-  }
-  // Enviar al backend
-  const res = await fetch("/api/instituciones", {
-    method: "POST",
-    headers: authHeaders(),
-    body: JSON.stringify({ cue, cui, nombre, nivel_educativo: nivel, categoria, ambito, establecimiento_cabecera: cabecera })
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    crearInstitucionMsg.textContent = data.error || "No se pudo crear la institución";
-    return;
-  }
-  crearInstitucionMsg.textContent = "Institución creada correctamente";
-  setTimeout(() => {
-    if (modalCrearInstitucion) modalCrearInstitucion.style.display = "none";
-    loadInstituciones();
-  }, 1000);
-});
 
 // Carga el dropdown de instituciones para el formulario de usuarios
 async function loadInstitucionesDropdown() {
@@ -984,10 +940,13 @@ async function loadInstituciones() {
   // Siempre cargar el dropdown para el form de usuarios
   await loadInstitucionesDropdown();
   
-  if (!hasPermission("instituciones.view")) return;
+  if (!hasPermission("instituciones.view")) {
+    return;
+  }
 
   const res = await fetch("/api/instituciones", { headers: authHeaders() });
   const result = await processApiResponse(res);
+  
   if (!result.ok) {
     if (institucionesMsg) {
       institucionesMsg.textContent = result.error === "Forbidden"
@@ -1003,18 +962,27 @@ async function loadInstituciones() {
   populateAsigProductoSelect();
 }
 
-function renderInstituciones() {
-  if (!institucionesTbody) return;
+function renderInstituciones(lista) {
+  if (!institucionesTbody) {
+    console.error("ERROR: institucionesTbody element not found");
+    return;
+  }
+  const items = lista !== undefined ? lista : state.instituciones;
   institucionesTbody.innerHTML = "";
+
+  const countEl = document.getElementById("institucionesCount");
+  if (countEl) {
+    countEl.textContent = `Mostrando ${items.length} de ${state.instituciones.length} instituciones`;
+  }
 
   const canEdit = hasPermission("instituciones.edit");
   const canDelete = hasPermission("instituciones.delete");
   const canAsignar = hasPermission("instituciones.asignar");
 
-  state.instituciones.forEach((inst) => {
+  items.forEach((inst) => {
     const actions = [];
     if (canEdit) {
-      actions.push(`<button data-action="edit-inst" data-id="${inst.id}">Editar</button>`);
+      actions.push(`<button data-action="edit-inst" data-id="${inst.id}">${inst.activo ? "Editar" : "Editar"}</button>`);
       actions.push(`<button data-action="toggle-inst" data-id="${inst.id}" data-active="${inst.activo}">${inst.activo ? "Desactivar" : "Activar"}</button>`);
     }
     if (canAsignar) {
@@ -1024,20 +992,50 @@ function renderInstituciones() {
       actions.push(`<button data-action="delete-inst" data-id="${inst.id}">Eliminar</button>`);
     }
 
+    const direccionCompleta = [inst.direccion, inst.localidad, inst.departamento]
+      .filter(Boolean).join(" - ") || "-";
+
     const tr = document.createElement("tr");
     tr.innerHTML = `
+      <td>${inst.id}</td>
       <td>${inst.cue}</td>
-      <td>${inst.nombre}</td>
+      <td>${inst.nombre.trim()}</td>
       <td>${inst.nivel || "-"}</td>
-      <td>${inst.localidad || "-"}</td>
-      <td>${inst.matriculados}</td>
-      <td>${inst.factor_asignacion}x</td>
-      <td>${inst.activo ? "Sí" : "No"}</td>
+      <td>${direccionCompleta}</td>
       <td><div class="inline-actions">${actions.join("")}</div></td>
     `;
     institucionesTbody.appendChild(tr);
   });
 }
+
+// Búsqueda de institución por CUE en la tabla de instituciones
+document.getElementById("btnBuscarCue")?.addEventListener("click", () => {
+  const cue = (document.getElementById("buscarCue")?.value || "").trim();
+  const msg = document.getElementById("institucionesMsg");
+  if (!cue) {
+    renderInstituciones();
+    return;
+  }
+  const encontradas = state.instituciones.filter(i => String(i.cue).includes(cue));
+  if (encontradas.length === 0) {
+    if (msg) showMessage(msg, `No se encontró ninguna institución con CUE "${cue}"`, "error");
+  } else {
+    if (msg) showMessage(msg, "");
+  }
+  renderInstituciones(encontradas);
+});
+
+document.getElementById("buscarCue")?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") document.getElementById("btnBuscarCue")?.click();
+});
+
+document.getElementById("btnLimpiarCue")?.addEventListener("click", () => {
+  const input = document.getElementById("buscarCue");
+  if (input) input.value = "";
+  const msg = document.getElementById("institucionesMsg");
+  if (msg) showMessage(msg, "");
+  renderInstituciones();
+});
 
 function populateAsigProductoSelect() {
   const select = document.getElementById("asigProductoId");
@@ -1155,4 +1153,201 @@ institucionesTbody?.addEventListener("click", async (e) => {
   }
 });
 
+// ============ PROVEEDORES ============
+const proveedoresTbody = document.getElementById("proveedoresTbody");
+const proveedoresMsg = document.getElementById("proveedoresMsg");
+
+async function loadProveedores() {
+  if (!hasPermission("proveedores.view")) return;
+  const res = await fetch("/api/proveedores", { headers: authHeaders() });
+  const result = await processApiResponse(res);
+  if (!result.ok) return;
+  const data = await res.json();
+  state.proveedores = data.proveedores || [];
+  renderProveedores();
+}
+
+function renderProveedores() {
+  if (!proveedoresTbody) return;
+  proveedoresTbody.innerHTML = "";
+
+  // Ocultar form si no tiene permiso de crear
+  const formWrap = document.getElementById("proveedorFormWrap");
+  if (formWrap) formWrap.style.display = hasPermission("proveedores.create") ? "" : "none";
+
+  if (state.proveedores.length === 0) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td colspan="6" style="text-align:center; color:#9ca3af; padding:32px;">No hay proveedores registrados</td>`;
+    proveedoresTbody.appendChild(tr);
+    return;
+  }
+
+  const canEdit = hasPermission("proveedores.edit");
+  const canDelete = hasPermission("proveedores.delete");
+
+  state.proveedores.forEach((p) => {
+    const tr = document.createElement("tr");
+    tr.dataset.id = p.id;
+    tr.innerHTML = `
+      <td><strong>${p.nombre}</strong><br><small style="color:#6b7280">${p.cuit || ""}</small></td>
+      <td>${p.contacto || "-"}</td>
+      <td>${p.telefono || "-"}</td>
+      <td>${p.email || "-"}</td>
+      <td>${p.categoria || "-"}</td>
+      <td>
+        <div class="inline-actions">
+          ${canEdit ? `<button data-action="edit-prov" data-id="${p.id}" title="Editar" style="padding:6px 10px;">✏️</button>` : ""}
+          ${canDelete ? `<button data-action="delete-prov" data-id="${p.id}" title="Eliminar" style="padding:6px 10px; background:#ef4444;">🗑️</button>` : ""}
+        </div>
+      </td>
+    `;
+    proveedoresTbody.appendChild(tr);
+  });
+}
+
+// Crear proveedor
+document.getElementById("createProveedorForm")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  showMessage(proveedoresMsg, "");
+
+  const payload = {
+    nombre: document.getElementById("provNombre").value.trim(),
+    cuit: document.getElementById("provCuit").value.trim() || null,
+    contacto: document.getElementById("provContacto").value.trim() || null,
+    telefono: document.getElementById("provTelefono").value.trim() || null,
+    email: document.getElementById("provEmail").value.trim() || null,
+    categoria: document.getElementById("provCategoria").value.trim() || null
+  };
+
+  const res = await fetch("/api/proveedores", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    showMessage(proveedoresMsg, data.error || "No se pudo crear el proveedor", "error");
+    return;
+  }
+
+  document.getElementById("createProveedorForm").reset();
+  document.getElementById("proveedorFormWrap").removeAttribute("open");
+  showMessage(proveedoresMsg, "Proveedor creado correctamente", "success");
+  await loadProveedores();
+});
+
+// Editar / Eliminar desde tabla
+proveedoresTbody?.addEventListener("click", async (e) => {
+  const btn = e.target.closest("button");
+  if (!btn) return;
+  const { action, id } = btn.dataset;
+  if (!action || !id) return;
+
+  if (action === "delete-prov") {
+    if (!confirm("\u00bfEliminar este proveedor?")) return;
+    const res = await fetch(`/api/proveedores/${id}`, { method: "DELETE", headers: authHeaders() });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      showMessage(proveedoresMsg, data.error || "No se pudo eliminar", "error");
+      return;
+    }
+    showMessage(proveedoresMsg, "Proveedor eliminado", "success");
+    await loadProveedores();
+  }
+
+  if (action === "edit-prov") {
+    const prov = state.proveedores.find(p => String(p.id) === String(id));
+    if (!prov) return;
+
+    // Modal inline de edici\u00f3n
+    const existing = document.getElementById("editProvModal");
+    if (existing) existing.remove();
+
+    const modal = document.createElement("div");
+    modal.id = "editProvModal";
+    modal.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;z-index:1000;";
+    modal.innerHTML = `
+      <div style="background:white;padding:28px;border-radius:10px;min-width:380px;max-width:520px;width:90%;">
+        <h3 style="margin-bottom:20px;">Editar proveedor</h3>
+        <div class="grid" style="gap:12px;">
+          <div><label>Empresa *</label><input id="ep_nombre" value="${prov.nombre}" style="width:100%;" /></div>
+          <div><label>CUIT</label><input id="ep_cuit" value="${prov.cuit || ""}" style="width:100%;" /></div>
+          <div><label>Contacto</label><input id="ep_contacto" value="${prov.contacto || ""}" style="width:100%;" /></div>
+          <div><label>Tel\u00e9fono</label><input id="ep_telefono" value="${prov.telefono || ""}" style="width:100%;" /></div>
+          <div><label>Email</label><input id="ep_email" value="${prov.email || ""}" style="width:100%;" /></div>
+          <div><label>Categor\u00eda</label><input id="ep_categoria" value="${prov.categoria || ""}" style="width:100%;" /></div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end;">
+          <button id="ep_cancel" class="secondary">Cancelar</button>
+          <button id="ep_save">Guardar cambios</button>
+        </div>
+        <div id="ep_msg" class="msg" style="margin-top:10px;"></div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    document.getElementById("ep_cancel").onclick = () => modal.remove();
+    modal.addEventListener("click", (ev) => { if (ev.target === modal) modal.remove(); });
+
+    document.getElementById("ep_save").onclick = async () => {
+      const payload = {
+        nombre: document.getElementById("ep_nombre").value.trim(),
+        cuit: document.getElementById("ep_cuit").value.trim() || null,
+        contacto: document.getElementById("ep_contacto").value.trim() || null,
+        telefono: document.getElementById("ep_telefono").value.trim() || null,
+        email: document.getElementById("ep_email").value.trim() || null,
+        categoria: document.getElementById("ep_categoria").value.trim() || null
+      };
+      if (!payload.nombre) {
+        document.getElementById("ep_msg").textContent = "El nombre es obligatorio";
+        return;
+      }
+      const res = await fetch(`/api/proveedores/${id}`, {
+        method: "PATCH",
+        headers: authHeaders(),
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        document.getElementById("ep_msg").textContent = data.error || "No se pudo guardar";
+        return;
+      }
+      modal.remove();
+      showMessage(proveedoresMsg, "Proveedor actualizado", "success");
+      await loadProveedores();
+    };
+  }
+});
+
 render();
+
+// ============ MODALES ============
+function openModal(id) {
+  const el = document.getElementById(id);
+  if (el) {
+    el.classList.remove("hidden");
+    document.body.style.overflow = "hidden";
+  }
+}
+
+function closeModal(id) {
+  const el = document.getElementById(id);
+  if (el) {
+    el.classList.add("hidden");
+    document.body.style.overflow = "";
+  }
+}
+
+document.getElementById("btnAgregarProducto")?.addEventListener("click", () => openModal("modalProducto"));
+document.getElementById("closeModalProducto")?.addEventListener("click", () => closeModal("modalProducto"));
+document.getElementById("cancelModalProducto")?.addEventListener("click", () => closeModal("modalProducto"));
+document.getElementById("modalProducto")?.addEventListener("click", (e) => {
+  if (e.target === e.currentTarget) closeModal("modalProducto");
+});
+
+document.getElementById("btnAgregarProveedor")?.addEventListener("click", () => openModal("modalProveedor"));
+document.getElementById("closeModalProveedor")?.addEventListener("click", () => closeModal("modalProveedor"));
+document.getElementById("cancelModalProveedor")?.addEventListener("click", () => closeModal("modalProveedor"));
+document.getElementById("modalProveedor")?.addEventListener("click", (e) => {
+  if (e.target === e.currentTarget) closeModal("modalProveedor");
+});

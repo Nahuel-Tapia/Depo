@@ -191,17 +191,12 @@ router.post("/", authorizePermissions(PERMISSIONS.INSTITUCIONES_CREATE), async (
     const factor = calcularFactorAsignacion(matriculadosNum);
 
     const result = await run(`
-      INSERT INTO instituciones (
-        cue, nombre, direccion, localidad, departamento,
-        telefono, email, nivel, tipo, matriculados, factor_asignacion, notas
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO institucion (
+        cue, nombre, email, nivel, tipo, matriculados, factor_asignacion, notas
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       cueNormalized,
       nombre.trim(),
-      direccion || null,
-      localidad || null,
-      departamento || null,
-      telefono || null,
       email || null,
       nivel || null,
       tipo || "publica",
@@ -315,10 +310,11 @@ router.patch("/:id", authorizePermissions(PERMISSIONS.INSTITUCIONES_EDIT), async
       return res.status(400).json({ error: "No hay campos para actualizar" });
     }
 
-    updates.push("updated_at = CURRENT_TIMESTAMP");
+    updates.push("updated_at = NOW()");
     params.push(id);
 
-    await run(`UPDATE instituciones SET ${updates.join(", ")} WHERE id = ?`, params);
+    // Usar tabla institucion para UPDATE (no la vista)
+    await run(`UPDATE institucion SET ${updates.join(", ")} WHERE id_institucion = ?`, params);
 
     // Auditoría
     await run(
@@ -343,9 +339,11 @@ router.delete("/:id", authorizePermissions(PERMISSIONS.INSTITUCIONES_DELETE), as
       return res.status(404).json({ error: "Institución no encontrada" });
     }
 
-    // Eliminar asignaciones relacionadas
+    // Eliminar asignaciones relacionadas  
     await run("DELETE FROM asignaciones_stock WHERE institucion_id = ?", [id]);
-    await run("DELETE FROM instituciones WHERE id = ?", [id]);
+    
+    // Usar tabla institucion para DELETE (no la vista)
+    await run("DELETE FROM institucion WHERE id_institucion = ?", [id]);
 
     // Auditoría
     await run(

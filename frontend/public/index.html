@@ -57,6 +57,7 @@
           <button class="tab-btn" data-tab="movimientos"><span class="tab-icon" aria-hidden="true">📊</span><span class="tab-label">Movimientos</span></button>
           <button class="tab-btn" data-tab="pedidos"><span class="tab-icon" aria-hidden="true">🧾</span><span class="tab-label">Pedidos</span></button>
           <button class="tab-btn" data-tab="instituciones"><span class="tab-icon" aria-hidden="true">🏫</span><span class="tab-label">Instituciones</span></button>
+          <button class="tab-btn" data-tab="proveedores"><span class="tab-icon" aria-hidden="true">🏭</span><span class="tab-label">Proveedores</span></button>
           <button class="tab-btn" data-tab="usuarios"><span class="tab-icon" aria-hidden="true">👥</span><span class="tab-label">Usuarios</span></button>
         </div>
 
@@ -215,42 +216,97 @@
 
         <!-- INSTITUCIONES -->
         <div class="tab-content hidden" id="institucionesTab">
-          <h2>Instituciones Registradas</h2>
-          <button id="abrirCrearInstitucionBtn" style="margin-bottom:16px;">Crear institución</button>
-          <table>
-            <thead>
-              <tr>
-                <th>CUE</th>
-                <th>Nombre</th>
-                <th>Nivel</th>
-                <th>Localidad</th>
-                <th>Matriculados</th>
-                <th>Factor</th>
-                <th>Activo</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody id="institucionesTbody"></tbody>
-          </table>
-          <!-- Modal para crear institución -->
-          <div id="modalCrearInstitucion" class="modal" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.4);z-index:1000;align-items:center;justify-content:center;">
-            <div style="background:#fff;padding:32px 24px 24px 24px;border-radius:10px;min-width:320px;max-width:95vw;position:relative;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
-              <h3 style="margin-top:0;">Crear nueva institución</h3>
-              <form id="formCrearInstitucion" class="grid" autocomplete="off">
-                <div><label>CUE</label><input type="text" id="nuevoCue" required maxlength="20" placeholder="Ej: 700038000" /></div>
-                <div><label>CUI (edificio)</label><input type="text" id="nuevoCui" required maxlength="20" placeholder="Ej: 7000001" /></div>
-                <div><label>Nombre</label><input type="text" id="nuevoNombreInst" required maxlength="100" placeholder="Nombre de la institución" /></div>
-                <div><label>Nivel educativo</label><input type="text" id="nuevoNivel" required maxlength="50" placeholder="Ej: Primario, Secundario" /></div>
-                <div><label>Categoría</label><input type="text" id="nuevaCategoria" required maxlength="20" placeholder="Ej: Primera, Segunda" /></div>
-                <div><label>Ámbito</label><input type="text" id="nuevoAmbito" required maxlength="20" placeholder="Ej: PUBLICO" /></div>
-                <div><label>Establecimiento cabecera</label><input type="text" id="nuevoCabecera" required maxlength="100" placeholder="(Si aplica)" /></div>
-                <div style="grid-column:1/-1;text-align:right;margin-top:16px;">
-                  <button type="submit">Crear</button>
-                  <button type="button" id="cerrarModalCrearInst" class="secondary" style="margin-left:8px;">Cerrar</button>
+          <h2>Instituciones</h2>
+
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
+            <input
+              type="text"
+              id="buscarCue"
+              placeholder="Buscar por CUE..."
+              style="width: 220px; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;"
+              maxlength="9"
+            />
+            <button id="btnBuscarCue" style="padding: 8px 16px;">Buscar</button>
+            <button id="btnLimpiarCue" class="secondary" style="padding: 8px 16px;">Ver todas</button>
+            <span id="institucionesMsg" class="msg" style="flex: 1;"></span>
+          </div>
+
+          <div id="institucionesCount" style="font-size: 13px; color: #6b7280; margin-bottom: 10px;"></div>
+
+          <div style="overflow-x: auto;">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>CUE</th>
+                  <th>Nombre</th>
+                  <th>Nivel</th>
+                  <th>Dirección</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="institucionesTbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- PROVEEDORES -->
+        <div class="tab-content hidden" id="proveedoresTab">
+          <h2>Proveedores</h2>
+
+          <div id="proveedoresMsg" class="msg" style="margin-bottom: 16px;"></div>
+
+          <!-- Formulario nueva empresa -->
+          <details id="proveedorFormWrap" style="margin-bottom: 24px;">
+            <summary style="cursor:pointer; font-weight:600; padding: 10px 0;">+ Agregar proveedor</summary>
+            <div style="background:#f9fafb; padding:20px; border-radius:8px; margin-top:12px;">
+              <form id="createProveedorForm" class="grid">
+                <div>
+                  <label>Empresa *</label>
+                  <input type="text" id="provNombre" placeholder="Ej: Distribuidora del Norte" required />
                 </div>
-                <div id="crearInstitucionMsg" class="msg" style="grid-column:1/-1;"></div>
+                <div>
+                  <label>CUIT</label>
+                  <input type="text" id="provCuit" placeholder="Ej: 30-12345678-9" />
+                </div>
+                <div>
+                  <label>Contacto</label>
+                  <input type="text" id="provContacto" placeholder="Nombre del contacto" />
+                </div>
+                <div>
+                  <label>Teléfono</label>
+                  <input type="text" id="provTelefono" placeholder="Ej: 0351-123456" />
+                </div>
+                <div>
+                  <label>Email</label>
+                  <input type="email" id="provEmail" placeholder="proveedor@empresa.com" />
+                </div>
+                <div>
+                  <label>Categoría</label>
+                  <input type="text" id="provCategoria" placeholder="Ej: Librería, Informática" />
+                </div>
+                <div style="grid-column: 1 / -1;">
+                  <button type="submit">Guardar proveedor</button>
+                </div>
               </form>
             </div>
+          </details>
+
+          <!-- Tabla -->
+          <div style="overflow-x: auto;">
+            <table id="proveedoresTable">
+              <thead>
+                <tr>
+                  <th>Empresa</th>
+                  <th>Contacto</th>
+                  <th>Teléfono</th>
+                  <th>Email</th>
+                  <th>Categoría</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="proveedoresTbody"></tbody>
+            </table>
           </div>
         </div>
 

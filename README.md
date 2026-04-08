@@ -1,152 +1,78 @@
-# Depo Stock (base inicial)
+# Depo Stock
 
-Proyecto base para control de stock del depósito.
+Aplicación web para control básico de stock de depósito.
 
-Incluye:
-- Login con JWT.
-- Gestión de usuarios.
-- Roles con permisos por acción.
-- Módulo de productos (CRUD).
-- Módulo de movimientos de ingreso/egreso.
-- Módulo de ajustes de inventario.
-- Registro completo de auditoría por usuario.
-- Interfaz web simple con colores inspirados en el logo del Ministerio.
+El proyecto incluye autenticación con JWT, administración de usuarios con roles, gestión de productos, registro de movimientos, ajustes de inventario, auditoría y módulos adicionales para pedidos, proveedores e instituciones.
 
----
+## Estado del proyecto
 
-## 1) Requisitos
+Este repositorio contiene el código fuente y los archivos necesarios para levantar una base de trabajo.
 
-- Node.js 18 o superior.
+La base de datos con la que desarrollé y probé el sistema la tengo localmente en mi PC. En este repositorio no incluyo una copia completa de esa base con datos reales. Lo que sí queda incluido es el código de la aplicación, el archivo de ejemplo de variables de entorno y el script SQL base disponible en `backend/base_prueba.sql`.
 
----
+## Tecnologías
 
-## 2) Cómo levantar el sistema
+- Node.js
+- Express
+- PostgreSQL
+- HTML, CSS y JavaScript en frontend estático
 
-1. Copiar variables de entorno:
-   - `copy .env.example .env`
-2. Instalar paquetes:
-   - `npm install`
-3. Ejecutar:
-   - `npm start`
-4. Abrir en navegador:
-   - `http://localhost:4000`
+## Puesta en marcha
 
----
+1. Crear el archivo `.env` a partir de `.env.example`.
+2. Completar las credenciales reales de PostgreSQL en ese archivo.
+3. Instalar dependencias con `npm install`.
+4. Crear la base de datos si hace falta con `npm run db:create`.
+5. Cargar la estructura base desde `backend/base_prueba.sql`.
+6. Iniciar el servidor con `npm start`.
+7. Abrir `http://localhost:4000`.
 
-## 3) Usuario inicial
+## Variables de entorno
+
+Variables esperadas:
+
+- `PORT`
+- `JWT_SECRET`
+- `DB_HOST`
+- `DB_PORT`
+- `DB_NAME`
+- `DB_USER`
+- `DB_PASSWORD`
+
+## Acceso inicial
+
+Usuario administrador por defecto:
 
 - Email: `admin@depo.local`
 - Contraseña: `Admin123!`
 
-> Cambiar contraseña y `JWT_SECRET` antes de usar en producción.
+Si el acceso falla, puede recrearse con `npm run reset-admin`.
 
----
+## Alcance funcional actual
 
-## 4) Roles y permisos
+- Login y sesión con JWT
+- Gestión de usuarios y roles
+- Matriz de permisos por acción
+- CRUD de productos
+- Registro de movimientos de stock
+- Ajustes de inventario
+- Auditoría de operaciones
+- Endpoints para pedidos, proveedores e instituciones
 
-### `admin`
-- Puede ver, crear, editar y eliminar usuarios.
-- Puede cambiar roles y activar/desactivar cuentas.
-- Tiene todos los permisos de stock.
+## Notas para revisión
 
-### `operador`
-- Puede trabajar sobre stock (ver/editar/registrar movimientos).
-- No puede administrar usuarios.
+- El backend sirve el frontend estático desde la misma aplicación Express.
+- La configuración actual del proyecto está orientada a PostgreSQL.
+- No se incluye una exportación de la base de datos de trabajo ni datos productivos dentro del repositorio.
 
-### `consulta`
-- Solo lectura (dashboard y stock).
-- No puede editar stock ni administrar usuarios.
+## Estructura principal
 
-### Matriz rápida
+- `backend/src`: servidor, rutas, middleware y acceso a datos
+- `backend/scripts`: scripts auxiliares de base de datos y usuarios
+- `frontend/public`: archivos estáticos del frontend
 
-| Permiso | admin | operador | consulta |
-|---|---|---|---|
-| `dashboard.view` | ✅ | ✅ | ✅ |
-| `stock.view` | ✅ | ✅ | ✅ |
-| `stock.edit` | ✅ | ✅ | ❌ |
-| `stock.movement.create` | ✅ | ✅ | ❌ |
-| `productos.view` | ✅ | ✅ | ✅ |
-| `productos.create` | ✅ | ✅ | ❌ |
-| `productos.edit` | ✅ | ✅ | ❌ |
-| `productos.delete` | ✅ | ❌ | ❌ |
-| `movimientos.view` | ✅ | ✅ | ✅ |
-| `movimientos.create` | ✅ | ✅ | ❌ |
-| `ajustes.view` | ✅ | ✅ | ✅ |
-| `ajustes.create` | ✅ | ✅ | ❌ |
-| `auditoria.view` | ✅ | ✅ | ✅ |
-| `users.read` | ✅ | ❌ | ❌ |
-| `users.create` | ✅ | ❌ | ❌ |
-| `users.role.update` | ✅ | ❌ | ❌ |
-| `users.status.update` | ✅ | ❌ | ❌ |
-| `users.delete` | ✅ | ❌ | ❌ |
+## Pendientes razonables
 
----
-
-## 5) Endpoints clave
-
-### Autenticación
-- `POST /api/auth/login` → login.
-
-### Usuarios
-- `GET /api/users/me` → datos del usuario autenticado.
-- `GET /api/users` → listar usuarios (solo con permiso).
-- `POST /api/users` → crear usuario (solo con permiso).
-- `PATCH /api/users/:id/role` → cambiar rol (solo con permiso).
-- `PATCH /api/users/:id/active` → activar/desactivar (solo con permiso).
-- `DELETE /api/users/:id` → eliminar usuario (solo admin).
-
-### Permisos
-- `GET /api/permissions/me` → permisos del usuario autenticado.
-- `GET /api/permissions/matrix` → matriz de permisos por rol.
-
-### Productos
-- `GET /api/productos` → listar productos.
-- `GET /api/productos/:id` → obtener producto.
-- `POST /api/productos` → crear producto (requiere permiso `productos.create`).
-- `PATCH /api/productos/:id` → editar producto (requiere permiso `productos.edit`).
-- `DELETE /api/productos/:id` → eliminar producto (requiere permiso `productos.delete`).
-
-### Movimientos
-- `GET /api/movimientos` → listar movimientos (filtrar por producto_id, tipo).
-- `GET /api/movimientos/:id` → obtener movimiento.
-- `POST /api/movimientos` → crear movimiento entrada/salida (requiere permiso `movimientos.create`).
-- `GET /api/movimientos/stats/resumen` → estadísticas de movimientos.
-
-### Ajustes
-- `GET /api/ajustes` → listar ajustes (filtrar por producto_id).
-- `GET /api/ajustes/:id` → obtener ajuste.
-- `POST /api/ajustes` → crear ajuste de inventario (requiere permiso `ajustes.create`).
-
-### Auditoría
-- `GET /api/auditoria` → listar auditoría (filtrar por usuario_id, entidad, accion).
-- `GET /api/auditoria/:id` → obtener registro de auditoría.
-- `GET /api/auditoria/usuario/:usuario_id` → auditoría por usuario específico.
-- `GET /api/auditoria/stats/resumen` → resumen de cambios.
-
----
-
-## 6) Próximos pasos sugeridos
-
-✅ **Implementados:**
-- Módulo de productos (CRUD)
-- Módulo de movimientos (ingreso/egreso)
-- Módulo de ajustes de inventario
-- Historial/auditoría por usuario
-
-📋 **Futuras mejoras:**
-- Interfaz web para productos, movimientos y auditoría
-- Reportes y gráficos de stock
-- Integración con sistemas externos
-- Backup automático de base de datos
-- Notificaciones de stock bajo
-
----
-
-## 7) Si no podés iniciar sesión
-
-1. Asegurate de abrir: `http://localhost:4000`
-2. Usar credenciales admin:
-   - `admin@depo.local`
-   - `Admin123!`
-3. Si sigue fallando, resetear admin:
-   - `npm run reset-admin`
+- Incorporar pruebas automatizadas
+- Formalizar un proceso de despliegue
+- Completar validaciones y documentación operativa de algunos módulos
