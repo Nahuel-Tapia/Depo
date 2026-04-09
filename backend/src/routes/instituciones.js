@@ -116,11 +116,10 @@ router.get("/", authorizePermissions(PERMISSIONS.INSTITUCIONES_VIEW), async (req
         i.categoria AS tipo,
         i.limite_productos,
         i.activo,
-        e.direccion,
-        e.localidad,
-        e.departamento
+        i.direccion,
+        i.localidad,
+        i.departamento
       FROM institucion i
-      LEFT JOIN edificio e ON i.id_edificio = e.id_edificio
       ORDER BY i.nombre ASC
     `);
     return res.json({ instituciones });
@@ -143,11 +142,10 @@ router.get("/:id", authorizePermissions(PERMISSIONS.INSTITUCIONES_VIEW), async (
         i.categoria AS tipo,
         i.limite_productos,
         i.activo,
-        e.direccion,
-        e.localidad,
-        e.departamento
+        i.direccion,
+        i.localidad,
+        i.departamento
       FROM institucion i
-      LEFT JOIN edificio e ON i.id_edificio = e.id_edificio
       WHERE i.id_institucion = ?
     `, [id]);
 
@@ -186,11 +184,10 @@ router.get("/cue/:cue", authorizePermissions(PERMISSIONS.INSTITUCIONES_VIEW), as
         i.categoria AS tipo,
         i.limite_productos,
         i.activo,
-        e.direccion,
-        e.localidad,
-        e.departamento
+        i.direccion,
+        i.localidad,
+        i.departamento
       FROM institucion i
-      LEFT JOIN edificio e ON i.id_edificio = e.id_edificio
       WHERE i.cue = ?
     `, [cue]);
 

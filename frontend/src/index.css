@@ -401,7 +401,7 @@ td {
   border-bottom: 1px solid var(--border);
   text-align: left;
   padding: 10px 14px;
-  font-size: 0.82rem;
+  font-size: 0.98rem;
 }
 
 th {
@@ -409,7 +409,7 @@ th {
   font-weight: 600;
   color: var(--muted);
   text-transform: uppercase;
-  font-size: 0.75rem;
+  font-size: 0.88rem;
   letter-spacing: 0.4px;
 }
 
@@ -419,16 +419,6 @@ tbody td {
 
 tbody tr:hover td {
   background: #fafafa;
-}
-
-/* Inventario de productos: mejorar legibilidad */
-.productos-table th,
-.productos-table td {
-  font-size: 0.98rem;
-}
-
-.productos-table th {
-  font-size: 0.88rem;
 }
 
 /* ===== BADGES ===== */
@@ -459,6 +449,38 @@ tbody tr:hover td {
 
 .inline-actions button:hover {
   background: linear-gradient(135deg, var(--orange) 0%, var(--red) 100%);
+}
+
+/* ===== MOVIMIENTOS ACTIONS ===== */
+.mov-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mov-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  border-radius: 4px;
+  font-size: 10px;
+  line-height: 1;
+  position: relative;
+}
+
+.mov-icon-box {
+  opacity: 0.9;
+}
+
+.mov-icon-arrow {
+  position: absolute;
+  right: -7px;
+  top: -5px;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 /* ===== TABS ===== */

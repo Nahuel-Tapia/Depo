@@ -12,7 +12,8 @@ export default function Movimientos() {
   const [productos, setProductos] = useState([])
   const [instituciones, setInstituciones] = useState([])
   const [msg, setMsg] = useState({ text: '', type: '' })
-  const [subTab, setSubTab] = useState('egreso')
+  const [ingresoModalOpen, setIngresoModalOpen] = useState(false)
+  const [egresoModalOpen, setEgresoModalOpen] = useState(false)
 
   // Egreso state
   const [egresoInst, setEgresoInst] = useState('')
@@ -124,6 +125,7 @@ export default function Movimientos() {
     setEgresoCargo('')
     setEgresoMotivo('')
     setLoteEgreso([])
+    setEgresoModalOpen(false)
     setMsg({ text: 'Egreso registrado correctamente', type: 'success' })
     loadMovimientos()
     loadProductos()
@@ -179,6 +181,7 @@ export default function Movimientos() {
 
     setIngresoMotivo('')
     setLoteIngreso([])
+    setIngresoModalOpen(false)
     setMsg({ text: 'Ingreso registrado correctamente', type: 'success' })
     loadMovimientos()
     loadProductos()
@@ -190,31 +193,56 @@ export default function Movimientos() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2>Registro de Movimientos</h2>
-        <PrintButton targetRef={printRef} title="Historial de Movimientos" />
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
+        <h2 style={{ margin: 0 }}>Registro de Movimientos</h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          {canCreate && (
+            <>
+              <button
+                type="button"
+                className="mov-action-btn"
+                style={{ width: 'auto', margin: 0, padding: '14px 22px', fontSize: '1rem' }}
+                onClick={() => { setEgresoModalOpen(true); setMsg({ text: '', type: '' }) }}
+              >
+                <span aria-hidden="true" style={{ marginRight: 8, fontSize: '1.2rem' }}>📦⬆️</span>
+                Egreso
+              </button>
+              <button
+                type="button"
+                className="mov-action-btn"
+                style={{ width: 'auto', margin: 0, padding: '14px 22px', fontSize: '1rem' }}
+                onClick={() => { setIngresoModalOpen(true); setMsg({ text: '', type: '' }) }}
+              >
+                <span aria-hidden="true" style={{ marginRight: 8, fontSize: '1.2rem' }}>📦⬇️</span>
+                Ingreso
+              </button>
+            </>
+          )}
+          <PrintButton targetRef={printRef} title="Historial de Movimientos" />
+        </div>
       </div>
 
       {canCreate && (
         <>
-          <div className="sub-tabs">
-            <button
-              type="button"
-              className={`sub-tab-btn${subTab === 'egreso' ? ' active' : ''}`}
-              onClick={() => { setSubTab('egreso'); setMsg({ text: '', type: '' }) }}
-            >EGRESO</button>
-            <button
-              type="button"
-              className={`sub-tab-btn${subTab === 'ingreso' ? ' active' : ''}`}
-              onClick={() => { setSubTab('ingreso'); setMsg({ text: '', type: '' }) }}
-            >INGRESO</button>
-          </div>
-
           {/* EGRESO */}
-          {subTab === 'egreso' && (
-            <div>
-              <h3>Egreso de Productos</h3>
-              <div style={{ background: '#f9fafb', padding: 24, borderRadius: 8, marginBottom: 32 }}>
+          {egresoModalOpen && (
+            <div
+              style={{
+                position: 'fixed',
+                inset: 0,
+                background: 'rgba(0, 0, 0, 0.45)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 1000,
+                padding: 16
+              }}
+              onClick={e => {
+                if (e.target === e.currentTarget) setEgresoModalOpen(false)
+              }}
+            >
+              <div style={{ background: '#f9fafb', padding: 24, borderRadius: 10, width: 'min(980px, 100%)', maxHeight: '90vh', overflowY: 'auto' }}>
+                <h3>Egreso de Productos</h3>
                 <form onSubmit={handleEgresoSubmit} className="grid">
                   <div>
                     <label>Institución</label>
@@ -322,7 +350,10 @@ export default function Movimientos() {
                     />
                   </div>
                   <div style={{ gridColumn: '1 / -1' }}>
-                    <button type="submit">Registrar Egreso</button>
+                    <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                      <button type="button" className="secondary" onClick={() => setEgresoModalOpen(false)}>Cancelar</button>
+                      <button type="submit" style={{ width: 'auto', margin: 0, padding: '10px 18px' }}>Registrar Egreso</button>
+                    </div>
                   </div>
                 </form>
               </div>
@@ -330,10 +361,24 @@ export default function Movimientos() {
           )}
 
           {/* INGRESO */}
-          {subTab === 'ingreso' && (
-            <div>
-              <h3>Ingreso de Productos</h3>
-              <div style={{ background: '#f9fafb', padding: 24, borderRadius: 8, marginBottom: 32 }}>
+          {ingresoModalOpen && (
+            <div
+              style={{
+                position: 'fixed',
+                inset: 0,
+                background: 'rgba(0, 0, 0, 0.45)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 1000,
+                padding: 16
+              }}
+              onClick={e => {
+                if (e.target === e.currentTarget) setIngresoModalOpen(false)
+              }}
+            >
+              <div style={{ background: '#f9fafb', padding: 24, borderRadius: 10, width: 'min(980px, 100%)', maxHeight: '90vh', overflowY: 'auto' }}>
+                <h3>Ingreso de Productos</h3>
                 <form onSubmit={handleIngresoSubmit} className="grid">
                   <div style={{ gridColumn: '1 / -1' }}>
                     <h4>Productos a ingresar</h4>
@@ -415,7 +460,10 @@ export default function Movimientos() {
                     />
                   </div>
                   <div style={{ gridColumn: '1 / -1' }}>
-                    <button type="submit">Registrar Ingreso</button>
+                    <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                      <button type="button" className="secondary" onClick={() => setIngresoModalOpen(false)}>Cancelar</button>
+                      <button type="submit" style={{ width: 'auto', margin: 0, padding: '10px 18px' }}>Registrar Ingreso</button>
+                    </div>
                   </div>
                 </form>
               </div>
