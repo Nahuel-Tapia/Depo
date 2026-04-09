@@ -16,6 +16,7 @@ const auditoriaRoutes = require("./routes/auditoria");
 const pedidosRoutes = require("./routes/pedidos");
 const institucionesRoutes = require("./routes/instituciones");
 const proveedoresRoutes = require("./routes/proveedores");
+const dashboardRoutes = require("./routes/dashboard");
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -44,6 +45,7 @@ app.use("/api/auditoria", auditoriaRoutes);
 app.use("/api/pedidos", pedidosRoutes);
 app.use("/api/instituciones", institucionesRoutes);
 app.use("/api/proveedores", proveedoresRoutes);
+app.use("/api/dashboard", dashboardRoutes);
 
 app.get("/", (req, res) => {
   res.sendFile(path.join(staticPath, "index.html"));
