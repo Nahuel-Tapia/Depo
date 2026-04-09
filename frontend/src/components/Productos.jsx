@@ -145,7 +145,7 @@ export default function Productos() {
       )}
 
       <h3>Inventario de Productos</h3>
-      <table>
+      <table className="productos-table">
         <thead>
           <tr>
             <th>ID</th>

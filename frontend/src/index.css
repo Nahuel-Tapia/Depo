@@ -115,18 +115,29 @@ h2 {
   font-size: 1.35rem;
   margin-top: 24px;
   margin-bottom: 16px;
-  padding-bottom: 0;
+  padding-bottom: 8px;
+  position: relative;
+  display: inline-block;
 }
 
 h3 {
   font-size: 1.1rem;
   margin-top: 16px;
-  padding-bottom: 0;
+  padding-bottom: 6px;
+  position: relative;
+  display: inline-block;
 }
 
 h2::after,
 h3::after {
-  display: none;
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 1.5px;
+  background: var(--orange);
+  border-radius: 999px;
 }
 
 .subtitle {
@@ -390,6 +401,16 @@ tbody td {
 
 tbody tr:hover td {
   background: #fafafa;
+}
+
+/* Inventario de productos: mejorar legibilidad */
+.productos-table th,
+.productos-table td {
+  font-size: 0.98rem;
+}
+
+.productos-table th {
+  font-size: 0.88rem;
 }
 
 /* ===== BADGES ===== */
