@@ -1365,7 +1365,7 @@ function renderInstituciones(lista) {
   items.forEach((inst) => {
     let actionsHtml = "";
     if (canEdit) {
-      actionsHtml = `<button data-action="edit-limite" data-id="${inst.id}">Editar</button>`;
+      actionsHtml = `<button data-action="edit-limite" data-id="${inst.id}">Editar límite</button>`;
     } else if (canAsignar) {
       actionsHtml = `<button data-action="ver-asignaciones" data-id="${inst.id}">Asignaciones</button>`;
     }
@@ -1420,31 +1420,38 @@ document.getElementById("btnLimpiarCue")?.addEventListener("click", () => {
 
 async function openLoteLimiteForm(institucion) {
   state.selectedInstitucionLimite = institucion.id;
-  if (loteLimiteFormWrap) loteLimiteFormWrap.classList.remove("hidden");
-  if (loteLimiteTitle) loteLimiteTitle.textContent = `Límite de productos`;
-  if (loteLimiteTextarea) loteLimiteTextarea.value = institucion.limite_productos || "";
+  if (loteLimiteFormWrap) {
+    loteLimiteFormWrap.classList.remove("hidden");
+    loteLimiteFormWrap.style.display = "block";
+  }
+  if (loteLimiteTitle) loteLimiteTitle.textContent = `Límite de productos - ${institucion.nombre}`;
+  if (loteLimiteTextarea) {
+    loteLimiteTextarea.value = institucion.limite_productos || "";
+    loteLimiteTextarea.focus();
+  }
   if (loteLimiteMsg) showMessage(loteLimiteMsg, "");
 
-  // Ocultar la tabla, acciones y contador
+  const searchRow = document.querySelector("#institucionesTab > div[style*='display: flex']");
+  if (searchRow) searchRow.style.display = "none";
   const tableContainer = document.querySelector("#institucionesTab > div[style*='overflow-x']");
   if (tableContainer) tableContainer.style.display = "none";
-  const acciones = document.querySelector("#institucionesTab .grid");
-  if (acciones) acciones.style.display = "none";
   const count = document.getElementById("institucionesCount");
   if (count) count.style.display = "none";
 }
 
 function closeLoteLimiteForm() {
   state.selectedInstitucionLimite = null;
-  if (loteLimiteFormWrap) loteLimiteFormWrap.classList.add("hidden");
+  if (loteLimiteFormWrap) {
+    loteLimiteFormWrap.classList.add("hidden");
+    loteLimiteFormWrap.style.display = "";
+  }
   if (loteLimiteTextarea) loteLimiteTextarea.value = "";
   if (loteLimiteMsg) showMessage(loteLimiteMsg, "");
 
-  // Mostrar la tabla, acciones y contador de nuevo
+  const searchRow = document.querySelector("#institucionesTab > div[style*='display: flex']");
+  if (searchRow) searchRow.style.display = "flex";
   const tableContainer = document.querySelector("#institucionesTab > div[style*='overflow-x']");
   if (tableContainer) tableContainer.style.display = "";
-  const acciones = document.querySelector("#institucionesTab .grid");
-  if (acciones) acciones.style.display = "";
   const count = document.getElementById("institucionesCount");
   if (count) count.style.display = "";
 }
