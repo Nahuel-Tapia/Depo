@@ -14,6 +14,23 @@ function helpCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
+async function getInstitucionNivelColumn() {
+  const row = await get(`
+    SELECT CASE
+      WHEN EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'institucion' AND column_name = 'nivel_educativo'
+      ) THEN 'nivel_educativo'
+      WHEN EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'institucion' AND column_name = 'nivel'
+      ) THEN 'nivel'
+      ELSE NULL
+    END AS col
+  `);
+  return row?.col || null;
+}
+
 router.post("/register", async (req, res) => {
   try {
     const { nombre, cue, nivel_educativo, numero, password } = req.body;
@@ -32,8 +49,13 @@ router.post("/register", async (req, res) => {
     }
 
     // Verificar que la institución existe con ese CUE y nivel educativo
+    const nivelColumn = await getInstitucionNivelColumn();
+    if (!nivelColumn) {
+      return res.status(500).json({ error: "Configuración inválida: falta columna de nivel en institucion" });
+    }
+
     const institucion = await get(
-      "SELECT id_institucion FROM institucion WHERE cue = ? AND nivel_educativo = ?",
+      `SELECT id_institucion FROM institucion WHERE cue = ? AND ${nivelColumn} = ?`,
       [cueNormalized, nivel_educativo]
     );
     if (!institucion) {
