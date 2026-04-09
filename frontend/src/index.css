@@ -204,16 +204,17 @@ button {
   margin-top: 16px;
   margin-bottom: 16px;
   border: none;
-  background: var(--orange);
+  background: linear-gradient(135deg, var(--orange) 0%, var(--red) 100%);
   color: white;
   font-weight: 700;
   cursor: pointer;
   justify-content: center;
-  transition: background 0.2s ease, opacity 0.2s ease;
+  transition: filter 0.2s ease, transform 0.2s ease, opacity 0.2s ease;
 }
 
 button:hover:not(:disabled) {
-  background: var(--red);
+  filter: brightness(0.96);
+  transform: translateY(-1px);
 }
 
 button:disabled {
