@@ -11,19 +11,19 @@ router.use(authenticate);
 router.get("/", authorizePermissions(PERMISSIONS.PEDIDOS_VIEW), async (req, res) => {
   try {
     let query = `
-      SELECT p.id, p.usuario_id, p.producto_id, pr.nombre as producto_nombre, 
+      SELECT p.id_pedido as id, p.id_usuario, p.id_producto, pr.nombre as producto_nombre, 
              p.cantidad, p.institucion, p.estado, p.notas, p.created_at, p.updated_at,
-             pr.stock_actual,
+             pr.stock_minimo,
              u.nombre as usuario_nombre
-      FROM pedidos p
-      JOIN productos pr ON p.producto_id = pr.id
-      JOIN users u ON p.usuario_id = u.id
+      FROM pedido p
+      JOIN producto pr ON p.id_producto = pr.id_producto
+      JOIN usuario u ON p.id_usuario = u.id_usuario
     `;
     let params = [];
 
     // Directivos solo ven sus pedidos
     if (req.user.role === "directivo") {
-      query += " WHERE p.institucion = (SELECT institucion FROM users WHERE id = ?)";
+      query += " WHERE p.institucion = (SELECT institucion FROM usuario WHERE id_usuario = ?)";
       params.push(req.user.sub);
     }
 

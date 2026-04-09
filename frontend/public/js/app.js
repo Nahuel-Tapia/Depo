@@ -1346,7 +1346,6 @@ async function loadInstituciones() {
 }
 
 function renderInstituciones(lista) {
-  console.log("NUEVA VERSION 2026-04-09 renderInstituciones ejecutada");
   if (!institucionesTbody) {
     console.error("ERROR: institucionesTbody element not found");
     return;
@@ -1419,12 +1418,20 @@ document.getElementById("btnLimpiarCue")?.addEventListener("click", () => {
   renderInstituciones();
 });
 
-function openLoteLimiteForm(institucion) {
+async function openLoteLimiteForm(institucion) {
   state.selectedInstitucionLimite = institucion.id;
   if (loteLimiteFormWrap) loteLimiteFormWrap.classList.remove("hidden");
-  if (loteLimiteTitle) loteLimiteTitle.textContent = `Límite de productos - ${institucion.nombre}`;
+  if (loteLimiteTitle) loteLimiteTitle.textContent = `Límite de productos`;
   if (loteLimiteTextarea) loteLimiteTextarea.value = institucion.limite_productos || "";
   if (loteLimiteMsg) showMessage(loteLimiteMsg, "");
+
+  // Ocultar la tabla, acciones y contador
+  const tableContainer = document.querySelector("#institucionesTab > div[style*='overflow-x']");
+  if (tableContainer) tableContainer.style.display = "none";
+  const acciones = document.querySelector("#institucionesTab .grid");
+  if (acciones) acciones.style.display = "none";
+  const count = document.getElementById("institucionesCount");
+  if (count) count.style.display = "none";
 }
 
 function closeLoteLimiteForm() {
@@ -1432,6 +1439,14 @@ function closeLoteLimiteForm() {
   if (loteLimiteFormWrap) loteLimiteFormWrap.classList.add("hidden");
   if (loteLimiteTextarea) loteLimiteTextarea.value = "";
   if (loteLimiteMsg) showMessage(loteLimiteMsg, "");
+
+  // Mostrar la tabla, acciones y contador de nuevo
+  const tableContainer = document.querySelector("#institucionesTab > div[style*='overflow-x']");
+  if (tableContainer) tableContainer.style.display = "";
+  const acciones = document.querySelector("#institucionesTab .grid");
+  if (acciones) acciones.style.display = "";
+  const count = document.getElementById("institucionesCount");
+  if (count) count.style.display = "";
 }
 
 async function saveLoteLimite() {
@@ -1457,6 +1472,7 @@ async function saveLoteLimite() {
 
   await loadInstituciones();
   showMessage(msg, "Límite guardado correctamente", "success");
+  closeLoteLimiteForm();
 }
 
 async function deleteLoteLimite() {
@@ -1527,6 +1543,8 @@ institucionesTbody?.addEventListener("click", async (e) => {
 
   const { id, action, active } = btn.dataset;
   if (!id || !action) return;
+
+  console.log("Acción en instituciones:", action, "ID:", id);
 
   if (action === "toggle-inst") {
     const res = await fetch(`/api/instituciones/${id}`, {
