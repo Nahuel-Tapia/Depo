@@ -32,6 +32,7 @@ CREATE TABLE institucion (
     nivel_educativo VARCHAR(50),
     categoria VARCHAR(20),
     ambito VARCHAR(20),
+    limite_productos INT DEFAULT 0,
     activo BOOLEAN DEFAULT TRUE,
     FOREIGN KEY (id_edificio) REFERENCES edificio(id_edificio),
     UNIQUE(cue, nivel_educativo)
@@ -141,7 +142,11 @@ CREATE TABLE proveedor (
     id_proveedor SERIAL PRIMARY KEY,
     nombre VARCHAR(100),
     cuit VARCHAR(20) UNIQUE,
-    contacto VARCHAR(100)
+    contacto VARCHAR(100),
+    telefono VARCHAR(50),
+    email VARCHAR(100),
+    categoria VARCHAR(50),
+    activo BOOLEAN DEFAULT TRUE
 );
 
 CREATE TABLE licitacion (

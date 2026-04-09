@@ -64,14 +64,13 @@ router.get("/stats", authorizePermissions(PERMISSIONS.DASHBOARD_VIEW), async (re
         m.tipo,
         m.cantidad,
         i.nombre as institucion,
-        pr.nombre as proveedor,
         u.nombre as usuario,
+        m.motivo,
         m.fecha_movimiento as fecha
       FROM movimiento_stock m
       LEFT JOIN producto p ON m.id_producto = p.id_producto
       LEFT JOIN usuario u ON m.id_usuario = u.id_usuario
       LEFT JOIN institucion i ON m.id_institucion = i.id_institucion
-      LEFT JOIN proveedor pr ON m.id_proveedor = pr.id_proveedor
       ORDER BY m.fecha_movimiento DESC
       LIMIT 8
     `);

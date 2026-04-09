@@ -124,14 +124,13 @@ export default function Inicio() {
                 <th>Tipo</th>
                 <th>Producto</th>
                 <th>Cantidad</th>
-                <th>Destino / Origen</th>
+                <th>Institución</th>
                 <th>Usuario</th>
               </tr>
             </thead>
             <tbody>
               {stats.ultimos_movimientos.map(m => {
                 const tipoStyle = TIPO_COLORS[m.tipo] || {}
-                const destino = m.tipo === 'egreso' ? m.institucion : m.tipo === 'ingreso' ? m.proveedor : '—'
                 return (
                   <tr key={m.id}>
                     <td>{new Date(m.fecha).toLocaleDateString('es-AR')}</td>
@@ -142,7 +141,7 @@ export default function Inicio() {
                     </td>
                     <td>{m.producto || '—'}</td>
                     <td style={{ fontWeight: 600 }}>{m.cantidad}</td>
-                    <td>{destino || '—'}</td>
+                    <td>{m.institucion || '—'}</td>
                     <td>{m.usuario || '—'}</td>
                   </tr>
                 )
