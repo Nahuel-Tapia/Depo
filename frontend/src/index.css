@@ -1,5 +1,5 @@
 /* ===== SAN JUAN GOBIERNO — Kit de Marca ===== */
-@import url('https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Ubuntu:wght@300;400;500;700&display=swap');
 
 :root {
   --yellow: #FBDD40;
@@ -22,8 +22,9 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-size: 0.95rem;
-  line-height: 1.5;
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.55;
 }
 
 /* ===== LAYOUT ===== */
@@ -105,14 +106,15 @@ h1, h2, h3, h4 {
   margin: 0 0 16px;
   color: var(--dark);
   font-weight: 700;
+  line-height: 1.25;
 }
 
 h1 {
-  font-size: 1.75rem;
+  font-size: 2rem;
 }
 
 h2 {
-  font-size: 1.35rem;
+  font-size: 1.6rem;
   margin-top: 24px;
   margin-bottom: 16px;
   padding-bottom: 8px;
@@ -121,11 +123,16 @@ h2 {
 }
 
 h3 {
-  font-size: 1.1rem;
+  font-size: 1.25rem;
   margin-top: 16px;
   padding-bottom: 6px;
   position: relative;
   display: inline-block;
+}
+
+h4 {
+  font-size: 1.05rem;
+  font-weight: 500;
 }
 
 h2::after,
@@ -143,7 +150,17 @@ h3::after {
 .subtitle {
   margin: 0 0 24px;
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: 1.05rem;
+  font-weight: 300;
+}
+
+p,
+td,
+input,
+select,
+button,
+label {
+  font-family: 'Ubuntu', sans-serif;
 }
 
 /* ===== FORMS ===== */

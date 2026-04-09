@@ -7,6 +7,7 @@ export default function Productos() {
   const [productos, setProductos] = useState([])
   const [categorias, setCategorias] = useState([])
   const [msg, setMsg] = useState({ text: '', type: '' })
+  const [formOpen, setFormOpen] = useState(false)
   const [form, setForm] = useState({ nombre: '', unidad_medida: 'unidad', stock_actual: 0, stock_minimo: 0, id_categoria: '' })
 
   const loadCategorias = async () => {
@@ -59,6 +60,7 @@ export default function Productos() {
     }
 
     setForm({ nombre: '', unidad_medida: 'unidad', stock_actual: 0, stock_minimo: 0, id_categoria: '' })
+    setFormOpen(false)
     setMsg({ text: 'Producto creado', type: 'success' })
     loadProductos()
   }
@@ -106,37 +108,14 @@ export default function Productos() {
       <h2>Gestión de Productos</h2>
 
       {hasPermission('productos.create') && (
-        <div style={{ background: '#f9fafb', padding: 24, borderRadius: 8, marginBottom: 32 }}>
-          <form onSubmit={handleCreate} className="grid">
-            <div>
-              <label>Nombre del producto</label>
-              <input type="text" value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Ej: Resma A4" required />
-            </div>
-            <div>
-              <label>Unidad de medida</label>
-              <input type="text" value={form.unidad_medida} onChange={e => setForm({ ...form, unidad_medida: e.target.value })} placeholder="Ej: unidad, kg, litro" />
-            </div>
-            <div>
-              <label>Stock actual</label>
-              <input type="number" value={form.stock_actual} onChange={e => setForm({ ...form, stock_actual: e.target.value })} placeholder="0" min="0" />
-            </div>
-            <div>
-              <label>Stock mínimo</label>
-              <input type="number" value={form.stock_minimo} onChange={e => setForm({ ...form, stock_minimo: e.target.value })} placeholder="0" min="0" />
-            </div>
-            <div>
-              <label>Categoría</label>
-              <select value={form.id_categoria} onChange={e => setForm({ ...form, id_categoria: e.target.value })}>
-                <option value="">-- Sin categoría --</option>
-                {categorias.map(cat => (
-                  <option key={cat.id} value={cat.id}>{cat.nombre}</option>
-                ))}
-              </select>
-            </div>
-            <div style={{ gridColumn: '1 / -1' }}>
-              <button type="submit">Crear producto</button>
-            </div>
-          </form>
+        <div style={{ marginBottom: 24 }}>
+          <button
+            type="button"
+            style={{ width: 'auto', margin: 0, padding: '10px 18px' }}
+            onClick={() => setFormOpen(true)}
+          >
+            Crear producto
+          </button>
         </div>
       )}
 
@@ -187,6 +166,59 @@ export default function Productos() {
           ))}
         </tbody>
       </table>
+
+      {formOpen && hasPermission('productos.create') && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: 16
+          }}
+          onClick={e => {
+            if (e.target === e.currentTarget) setFormOpen(false)
+          }}
+        >
+          <div style={{ background: '#f9fafb', padding: 24, borderRadius: 10, width: 'min(720px, 100%)' }}>
+            <h3>Crear producto</h3>
+            <form onSubmit={handleCreate} className="grid">
+              <div>
+                <label>Nombre del producto</label>
+                <input type="text" value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Ej: Resma A4" required />
+              </div>
+              <div>
+                <label>Unidad de medida</label>
+                <input type="text" value={form.unidad_medida} onChange={e => setForm({ ...form, unidad_medida: e.target.value })} placeholder="Ej: unidad, kg, litro" />
+              </div>
+              <div>
+                <label>Stock actual</label>
+                <input type="number" value={form.stock_actual} onChange={e => setForm({ ...form, stock_actual: e.target.value })} placeholder="0" min="0" />
+              </div>
+              <div>
+                <label>Stock mínimo</label>
+                <input type="number" value={form.stock_minimo} onChange={e => setForm({ ...form, stock_minimo: e.target.value })} placeholder="0" min="0" />
+              </div>
+              <div>
+                <label>Categoría</label>
+                <select value={form.id_categoria} onChange={e => setForm({ ...form, id_categoria: e.target.value })}>
+                  <option value="">-- Sin categoría --</option>
+                  {categorias.map(cat => (
+                    <option key={cat.id} value={cat.id}>{cat.nombre}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                <button type="button" className="secondary" onClick={() => setFormOpen(false)}>Cancelar</button>
+                <button type="submit" style={{ width: 'auto', margin: 0, padding: '10px 18px' }}>Guardar producto</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
