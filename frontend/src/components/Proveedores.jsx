@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../api'
+import PrintButton from './PrintButton'
 
 export default function Proveedores() {
   const { token, hasPermission } = useAuth()
@@ -117,9 +118,14 @@ export default function Proveedores() {
   const canEdit = hasPermission('proveedores.edit')
   const canDelete = hasPermission('proveedores.delete')
 
+  const printRef = useRef(null)
+
   return (
     <div>
-      <h2>Proveedores</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h2>Proveedores</h2>
+        <PrintButton targetRef={printRef} title="Listado de Proveedores" />
+      </div>
 
       {msg.text && (
         <div className={`msg show ${msg.type === 'success' ? 'msg-success' : 'msg-error'}`} style={{ marginBottom: 16 }}>
@@ -164,7 +170,7 @@ export default function Proveedores() {
         </details>
       )}
 
-      <div style={{ overflowX: 'auto' }}>
+      <div ref={printRef} style={{ overflowX: 'auto' }}>
         <table>
           <thead>
             <tr>
