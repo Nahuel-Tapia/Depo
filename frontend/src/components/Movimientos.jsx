@@ -18,6 +18,7 @@ export default function Movimientos() {
   // Egreso state
   const [egresoInst, setEgresoInst] = useState('')
   const [egresoCargo, setEgresoCargo] = useState('')
+  const [egresoNivel, setEgresoNivel] = useState('')
   const [egresoMotivo, setEgresoMotivo] = useState('')
   const [loteEgreso, setLoteEgreso] = useState([])
   const [egresoItem, setEgresoItem] = useState({ productoNombre: '', cantidad: '', estado: 'nuevo' })
@@ -62,6 +63,11 @@ export default function Movimientos() {
     loadMovimientos()
     loadInstituciones()
   }, [])
+
+  useEffect(() => {
+    const match = instituciones.find(i => i.nombre.toLowerCase() === egresoInst.trim().toLowerCase())
+    setEgresoNivel(match?.nivel_educativo || '')
+  }, [egresoInst, instituciones])
 
   const findProducto = (nombre) =>
     productos.find(p => p.nombre.toLowerCase() === nombre.trim().toLowerCase())
@@ -123,6 +129,7 @@ export default function Movimientos() {
 
     setEgresoInst('')
     setEgresoCargo('')
+    setEgresoNivel('')
     setEgresoMotivo('')
     setLoteEgreso([])
     setEgresoModalOpen(false)
@@ -260,14 +267,26 @@ export default function Movimientos() {
                       ))}
                     </datalist>
                   </div>
-                  <div>
-                    <label>Cargo de quien retira</label>
-                    <select value={egresoCargo} onChange={e => setEgresoCargo(e.target.value)} required>
-                      <option value="">Seleccionar cargo...</option>
-                      {CARGOS.map(c => (
-                        <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
-                      ))}
-                    </select>
+                  <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                    <div>
+                      <label>Cargo de quien retira</label>
+                      <select value={egresoCargo} onChange={e => setEgresoCargo(e.target.value)} required>
+                        <option value="">Seleccionar cargo...</option>
+                        {CARGOS.map(c => (
+                          <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label>Nivel Educativo</label>
+                      <input
+                        type="text"
+                        value={egresoNivel}
+                        placeholder="Se cargará automáticamente"
+                        readOnly
+                        disabled
+                      />
+                    </div>
                   </div>
 
                   <div style={{ gridColumn: '1 / -1' }}>
