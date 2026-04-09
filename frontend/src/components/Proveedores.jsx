@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../api'
+import PrintButton from './PrintButton'
 
 export default function Proveedores() {
   const { token, hasPermission } = useAuth()
@@ -117,9 +118,14 @@ export default function Proveedores() {
   const canEdit = hasPermission('proveedores.edit')
   const canDelete = hasPermission('proveedores.delete')
 
+  const printRef = useRef(null)
+
   return (
     <div>
-      <h2>Proveedores</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h2>Proveedores</h2>
+        <PrintButton targetRef={printRef} title="Listado de Proveedores" />
+      </div>
 
       {msg.text && (
         <div className={`msg show ${msg.type === 'success' ? 'msg-success' : 'msg-error'}`} style={{ marginBottom: 16 }}>
@@ -128,43 +134,18 @@ export default function Proveedores() {
       )}
 
       {canCreate && (
-        <details open={formOpen} onToggle={e => setFormOpen(e.target.open)} style={{ marginBottom: 24 }}>
-          <summary style={{ cursor: 'pointer', fontWeight: 600, padding: '10px 0' }}>+ Agregar proveedor</summary>
-          <div style={{ background: '#f9fafb', padding: 20, borderRadius: 8, marginTop: 12 }}>
-            <form onSubmit={handleCreate} className="grid">
-              <div>
-                <label>Empresa *</label>
-                <input type="text" value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Ej: Distribuidora del Norte" required />
-              </div>
-              <div>
-                <label>CUIT</label>
-                <input type="text" value={form.cuit} onChange={e => setForm({ ...form, cuit: e.target.value })} placeholder="Ej: 30-12345678-9" />
-              </div>
-              <div>
-                <label>Contacto</label>
-                <input type="text" value={form.contacto} onChange={e => setForm({ ...form, contacto: e.target.value })} placeholder="Nombre del contacto" />
-              </div>
-              <div>
-                <label>Teléfono</label>
-                <input type="text" value={form.telefono} onChange={e => setForm({ ...form, telefono: e.target.value })} placeholder="Ej: 0351-123456" />
-              </div>
-              <div>
-                <label>Email</label>
-                <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="proveedor@empresa.com" />
-              </div>
-              <div>
-                <label>Categoría</label>
-                <input type="text" value={form.categoria} onChange={e => setForm({ ...form, categoria: e.target.value })} placeholder="Ej: Librería, Informática" />
-              </div>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <button type="submit">Guardar proveedor</button>
-              </div>
-            </form>
-          </div>
-        </details>
+        <div style={{ marginBottom: 24 }}>
+          <button
+            type="button"
+            style={{ width: 'auto', margin: 0, padding: '10px 18px' }}
+            onClick={() => setFormOpen(true)}
+          >
+            Agregar proveedor
+          </button>
+        </div>
       )}
 
-      <div style={{ overflowX: 'auto' }}>
+      <div ref={printRef} style={{ overflowX: 'auto' }}>
         <table>
           <thead>
             <tr>
@@ -222,6 +203,47 @@ export default function Proveedores() {
               <button onClick={handleEditSave}>Guardar cambios</button>
             </div>
             {editModal.error && <div className="msg show msg-error" style={{ marginTop: 10 }}>{editModal.error}</div>}
+          </div>
+        </div>
+      )}
+
+      {formOpen && canCreate && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}
+          onClick={e => { if (e.target === e.currentTarget) setFormOpen(false) }}
+        >
+          <div style={{ background: '#f9fafb', padding: 24, borderRadius: 10, width: 'min(720px, 100%)' }}>
+            <h3>Agregar proveedor</h3>
+            <form onSubmit={handleCreate} className="grid">
+              <div>
+                <label>Empresa *</label>
+                <input type="text" value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Ej: Distribuidora del Norte" required />
+              </div>
+              <div>
+                <label>CUIT</label>
+                <input type="text" value={form.cuit} onChange={e => setForm({ ...form, cuit: e.target.value })} placeholder="Ej: 30-12345678-9" />
+              </div>
+              <div>
+                <label>Contacto</label>
+                <input type="text" value={form.contacto} onChange={e => setForm({ ...form, contacto: e.target.value })} placeholder="Nombre del contacto" />
+              </div>
+              <div>
+                <label>Teléfono</label>
+                <input type="text" value={form.telefono} onChange={e => setForm({ ...form, telefono: e.target.value })} placeholder="Ej: 0351-123456" />
+              </div>
+              <div>
+                <label>Email</label>
+                <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="proveedor@empresa.com" />
+              </div>
+              <div>
+                <label>Categoría</label>
+                <input type="text" value={form.categoria} onChange={e => setForm({ ...form, categoria: e.target.value })} placeholder="Ej: Librería, Informática" />
+              </div>
+              <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                <button type="button" className="secondary" onClick={() => setFormOpen(false)}>Cancelar</button>
+                <button type="submit" style={{ width: 'auto', margin: 0, padding: '10px 18px' }}>Guardar proveedor</button>
+              </div>
+            </form>
           </div>
         </div>
       )}

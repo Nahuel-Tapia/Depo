@@ -47,6 +47,11 @@ app.use("/api/instituciones", institucionesRoutes);
 app.use("/api/proveedores", proveedoresRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 
+// Si una ruta /api no existe, devolver JSON en lugar de index.html
+app.use("/api", (req, res) => {
+  return res.status(404).json({ error: "Ruta API no encontrada" });
+});
+
 app.get("/", (req, res) => {
   res.sendFile(path.join(staticPath, "index.html"));
 });

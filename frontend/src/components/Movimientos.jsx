@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../api'
+import PrintButton from './PrintButton'
 
 const ESTADOS_PRODUCTO = ['nuevo', 'usado', 'dañado', 'reparado']
 const CARGOS = ['director/a', 'vicedirector/a', 'secretario/a', 'rector/a', 'maestro/a a cargo']
@@ -192,9 +193,14 @@ export default function Movimientos() {
 
   const canCreate = hasPermission('movimientos.create')
 
+  const printRef = useRef(null)
+
   return (
     <div>
-      <h2>Registro de Movimientos</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h2>Registro de Movimientos</h2>
+        <PrintButton targetRef={printRef} title="Historial de Movimientos" />
+      </div>
 
       {canCreate && (
         <>
@@ -441,6 +447,7 @@ export default function Movimientos() {
         <div className={`msg show ${msg.type === 'success' ? 'msg-success' : 'msg-error'}`}>{msg.text}</div>
       )}
 
+      <div ref={printRef}>
       <table>
         <thead>
           <tr>
@@ -474,6 +481,7 @@ export default function Movimientos() {
           })}
         </tbody>
       </table>
+      </div>
     </div>
   )
 }
