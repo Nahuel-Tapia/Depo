@@ -93,7 +93,7 @@ router.get("/public/cue/:cue", async (req, res) => {
 router.get("/public/list", async (req, res) => {
   try {
     const instituciones = await all(`
-      SELECT id_institucion as id, nombre FROM institucion ORDER BY nombre ASC
+      SELECT id_institucion as id, nombre, nivel_educativo FROM institucion ORDER BY nombre ASC
     `);
     return res.json({ instituciones });
   } catch (err) {
