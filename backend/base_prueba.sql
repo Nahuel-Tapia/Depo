@@ -79,10 +79,16 @@ CREATE TABLE categoria (
     tipo_bien tipo_bien DEFAULT 'consumible'
 );
 
+INSERT INTO categoria (nombre, tipo_bien) VALUES
+    ('Insumos de limpieza', 'consumible'),
+    ('Papelería/Librería', 'consumible'),
+    ('Otros', 'consumible');
+
 CREATE TABLE producto (
     id_producto SERIAL PRIMARY KEY,
     nombre VARCHAR(100),
     unidad_medida VARCHAR(20),
+    stock_actual INT DEFAULT 0 CHECK (stock_actual >= 0),
     stock_minimo INT DEFAULT 0 CHECK (stock_minimo >= 0),
     id_categoria INT,
     FOREIGN KEY (id_categoria) REFERENCES categoria(id_categoria)
@@ -227,3 +233,22 @@ CREATE TABLE movimiento_stock (
 CREATE INDEX idx_movimiento_producto ON movimiento_stock(id_producto);
 CREATE INDEX idx_pedido_institucion ON pedido(id_institucion);
 CREATE INDEX idx_orden_institucion ON orden_dispensacion(id_institucion);
+
+
+-- LÍMITES DE STOCK POR INSTITUCIÓN
+
+
+CREATE TABLE limite_stock (
+    id_limite SERIAL PRIMARY KEY,
+    id_institucion INT NOT NULL,
+    id_producto INT NOT NULL,
+    cantidad_maxima INT NOT NULL CHECK (cantidad_maxima >= 0),
+    periodo VARCHAR(20) DEFAULT 'anual',
+    id_usuario_asigna INT,
+    fecha_asignacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    observacion TEXT,
+    FOREIGN KEY (id_institucion) REFERENCES institucion(id_institucion),
+    FOREIGN KEY (id_producto) REFERENCES producto(id_producto),
+    FOREIGN KEY (id_usuario_asigna) REFERENCES usuario(id_usuario),
+    UNIQUE(id_institucion, id_producto, periodo)
+);

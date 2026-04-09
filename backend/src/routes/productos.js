@@ -15,6 +15,7 @@ router.get("/", authorizePermissions(PERMISSIONS.PRODUCTOS_VIEW), async (req, re
         p.id_producto as id,
         p.nombre,
         p.unidad_medida,
+        p.stock_actual,
         p.stock_minimo,
         p.id_categoria,
         c.nombre as categoria_nombre
@@ -49,6 +50,7 @@ router.get("/:id", authorizePermissions(PERMISSIONS.PRODUCTOS_VIEW), async (req,
         p.id_producto as id,
         p.nombre,
         p.unidad_medida,
+        p.stock_actual,
         p.stock_minimo,
         p.id_categoria,
         c.nombre as categoria_nombre
@@ -75,9 +77,10 @@ router.post("/", authorizePermissions(PERMISSIONS.PRODUCTOS_CREATE), async (req,
       return res.status(400).json({ error: "El nombre es obligatorio" });
     }
 
+    const stock_actual_val = parseInt(req.body.stock_actual) || 0;
     const result = await run(
-      "INSERT INTO producto (nombre, unidad_medida, stock_minimo, id_categoria) VALUES (?, ?, ?, ?)",
-      [nombre, unidad_medida || 'unidad', parseInt(stock_minimo) || 0, id_categoria || null]
+      "INSERT INTO producto (nombre, unidad_medida, stock_actual, stock_minimo, id_categoria) VALUES (?, ?, ?, ?, ?)",
+      [nombre, unidad_medida || 'unidad', stock_actual_val, parseInt(stock_minimo) || 0, id_categoria || null]
     );
 
     return res.status(201).json({ id: result.lastID });
@@ -116,6 +119,10 @@ router.patch("/:id", authorizePermissions(PERMISSIONS.PRODUCTOS_EDIT), async (re
     if (id_categoria !== undefined) {
       updates.push("id_categoria = ?");
       params.push(id_categoria || null);
+    }
+    if (req.body.stock_actual !== undefined) {
+      updates.push("stock_actual = ?");
+      params.push(parseInt(req.body.stock_actual) || 0);
     }
 
     if (updates.length === 0) {
