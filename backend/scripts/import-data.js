@@ -65,6 +65,27 @@ async function importData() {
     console.log(`Edificios: ${edificios.length}`);
     console.log(`Instituciones: ${instituciones.length}`);
 
+    // Compatibilidad de esquema: algunas bases usan "nivel" en lugar de "nivel_educativo".
+    const institucionColsRes = await client.query(
+      `SELECT column_name
+       FROM information_schema.columns
+       WHERE table_schema = 'public' AND table_name = 'institucion'`
+    );
+    const institucionCols = new Set(
+      institucionColsRes.rows.map((r) => r.column_name)
+    );
+    const nivelColumn = institucionCols.has("nivel_educativo")
+      ? "nivel_educativo"
+      : institucionCols.has("nivel")
+      ? "nivel"
+      : null;
+
+    if (!nivelColumn) {
+      throw new Error(
+        "La tabla institucion no tiene columna de nivel (se esperaba 'nivel_educativo' o 'nivel')"
+      );
+    }
+
     // 2. Crear un mapa de id_direccion → datos de dirección para fusionarlos con edificios
     console.log("\nProcesando datos...");
     const direccionesMap = {};
@@ -124,30 +145,30 @@ async function importData() {
     let erroresInserccion = 0;
     for (const inst of instituciones) {
       try {
-        // Verificar si ya existe
-        const existente = await client.query(
-          `SELECT id_institucion FROM institucion WHERE cue = $1 AND nivel_educativo = $2`,
-          [inst.cue, inst.nivel_educativo || null]
+        const nivelValue = inst.nivel_educativo || inst.nivel || null;
+        const establecimientoCabecera =
+          inst.establecimiento_cabecera ||
+          inst.establecimiento_de_cabecera ||
+          null;
+
+        const res = await client.query(
+          `INSERT INTO institucion (nombre, cue, id_edificio, establecimiento_cabecera, ${nivelColumn}, categoria, ambito)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             ON CONFLICT DO NOTHING
+             RETURNING id_institucion`,
+          [
+            inst.nombre,
+            inst.cue,
+            inst.id_edificio ? parseInt(inst.id_edificio) : null,
+            establecimientoCabecera,
+            nivelValue,
+            inst.categoria || null,
+            inst.ambito || null,
+          ]
         );
-        
-        if (existente.rows.length === 0) {
-          const res = await client.query(
-            `INSERT INTO institucion (nombre, cue, id_edificio, establecimiento_cabecera, nivel_educativo, categoria, ambito)
-               VALUES ($1, $2, $3, $4, $5, $6, $7)
-               RETURNING id_institucion`,
-            [
-              inst.nombre,
-              inst.cue,
-              inst.id_edificio ? parseInt(inst.id_edificio) : null,
-              inst.establecimiento_cabecera || null,
-              inst.nivel_educativo || null,
-              inst.categoria || null,
-              inst.ambito || null,
-            ]
-          );
-          if (res.rowCount > 0) {
-            institucionesInsertadas++;
-          }
+
+        if (res.rowCount > 0) {
+          institucionesInsertadas++;
         } else {
           duplicadosIgnorados++;
         }

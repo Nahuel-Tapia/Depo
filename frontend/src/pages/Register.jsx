@@ -8,6 +8,8 @@ export default function Register() {
   const [cue, setCue] = useState('')
   const [escuela, setEscuela] = useState('')
   const [cueStatus, setCueStatus] = useState({ text: '', color: '' })
+  const [modalidades, setModalidades] = useState([])
+  const [nivelEducativo, setNivelEducativo] = useState('')
   const [numero, setNumero] = useState('')
   const [password, setPassword] = useState('')
   const [msg, setMsg] = useState({ text: '', type: '' })
@@ -15,6 +17,8 @@ export default function Register() {
   const handleCueBlur = async () => {
     if (!cue || cue.length !== 9) {
       setEscuela('')
+      setModalidades([])
+      setNivelEducativo('')
       setCueStatus({ text: '', color: '' })
       return
     }
@@ -26,12 +30,26 @@ export default function Register() {
       if (res.ok && data.nombre) {
         setEscuela(data.nombre)
         setCueStatus({ text: '✓ Escuela encontrada', color: '#10b981' })
+        if (data.modalidades && data.modalidades.length > 1) {
+          setModalidades(data.modalidades)
+          setNivelEducativo('')
+        } else if (data.modalidades && data.modalidades.length === 1) {
+          setModalidades([])
+          setNivelEducativo(data.modalidades[0].nivel_educativo)
+        } else {
+          setModalidades([])
+          setNivelEducativo('')
+        }
       } else {
         setEscuela('')
+        setModalidades([])
+        setNivelEducativo('')
         setCueStatus({ text: data.error || 'Escuela no encontrada', color: '#ef4444' })
       }
     } catch {
       setEscuela('')
+      setModalidades([])
+      setNivelEducativo('')
       setCueStatus({ text: 'Error al buscar escuela', color: '#ef4444' })
     }
   }
@@ -44,7 +62,7 @@ export default function Register() {
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nombre, cue, numero, password })
+        body: JSON.stringify({ nombre, cue, nivel_educativo: nivelEducativo, numero, password })
       })
 
       const data = await res.json().catch(() => ({}))
@@ -64,7 +82,7 @@ export default function Register() {
       const loginRes = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cue, password })
+        body: JSON.stringify({ cue, nivel_educativo: nivelEducativo, password })
       })
 
       const loginData = await loginRes.json().catch(() => ({}))
@@ -124,6 +142,17 @@ export default function Register() {
                 </small>
               )}
             </div>
+            {modalidades.length > 1 && (
+              <div>
+                <label>Nivel Educativo</label>
+                <select value={nivelEducativo} onChange={(e) => setNivelEducativo(e.target.value)} required>
+                  <option value="">Seleccione su modalidad</option>
+                  {modalidades.map((m) => (
+                    <option key={m.id} value={m.nivel_educativo}>{m.nivel_educativo}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div>
               <label>Número</label>
               <input type="text" value={numero} onChange={(e) => setNumero(e.target.value)} required placeholder="Ej: 3511234567" />
