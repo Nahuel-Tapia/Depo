@@ -1,6 +1,6 @@
 -- ENUMS
 
-CREATE TYPE estado_tramite AS ENUM ('pendiente', 'en_revision', 'aprobado_parcial', 'aprobado', 'rechazado', 'finalizado');
+CREATE TYPE estado_tramite AS ENUM ('pendiente', 'en_revision', 'aprobado_parcial', 'aprobado', 'rechazado', 'entregado', 'finalizado');
 CREATE TYPE tipo_movimiento AS ENUM ('ingreso', 'egreso', 'ajuste', 'devolucion');
 CREATE TYPE tipo_bien AS ENUM ('consumible', 'patrimonial');
 
@@ -143,9 +143,9 @@ CREATE TABLE proveedor (
     nombre VARCHAR(100),
     cuit VARCHAR(20) UNIQUE,
     contacto VARCHAR(100),
-    telefono VARCHAR(50),
+    telefono VARCHAR(30),
     email VARCHAR(100),
-    categoria VARCHAR(50),
+    categoria VARCHAR(100),
     activo BOOLEAN DEFAULT TRUE
 );
 

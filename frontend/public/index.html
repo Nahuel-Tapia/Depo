@@ -1,0 +1,505 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Depósito - Ministerio</title>
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <link rel="icon" href="faviconmin.png" type="image/x-icon" />
+  <body>
+    <main class="container">
+      <section class="card" id="loginCard">
+        <div style="max-width: 500px; margin: 0 auto;">
+          <img src="http://prod.eduge.com.ar/assets/logoGobierno-D5M0tUR9.png" alt="Logo Gobierno" style="width: 300px; height: auto; display: block; margin: 0 auto 32px;">
+          <h1 style="text-align: center; margin-bottom: 8px;">Depósito</h1>
+          <p class="subtitle" style="text-align: center; margin-bottom: 32px;">Sistema de Control de Stock</p>
+
+          <form id="loginForm">
+            <div>
+              <label>CUE o Correo Electrónico</label>
+              <input type="text" id="email" required placeholder="Ej: 1234567 o admin@depo.local" />
+            </div>
+
+            <div>
+              <label>Contraseña</label>
+              <input type="password" id="password" required placeholder="●●●●●●●●" />
+            </div>
+
+            <button type="submit">Iniciar sesión</button>
+            <div id="loginMsg" class="msg"></div>
+          </form>
+
+          <div class="auth-divider"></div>
+          <div class="auth-alt-action">
+          <p class="auth-helper">¿No tiene cuenta?</p>
+            <a href="/registro" class="secondary auth-switch-btn auth-switch-link register-institution-btn">Registrar como directivo</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="card hidden" id="appCard">
+        <div class="topbar">
+          <div class="logo-container">
+            <img src="http://prod.eduge.com.ar/assets/logoGobierno-D5M0tUR9.png" alt="Logo Gobierno" style="max-width: 300px; height: auto;">
+          </div>
+          <div class="user-info">
+            <div>
+              <span id="currentUser"></span>
+            </div>
+            <button id="logoutBtn" class="secondary">Cerrar sesión</button>
+          </div>
+        </div>
+
+        <div class="tabs">
+          <button class="tab-btn active" data-tab="inicio"><span class="tab-icon" aria-hidden="true">🏠</span><span class="tab-label">Inicio</span></button>
+          <button class="tab-btn" data-tab="productos"><span class="tab-icon" aria-hidden="true">📦</span><span class="tab-label">Productos</span></button>
+          <button class="tab-btn" data-tab="movimientos"><span class="tab-icon" aria-hidden="true">📊</span><span class="tab-label">Movimientos</span></button>
+          <button class="tab-btn" data-tab="pedidos"><span class="tab-icon" aria-hidden="true">🧾</span><span class="tab-label">Pedidos</span></button>
+          <button class="tab-btn" data-tab="instituciones"><span class="tab-icon" aria-hidden="true">🏫</span><span class="tab-label">Instituciones</span></button>
+          <button class="tab-btn" data-tab="proveedores"><span class="tab-icon" aria-hidden="true">🏭</span><span class="tab-label">Proveedores</span></button>
+          <button class="tab-btn" data-tab="usuarios"><span class="tab-icon" aria-hidden="true">👥</span><span class="tab-label">Usuarios</span></button>
+        </div>
+
+        <!-- INICIO -->
+        <div class="tab-content active" id="inicioTab">
+          <div class="stock-alert-box" id="stockAlertBox">
+            <div id="roleStockAlert"></div>
+          </div>
+        </div>
+
+        <!-- PRODUCTOS -->
+        <div class="tab-content hidden" id="productosTab">
+          <h2>Gestión de Productos</h2>
+          
+          <div style="background: #f9fafb; padding: 24px; border-radius: 8px; margin-bottom: 32px;">
+            <form id="createProductForm" class="grid">
+              <div>
+                <label>Nombre del producto</label>
+                <input type="text" id="productoNombre" placeholder="Ej: Resma A4" required />
+              </div>
+              <div>
+                <label>Unidad de medida</label>
+                <input type="text" id="productoUnidad" placeholder="Ej: unidad, kg, litro" value="unidad" />
+              </div>
+              <div>
+                <label>Stock mínimo</label>
+                <input type="number" id="productoStockMin" placeholder="0" min="0" value="0" />
+              </div>
+              <div>
+                <label>Categoría</label>
+                <select id="productoCategoria">
+                  <option value="">-- Sin categoría --</option>
+                </select>
+              </div>
+              <div style="grid-column: 1 / -1;">
+                <button type="submit">Crear producto</button>
+              </div>
+            </form>
+          </div>
+          
+          <div id="productosMsg" class="msg"></div>
+          
+          <h3>Inventario de Productos</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Nombre</th>
+                <th>Unidad</th>
+                <th>Stock Mín.</th>
+                <th>Categoría</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="productosTbody"></tbody>
+          </table>
+        </div>
+
+        <!-- MOVIMIENTOS -->
+        <div class="tab-content hidden" id="movimientosTab">
+          <h2>Registro de Movimientos</h2>
+          
+          <!-- Sub-pestañas para EGRESO e INGRESO -->
+          <div class="sub-tabs">
+            <button class="sub-tab-btn active" data-subtab="egreso">EGRESO</button>
+            <button class="sub-tab-btn" data-subtab="ingreso">INGRESO</button>
+          </div>
+
+          <!-- EGRESO -->
+          <div class="sub-tab-content active" id="egresoSubTab">
+            <h3>Egreso de Productos</h3>
+            <div style="background: #f9fafb; padding: 24px; border-radius: 8px; margin-bottom: 32px;">
+              <form id="createEgresoForm" class="grid">
+                <div>
+                  <label>Institución</label>
+                  <select id="egresoInstitucion" required>
+                    <option value="">Seleccionar institución...</option>
+                  </select>
+                </div>
+                <div>
+                  <label>Cargo de quien retira</label>
+                  <select id="egresoCargo" required>
+                    <option value="">Seleccionar cargo...</option>
+                    <option value="director/a">Director/a</option>
+                    <option value="vicedirector/a">Vicedirector/a</option>
+                    <option value="secretario/a">Secretario/a</option>
+                    <option value="rector/a">Rector/a</option>
+                    <option value="maestro/a a cargo">Maestro/a a cargo</option>
+                  </select>
+                </div>
+                <div style="grid-column: 1 / -1;">
+                  <h4>Productos a egresar</h4>
+                  <div class="grid" style="margin-bottom: 16px;">
+                    <div>
+                      <label>Producto</label>
+                      <input list="egresoProductoList" id="egresoProductoId" placeholder="Escriba para buscar producto..." autocomplete="off" />
+                      <datalist id="egresoProductoList"></datalist>
+                    </div>
+                    <div>
+                      <label>Cantidad</label>
+                      <input type="number" id="egresoCantidad" placeholder="0" min="1" />
+                    </div>
+                    <div>
+                      <label>Estado del producto</label>
+                      <select id="egresoEstado">
+                        <option value="nuevo">Nuevo</option>
+                        <option value="usado">Usado</option>
+                        <option value="dañado">Dañado</option>
+                        <option value="reparado">Reparado</option>
+                      </select>
+                    </div>
+                    <div style="align-self: end;">
+                      <button type="button" id="addEgresoBtn">Agregar al Egreso</button>
+                    </div>
+                  </div>
+                </div>
+                <div style="grid-column: 1 / -1;">
+                  <h4>Productos en el Egreso:</h4>
+                  <table id="egresoTable" style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                      <tr style="background: #f0f0f0;">
+                        <th style="border: 1px solid #ddd; padding: 8px;">Producto</th>
+                        <th style="border: 1px solid #ddd; padding: 8px;">Cantidad</th>
+                        <th style="border: 1px solid #ddd; padding: 8px;">Estado</th>
+                        <th style="border: 1px solid #ddd; padding: 8px;">Acción</th>
+                      </tr>
+                    </thead>
+                    <tbody id="egresoTbody">
+                      <!-- Productos agregados aparecerán aquí -->
+                    </tbody>
+                  </table>
+                </div>
+                <div style="grid-column: 1 / -1;">
+                  <label>Motivo del egreso</label>
+                  <input type="text" id="egresoMotivo" placeholder="Motivo del egreso" />
+                </div>
+                <div style="grid-column: 1 / -1;">
+                  <button type="submit" id="registerEgresoBtn">Registrar Egreso</button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <!-- INGRESO -->
+          <div class="sub-tab-content hidden" id="ingresoSubTab">
+            <h3>Ingreso de Productos</h3>
+            <div style="background: #f9fafb; padding: 24px; border-radius: 8px; margin-bottom: 32px;">
+              <form id="createIngresoForm" class="grid">
+                <div>
+                  <label>Proveedor</label>
+                  <select id="ingresoProveedor">
+                    <option value="">Seleccionar proveedor (opcional)...</option>
+                  </select>
+                </div>
+                <div style="grid-column: 1 / -1;">
+                  <h4>Productos a ingresar</h4>
+                  <div class="grid" style="margin-bottom: 16px;">
+                    <div>
+                      <label>Producto</label>
+                      <input list="ingresoProductoList" id="ingresoProductoId" placeholder="Escriba para buscar producto..." autocomplete="off" />
+                      <datalist id="ingresoProductoList"></datalist>
+                    </div>
+                    <div>
+                      <label>Cantidad</label>
+                      <input type="number" id="ingresoCantidad" placeholder="0" min="1" />
+                    </div>
+                    <div>
+                      <label>Estado del producto</label>
+                      <select id="ingresoEstado">
+                        <option value="nuevo">Nuevo</option>
+                        <option value="usado">Usado</option>
+                        <option value="dañado">Dañado</option>
+                        <option value="reparado">Reparado</option>
+                      </select>
+                    </div>
+                    <div style="align-self: end;">
+                      <button type="button" id="addIngresoBtn">Agregar al Ingreso</button>
+                    </div>
+                  </div>
+                </div>
+                <div style="grid-column: 1 / -1;">
+                  <h4>Productos en el Ingreso:</h4>
+                  <table id="ingresoTable" style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                      <tr style="background: #f0f0f0;">
+                        <th style="border: 1px solid #ddd; padding: 8px;">Producto</th>
+                        <th style="border: 1px solid #ddd; padding: 8px;">Cantidad</th>
+                        <th style="border: 1px solid #ddd; padding: 8px;">Estado</th>
+                        <th style="border: 1px solid #ddd; padding: 8px;">Acción</th>
+                      </tr>
+                    </thead>
+                    <tbody id="ingresoTbody">
+                      <!-- Productos agregados aparecerán aquí -->
+                    </tbody>
+                  </table>
+                </div>
+                <div style="grid-column: 1 / -1;">
+                  <label>Motivo del ingreso</label>
+                  <input type="text" id="ingresoMotivo" placeholder="Motivo del ingreso" />
+                </div>
+                <div style="grid-column: 1 / -1;">
+                  <button type="submit" id="registerIngresoBtn">Registrar Ingreso</button>
+                </div>
+              </form>
+            </div>
+          </div>
+          
+          <div id="movimientosMsg" class="msg"></div>
+          <table>
+            <thead>
+              <tr>
+                <th>Producto</th>
+                <th>Tipo</th>
+                <th>Cantidad</th>
+                <th>Estado</th>
+                <th>Institución/Cargo</th>
+                <th>Proveedor</th>
+                <th>Motivo</th>
+                <th>Registrado por</th>
+                <th>Fecha</th>
+              </tr>
+            </thead>
+            <tbody id="movimientosTbody"></tbody>
+          </table>
+        </div>
+
+        <!-- PEDIDOS -->
+        <div class="tab-content hidden" id="pedidosTab">
+          <h2>Gestión de Pedidos</h2>
+
+          <div style="background: #f9fafb; padding: 24px; border-radius: 8px; margin-bottom: 32px;">
+            <form id="createPedidoForm" class="grid">
+              <div>
+                <label>Producto</label>
+                <input list="pedidoProductoList" id="pedidoProductoId" required placeholder="Escriba para buscar producto..." autocomplete="off" />
+                <datalist id="pedidoProductoList"></datalist>
+              </div>
+              <div>
+                <label>Cantidad</label>
+                <input type="number" id="pedidoCantidad" placeholder="0" min="1" required />
+              </div>
+              <div style="grid-column: 1 / -1;">
+                <label>Notas</label>
+                <input type="text" id="pedidoNotas" placeholder="Observaciones del pedido" />
+              </div>
+              <div style="grid-column: 1 / -1;">
+                <button type="submit">Crear pedido</button>
+              </div>
+            </form>
+          </div>
+
+          <div id="pedidosMsg" class="msg"></div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Producto</th>
+                <th>Cantidad</th>
+                <th id="pedidosStockHeader">Stock Actual</th>
+                <th>Institución</th>
+                <th>Estado</th>
+                <th>Solicitado por</th>
+                <th>Notas</th>
+                <th>Fecha</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="pedidosTbody"></tbody>
+          </table>
+        </div>
+
+        <!-- INSTITUCIONES -->
+        <div class="tab-content hidden" id="institucionesTab">
+          <h2>Instituciones</h2>
+
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
+            <input
+              type="text"
+              id="buscarCue"
+              placeholder="Buscar por CUE..."
+              style="width: 220px; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;"
+              maxlength="9"
+            />
+            <button id="btnBuscarCue" style="padding: 8px 16px;">Buscar</button>
+            <button id="btnLimpiarCue" class="secondary" style="padding: 8px 16px;">Ver todas</button>
+            <span id="institucionesMsg" class="msg" style="flex: 1;"></span>
+          </div>
+
+          <div id="institucionesCount" style="font-size: 13px; color: #6b7280; margin-bottom: 10px;"></div>
+
+          <div id="loteLimiteFormWrap" class="hidden" style="background: #f9fafb; padding: 24px; border-radius: 8px; margin-bottom: 24px;">
+            <h3 id="loteLimiteTitle">Límite de productos</h3>
+            <form id="loteLimiteForm" class="grid">
+              <div style="grid-column: 1 / -1;">
+                <label>Detalle del límite (máximo 1000 caracteres)</label>
+                <textarea id="loteLimiteTextarea" maxlength="1000" rows="6" placeholder="Describe el límite o las condiciones para esta escuela..."></textarea>
+              </div>
+              <div style="display: flex; align-items: center; gap: 12px; width: 100%;">
+                <button type="submit">Guardar límite</button>
+                <button type="button" id="deleteLoteLimiteBtn" class="secondary">Eliminar límite</button>
+                <button type="button" id="cancelLoteLimiteBtn" class="secondary">Volver</button>
+                <span id="loteLimiteMsg" class="msg" style="margin-left: auto;"></span>
+              </div>
+            </form>
+          </div>
+
+          <div style="overflow-x: auto;">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>CUE</th>
+                  <th>Nombre</th>
+                  <th>Nivel</th>
+                  <th>Dirección</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="institucionesTbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- PROVEEDORES -->
+        <div class="tab-content hidden" id="proveedoresTab">
+          <h2>Proveedores</h2>
+
+          <div id="proveedoresMsg" class="msg" style="margin-bottom: 16px;"></div>
+
+          <!-- Formulario nueva empresa -->
+          <details id="proveedorFormWrap" style="margin-bottom: 24px;">
+            <summary style="cursor:pointer; font-weight:600; padding: 10px 0;">+ Agregar proveedor</summary>
+            <div style="background:#f9fafb; padding:20px; border-radius:8px; margin-top:12px;">
+              <form id="createProveedorForm" class="grid">
+                <div>
+                  <label>Empresa *</label>
+                  <input type="text" id="provNombre" placeholder="Ej: Distribuidora del Norte" required />
+                </div>
+                <div>
+                  <label>CUIT</label>
+                  <input type="text" id="provCuit" placeholder="Ej: 30-12345678-9" />
+                </div>
+                <div>
+                  <label>Contacto</label>
+                  <input type="text" id="provContacto" placeholder="Nombre del contacto" />
+                </div>
+                <div>
+                  <label>Teléfono</label>
+                  <input type="text" id="provTelefono" placeholder="Ej: 0351-123456" />
+                </div>
+                <div>
+                  <label>Email</label>
+                  <input type="email" id="provEmail" placeholder="proveedor@empresa.com" />
+                </div>
+                <div>
+                  <label>Categoría</label>
+                  <input type="text" id="provCategoria" placeholder="Ej: Librería, Informática" />
+                </div>
+                <div style="grid-column: 1 / -1;">
+                  <button type="submit">Guardar proveedor</button>
+                </div>
+              </form>
+            </div>
+          </details>
+
+          <!-- Tabla -->
+          <div style="overflow-x: auto;">
+            <table id="proveedoresTable">
+              <thead>
+                <tr>
+                  <th>Empresa</th>
+                  <th>Contacto</th>
+                  <th>Teléfono</th>
+                  <th>Email</th>
+                  <th>Categoría</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="proveedoresTbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- USUARIOS -->
+        <div class="tab-content hidden" id="usuariosTab">
+          <h2>Gestión de Usuarios</h2>
+          
+          <div style="background: #f9fafb; padding: 24px; border-radius: 8px; margin-bottom: 32px;">
+            <form id="createUserForm" class="grid">
+              <div>
+                <label>Nombre Completo</label>
+                <input type="text" id="newNombre" placeholder="Ej: Juan García" required />
+              </div>
+              <div>
+                <label>Correo Electrónico</label>
+                <input type="email" id="newEmail" placeholder="usuario@depo.local" required />
+              </div>
+              <div>
+                <label>Contraseña</label>
+                <input type="password" id="newPassword" placeholder="●●●●●●●●" required />
+              </div>
+              <div>
+                <label>Rol</label>
+                <select id="newRole" required>
+                  <option value="consulta">Consulta (Solo lectura)</option>
+                  <option value="operador">Operador</option>
+                  <option value="directivo">Directivo</option>
+                  <option value="admin">Administrador</option>
+                </select>
+              </div>
+              <div>
+                <label>Institución</label>
+                <select id="newInstitucion">
+                  <option value="">-- Seleccionar (obligatorio para directivo) --</option>
+                </select>
+              </div>
+              <div style="grid-column: 1 / -1;">
+                <button type="submit">Crear usuario</button>
+              </div>
+            </form>
+          </div>
+          
+          <div id="adminMsg" class="msg"></div>
+          
+          <h3>Usuarios Registrados</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Nombre</th>
+                <th>Email</th>
+                <th>CUE</th>
+                <th>Rol</th>
+                <th>Activo</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="usersTbody"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script src="js/app.js"></script>
+  </body>
+</html>

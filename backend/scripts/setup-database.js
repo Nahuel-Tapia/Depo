@@ -59,7 +59,7 @@ async function setup() {
     await dbClient.query(sql);
     console.log("     Tablas creadas correctamente.");
   } catch (err) {
-    if (err.message.includes("already exists")) {
+    if (err.message.includes("already exists") || err.message.includes("ya existe")) {
       console.log("     Las tablas ya existen, se omite la creación.");
     } else {
       console.error("Error ejecutando SQL:", err.message);
