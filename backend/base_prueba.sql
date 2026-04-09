@@ -32,6 +32,7 @@ CREATE TABLE institucion (
     nivel_educativo VARCHAR(50),
     categoria VARCHAR(20),
     ambito VARCHAR(20),
+    limite_productos INT DEFAULT 0,
     activo BOOLEAN DEFAULT TRUE,
     FOREIGN KEY (id_edificio) REFERENCES edificio(id_edificio),
     UNIQUE(cue, nivel_educativo)
