@@ -458,7 +458,7 @@ tbody tr:hover td {
 }
 
 .inline-actions button:hover {
-  background: var(--orange);
+  background: linear-gradient(135deg, var(--orange) 0%, var(--red) 100%);
 }
 
 /* ===== TABS ===== */
