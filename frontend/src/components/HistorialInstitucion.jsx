@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../api'
+import PrintButton from './PrintButton'
 
 export default function HistorialInstitucion() {
   const { token } = useAuth()
@@ -88,9 +89,14 @@ export default function HistorialInstitucion() {
     }
   }
 
+  const printRef = useRef(null)
+
   return (
     <div>
-      <h2>Historial por Institución</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h2>Historial por Institución</h2>
+        <PrintButton targetRef={printRef} title={`Historial — ${selectedNombre || 'Institución'}`} />
+      </div>
 
       {/* Buscador */}
       <div style={{ background: '#f9fafb', padding: 24, borderRadius: 8, marginBottom: 24 }}>
@@ -187,6 +193,7 @@ export default function HistorialInstitucion() {
 
           {/* Tabla de eventos */}
           <h3>Timeline de actividad</h3>
+          <div ref={printRef}>
           {historial.eventos.length === 0 ? (
             <p style={{ color: '#6b7280' }}>No hay actividad registrada para los filtros seleccionados.</p>
           ) : (
@@ -237,6 +244,7 @@ export default function HistorialInstitucion() {
               </tbody>
             </table>
           )}
+          </div>
         </>
       )}
     </div>

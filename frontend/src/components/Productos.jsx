@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../api'
+import PrintButton from './PrintButton'
 
 export default function Productos() {
   const { token, hasPermission } = useAuth()
@@ -140,9 +141,14 @@ export default function Productos() {
     loadProductos()
   }
 
+  const printRef = useRef(null)
+
   return (
     <div>
-      <h2>Gestión de Productos</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h2>Gestión de Productos</h2>
+        <PrintButton targetRef={printRef} title="Inventario de Productos" />
+      </div>
 
       {hasPermission('productos.create') && (
         <div style={{ marginBottom: 24 }}>
@@ -160,6 +166,7 @@ export default function Productos() {
         <div className={`msg show ${msg.type === 'success' ? 'msg-success' : 'msg-error'}`}>{msg.text}</div>
       )}
 
+      <div ref={printRef}>
       <h3>Inventario de Productos</h3>
       <table className="productos-table">
         <thead>
@@ -203,6 +210,7 @@ export default function Productos() {
           ))}
         </tbody>
       </table>
+      </div>
 
       {formOpen && hasPermission('productos.create') && (
         <div

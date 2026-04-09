@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../api'
+import PrintButton from './PrintButton'
 
 export default function Pedidos() {
   const { token, user, hasPermission } = useAuth()
@@ -100,9 +101,14 @@ export default function Pedidos() {
   const canCreatePedido = hasPermission('pedidos.create') && user?.role === 'directivo'
   const canManage = hasPermission('pedidos.manage')
 
+  const printRef = useRef(null)
+
   return (
     <div>
-      <h2>Gestión de Pedidos</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h2>Gestión de Pedidos</h2>
+        <PrintButton targetRef={printRef} title="Reporte de Pedidos" />
+      </div>
 
       {canCreatePedido && (
         <div style={{ background: '#f9fafb', padding: 24, borderRadius: 8, marginBottom: 32 }}>
@@ -134,6 +140,8 @@ export default function Pedidos() {
       {msg.text && (
         <div className={`msg show ${msg.type === 'success' ? 'msg-success' : 'msg-error'}`}>{msg.text}</div>
       )}
+
+      <div ref={printRef}>
 
       <table>
         <thead>
@@ -186,6 +194,7 @@ export default function Pedidos() {
           })}
         </tbody>
       </table>
+      </div>
     </div>
   )
 }

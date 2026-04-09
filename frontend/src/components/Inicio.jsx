@@ -1,6 +1,7 @@
 import { useAuth } from '../context/AuthContext'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { apiFetch } from '../api'
+import PrintButton from './PrintButton'
 
 const ROLE_LABELS = {
   admin: 'Administrador',
@@ -22,6 +23,7 @@ export default function Inicio() {
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const printRef = useRef(null)
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -47,6 +49,11 @@ export default function Inicio() {
 
   return (
     <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <span></span>
+        <PrintButton targetRef={printRef} title="Resumen General — Dashboard" />
+      </div>
+      <div ref={printRef}>
       {/* Bienvenida */}
       <div className="stock-alert-box">
         <div className="stock-alert-title">
@@ -150,6 +157,7 @@ export default function Inicio() {
           </table>
         </>
       )}
+    </div>
     </div>
   )
 }
