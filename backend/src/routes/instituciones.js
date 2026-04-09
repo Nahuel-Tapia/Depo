@@ -104,27 +104,29 @@ router.get("/public/list", async (req, res) => {
 
 router.use(authenticate);
 
-// Listar todas las instituciones
-router.get("/", authorizePermissions(PERMISSIONS.INSTITUCIONES_VIEW), async (req, res) => {
+// Listar todas las instituciones con status de retiro
+router.get("/", async (req, res) => {
   try {
     const instituciones = await all(`
       SELECT
         i.id_institucion AS id,
-        i.cue,
         i.nombre,
-        i.nivel_educativo AS nivel,
-        i.categoria AS tipo,
-        i.limite_productos,
-        i.activo,
-        i.direccion,
-        i.localidad,
-        i.departamento
+        i.cue,
+        e.cui,
+        d.latitud,
+        d.longitud,
+        CASE WHEN EXISTS (
+          SELECT 1 FROM orden_dispensacion od WHERE od.id_institucion = i.id_institucion
+        ) THEN 'retiraron' ELSE 'no_retiraron' END AS status
       FROM institucion i
+      LEFT JOIN edificio e ON i.id_edificio = e.id_edificio
+      LEFT JOIN direccion d ON e.id_direccion = d.id_direccion
+      WHERE d.latitud IS NOT NULL AND d.longitud IS NOT NULL
       ORDER BY i.nombre ASC
     `);
     return res.json({ instituciones });
   } catch (err) {
-    console.error(err);
+    console.error('Error en consulta instituciones:', err.message);
     return res.status(500).json({ error: "No se pudo listar instituciones" });
   }
 });
@@ -140,12 +142,16 @@ router.get("/:id", authorizePermissions(PERMISSIONS.INSTITUCIONES_VIEW), async (
         i.nombre,
         i.nivel_educativo AS nivel,
         i.categoria AS tipo,
-        i.limite_productos,
         i.activo,
-        i.direccion,
-        i.localidad,
-        i.departamento
+      e.cui,
+      d.calle AS direccion,
+      d.localidad,
+      d.departamento,
+      d.latitud,
+      d.longitud
       FROM institucion i
+          LEFT JOIN edificio e ON i.id_edificio = e.id_edificio
+          LEFT JOIN direccion d ON e.id_direccion = d.id_direccion
       WHERE i.id_institucion = ?
     `, [id]);
 
@@ -182,12 +188,16 @@ router.get("/cue/:cue", authorizePermissions(PERMISSIONS.INSTITUCIONES_VIEW), as
         i.nombre,
         i.nivel_educativo AS nivel,
         i.categoria AS tipo,
-        i.limite_productos,
         i.activo,
-        i.direccion,
-        i.localidad,
-        i.departamento
+      e.cui,
+      d.calle AS direccion,
+      d.localidad,
+      d.departamento,
+      d.latitud,
+      d.longitud
       FROM institucion i
+          LEFT JOIN edificio e ON i.id_edificio = e.id_edificio
+          LEFT JOIN direccion d ON e.id_direccion = d.id_direccion
       WHERE i.cue = ?
     `, [cue]);
 
