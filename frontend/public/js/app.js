@@ -775,6 +775,7 @@ function renderMovimientos() {
       <td>${m.cantidad}</td>
       <td>${m.estado_producto || "-"}</td>
       <td>${institucionCargo}</td>
+      <td>${m.proveedor_nombre || "-"}</td>
       <td>${m.motivo || "-"}</td>
       <td>${m.usuario_nombre || "-"}</td>
       <td>${new Date(m.fecha_movimiento).toLocaleDateString()}</td>
@@ -1029,13 +1030,10 @@ document.getElementById("createEgresoForm")?.addEventListener("submit", async (e
   const msg = document.getElementById("movimientosMsg");
   msg.textContent = "";
   
-  const institucionInput = document.getElementById("egresoInstitucion").value.trim();
+  const institucionId = document.getElementById("egresoInstitucion").value;
   const cargo = document.getElementById("egresoCargo").value;
   const motivo = document.getElementById("egresoMotivo").value.trim() || null;
   
-  const institucionMatch = state.instituciones.find(inst => inst.nombre.toLowerCase() === institucionInput.toLowerCase());
-  const institucionId = institucionMatch ? institucionMatch.id : null;
-
   if (!institucionId || !cargo) {
     msg.textContent = "Seleccione institución válida y cargo";
     return;
@@ -1080,6 +1078,7 @@ document.getElementById("createIngresoForm")?.addEventListener("submit", async (
   const msg = document.getElementById("movimientosMsg");
   msg.textContent = "";
   
+  const proveedorId = document.getElementById("ingresoProveedor").value || null;
   const motivo = document.getElementById("ingresoMotivo").value.trim() || null;
   
   if (state.loteIngreso.length === 0) {
@@ -1089,6 +1088,7 @@ document.getElementById("createIngresoForm")?.addEventListener("submit", async (
   
   const payload = {
     tipo: "ingreso",
+    proveedor_id: proveedorId,
     motivo: motivo,
     productos: state.loteIngreso
   };
@@ -1277,7 +1277,8 @@ const institucionesMsg = document.getElementById("institucionesMsg");
 // Carga el dropdown de instituciones para el formulario de usuarios
 async function loadInstitucionesDropdown() {
   const selects = [
-    document.getElementById("newInstitucion")
+    document.getElementById("newInstitucion"),
+    document.getElementById("egresoInstitucion")
   ];
   const datalist = document.getElementById("egresoInstitucionList");
   
@@ -1542,6 +1543,7 @@ async function loadProveedores() {
   const data = await res.json();
   state.proveedores = data.proveedores || [];
   renderProveedores();
+  updateProveedoresSelect();
 }
 
 function renderProveedores() {
@@ -1580,6 +1582,22 @@ function renderProveedores() {
     `;
     proveedoresTbody.appendChild(tr);
   });
+}
+
+// Función para actualizar el select de proveedores
+function updateProveedoresSelect() {
+  const select = document.getElementById("ingresoProveedor");
+  if (select) {
+    // Mantener la primera opción
+    const firstOption = select.querySelector("option")?.textContent || "Seleccionar proveedor (opcional)...";
+    select.innerHTML = `<option value="">${firstOption}</option>`;
+    state.proveedores.forEach(p => {
+      const opt = document.createElement("option");
+      opt.value = p.id;
+      opt.textContent = p.nombre;
+      select.appendChild(opt);
+    });
+  }
 }
 
 // Crear proveedor

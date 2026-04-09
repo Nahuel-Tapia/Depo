@@ -133,8 +133,9 @@
               <form id="createEgresoForm" class="grid">
                 <div>
                   <label>Institución</label>
-                  <input list="egresoInstitucionList" id="egresoInstitucion" required placeholder="Escriba para buscar institución..." autocomplete="off" />
-                  <datalist id="egresoInstitucionList"></datalist>
+                  <select id="egresoInstitucion" required>
+                    <option value="">Seleccionar institución...</option>
+                  </select>
                 </div>
                 <div>
                   <label>Cargo de quien retira</label>
@@ -205,6 +206,12 @@
             <h3>Ingreso de Productos</h3>
             <div style="background: #f9fafb; padding: 24px; border-radius: 8px; margin-bottom: 32px;">
               <form id="createIngresoForm" class="grid">
+                <div>
+                  <label>Proveedor</label>
+                  <select id="ingresoProveedor">
+                    <option value="">Seleccionar proveedor (opcional)...</option>
+                  </select>
+                </div>
                 <div style="grid-column: 1 / -1;">
                   <h4>Productos a ingresar</h4>
                   <div class="grid" style="margin-bottom: 16px;">
@@ -267,6 +274,7 @@
                 <th>Cantidad</th>
                 <th>Estado</th>
                 <th>Institución/Cargo</th>
+                <th>Proveedor</th>
                 <th>Motivo</th>
                 <th>Registrado por</th>
                 <th>Fecha</th>

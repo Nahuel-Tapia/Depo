@@ -25,6 +25,7 @@ router.get("/", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW), async (req, 
         m.estado_producto,
         m.cargo_retira,
         i.nombre as institucion_nombre,
+        pr.nombre as proveedor_nombre,
         m.motivo,
         u.nombre as usuario_nombre,
         u.email as usuario_email,
@@ -33,6 +34,7 @@ router.get("/", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW), async (req, 
       LEFT JOIN producto p ON m.id_producto = p.id_producto
       LEFT JOIN usuario u ON m.id_usuario = u.id_usuario
       LEFT JOIN institucion i ON m.id_institucion = i.id_institucion
+      LEFT JOIN proveedor pr ON m.id_proveedor = pr.id_proveedor
       WHERE 1 = 1
     `;
     const params = [];
@@ -73,6 +75,7 @@ router.get("/:id", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW), async (re
         m.estado_producto,
         m.cargo_retira,
         i.nombre as institucion_nombre,
+        pr.nombre as proveedor_nombre,
         m.motivo,
         u.nombre as usuario_nombre,
         m.fecha_movimiento as created_at
@@ -80,6 +83,7 @@ router.get("/:id", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW), async (re
       LEFT JOIN producto p ON m.id_producto = p.id_producto
       LEFT JOIN usuario u ON m.id_usuario = u.id_usuario
       LEFT JOIN institucion i ON m.id_institucion = i.id_institucion
+      LEFT JOIN proveedor pr ON m.id_proveedor = pr.id_proveedor
       WHERE m.id_movimiento = ?
     `, [id]);
     
@@ -179,7 +183,7 @@ router.post("/lote", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), async
 // Crear movimiento directo (egreso/ingreso)
 router.post("/directo", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), async (req, res) => {
   try {
-    const { tipo, institucion_id, cargo_retira, motivo, productos } = req.body;
+    const { tipo, institucion_id, cargo_retira, proveedor_id, motivo, productos } = req.body;
 
     if (!tipo || !productos || !Array.isArray(productos) || productos.length === 0) {
       return res.status(400).json({ error: "Faltan campos obligatorios (tipo, productos array)" });
@@ -216,8 +220,8 @@ router.post("/directo", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), as
     const ids = [];
     for (const prod of productos) {
       const result = await run(
-        `INSERT INTO movimiento_stock (id_producto, tipo, cantidad, estado_producto, cargo_retira, id_institucion, id_usuario, motivo, fecha_movimiento)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+        `INSERT INTO movimiento_stock (id_producto, tipo, cantidad, estado_producto, cargo_retira, id_institucion, id_proveedor, id_usuario, motivo, fecha_movimiento)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
         [
           prod.producto_id,
           tipo,
@@ -225,6 +229,7 @@ router.post("/directo", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), as
           prod.estado,
           tipo === "egreso" ? cargo_retira : null,
           tipo === "egreso" ? institucion_id : null,
+          tipo === "ingreso" ? proveedor_id : null,
           req.user.sub,
           motivo || null
         ]
