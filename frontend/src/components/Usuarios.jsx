@@ -7,6 +7,7 @@ export default function Usuarios() {
   const [users, setUsers] = useState([])
   const [instituciones, setInstituciones] = useState([])
   const [msg, setMsg] = useState('')
+  const [formOpen, setFormOpen] = useState(false)
   const [form, setForm] = useState({ nombre: '', email: '', password: '', role: 'consulta', institucion: '' })
 
   const loadUsers = async () => {
@@ -64,6 +65,7 @@ export default function Usuarios() {
     }
 
     setForm({ nombre: '', email: '', password: '', role: 'consulta', institucion: '' })
+    setFormOpen(false)
     loadUsers()
   }
 
@@ -133,42 +135,14 @@ export default function Usuarios() {
       <h2>Gestión de Usuarios</h2>
 
       {hasPermission('users.create') && (
-        <div style={{ background: '#f9fafb', padding: 24, borderRadius: 8, marginBottom: 32 }}>
-          <form onSubmit={handleCreate} className="grid">
-            <div>
-              <label>Nombre Completo</label>
-              <input type="text" value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Ej: Juan García" required />
-            </div>
-            <div>
-              <label>Correo Electrónico</label>
-              <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="usuario@depo.local" required />
-            </div>
-            <div>
-              <label>Contraseña</label>
-              <input type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} placeholder="●●●●●●●●" required />
-            </div>
-            <div>
-              <label>Rol</label>
-              <select value={form.role} onChange={e => setForm({ ...form, role: e.target.value })} required>
-                <option value="consulta">Consulta (Solo lectura)</option>
-                <option value="operador">Operador</option>
-                <option value="directivo">Directivo</option>
-                <option value="admin">Administrador</option>
-              </select>
-            </div>
-            <div>
-              <label>Institución</label>
-              <select value={form.institucion} onChange={e => setForm({ ...form, institucion: e.target.value })}>
-                <option value="">-- Seleccionar (obligatorio para directivo) --</option>
-                {instituciones.map(inst => (
-                  <option key={inst.id} value={inst.id}>{inst.nombre}</option>
-                ))}
-              </select>
-            </div>
-            <div style={{ gridColumn: '1 / -1' }}>
-              <button type="submit">Crear usuario</button>
-            </div>
-          </form>
+        <div style={{ marginBottom: 24 }}>
+          <button
+            type="button"
+            style={{ width: 'auto', margin: 0, padding: '10px 18px' }}
+            onClick={() => setFormOpen(true)}
+          >
+            Crear usuario
+          </button>
         </div>
       )}
 
@@ -211,6 +185,64 @@ export default function Usuarios() {
           ))}
         </tbody>
       </table>
+
+      {formOpen && hasPermission('users.create') && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: 16
+          }}
+          onClick={e => {
+            if (e.target === e.currentTarget) setFormOpen(false)
+          }}
+        >
+          <div style={{ background: '#f9fafb', padding: 24, borderRadius: 10, width: 'min(720px, 100%)' }}>
+            <h3>Crear usuario</h3>
+            <form onSubmit={handleCreate} className="grid">
+              <div>
+                <label>Nombre Completo</label>
+                <input type="text" value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Ej: Juan García" required />
+              </div>
+              <div>
+                <label>Correo Electrónico</label>
+                <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="usuario@depo.local" required />
+              </div>
+              <div>
+                <label>Contraseña</label>
+                <input type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} placeholder="●●●●●●●●" required />
+              </div>
+              <div>
+                <label>Rol</label>
+                <select value={form.role} onChange={e => setForm({ ...form, role: e.target.value })} required>
+                  <option value="consulta">Consulta (Solo lectura)</option>
+                  <option value="operador">Operador</option>
+                  <option value="directivo">Directivo</option>
+                  <option value="admin">Administrador</option>
+                </select>
+              </div>
+              <div>
+                <label>Institución</label>
+                <select value={form.institucion} onChange={e => setForm({ ...form, institucion: e.target.value })}>
+                  <option value="">-- Seleccionar (obligatorio para directivo) --</option>
+                  {instituciones.map(inst => (
+                    <option key={inst.id} value={inst.id}>{inst.nombre}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                <button type="button" className="secondary" onClick={() => setFormOpen(false)}>Cancelar</button>
+                <button type="submit" style={{ width: 'auto', margin: 0, padding: '10px 18px' }}>Guardar usuario</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
