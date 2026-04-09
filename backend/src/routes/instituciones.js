@@ -86,12 +86,20 @@ router.use(authenticate);
 router.get("/", authorizePermissions(PERMISSIONS.INSTITUCIONES_VIEW), async (req, res) => {
   try {
     const instituciones = await all(`
-      SELECT 
-        id, cue, nombre, direccion, localidad, departamento, 
-        telefono, email, nivel, tipo, matriculados, 
-        factor_asignacion, activo, notas, created_at, updated_at
-      FROM instituciones 
-      ORDER BY nombre ASC
+      SELECT
+        i.id_institucion AS id,
+        i.cue,
+        i.nombre,
+        i.nivel_educativo AS nivel,
+        i.categoria AS tipo,
+        i.limite_productos,
+        i.activo,
+        e.direccion,
+        e.localidad,
+        e.departamento
+      FROM institucion i
+      LEFT JOIN edificio e ON i.id_edificio = e.id_edificio
+      ORDER BY i.nombre ASC
     `);
     return res.json({ instituciones });
   } catch (err) {
@@ -106,10 +114,19 @@ router.get("/:id", authorizePermissions(PERMISSIONS.INSTITUCIONES_VIEW), async (
     const { id } = req.params;
     const institucion = await get(`
       SELECT 
-        id, cue, nombre, direccion, localidad, departamento, 
-        telefono, email, nivel, tipo, matriculados, 
-        factor_asignacion, activo, notas, created_at, updated_at
-      FROM instituciones WHERE id = ?
+        i.id_institucion AS id,
+        i.cue,
+        i.nombre,
+        i.nivel_educativo AS nivel,
+        i.categoria AS tipo,
+        i.limite_productos,
+        i.activo,
+        e.direccion,
+        e.localidad,
+        e.departamento
+      FROM institucion i
+      LEFT JOIN edificio e ON i.id_edificio = e.id_edificio
+      WHERE i.id_institucion = ?
     `, [id]);
 
     if (!institucion) {
@@ -140,10 +157,19 @@ router.get("/cue/:cue", authorizePermissions(PERMISSIONS.INSTITUCIONES_VIEW), as
     const { cue } = req.params;
     const instituciones = await all(`
       SELECT 
-        id, cue, nombre, direccion, localidad, departamento, 
-        telefono, email, nivel, tipo, matriculados, 
-        factor_asignacion, activo, notas
-      FROM instituciones WHERE cue = ?
+        i.id_institucion AS id,
+        i.cue,
+        i.nombre,
+        i.nivel_educativo AS nivel,
+        i.categoria AS tipo,
+        i.limite_productos,
+        i.activo,
+        e.direccion,
+        e.localidad,
+        e.departamento
+      FROM institucion i
+      LEFT JOIN edificio e ON i.id_edificio = e.id_edificio
+      WHERE i.cue = ?
     `, [cue]);
 
     if (!instituciones || instituciones.length === 0) {
@@ -182,7 +208,7 @@ router.post("/", authorizePermissions(PERMISSIONS.INSTITUCIONES_CREATE), async (
       return res.status(400).json({ error: "Tipo inválido" });
     }
 
-    const existing = await get("SELECT id FROM instituciones WHERE cue = ? AND nivel = ?", [cueNormalized, nivel || null]);
+    const existing = await get("SELECT id_institucion AS id FROM institucion WHERE cue = ? AND nivel_educativo = ?", [cueNormalized, nivel || null]);
     if (existing) {
       return res.status(409).json({ error: "Ya existe una institución con ese CUE y nivel educativo" });
     }
@@ -231,10 +257,11 @@ router.patch("/:id", authorizePermissions(PERMISSIONS.INSTITUCIONES_EDIT), async
     const { id } = req.params;
     const { 
       nombre, direccion, localidad, departamento,
-      telefono, email, nivel, tipo, matriculados, notas, activo 
+      telefono, email, nivel, tipo, matriculados, notas, activo,
+      limite_productos
     } = req.body;
 
-    const institucion = await get("SELECT * FROM instituciones WHERE id = ?", [id]);
+    const institucion = await get("SELECT * FROM institucion WHERE id_institucion = ?", [id]);
     if (!institucion) {
       return res.status(404).json({ error: "Institución no encontrada" });
     }
@@ -300,6 +327,11 @@ router.patch("/:id", authorizePermissions(PERMISSIONS.INSTITUCIONES_EDIT), async
       updates.push("notas = ?");
       params.push(notas);
     }
+    if (limite_productos !== undefined) {
+      updates.push("limite_productos = ?");
+      params.push(limite_productos || null);
+      cambios.limite_productos = { antes: institucion.limite_productos || null, despues: limite_productos || null };
+    }
     if (activo !== undefined) {
       updates.push("activo = ?");
       params.push(activo ? 1 : 0);
@@ -334,7 +366,7 @@ router.delete("/:id", authorizePermissions(PERMISSIONS.INSTITUCIONES_DELETE), as
   try {
     const { id } = req.params;
 
-    const institucion = await get("SELECT * FROM instituciones WHERE id = ?", [id]);
+    const institucion = await get("SELECT * FROM institucion WHERE id_institucion = ?", [id]);
     if (!institucion) {
       return res.status(404).json({ error: "Institución no encontrada" });
     }
@@ -403,7 +435,7 @@ router.post("/:id/asignar", authorizePermissions(PERMISSIONS.INSTITUCIONES_ASIGN
       return res.status(400).json({ error: "producto_id, cantidad y periodo son obligatorios" });
     }
 
-    const institucion = await get("SELECT * FROM instituciones WHERE id = ?", [id]);
+    const institucion = await get("SELECT * FROM institucion WHERE id_institucion = ?", [id]);
     if (!institucion) {
       return res.status(404).json({ error: "Institución no encontrada" });
     }
@@ -463,7 +495,7 @@ router.post("/asignar-masivo", authorizePermissions(PERMISSIONS.INSTITUCIONES_AS
       return res.status(404).json({ error: "Producto no encontrado" });
     }
 
-    const instituciones = await all("SELECT id, nombre, matriculados FROM instituciones WHERE activo = 1");
+    const instituciones = await all("SELECT id_institucion AS id, nombre, matriculados FROM institucion WHERE activo = TRUE");
     
     let asignados = 0;
     let totalUnidades = 0;
@@ -597,13 +629,13 @@ router.get("/resumen/:periodo", authorizePermissions(PERMISSIONS.INSTITUCIONES_V
 
     const instituciones = await all(`
       SELECT 
-        i.id, i.cue, i.nombre, i.matriculados, i.factor_asignacion,
+        i.id_institucion AS id, i.cue, i.nombre, i.matriculados, i.factor_asignacion,
         SUM(a.cantidad_asignada) as total_asignado,
         SUM(a.cantidad_entregada) as total_entregado
-      FROM instituciones i
-      LEFT JOIN asignaciones_stock a ON i.id = a.institucion_id AND a.periodo = ?
-      WHERE i.activo = 1
-      GROUP BY i.id
+      FROM institucion i
+      LEFT JOIN asignaciones_stock a ON i.id_institucion = a.institucion_id AND a.periodo = ?
+      WHERE i.activo = TRUE
+      GROUP BY i.id_institucion
       ORDER BY i.nombre
     `, [periodo]);
 
