@@ -34,6 +34,23 @@ function calcularCantidadAsignada(matriculados, cantidadBase = 10) {
   return Math.ceil(cantidadBase * factor);
 }
 
+async function getInstitucionNivelColumn() {
+  const row = await get(`
+    SELECT CASE
+      WHEN EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'institucion' AND column_name = 'nivel_educativo'
+      ) THEN 'nivel_educativo'
+      WHEN EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'institucion' AND column_name = 'nivel'
+      ) THEN 'nivel'
+      ELSE NULL
+    END AS col
+  `);
+  return row?.col || null;
+}
+
 // Endpoint público para obtener instituciones por CUE (sin autenticación)
 router.get("/public/cue/:cue", async (req, res) => {
   try {
@@ -44,8 +61,13 @@ router.get("/public/cue/:cue", async (req, res) => {
       return res.status(400).json({ error: "CUE inválido" });
     }
 
+    const nivelColumn = await getInstitucionNivelColumn();
+    if (!nivelColumn) {
+      return res.status(500).json({ error: "Configuración inválida: falta columna de nivel en institucion" });
+    }
+
     const instituciones = await all(`
-      SELECT id_institucion as id, cue, nombre, nivel_educativo, activo
+      SELECT id_institucion as id, cue, nombre, ${nivelColumn} as nivel_educativo, activo
       FROM institucion WHERE cue = ? AND activo = TRUE
     `, [cueNormalized]);
 
