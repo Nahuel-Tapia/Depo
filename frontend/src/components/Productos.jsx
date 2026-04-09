@@ -7,7 +7,7 @@ export default function Productos() {
   const [productos, setProductos] = useState([])
   const [categorias, setCategorias] = useState([])
   const [msg, setMsg] = useState({ text: '', type: '' })
-  const [form, setForm] = useState({ nombre: '', unidad_medida: 'unidad', stock_minimo: 0, id_categoria: '' })
+  const [form, setForm] = useState({ nombre: '', unidad_medida: 'unidad', stock_actual: 0, stock_minimo: 0, id_categoria: '' })
 
   const loadCategorias = async () => {
     try {
@@ -41,6 +41,7 @@ export default function Productos() {
     const payload = {
       nombre: form.nombre.trim(),
       unidad_medida: form.unidad_medida.trim() || 'unidad',
+      stock_actual: parseInt(form.stock_actual) || 0,
       stock_minimo: parseInt(form.stock_minimo) || 0,
       id_categoria: form.id_categoria || null
     }
@@ -57,7 +58,7 @@ export default function Productos() {
       return
     }
 
-    setForm({ nombre: '', unidad_medida: 'unidad', stock_minimo: 0, id_categoria: '' })
+    setForm({ nombre: '', unidad_medida: 'unidad', stock_actual: 0, stock_minimo: 0, id_categoria: '' })
     setMsg({ text: 'Producto creado', type: 'success' })
     loadProductos()
   }
@@ -116,6 +117,10 @@ export default function Productos() {
               <input type="text" value={form.unidad_medida} onChange={e => setForm({ ...form, unidad_medida: e.target.value })} placeholder="Ej: unidad, kg, litro" />
             </div>
             <div>
+              <label>Stock actual</label>
+              <input type="number" value={form.stock_actual} onChange={e => setForm({ ...form, stock_actual: e.target.value })} placeholder="0" min="0" />
+            </div>
+            <div>
               <label>Stock mínimo</label>
               <input type="number" value={form.stock_minimo} onChange={e => setForm({ ...form, stock_minimo: e.target.value })} placeholder="0" min="0" />
             </div>
@@ -146,8 +151,10 @@ export default function Productos() {
             <th>ID</th>
             <th>Nombre</th>
             <th>Unidad</th>
+            <th>Stock Actual</th>
             <th>Stock Mín.</th>
             <th>Categoría</th>
+            <th>Estado</th>
             <th>Acciones</th>
           </tr>
         </thead>
@@ -157,8 +164,15 @@ export default function Productos() {
               <td>{p.id}</td>
               <td>{p.nombre}</td>
               <td>{p.unidad_medida || 'unidad'}</td>
+              <td>{p.stock_actual ?? 0}</td>
               <td>{p.stock_minimo || 0}</td>
               <td>{p.categoria_nombre || '-'}</td>
+              <td>
+                {(p.stock_actual ?? 0) <= (p.stock_minimo || 0)
+                  ? <span style={{ color: '#ef4444', fontWeight: 600 }}>⚠ Bajo</span>
+                  : <span style={{ color: '#10b981' }}>OK</span>
+                }
+              </td>
               <td>
                 <div className="inline-actions">
                   {hasPermission('productos.edit') && (

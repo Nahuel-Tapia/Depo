@@ -23,12 +23,11 @@ const PORT = process.env.PORT || 4000;
 app.use(cors());
 app.use(express.json());
 
-// Servir el build de React (frontend/dist) si existe, sino caer a frontend/public
+// Servir el build de React (frontend/dist)
 const frontendDistPath = path.join(__dirname, "..", "..", "frontend", "dist");
 const frontendPublicPath = path.join(__dirname, "..", "..", "frontend", "public");
 const fs = require("fs");
-// Forzar usar public/ para desarrollo
-const staticPath = frontendPublicPath;
+const staticPath = fs.existsSync(frontendDistPath) ? frontendDistPath : frontendPublicPath;
 app.use(express.static(staticPath));
 
 app.get("/api/health", (req, res) => {

@@ -7,6 +7,7 @@ import Pedidos from '../components/Pedidos'
 import Instituciones from '../components/Instituciones'
 import Proveedores from '../components/Proveedores'
 import Usuarios from '../components/Usuarios'
+import HistorialInstitucion from '../components/HistorialInstitucion'
 
 const TABS = [
   { key: 'inicio', label: 'Inicio', permission: null },
@@ -14,6 +15,7 @@ const TABS = [
   { key: 'movimientos', label: 'Movimientos', permission: 'movimientos.view' },
   { key: 'pedidos', label: 'Pedidos', permission: 'pedidos.view' },
   { key: 'instituciones', label: 'Instituciones', permission: 'instituciones.view' },
+  { key: 'historial', label: 'Historial', permission: 'instituciones.view' },
   { key: 'proveedores', label: 'Proveedores', permission: 'proveedores.view' },
   { key: 'usuarios', label: 'Usuarios', permission: 'users.read' }
 ]
@@ -40,6 +42,7 @@ export default function Dashboard() {
       case 'movimientos': return <Movimientos />
       case 'pedidos': return <Pedidos />
       case 'instituciones': return <Instituciones />
+      case 'historial': return <HistorialInstitucion />
       case 'proveedores': return <Proveedores />
       case 'usuarios': return <Usuarios />
       default: return <Inicio />

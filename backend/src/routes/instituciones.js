@@ -668,4 +668,126 @@ router.get("/resumen/:periodo", authorizePermissions(PERMISSIONS.INSTITUCIONES_V
   }
 });
 
+// === HISTORIAL POR INSTITUCIÓN ===
+router.get("/:id/historial", authorizePermissions(PERMISSIONS.INSTITUCIONES_VIEW), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { desde, hasta, tipo } = req.query;
+
+    const institucion = await get(`
+      SELECT id_institucion AS id, nombre, cue, nivel_educativo
+      FROM institucion WHERE id_institucion = ?
+    `, [id]);
+
+    if (!institucion) {
+      return res.status(404).json({ error: "Institución no encontrada" });
+    }
+
+    const eventos = [];
+    const params_pedidos = [id];
+    const params_movimientos = [id];
+
+    // Filtros de fecha
+    let filtroPedidos = "";
+    let filtroMovimientos = "";
+
+    if (desde) {
+      filtroPedidos += " AND p.fecha_creacion >= ?";
+      filtroMovimientos += " AND ms.fecha_movimiento >= ?";
+      params_pedidos.push(desde);
+      params_movimientos.push(desde);
+    }
+    if (hasta) {
+      filtroPedidos += " AND p.fecha_creacion <= ?";
+      filtroMovimientos += " AND ms.fecha_movimiento <= ?";
+      params_pedidos.push(hasta + " 23:59:59");
+      params_movimientos.push(hasta + " 23:59:59");
+    }
+
+    // 1. Pedidos de la institución
+    if (!tipo || tipo === "pedido") {
+      const pedidos = await all(`
+        SELECT 
+          p.id_pedido AS id,
+          'pedido' AS tipo_evento,
+          p.fecha_creacion AS fecha,
+          p.estado,
+          p.observaciones_generales AS observacion,
+          u.nombre AS usuario_nombre,
+          COALESCE(
+            (SELECT string_agg(pr.nombre || ' x' || dp.cantidad_solicitada, ', ')
+             FROM detalle_pedido dp
+             JOIN producto pr ON dp.id_producto = pr.id_producto
+             WHERE dp.id_pedido = p.id_pedido),
+            'Sin detalle'
+          ) AS detalle
+        FROM pedido p
+        LEFT JOIN usuario u ON p.id_usuario_solicitante = u.id_usuario
+        WHERE p.id_institucion = ?${filtroPedidos}
+        ORDER BY p.fecha_creacion DESC
+      `, params_pedidos);
+
+      pedidos.forEach(p => eventos.push({
+        id: p.id,
+        tipo: 'Pedido',
+        fecha: p.fecha,
+        detalle: p.detalle,
+        estado: p.estado,
+        usuario: p.usuario_nombre,
+        observacion: p.observacion
+      }));
+    }
+
+    // 2. Movimientos de stock vinculados a la institución
+    if (!tipo || tipo === "movimiento") {
+      const movimientos = await all(`
+        SELECT 
+          ms.id_movimiento AS id,
+          ms.tipo AS tipo_mov,
+          ms.fecha_movimiento AS fecha,
+          ms.cantidad,
+          ms.motivo,
+          ms.estado_producto,
+          ms.cargo_retira,
+          pr.nombre AS producto_nombre,
+          u.nombre AS usuario_nombre
+        FROM movimiento_stock ms
+        LEFT JOIN producto pr ON ms.id_producto = pr.id_producto
+        LEFT JOIN usuario u ON ms.id_usuario = u.id_usuario
+        WHERE ms.id_institucion = ?${filtroMovimientos}
+        ORDER BY ms.fecha_movimiento DESC
+      `, params_movimientos);
+
+      movimientos.forEach(m => eventos.push({
+        id: m.id,
+        tipo: m.tipo_mov === 'ingreso' ? 'Ingreso' : 
+              m.tipo_mov === 'egreso' ? 'Entrega' : 
+              m.tipo_mov === 'devolucion' ? 'Devolución' : 'Ajuste',
+        fecha: m.fecha,
+        detalle: `${m.producto_nombre} x${m.cantidad}`,
+        estado: m.estado_producto || 'OK',
+        usuario: m.usuario_nombre,
+        observacion: m.motivo
+      }));
+    }
+
+    // Ordenar todo por fecha descendente
+    eventos.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+
+    // Resumen
+    const resumen = {
+      total_pedidos: eventos.filter(e => e.tipo === 'Pedido').length,
+      total_entregas: eventos.filter(e => e.tipo === 'Entrega').length,
+      total_devoluciones: eventos.filter(e => e.tipo === 'Devolución').length,
+      total_ingresos: eventos.filter(e => e.tipo === 'Ingreso').length,
+      total_ajustes: eventos.filter(e => e.tipo === 'Ajuste').length
+    };
+
+    return res.json({ institucion, eventos, resumen });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "No se pudo obtener el historial" });
+  }
+});
+
 module.exports = router;
