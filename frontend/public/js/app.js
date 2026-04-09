@@ -8,6 +8,7 @@ const state = {
   users: [],
   instituciones: [],
   proveedores: [],
+  selectedInstitucionLimite: null,
   loteMovimientos: [], // Array de {producto_id, cantidad, nombre}
   loteEgreso: [], // Array de {producto_id, cantidad, nombre, estado}
   loteIngreso: [] // Array de {producto_id, cantidad, nombre, estado}
@@ -1273,6 +1274,10 @@ pedidosTbody?.addEventListener("click", async (e) => {
 // ============ INSTITUCIONES ============
 const institucionesTbody = document.getElementById("institucionesTbody");
 const institucionesMsg = document.getElementById("institucionesMsg");
+const loteLimiteFormWrap = document.getElementById("loteLimiteFormWrap");
+const loteLimiteTitle = document.getElementById("loteLimiteTitle");
+const loteLimiteTextarea = document.getElementById("loteLimiteTextarea");
+const loteLimiteMsg = document.getElementById("loteLimiteMsg");
 
 // Carga el dropdown de instituciones para el formulario de usuarios
 async function loadInstitucionesDropdown() {
@@ -1341,6 +1346,7 @@ async function loadInstituciones() {
 }
 
 function renderInstituciones(lista) {
+  console.log("NUEVA VERSION 2026-04-09 renderInstituciones ejecutada");
   if (!institucionesTbody) {
     console.error("ERROR: institucionesTbody element not found");
     return;
@@ -1358,16 +1364,14 @@ function renderInstituciones(lista) {
   const canAsignar = hasPermission("instituciones.asignar");
 
   items.forEach((inst) => {
-    const actions = [];
+    let actionsHtml = "";
     if (canEdit) {
-      actions.push(`<button data-action="edit-inst" data-id="${inst.id}">${inst.activo ? "Editar" : "Editar"}</button>`);
-      actions.push(`<button data-action="toggle-inst" data-id="${inst.id}" data-active="${inst.activo}">${inst.activo ? "Desactivar" : "Activar"}</button>`);
+      actionsHtml = `<button data-action="edit-limite" data-id="${inst.id}">Editar</button>`;
+    } else if (canAsignar) {
+      actionsHtml = `<button data-action="ver-asignaciones" data-id="${inst.id}">Asignaciones</button>`;
     }
-    if (canAsignar) {
-      actions.push(`<button data-action="ver-asignaciones" data-id="${inst.id}">Asignaciones</button>`);
-    }
-    if (canDelete) {
-      actions.push(`<button data-action="delete-inst" data-id="${inst.id}">Eliminar</button>`);
+    if (canDelete && !canEdit) {
+      actionsHtml += `<button data-action="delete-inst" data-id="${inst.id}">Eliminar</button>`;
     }
 
     const direccionCompleta = [inst.direccion, inst.localidad, inst.departamento]
@@ -1380,7 +1384,7 @@ function renderInstituciones(lista) {
       <td>${inst.nombre.trim()}</td>
       <td>${inst.nivel || "-"}</td>
       <td>${direccionCompleta}</td>
-      <td><div class="inline-actions">${actions.join("")}</div></td>
+      <td>${actionsHtml}</td>
     `;
     institucionesTbody.appendChild(tr);
   });
@@ -1415,6 +1419,81 @@ document.getElementById("btnLimpiarCue")?.addEventListener("click", () => {
   renderInstituciones();
 });
 
+function openLoteLimiteForm(institucion) {
+  state.selectedInstitucionLimite = institucion.id;
+  if (loteLimiteFormWrap) loteLimiteFormWrap.classList.remove("hidden");
+  if (loteLimiteTitle) loteLimiteTitle.textContent = `Límite de productos - ${institucion.nombre}`;
+  if (loteLimiteTextarea) loteLimiteTextarea.value = institucion.limite_productos || "";
+  if (loteLimiteMsg) showMessage(loteLimiteMsg, "");
+}
+
+function closeLoteLimiteForm() {
+  state.selectedInstitucionLimite = null;
+  if (loteLimiteFormWrap) loteLimiteFormWrap.classList.add("hidden");
+  if (loteLimiteTextarea) loteLimiteTextarea.value = "";
+  if (loteLimiteMsg) showMessage(loteLimiteMsg, "");
+}
+
+async function saveLoteLimite() {
+  if (!state.selectedInstitucionLimite) return;
+  const institucionId = state.selectedInstitucionLimite;
+  const texto = loteLimiteTextarea ? loteLimiteTextarea.value.trim() : "";
+  const msg = loteLimiteMsg;
+
+  if (!msg) return;
+  showMessage(msg, "");
+
+  const res = await fetch(`/api/instituciones/${institucionId}`, {
+    method: "PATCH",
+    headers: authHeaders(),
+    body: JSON.stringify({ limite_productos: texto })
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    showMessage(msg, data.error || "Error al guardar el límite", "error");
+    return;
+  }
+
+  await loadInstituciones();
+  showMessage(msg, "Límite guardado correctamente", "success");
+}
+
+async function deleteLoteLimite() {
+  if (!state.selectedInstitucionLimite) return;
+  const msg = loteLimiteMsg;
+  if (!msg) return;
+  showMessage(msg, "");
+
+  const res = await fetch(`/api/instituciones/${state.selectedInstitucionLimite}`, {
+    method: "PATCH",
+    headers: authHeaders(),
+    body: JSON.stringify({ limite_productos: null })
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    showMessage(msg, data.error || "Error al eliminar el límite", "error");
+    return;
+  }
+
+  await loadInstituciones();
+  closeLoteLimiteForm();
+}
+
+document.getElementById("loteLimiteForm")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  await saveLoteLimite();
+});
+
+document.getElementById("deleteLoteLimiteBtn")?.addEventListener("click", async () => {
+  await deleteLoteLimite();
+});
+
+document.getElementById("cancelLoteLimiteBtn")?.addEventListener("click", () => {
+  closeLoteLimiteForm();
+});
+
 function populateAsigProductoSelect() {
   const select = document.getElementById("asigProductoId");
   if (!select) return;
@@ -1430,6 +1509,19 @@ function populateAsigProductoSelect() {
 
 // Acciones en tabla de instituciones
 institucionesTbody?.addEventListener("click", async (e) => {
+  // Manejar dropdown toggle
+  if (e.target.classList.contains("edit-dropdown-btn")) {
+    const id = e.target.dataset.id;
+    const dropdown = document.getElementById(`dropdown-${id}`);
+    // Cerrar otros dropdowns
+    document.querySelectorAll(".dropdown-menu").forEach(d => {
+      if (d.id !== `dropdown-${id}`) d.style.display = "none";
+    });
+    // Toggle este
+    dropdown.style.display = dropdown.style.display === "none" ? "block" : "none";
+    return;
+  }
+
   const btn = e.target.closest("button");
   if (!btn) return;
 
@@ -1448,6 +1540,8 @@ institucionesTbody?.addEventListener("click", async (e) => {
       const data = await res.json().catch(() => ({}));
       showMessage(institucionesMsg, data.error || "No se pudo actualizar", "error");
     }
+    // Cerrar dropdowns
+    document.querySelectorAll(".dropdown-menu").forEach(d => d.style.display = "none");
   }
 
   if (action === "delete-inst") {
@@ -1463,6 +1557,17 @@ institucionesTbody?.addEventListener("click", async (e) => {
       const data = await res.json().catch(() => ({}));
       showMessage(institucionesMsg, data.error || "No se pudo eliminar", "error");
     }
+    // Cerrar dropdowns
+    document.querySelectorAll(".dropdown-menu").forEach(d => d.style.display = "none");
+  }
+
+  if (action === "edit-limite") {
+    const inst = state.instituciones.find(i => i.id === parseInt(id, 10));
+    if (!inst) return;
+    openLoteLimiteForm(inst);
+    // Cerrar dropdowns
+    document.querySelectorAll(".dropdown-menu").forEach(d => d.style.display = "none");
+    return;
   }
 
   if (action === "ver-asignaciones") {
@@ -1506,6 +1611,8 @@ institucionesTbody?.addEventListener("click", async (e) => {
       </div>
     `;
     document.body.appendChild(modal);
+    // Cerrar dropdowns
+    document.querySelectorAll(".dropdown-menu").forEach(d => d.style.display = "none");
   }
 
   if (action === "edit-inst") {
@@ -1528,6 +1635,8 @@ institucionesTbody?.addEventListener("click", async (e) => {
       const data = await res.json().catch(() => ({}));
       showMessage(institucionesMsg, data.error || "No se pudo actualizar", "error");
     }
+    // Cerrar dropdowns
+    document.querySelectorAll(".dropdown-menu").forEach(d => d.style.display = "none");
   }
 });
 

@@ -348,6 +348,22 @@
 
           <div id="institucionesCount" style="font-size: 13px; color: #6b7280; margin-bottom: 10px;"></div>
 
+          <div id="loteLimiteFormWrap" class="hidden" style="background: #f9fafb; padding: 24px; border-radius: 8px; margin-bottom: 24px;">
+            <h3 id="loteLimiteTitle">Editar límite de productos</h3>
+            <form id="loteLimiteForm" class="grid">
+              <div style="grid-column: 1 / -1;">
+                <label>Detalle del límite (máximo 1000 caracteres)</label>
+                <textarea id="loteLimiteTextarea" maxlength="1000" rows="6" placeholder="Describe el límite o las condiciones para esta escuela..."></textarea>
+              </div>
+              <div style="display: flex; align-items: center; gap: 12px; width: 100%;">
+                <button type="submit">Guardar límite</button>
+                <button type="button" id="deleteLoteLimiteBtn" class="secondary">Eliminar límite</button>
+                <button type="button" id="cancelLoteLimiteBtn" class="secondary">Cancelar</button>
+                <span id="loteLimiteMsg" class="msg" style="margin-left: auto;"></span>
+              </div>
+            </form>
+          </div>
+
           <div style="overflow-x: auto;">
             <table>
               <thead>

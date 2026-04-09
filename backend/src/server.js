@@ -27,7 +27,8 @@ app.use(express.json());
 const frontendDistPath = path.join(__dirname, "..", "..", "frontend", "dist");
 const frontendPublicPath = path.join(__dirname, "..", "..", "frontend", "public");
 const fs = require("fs");
-const staticPath = fs.existsSync(frontendDistPath) ? frontendDistPath : frontendPublicPath;
+// Forzar usar public/ para desarrollo
+const staticPath = frontendPublicPath;
 app.use(express.static(staticPath));
 
 app.get("/api/health", (req, res) => {
