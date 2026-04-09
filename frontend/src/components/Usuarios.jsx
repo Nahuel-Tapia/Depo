@@ -8,6 +8,7 @@ export default function Usuarios() {
   const [instituciones, setInstituciones] = useState([])
   const [msg, setMsg] = useState('')
   const [formOpen, setFormOpen] = useState(false)
+  const [roleModal, setRoleModal] = useState(null)
   const [form, setForm] = useState({ nombre: '', email: '', password: '', role: 'consulta', institucion: '' })
 
   const loadUsers = async () => {
@@ -69,20 +70,28 @@ export default function Usuarios() {
     loadUsers()
   }
 
-  const handleChangeRole = async (id) => {
-    const role = window.prompt('Nuevo rol (admin, directivo, operador, consulta):', 'operador')
-    if (!role) return
+  const handleChangeRole = async (u) => {
+    setRoleModal({
+      id: u.id,
+      nombre: u.nombre,
+      role: u.role || 'consulta',
+      institucion: '',
+      error: ''
+    })
+  }
 
-    let institucion = null
-    if (role === 'directivo') {
-      institucion = window.prompt('Institución del usuario (obligatoria para directivo):', '')?.trim() || ''
-      if (!institucion) {
-        setMsg('La institución es obligatoria para rol directivo')
-        return
-      }
+  const handleSaveRole = async () => {
+    if (!roleModal) return
+
+    const role = roleModal.role
+    let institucion = roleModal.institucion || null
+
+    if (role === 'directivo' && !institucion) {
+      setRoleModal({ ...roleModal, error: 'La institución es obligatoria para rol directivo' })
+      return
     }
 
-    const res = await apiFetch(`/api/users/${id}/role`, {
+    const res = await apiFetch(`/api/users/${roleModal.id}/role`, {
       token,
       method: 'PATCH',
       body: JSON.stringify({ role, institucion })
@@ -90,10 +99,12 @@ export default function Usuarios() {
 
     const data = await res.json().catch(() => ({}))
     if (!res.ok) {
-      setMsg(data.error || 'No se pudo actualizar rol')
+      setRoleModal({ ...roleModal, error: data.error || 'No se pudo actualizar rol' })
       return
     }
 
+    setRoleModal(null)
+    setMsg('Rol actualizado correctamente')
     loadUsers()
   }
 
@@ -170,7 +181,7 @@ export default function Usuarios() {
               <td>{u.activo ? 'Sí' : 'No'}</td>
               <td>
                 <div className="inline-actions">
-                  {canChangeRole && <button onClick={() => handleChangeRole(u.id)}>Rol +</button>}
+                  {canChangeRole && <button onClick={() => handleChangeRole(u)}>Rol +</button>}
                   {canToggleStatus && (
                     <button onClick={() => handleToggleActive(u.id, u.activo)}>
                       {u.activo ? 'Desactivar' : 'Activar'}
@@ -240,6 +251,70 @@ export default function Usuarios() {
                 <button type="submit" style={{ width: 'auto', margin: 0, padding: '10px 18px' }}>Guardar usuario</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {roleModal && canChangeRole && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: 16
+          }}
+          onClick={e => {
+            if (e.target === e.currentTarget) setRoleModal(null)
+          }}
+        >
+          <div style={{ background: '#f9fafb', padding: 24, borderRadius: 10, width: 'min(560px, 100%)' }}>
+            <h3>Cambiar rol</h3>
+            <p style={{ marginTop: 8, marginBottom: 16 }}>Usuario: {roleModal.nombre}</p>
+
+            <label style={{ marginTop: 0 }}>Seleccionar rol</label>
+            <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
+              {[
+                { value: 'admin', label: 'Administrador' },
+                { value: 'directivo', label: 'Directivo' },
+                { value: 'operador', label: 'Operador' },
+                { value: 'consulta', label: 'Consulta' }
+              ].map(opt => (
+                <label key={opt.value} style={{ display: 'flex', alignItems: 'center', gap: 8, textTransform: 'none', letterSpacing: 0, fontSize: '0.95rem', margin: 0 }}>
+                  <input
+                    type="radio"
+                    name="rol_usuario"
+                    value={opt.value}
+                    checked={roleModal.role === opt.value}
+                    onChange={e => setRoleModal({ ...roleModal, role: e.target.value, error: '' })}
+                    style={{ width: 16, minHeight: 16, margin: 0 }}
+                  />
+                  {opt.label}
+                </label>
+              ))}
+            </div>
+
+            {roleModal.role === 'directivo' && (
+              <div style={{ marginTop: 16 }}>
+                <label>Institución</label>
+                <select value={roleModal.institucion} onChange={e => setRoleModal({ ...roleModal, institucion: e.target.value, error: '' })}>
+                  <option value="">-- Seleccionar institución --</option>
+                  {instituciones.map(inst => (
+                    <option key={inst.id} value={inst.id}>{inst.nombre}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {roleModal.error && <div className="msg show msg-error" style={{ marginTop: 12 }}>{roleModal.error}</div>}
+
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 }}>
+              <button type="button" className="secondary" onClick={() => setRoleModal(null)}>Cancelar</button>
+              <button type="button" onClick={handleSaveRole} style={{ width: 'auto', margin: 0, padding: '10px 18px' }}>Guardar</button>
+            </div>
           </div>
         </div>
       )}

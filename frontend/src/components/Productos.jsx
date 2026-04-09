@@ -8,6 +8,8 @@ export default function Productos() {
   const [categorias, setCategorias] = useState([])
   const [msg, setMsg] = useState({ text: '', type: '' })
   const [formOpen, setFormOpen] = useState(false)
+  const [editModal, setEditModal] = useState(null)
+  const [deleteModal, setDeleteModal] = useState(null)
   const [form, setForm] = useState({ nombre: '', unidad_medida: 'unidad', stock_actual: 0, stock_minimo: 0, id_categoria: '' })
 
   const loadCategorias = async () => {
@@ -69,37 +71,72 @@ export default function Productos() {
     const producto = productos.find(p => p.id === id)
     if (!producto) return
 
-    const nuevoNombre = window.prompt('Nuevo nombre:', producto.nombre)
-    if (nuevoNombre === null) return
-
-    const res = await apiFetch(`/api/productos/${id}`, {
-      token,
-      method: 'PATCH',
-      body: JSON.stringify({ nombre: nuevoNombre })
+    setEditModal({
+      id: producto.id,
+      nombre: producto.nombre || '',
+      unidad_medida: producto.unidad_medida || 'unidad',
+      stock_actual: producto.stock_actual ?? 0,
+      stock_minimo: producto.stock_minimo ?? 0,
+      id_categoria: producto.id_categoria || ''
     })
+  }
 
-    if (!res.ok) {
-      alert('No se pudo editar el producto')
+  const handleEditSave = async (e) => {
+    e.preventDefault()
+    if (!editModal) return
+
+    const payload = {
+      nombre: String(editModal.nombre || '').trim(),
+      unidad_medida: String(editModal.unidad_medida || '').trim() || 'unidad',
+      stock_actual: parseInt(editModal.stock_actual, 10) || 0,
+      stock_minimo: parseInt(editModal.stock_minimo, 10) || 0,
+      id_categoria: editModal.id_categoria || null
+    }
+
+    if (!payload.nombre) {
+      setMsg({ text: 'El nombre es obligatorio', type: 'error' })
       return
     }
 
+    const res = await apiFetch(`/api/productos/${editModal.id}`, {
+      token,
+      method: 'PATCH',
+      body: JSON.stringify(payload)
+    })
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      setMsg({ text: data.error || 'No se pudo editar el producto', type: 'error' })
+      return
+    }
+
+    setEditModal(null)
+    setMsg({ text: 'Producto actualizado', type: 'success' })
     loadProductos()
   }
 
   const handleDelete = async (id) => {
-    if (!window.confirm('¿Estás seguro?')) return
+    const producto = productos.find(p => p.id === id)
+    if (!producto) return
+    setDeleteModal({ id, nombre: producto.nombre })
+  }
 
-    const res = await apiFetch(`/api/productos/${id}`, {
+  const confirmDelete = async () => {
+    if (!deleteModal) return
+
+    const res = await apiFetch(`/api/productos/${deleteModal.id}`, {
       token,
       method: 'DELETE'
     })
 
     if (!res.ok) {
       const data = await res.json().catch(() => ({}))
-      alert(data.error || 'No se pudo eliminar el producto')
+      setMsg({ text: data.error || 'No se pudo eliminar el producto', type: 'error' })
       return
     }
 
+    setDeleteModal(null)
+    setMsg({ text: 'Producto eliminado', type: 'success' })
     loadProductos()
   }
 
@@ -216,6 +253,88 @@ export default function Productos() {
                 <button type="submit" style={{ width: 'auto', margin: 0, padding: '10px 18px' }}>Guardar producto</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {editModal && hasPermission('productos.edit') && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: 16
+          }}
+          onClick={e => {
+            if (e.target === e.currentTarget) setEditModal(null)
+          }}
+        >
+          <div style={{ background: '#f9fafb', padding: 24, borderRadius: 10, width: 'min(720px, 100%)' }}>
+            <h3>Editar producto</h3>
+            <form onSubmit={handleEditSave} className="grid">
+              <div>
+                <label>Nombre del producto</label>
+                <input type="text" value={editModal.nombre} onChange={e => setEditModal({ ...editModal, nombre: e.target.value })} placeholder="Ej: Resma A4" required />
+              </div>
+              <div>
+                <label>Unidad de medida</label>
+                <input type="text" value={editModal.unidad_medida} onChange={e => setEditModal({ ...editModal, unidad_medida: e.target.value })} placeholder="Ej: unidad, kg, litro" />
+              </div>
+              <div>
+                <label>Stock actual</label>
+                <input type="number" value={editModal.stock_actual} onChange={e => setEditModal({ ...editModal, stock_actual: e.target.value })} placeholder="0" min="0" />
+              </div>
+              <div>
+                <label>Stock mínimo</label>
+                <input type="number" value={editModal.stock_minimo} onChange={e => setEditModal({ ...editModal, stock_minimo: e.target.value })} placeholder="0" min="0" />
+              </div>
+              <div>
+                <label>Categoría</label>
+                <select value={editModal.id_categoria} onChange={e => setEditModal({ ...editModal, id_categoria: e.target.value })}>
+                  <option value="">-- Sin categoría --</option>
+                  {categorias.map(cat => (
+                    <option key={cat.id} value={cat.id}>{cat.nombre}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                <button type="button" className="secondary" onClick={() => setEditModal(null)}>Cancelar</button>
+                <button type="submit" style={{ width: 'auto', margin: 0, padding: '10px 18px' }}>Guardar cambios</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {deleteModal && hasPermission('productos.delete') && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: 16
+          }}
+          onClick={e => {
+            if (e.target === e.currentTarget) setDeleteModal(null)
+          }}
+        >
+          <div style={{ background: '#f9fafb', padding: 24, borderRadius: 10, width: 'min(520px, 100%)' }}>
+            <h3>Confirmar eliminación</h3>
+            <p style={{ marginTop: 8, marginBottom: 20 }}>
+              ¿Está seguro que quiere eliminar "{deleteModal.nombre}"?
+            </p>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button type="button" className="secondary" onClick={() => setDeleteModal(null)}>No</button>
+              <button type="button" onClick={confirmDelete} style={{ width: 'auto', margin: 0, padding: '10px 18px' }}>Sí</button>
+            </div>
           </div>
         </div>
       )}
