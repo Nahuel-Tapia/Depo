@@ -67,6 +67,16 @@ export default function Inicio({ onNavigate }) {
         </p>
       </div>
 
+      {/* Rol directivo: solo bienvenida + acceso a pedidos */}
+      {user?.role === 'directivo' ? (
+        <div style={{ textAlign: 'center', padding: '40px 0' }}>
+          <p style={{ color: 'var(--muted)', marginBottom: 16 }}>Desde aquí podés gestionar tus pedidos.</p>
+          <button onClick={() => onNavigate?.('pedidos')} style={{ fontSize: '1rem' }}>
+            Ir a Pedidos
+          </button>
+        </div>
+      ) : (
+      <>
       {/* Cards de resumen */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '24px' }}>
         <StatCard
@@ -175,6 +185,8 @@ export default function Inicio({ onNavigate }) {
             </tbody>
           </table>
         </>
+      )}
+      </>
       )}
 
       {modalType && (

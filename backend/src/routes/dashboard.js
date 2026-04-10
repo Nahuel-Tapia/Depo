@@ -10,6 +10,22 @@ router.use(authenticate);
 // Dashboard resumen general
 router.get("/stats", authorizePermissions(PERMISSIONS.DASHBOARD_VIEW), async (req, res) => {
   try {
+    const userRole = req.user.role;
+
+    // Rol directivo: solo datos básicos (sin info sensible de stock/movimientos)
+    if (userRole === 'directivo') {
+      return res.json({
+        productos: { total: 0, stock_bajo: 0, sin_stock: 0 },
+        instituciones: { total: 0 },
+        proveedores: { total: 0 },
+        movimientos_mes: { total: 0, ingresos: 0, egresos: 0, ajustes: 0, devoluciones: 0 },
+        stock_bajo: [],
+        sin_stock_list: [],
+        ultimos_movimientos: [],
+        limited: true,
+      });
+    }
+
     // Totales de productos y alertas de stock bajo
     const productosStats = await get(`
       SELECT 
