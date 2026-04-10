@@ -37,7 +37,7 @@ export default function Dashboard() {
 
   const renderTab = () => {
     switch (activeTab) {
-      case 'inicio': return <Inicio />
+      case 'inicio': return <Inicio onNavigate={setActiveTab} />
       case 'productos': return <Productos />
       case 'movimientos': return <Movimientos />
       case 'pedidos': return <Pedidos />

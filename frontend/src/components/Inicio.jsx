@@ -18,11 +18,12 @@ const TIPO_COLORS = {
   devolucion: { bg: '#eff6ff', color: '#1e40af' },
 }
 
-export default function Inicio() {
+export default function Inicio({ onNavigate }) {
   const { user, token } = useAuth()
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [modalType, setModalType] = useState(null)
   const printRef = useRef(null)
 
   useEffect(() => {
@@ -46,6 +47,7 @@ export default function Inicio() {
   if (!stats) return null
 
   const mesActual = new Date().toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })
+  const sinStockList = stats.sin_stock_list || []
 
   return (
     <div>
@@ -67,18 +69,35 @@ export default function Inicio() {
 
       {/* Cards de resumen */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-        <StatCard label="Productos" value={stats.productos.total} icon="📦" />
+        <StatCard
+          label="Productos"
+          value={stats.productos.total}
+          icon="📦"
+          onClick={() => onNavigate?.('productos')}
+        />
         <StatCard
           label="Stock bajo"
           value={stats.productos.stock_bajo}
           icon="⚠️"
           accent={stats.productos.stock_bajo > 0 ? '#E03C31' : '#065f46'}
+          onClick={() => setModalType('stock_bajo')}
         />
         <StatCard label="Sin stock" value={stats.productos.sin_stock} icon="🚫"
           accent={stats.productos.sin_stock > 0 ? '#b91c1c' : '#065f46'}
+          onClick={() => setModalType('sin_stock')}
         />
-        <StatCard label="Instituciones" value={stats.instituciones.total} icon="🏫" />
-        <StatCard label="Proveedores" value={stats.proveedores.total} icon="🏢" />
+        <StatCard
+          label="Instituciones"
+          value={stats.instituciones.total}
+          icon="🏫"
+          onClick={() => onNavigate?.('instituciones')}
+        />
+        <StatCard
+          label="Proveedores"
+          value={stats.proveedores.total}
+          icon="🏢"
+          onClick={() => onNavigate?.('proveedores')}
+        />
       </div>
 
       {/* Movimientos del mes */}
@@ -157,14 +176,77 @@ export default function Inicio() {
           </table>
         </>
       )}
+
+      {modalType && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1200,
+            padding: 16
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setModalType(null)
+          }}
+        >
+          <div style={{ background: '#f9fafb', padding: 24, borderRadius: 10, width: 'min(760px, 100%)', maxHeight: '80vh', overflowY: 'auto' }}>
+            <h3 style={{ marginTop: 0 }}>
+              {modalType === 'stock_bajo' ? 'Productos con stock bajo' : 'Productos sin stock'}
+            </h3>
+
+            <table>
+              <thead>
+                <tr>
+                  <th>Producto</th>
+                  <th>Categoría</th>
+                  <th>Stock actual</th>
+                  <th>Mínimo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(modalType === 'stock_bajo' ? stats.stock_bajo : sinStockList).length === 0 ? (
+                  <tr>
+                    <td colSpan={4} style={{ textAlign: 'center', color: 'var(--muted)' }}>No hay productos para mostrar</td>
+                  </tr>
+                ) : (
+                  (modalType === 'stock_bajo' ? stats.stock_bajo : sinStockList).map((p) => (
+                    <tr key={p.id}>
+                      <td style={{ fontWeight: 600 }}>{p.nombre}</td>
+                      <td>{p.categoria || '—'}</td>
+                      <td style={{ color: p.stock_actual === 0 ? '#b91c1c' : '#92400e', fontWeight: 700 }}>{p.stock_actual}</td>
+                      <td>{p.stock_minimo}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+              <button type="button" className="secondary" onClick={() => setModalType(null)}>
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
     </div>
   )
 }
 
-function StatCard({ label, value, icon, accent }) {
+function StatCard({ label, value, icon, accent, onClick }) {
+  const clickable = typeof onClick === 'function'
+
   return (
-    <div style={{
+    <button
+      type="button"
+      className={`stat-card ${clickable ? 'stat-card-clickable' : ''}`}
+      onClick={onClick}
+      style={{
       background: 'white',
       border: '1px solid var(--border)',
       borderRadius: '8px',
@@ -172,6 +254,10 @@ function StatCard({ label, value, icon, accent }) {
       display: 'flex',
       flexDirection: 'column',
       gap: '4px',
+      textAlign: 'left',
+      width: '100%',
+      margin: 0,
+      cursor: clickable ? 'pointer' : 'default'
     }}>
       <span style={{ fontSize: '1.5rem' }}>{icon}</span>
       <span style={{
@@ -183,7 +269,7 @@ function StatCard({ label, value, icon, accent }) {
       <span style={{ fontSize: '0.8rem', color: 'var(--muted)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.3px' }}>
         {label}
       </span>
-    </div>
+    </button>
   )
 }
 

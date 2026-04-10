@@ -56,6 +56,20 @@ router.get("/stats", authorizePermissions(PERMISSIONS.DASHBOARD_VIEW), async (re
       LIMIT 10
     `);
 
+    const sinStockList = await all(`
+      SELECT
+        p.id_producto as id,
+        p.nombre,
+        p.stock_actual,
+        p.stock_minimo,
+        c.nombre as categoria
+      FROM producto p
+      LEFT JOIN categoria c ON p.id_categoria = c.id_categoria
+      WHERE p.stock_actual = 0
+      ORDER BY p.nombre ASC
+      LIMIT 50
+    `);
+
     // Últimos 8 movimientos
     const ultimosMovimientos = await all(`
       SELECT 
@@ -95,6 +109,7 @@ router.get("/stats", authorizePermissions(PERMISSIONS.DASHBOARD_VIEW), async (re
         devoluciones: parseInt(movimientosStats.total_devoluciones) || 0,
       },
       stock_bajo: stockBajo,
+      sin_stock_list: sinStockList,
       ultimos_movimientos: ultimosMovimientos,
     });
   } catch (err) {

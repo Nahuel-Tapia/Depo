@@ -140,6 +140,8 @@ export default function Usuarios() {
   const canChangeRole = hasPermission('users.role.update')
   const canToggleStatus = hasPermission('users.status.update')
   const canDeleteUser = hasPermission('users.delete') && user?.role === 'admin'
+  const institucionSeleccionada = instituciones.find(inst => String(inst.id) === String(form.institucion))
+  const cueSeleccionado = institucionSeleccionada?.cue || ''
 
   return (
     <div>
@@ -246,6 +248,18 @@ export default function Usuarios() {
                   ))}
                 </select>
               </div>
+              {form.role === 'directivo' && (
+                <div>
+                  <label>CUE</label>
+                  <input
+                    type="text"
+                    value={cueSeleccionado}
+                    readOnly
+                    disabled
+                    placeholder="Se completa al elegir institución"
+                  />
+                </div>
+              )}
               <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
                 <button type="button" className="secondary" onClick={() => setFormOpen(false)}>Cancelar</button>
                 <button type="submit" style={{ width: 'auto', margin: 0, padding: '10px 18px' }}>Guardar usuario</button>

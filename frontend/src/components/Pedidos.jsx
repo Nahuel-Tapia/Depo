@@ -169,7 +169,7 @@ export default function Pedidos() {
                 <td>{pedido.cantidad}</td>
                 {canManage && <td>{stockActual}</td>}
                 <td>{pedido.institucion || '-'}</td>
-                <td><span className="badge">{pedido.estado}</span></td>
+                <td><span className={`badge badge-estado-${pedido.estado}`}>{pedido.estado}</span></td>
                 <td>{pedido.usuario_nombre || '-'}</td>
                 <td>{pedido.notas || '-'}</td>
                 <td>{new Date(pedido.created_at).toLocaleDateString()}</td>

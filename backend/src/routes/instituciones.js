@@ -92,8 +92,15 @@ router.get("/public/cue/:cue", async (req, res) => {
 // Endpoint público para listar instituciones (para dropdowns)
 router.get("/public/list", async (req, res) => {
   try {
+    const nivelColumn = await getInstitucionNivelColumn();
+    if (!nivelColumn) {
+      return res.status(500).json({ error: "Configuración inválida: falta columna de nivel en institucion" });
+    }
+
     const instituciones = await all(`
-      SELECT id_institucion as id, nombre, nivel_educativo FROM institucion ORDER BY nombre ASC
+      SELECT id_institucion as id, cue, nombre, ${nivelColumn} as nivel_educativo
+      FROM institucion
+      ORDER BY nombre ASC
     `);
     return res.json({ instituciones });
   } catch (err) {

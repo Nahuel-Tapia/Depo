@@ -1,10 +1,24 @@
 const express = require("express");
-const { all, get, run } = require("../db.pg");
+const { all, get, run, pool } = require("../db.pg");
 const { authenticate, authorizePermissions } = require("../middleware/auth");
 const { PERMISSIONS } = require("../permissions");
 
 const router = express.Router();
 router.use(authenticate);
+
+async function getEstadoEntregadoDb() {
+  const rows = await all(`
+    SELECT e.enumlabel
+    FROM pg_enum e
+    JOIN pg_type t ON t.oid = e.enumtypid
+    WHERE t.typname = 'estado_tramite'
+  `);
+
+  const estados = rows.map(r => r.enumlabel);
+  if (estados.includes("entregado")) return "entregado";
+  if (estados.includes("finalizado")) return "finalizado";
+  return "entregado";
+}
 
 // Listar pedidos
 router.get("/", authorizePermissions(PERMISSIONS.PEDIDOS_VIEW), async (req, res) => {
@@ -12,11 +26,12 @@ router.get("/", authorizePermissions(PERMISSIONS.PEDIDOS_VIEW), async (req, res)
     let query = `
       SELECT
         p.id_pedido as id,
-        p.estado,
+        CASE WHEN p.estado::text = 'finalizado' THEN 'entregado' ELSE p.estado::text END as estado,
         p.observaciones_generales as notas,
         p.fecha_creacion as created_at,
         p.id_institucion,
         pr.nombre as producto_nombre,
+        pr.stock_actual as stock_actual,
         dp.cantidad_solicitada as cantidad,
         u.nombre as usuario_nombre,
         i.nombre as institucion
@@ -52,7 +67,7 @@ router.get("/institucion/:institucion", authorizePermissions(PERMISSIONS.PEDIDOS
       `
       SELECT
         p.id_pedido as id,
-        p.estado,
+        CASE WHEN p.estado::text = 'finalizado' THEN 'entregado' ELSE p.estado::text END as estado,
         p.observaciones_generales as notas,
         p.fecha_creacion as created_at,
         pr.nombre as producto_nombre,
@@ -84,7 +99,7 @@ router.get("/:id", authorizePermissions(PERMISSIONS.PEDIDOS_VIEW), async (req, r
       `
       SELECT
         p.id_pedido as id,
-        p.estado,
+        CASE WHEN p.estado::text = 'finalizado' THEN 'entregado' ELSE p.estado::text END as estado,
         p.observaciones_generales as notas,
         p.fecha_creacion as created_at,
         p.id_institucion,
@@ -173,7 +188,7 @@ router.patch("/:id/estado", authorizePermissions(PERMISSIONS.PEDIDOS_MANAGE), as
     }
 
     const pedido = await get(
-      `SELECT id_pedido as id, estado, id_institucion FROM pedido WHERE id_pedido = ?`,
+      `SELECT id_pedido as id, estado::text as estado_db, id_institucion FROM pedido WHERE id_pedido = ?`,
       [id]
     );
 
@@ -181,13 +196,84 @@ router.patch("/:id/estado", authorizePermissions(PERMISSIONS.PEDIDOS_MANAGE), as
       return res.status(404).json({ error: "Pedido no encontrado" });
     }
 
-    if (pedido.estado === estado) {
+    const estadoEntregadoDb = await getEstadoEntregadoDb();
+    const estadoObjetivoDb = estado === "entregado" ? estadoEntregadoDb : estado;
+    const pedidoYaEntregado = pedido.estado_db === "entregado" || pedido.estado_db === "finalizado";
+
+    if (pedido.estado_db === estadoObjetivoDb) {
       return res.json({ ok: true, unchanged: true });
+    }
+
+    // Si ya fue entregado, evitamos cambiarlo para no desincronizar stock.
+    if (pedidoYaEntregado && estadoObjetivoDb !== estadoEntregadoDb) {
+      return res.status(400).json({ error: "El pedido ya fue entregado y su estado no puede revertirse" });
+    }
+
+    if (estadoObjetivoDb === estadoEntregadoDb) {
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+
+        const detalleRes = await client.query(
+          `SELECT id_producto, cantidad_solicitada as cantidad
+           FROM detalle_pedido
+           WHERE id_pedido = $1`,
+          [id]
+        );
+
+        if (!detalleRes.rows.length) {
+          await client.query("ROLLBACK");
+          return res.status(400).json({ error: "El pedido no tiene productos para entregar" });
+        }
+
+        for (const item of detalleRes.rows) {
+          const cantidad = Number(item.cantidad || 0);
+
+          const updateStock = await client.query(
+            `UPDATE producto
+             SET stock_actual = stock_actual - $1
+             WHERE id_producto = $2 AND stock_actual >= $1
+             RETURNING id_producto, stock_actual`,
+            [cantidad, item.id_producto]
+          );
+
+          if (!updateStock.rowCount) {
+            const stockRow = await client.query(
+              `SELECT stock_actual FROM producto WHERE id_producto = $1`,
+              [item.id_producto]
+            );
+            const disponible = Number(stockRow.rows[0]?.stock_actual || 0);
+            await client.query("ROLLBACK");
+            return res.status(400).json({
+              error: `Stock insuficiente para entregar pedido. Producto ${item.id_producto}: solicitado ${cantidad}, disponible ${disponible}`
+            });
+          }
+
+          await client.query(
+            `INSERT INTO movimiento_stock (id_producto, cantidad, tipo, id_institucion, id_usuario, motivo)
+             VALUES ($1, $2, 'egreso', $3, $4, $5)`,
+            [item.id_producto, cantidad, pedido.id_institucion, req.user.sub, `Entrega de pedido #${id}`]
+          );
+        }
+
+        await client.query(
+          "UPDATE pedido SET estado = $1 WHERE id_pedido = $2",
+          [estadoObjetivoDb, id]
+        );
+
+        await client.query("COMMIT");
+        return res.json({ ok: true });
+      } catch (txErr) {
+        await client.query("ROLLBACK");
+        throw txErr;
+      } finally {
+        client.release();
+      }
     }
 
     await run(
       "UPDATE pedido SET estado = ? WHERE id_pedido = ?",
-      [estado, id]
+      [estadoObjetivoDb, id]
     );
 
     return res.json({ ok: true });
