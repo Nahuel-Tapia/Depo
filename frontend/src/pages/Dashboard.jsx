@@ -29,7 +29,18 @@ export default function Dashboard() {
     : user?.role === 'operador' ? 'O'
     : 'C'
 
-  const visibleTabs = TABS.filter(t => !t.permission || hasPermission(t.permission))
+  const visibleTabs = TABS.filter(tab => {
+    if (user?.role === 'directivo') {
+      return tab.key === 'inicio' || tab.key === 'pedidos'
+    }
+    return !tab.permission || hasPermission(tab.permission)
+  })
+
+  useEffect(() => {
+    if (!visibleTabs.some(tab => tab.key === activeTab)) {
+      setActiveTab(visibleTabs[0]?.key || 'inicio')
+    }
+  }, [activeTab, visibleTabs])
 
   const handleLogout = () => {
     logout()
