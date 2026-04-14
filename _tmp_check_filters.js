@@ -1,2 +1,0 @@
-const {all,closeDb}=require("./backend/src/db.pg");
-(async()=>{try{const rows=await all("SELECT i.id_institucion AS id,i.nombre,i.cue,i.nivel_educativo,i.nivel,i.departamento as i_dep,e.id_edificio,e.cui,e.departamento as e_dep,d.departamento as d_dep,d.latitud,d.longitud FROM institucion i LEFT JOIN edificio e ON i.id_edificio=e.id_edificio LEFT JOIN direccion d ON e.id_direccion=d.id_direccion LIMIT 5");console.log(rows);}catch(e){console.error(e.message)}finally{await closeDb();}})();
