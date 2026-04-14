@@ -709,3 +709,185 @@ tbody tr:hover td {
     width: 100%;
   }
 }
+
+/* ===== SUPERVISOR DASHBOARD ===== */
+.sv-jurisdiction-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-left: 4px solid var(--orange);
+  border-radius: 8px;
+  padding: 12px 20px;
+  margin-bottom: 20px;
+  margin-top: 8px;
+  font-size: 0.92rem;
+}
+
+.sv-jurisdiction-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--orange);
+  flex-shrink: 0;
+}
+
+.sv-jurisdiction-count {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+.sv-empty-state {
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--muted);
+  background: #fafafa;
+  border-radius: 8px;
+  border: 1px dashed var(--border);
+  font-size: 0.95rem;
+}
+
+.sv-rechazo-box {
+  min-width: 200px;
+}
+
+.sv-rechazo-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1.5px solid var(--red);
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-family: 'Ubuntu', sans-serif;
+  resize: vertical;
+  min-height: 48px;
+  transition: border-color 0.2s;
+}
+
+.sv-rechazo-input:focus {
+  outline: none;
+  border-color: var(--orange);
+}
+
+.sv-btn-rechazar {
+  background: var(--red) !important;
+}
+
+.sv-btn-reparar {
+  background: #2563eb !important;
+}
+
+.sv-btn-confirmar-reparar {
+  margin: 0 !important;
+  min-height: auto !important;
+  padding: 6px 12px !important;
+  font-size: 0.75rem !important;
+  background: #2563eb !important;
+}
+
+.sv-btn-confirmar-rechazo {
+  margin: 0 !important;
+  min-height: auto !important;
+  padding: 6px 12px !important;
+  font-size: 0.75rem !important;
+  background: var(--red) !important;
+}
+
+.badge-estado-reparacion,
+.badge-estado-en_reparacion {
+  background: #eff6ff;
+  color: #1e40af;
+}
+
+/* Instituciones grid */
+.sv-instituciones-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.sv-inst-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  background: #fafafa;
+  transition: border-color 0.2s;
+}
+
+.sv-inst-card:hover {
+  border-color: var(--orange);
+}
+
+.sv-inst-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.sv-inst-cue {
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.sv-inst-nombre {
+  font-weight: 600;
+  font-size: 0.95rem;
+  margin-bottom: 12px;
+  line-height: 1.35;
+}
+
+.sv-badge-tipo-escuela {
+  background: #eff6ff;
+  color: #1e40af;
+}
+
+.sv-badge-tipo-comedor {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.sv-btn-historial {
+  width: 100%;
+  font-size: 0.8rem !important;
+  padding: 8px 14px !important;
+  margin: 0 !important;
+}
+
+/* Historial panel inside card */
+.sv-historial-panel {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.sv-historial-table {
+  margin-top: 4px;
+  margin-bottom: 0;
+  font-size: 0.82rem;
+}
+
+.sv-historial-table th,
+.sv-historial-table td {
+  padding: 6px 10px;
+  font-size: 0.82rem;
+}
+
+@media (max-width: 768px) {
+  .sv-instituciones-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sv-jurisdiction-banner {
+    flex-wrap: wrap;
+    font-size: 0.85rem;
+  }
+
+  .sv-rechazo-box {
+    min-width: 140px;
+  }
+}

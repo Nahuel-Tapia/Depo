@@ -3,7 +3,234 @@ import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../api'
 import PrintButton from './PrintButton'
 
-export default function Pedidos() {
+// ============================================================
+// MOCK DATA para vista Supervisor — Reemplazar con API real
+// ============================================================
+const MOCK_JURISDICCION = 'Rawson'
+
+const MOCK_INSTITUCIONES = [
+  { id: 1, nombre: 'Escuela N° 12 "Domingo F. Sarmiento"', cue: '7000012', jurisdiccion: 'Rawson' },
+  { id: 3, nombre: 'Escuela N° 34 "San Martín"', cue: '7000034', jurisdiccion: 'Rawson' },
+]
+
+const MOCK_PEDIDOS_PENDIENTES = [
+  { id: 101, institucion_id: 1, institucion: 'Escuela N° 12 "Domingo F. Sarmiento"', fecha: '2026-04-12', producto: 'Lavandina (L)', cantidad: 5, notas: 'Para comedor escolar', estado: 'pendiente', solicitante: 'María López' },
+  { id: 103, institucion_id: 3, institucion: 'Escuela N° 34 "San Martín"', fecha: '2026-04-10', producto: 'Lampazo (U)', cantidad: 4, notas: 'Urgente', estado: 'pendiente', solicitante: 'Ana García' },
+  { id: 104, institucion_id: 1, institucion: 'Escuela N° 12 "Domingo F. Sarmiento"', fecha: '2026-04-10', producto: 'Tizas (Caja)', cantidad: 1, notas: '', estado: 'pendiente', solicitante: 'María López' },
+]
+
+const MOCK_HISTORIAL = {
+  1: [
+    { fecha: '2026-03-15', producto: 'Arroz (kg)', cantidad: 30, tipo: 'Entrega' },
+    { fecha: '2026-03-01', producto: 'Aceite (litro)', cantidad: 10, tipo: 'Entrega' },
+    { fecha: '2026-02-20', producto: 'Fideos (kg)', cantidad: 25, tipo: 'Entrega' },
+    { fecha: '2026-02-10', producto: 'Harina (kg)', cantidad: 15, tipo: 'Entrega' },
+  ],
+  3: [
+    { fecha: '2026-04-01', producto: 'Aceite (litro)', cantidad: 12, tipo: 'Entrega' },
+    { fecha: '2026-03-10', producto: 'Harina (kg)', cantidad: 20, tipo: 'Entrega' },
+  ],
+}
+
+// ============================================================
+// Vista Supervisor: Bandeja de aprobación de pedidos
+// ============================================================
+function SupervisorPedidos() {
+  const { token, user } = useAuth()
+  const printRef = useRef(null)
+
+  const [instituciones, setInstituciones] = useState([])
+  const [pedidosPendientes, setPedidosPendientes] = useState([])
+  const [procesados, setProcesados] = useState([])
+  const [msg, setMsg] = useState({ text: '', type: '' })
+  const [rechazandoId, setRechazandoId] = useState(null)
+  const [motivoRechazo, setMotivoRechazo] = useState('')
+  const [historialVisible, setHistorialVisible] = useState(null)
+  const [historialData, setHistorialData] = useState([])
+  const [busqueda, setBusqueda] = useState('')
+
+  useEffect(() => {
+    // TODO API: Reemplazar mock data con llamadas al backend
+    // const jurisdiccion = user?.jurisdiccion || ''
+    // const res = await apiFetch(`/api/supervisor/pedidos-pendientes?jurisdiccion=${encodeURIComponent(jurisdiccion)}`, { token })
+    const jurisdiccion = user?.jurisdiccion || MOCK_JURISDICCION
+    const instFiltradas = MOCK_INSTITUCIONES.filter(i => i.jurisdiccion === jurisdiccion)
+    setInstituciones(instFiltradas)
+    const idsJurisdiccion = new Set(instFiltradas.map(i => i.id))
+    setPedidosPendientes(MOCK_PEDIDOS_PENDIENTES.filter(p => idsJurisdiccion.has(p.institucion_id)))
+  }, [])
+
+  const handleAprobar = async (pedidoId) => {
+    // TODO API: await apiFetch(`/api/pedidos/${pedidoId}/estado`, { token, method: 'PATCH', body: JSON.stringify({ estado: 'aprobado' }) })
+    const pedido = pedidosPendientes.find(p => p.id === pedidoId)
+    setPedidosPendientes(prev => prev.filter(p => p.id !== pedidoId))
+    setProcesados(prev => [...prev, { ...pedido, estado: 'aprobado', fechaProcesado: new Date().toISOString() }])
+    setMsg({ text: `Pedido #${pedidoId} aprobado correctamente`, type: 'success' })
+    setTimeout(() => setMsg({ text: '', type: '' }), 3000)
+  }
+
+  const iniciarRechazo = (id) => { setRechazandoId(id); setMotivoRechazo('') }
+  const cancelarRechazo = () => { setRechazandoId(null); setMotivoRechazo('') }
+
+  const confirmarRechazo = async (pedidoId) => {
+    if (!motivoRechazo.trim()) {
+      setMsg({ text: 'Debe ingresar un motivo de rechazo', type: 'error' })
+      setTimeout(() => setMsg({ text: '', type: '' }), 3000)
+      return
+    }
+    // TODO API: await apiFetch(`/api/pedidos/${pedidoId}/estado`, { token, method: 'PATCH', body: JSON.stringify({ estado: 'rechazado', motivo: motivoRechazo.trim() }) })
+    const pedido = pedidosPendientes.find(p => p.id === pedidoId)
+    setPedidosPendientes(prev => prev.filter(p => p.id !== pedidoId))
+    setProcesados(prev => [...prev, { ...pedido, estado: 'rechazado', motivo: motivoRechazo.trim(), fechaProcesado: new Date().toISOString() }])
+    setMsg({ text: `Pedido #${pedidoId} rechazado`, type: 'success' })
+    setRechazandoId(null); setMotivoRechazo('')
+    setTimeout(() => setMsg({ text: '', type: '' }), 3000)
+  }
+
+  const verHistorial = (institucionId) => {
+    if (historialVisible === institucionId) { setHistorialVisible(null); setHistorialData([]); return }
+    // TODO API: const res = await apiFetch(`/api/instituciones/${institucionId}/historial`, { token })
+    setHistorialData(MOCK_HISTORIAL[institucionId] || [])
+    setHistorialVisible(institucionId)
+  }
+
+  const pedidosFiltrados = busqueda.trim()
+    ? pedidosPendientes.filter(p => p.institucion.toLowerCase().includes(busqueda.toLowerCase()) || p.producto.toLowerCase().includes(busqueda.toLowerCase()))
+    : pedidosPendientes
+
+  return (
+    <div className="supervisor-dashboard">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+        <h2>Pedidos — Supervisor</h2>
+        <PrintButton targetRef={printRef} title="Reporte Pedidos Supervisor" />
+      </div>
+
+      <div className="sv-jurisdiction-banner">
+        <span className="sv-jurisdiction-dot"></span>
+        <span>Jurisdicción: <strong>{user?.jurisdiccion || MOCK_JURISDICCION}</strong></span>
+        <span className="sv-jurisdiction-count">{instituciones.length} escuelas</span>
+      </div>
+
+      {msg.text && <div className={`msg show ${msg.type === 'success' ? 'msg-success' : 'msg-error'}`}>{msg.text}</div>}
+
+      <div ref={printRef}>
+        <h3>Pedidos Pendientes de Aprobación</h3>
+
+        <div style={{ marginBottom: 16, maxWidth: 400 }}>
+          <input type="text" placeholder="Buscar por institución o producto..." value={busqueda} onChange={e => setBusqueda(e.target.value)} style={{ marginBottom: 0 }} />
+        </div>
+
+        {pedidosFiltrados.length === 0 ? (
+          <div className="sv-empty-state">No hay pedidos pendientes en tu jurisdicción</div>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>Institución</th>
+                <th>Fecha</th>
+                <th>Producto</th>
+                <th>Cantidad</th>
+                <th>Solicitante</th>
+                <th>Notas</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pedidosFiltrados.map(pedido => (
+                <tr key={pedido.id}>
+                  <td><strong>{pedido.institucion}</strong></td>
+                  <td>{new Date(pedido.fecha).toLocaleDateString('es-AR')}</td>
+                  <td>{pedido.producto}</td>
+                  <td style={{ textAlign: 'center', fontWeight: 600 }}>{pedido.cantidad}</td>
+                  <td>{pedido.solicitante}</td>
+                  <td>{pedido.notas || '-'}</td>
+                  <td>
+                    {rechazandoId === pedido.id ? (
+                      <div className="sv-rechazo-box">
+                        <textarea className="sv-rechazo-input" placeholder="Motivo del rechazo..." value={motivoRechazo} onChange={e => setMotivoRechazo(e.target.value)} rows={2} />
+                        <div className="inline-actions" style={{ marginTop: 6 }}>
+                          <button onClick={() => confirmarRechazo(pedido.id)} className="sv-btn-confirmar-rechazo">Confirmar</button>
+                          <button onClick={cancelarRechazo} className="secondary" style={{ margin: 0, minHeight: 'auto', padding: '6px 12px', fontSize: '0.75rem' }}>Cancelar</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="inline-actions">
+                        <button onClick={() => handleAprobar(pedido.id)}>Aprobar</button>
+                        <button onClick={() => iniciarRechazo(pedido.id)} className="sv-btn-rechazar">Rechazar</button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+
+        {procesados.length > 0 && (
+          <>
+            <h3>Procesados en esta sesión</h3>
+            <table>
+              <thead><tr><th>Institución</th><th>Producto</th><th>Cantidad</th><th>Estado</th><th>Motivo</th></tr></thead>
+              <tbody>
+                {procesados.map(p => (
+                  <tr key={p.id}>
+                    <td>{p.institucion}</td>
+                    <td>{p.producto}</td>
+                    <td style={{ textAlign: 'center' }}>{p.cantidad}</td>
+                    <td><span className={`badge badge-estado-${p.estado}`}>{p.estado}</span></td>
+                    <td>{p.motivo || '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        )}
+
+        <h3>Escuelas de la Jurisdicción</h3>
+        <div className="sv-instituciones-grid">
+          {instituciones.map(inst => (
+            <div key={inst.id} className="sv-inst-card">
+              <div className="sv-inst-header">
+                <span className="badge sv-badge-tipo-escuela">Escuela</span>
+                <span className="sv-inst-cue">CUE: {inst.cue}</span>
+              </div>
+              <div className="sv-inst-nombre">{inst.nombre}</div>
+              <button className="secondary sv-btn-historial" onClick={() => verHistorial(inst.id)}>
+                {historialVisible === inst.id ? 'Ocultar historial' : 'Ver historial de retiros'}
+              </button>
+              {historialVisible === inst.id && (
+                <div className="sv-historial-panel">
+                  {historialData.length === 0 ? (
+                    <p style={{ color: 'var(--muted)', fontSize: '0.85rem', margin: '8px 0' }}>Sin registros</p>
+                  ) : (
+                    <table className="sv-historial-table">
+                      <thead><tr><th>Fecha</th><th>Producto</th><th>Cantidad</th><th>Tipo</th></tr></thead>
+                      <tbody>
+                        {historialData.map((h, idx) => (
+                          <tr key={idx}>
+                            <td>{new Date(h.fecha).toLocaleDateString('es-AR')}</td>
+                            <td>{h.producto}</td>
+                            <td style={{ textAlign: 'center' }}>{h.cantidad}</td>
+                            <td><span className={`badge badge-${h.tipo.toLowerCase()}`}>{h.tipo}</span></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ============================================================
+// Vista Depósito: Gestión de pedidos (admin, operador, directivo)
+// ============================================================
+function DepositoPedidos() {
   const { token, user, hasPermission } = useAuth()
   const [pedidos, setPedidos] = useState([])
   const [productos, setProductos] = useState([])
@@ -197,4 +424,17 @@ export default function Pedidos() {
       </div>
     </div>
   )
+}
+
+// ============================================================
+// Export: muestra la vista correcta según el rol
+// ============================================================
+export default function Pedidos() {
+  const { user } = useAuth()
+
+  if (user?.role === 'supervisor') {
+    return <SupervisorPedidos />
+  }
+
+  return <DepositoPedidos />
 }

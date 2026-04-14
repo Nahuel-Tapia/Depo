@@ -5,6 +5,7 @@ import PrintButton from './PrintButton'
 
 const ROLE_LABELS = {
   admin: 'Administrador',
+  supervisor: 'Supervisor',
   directivo: 'Directivo',
   operador: 'Operador',
   consulta: 'Consulta',
@@ -27,6 +28,11 @@ export default function Inicio({ onNavigate }) {
   const printRef = useRef(null)
 
   useEffect(() => {
+    // Supervisor no necesita stats del depósito
+    if (user?.role === 'supervisor') {
+      setLoading(false)
+      return
+    }
     const fetchStats = async () => {
       try {
         const res = await apiFetch('/api/dashboard/stats', { token })
@@ -43,6 +49,23 @@ export default function Inicio({ onNavigate }) {
   }, [token])
 
   if (loading) return <p style={{ color: 'var(--muted)', padding: '24px 0' }}>Cargando resumen...</p>
+
+  // Supervisor: mostrar su vista propia sin necesidad de stats
+  if (user?.role === 'supervisor') {
+    return (
+      <div>
+        <div className="stock-alert-box">
+          <div className="stock-alert-title">
+            <span className="stock-alert-triangle"></span>
+            Bienvenido, {user?.nombre || 'Usuario'}
+          </div>
+          <p className="stock-alert-role">Supervisor</p>
+        </div>
+        <SupervisorInicio onNavigate={onNavigate} token={token} user={user} />
+      </div>
+    )
+  }
+
   if (error) return <p style={{ color: '#b91c1c', padding: '24px 0' }}>Error: {error}</p>
   if (!stats) return null
 
@@ -75,6 +98,8 @@ export default function Inicio({ onNavigate }) {
             Ir a Pedidos
           </button>
         </div>
+      ) : user?.role === 'supervisor' ? (
+        <SupervisorInicio onNavigate={onNavigate} token={token} user={user} />
       ) : (
       <>
       {/* Cards de resumen */}
@@ -296,6 +321,107 @@ function MiniCard({ label, value, color }) {
     }}>
       <div style={{ fontSize: '1.4rem', fontWeight: 700, color }}>{value}</div>
       <div style={{ fontSize: '0.75rem', color: 'var(--muted)', fontWeight: 500, marginTop: '2px' }}>{label}</div>
+    </div>
+  )
+}
+
+// ── Vista de Inicio para Supervisor ──
+const MOCK_SUPERVISOR_INSTITUCIONES = [
+  { id: 1, nombre: 'Escuela N° 12 "Domingo F. Sarmiento"', cue: '7000012', jurisdiccion: 'Rawson', pedidos_pendientes: 2, tickets_patrimonio: 3 },
+  { id: 3, nombre: 'Escuela N° 34 "San Martín"', cue: '7000034', jurisdiccion: 'Rawson', pedidos_pendientes: 1, tickets_patrimonio: 2 },
+]
+
+function SupervisorInicio({ onNavigate, token, user }) {
+  const [instituciones, setInstituciones] = useState(MOCK_SUPERVISOR_INSTITUCIONES)
+
+  // TODO API: Reemplazar mock con llamada real
+  // useEffect(() => {
+  //   const load = async () => {
+  //     try {
+  //       const res = await apiFetch(`/api/supervisor/instituciones?jurisdiccion=${encodeURIComponent(user?.jurisdiccion || '')}`, { token })
+  //       if (res.ok) {
+  //         const data = await res.json()
+  //         setInstituciones(data.instituciones || [])
+  //       }
+  //     } catch {}
+  //   }
+  //   load()
+  // }, [token])
+
+  const totalPendientes = instituciones.reduce((sum, i) => sum + (i.pedidos_pendientes || 0), 0)
+  const totalTickets = instituciones.reduce((sum, i) => sum + (i.tickets_patrimonio || 0), 0)
+
+  return (
+    <div>
+      <div className="sv-jurisdiction-banner">
+        <span className="sv-jurisdiction-dot"></span>
+        <span>Jurisdicción: <strong>{user?.jurisdiccion || 'Rawson'}</strong></span>
+        <span className="sv-jurisdiction-count">{instituciones.length} escuelas asignadas</span>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+        <StatCard
+          label="Escuelas"
+          value={instituciones.length}
+          icon="🏫"
+          onClick={() => onNavigate?.('pedidos')}
+        />
+        <StatCard
+          label="Pedidos pendientes"
+          value={totalPendientes}
+          icon="📋"
+          accent={totalPendientes > 0 ? '#E03C31' : '#065f46'}
+          onClick={() => onNavigate?.('pedidos')}
+        />
+        <StatCard
+          label="Tickets patrimonio"
+          value={totalTickets}
+          icon="🪑"
+          accent={totalTickets > 0 ? '#2563eb' : '#065f46'}
+          onClick={() => onNavigate?.('supervisor')}
+        />
+      </div>
+
+      <h3 style={{ marginBottom: '12px' }}>Mis Escuelas</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Escuela</th>
+            <th>CUE</th>
+            <th>Pedidos</th>
+            <th>Patrimonio</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {instituciones.map(inst => (
+            <tr key={inst.id}>
+              <td style={{ fontWeight: 600 }}>{inst.nombre}</td>
+              <td>{inst.cue}</td>
+              <td style={{ textAlign: 'center' }}>
+                {inst.pedidos_pendientes > 0 ? (
+                  <span className="badge badge-estado-pendiente">{inst.pedidos_pendientes}</span>
+                ) : (
+                  <span className="badge badge-estado-aprobado">0</span>
+                )}
+              </td>
+              <td style={{ textAlign: 'center' }}>
+                {inst.tickets_patrimonio > 0 ? (
+                  <span className="badge" style={{ background: '#eff6ff', color: '#1e40af' }}>{inst.tickets_patrimonio}</span>
+                ) : (
+                  <span className="badge badge-estado-aprobado">0</span>
+                )}
+              </td>
+              <td>
+                <div className="inline-actions">
+                  <button onClick={() => onNavigate?.('pedidos')}>Pedidos</button>
+                  <button onClick={() => onNavigate?.('supervisor')} style={{ background: '#2563eb' }}>Patrimonio</button>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }

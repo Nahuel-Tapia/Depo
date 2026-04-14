@@ -235,6 +235,7 @@ export default function Usuarios() {
                 <select value={form.role} onChange={e => setForm({ ...form, role: e.target.value })} required>
                   <option value="consulta">Consulta (Solo lectura)</option>
                   <option value="operador">Operador</option>
+                  <option value="supervisor">Supervisor</option>
                   <option value="directivo">Directivo</option>
                   <option value="admin">Administrador</option>
                 </select>
@@ -293,6 +294,7 @@ export default function Usuarios() {
             <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
               {[
                 { value: 'admin', label: 'Administrador' },
+                { value: 'supervisor', label: 'Supervisor' },
                 { value: 'directivo', label: 'Directivo' },
                 { value: 'operador', label: 'Operador' },
                 { value: 'consulta', label: 'Consulta' }

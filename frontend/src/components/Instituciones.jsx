@@ -15,7 +15,7 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 })
 
-export default function Instituciones() {
+export default function Instituciones({ supervisorMode = false }) {
   const [instituciones, setInstituciones] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -29,7 +29,24 @@ export default function Instituciones() {
         const token = localStorage.getItem('token')
         const response = await apiFetch('/api/instituciones', { token })
         const data = await response.json()
-        setInstituciones(data.instituciones || [])
+        let list = data.instituciones || []
+
+        // En modo supervisor, filtrar solo las escuelas de la jurisdicción
+        if (supervisorMode) {
+          const user = JSON.parse(localStorage.getItem('user') || '{}')
+          const jurisdiccion = (user.jurisdiccion || '').toLowerCase()
+          if (jurisdiccion) {
+            list = list.filter(i =>
+              (i.jurisdiccion || i.departamento || '').toLowerCase() === jurisdiccion
+            )
+          }
+          // Excluir comedores — solo escuelas
+          list = list.filter(i =>
+            !(i.tipo || i.categoria || '').toLowerCase().includes('comedor')
+          )
+        }
+
+        setInstituciones(list)
       } catch (err) {
         setError('Error al cargar instituciones')
       } finally {
@@ -37,7 +54,7 @@ export default function Instituciones() {
       }
     }
     fetchInstituciones()
-  }, [])
+  }, [supervisorMode])
 
   // Filtrar instituciones
   const filteredInstituciones = instituciones.filter(inst =>
@@ -71,7 +88,7 @@ export default function Instituciones() {
 
   return (
     <div>
-      <h2>Mapa de Instituciones - San Juan</h2>
+      <h2>{supervisorMode ? 'Mis Escuelas' : 'Mapa de Instituciones - San Juan'}</h2>
       
       {/* Filtros */}
       <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
