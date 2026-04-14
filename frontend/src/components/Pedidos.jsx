@@ -236,6 +236,7 @@ function DepositoPedidos() {
   const [productos, setProductos] = useState([])
   const [msg, setMsg] = useState({ text: '', type: '' })
   const [form, setForm] = useState({ producto_id: '', cantidad: '', notas: '' })
+  const [createModalOpen, setCreateModalOpen] = useState(false)
 
   const loadProductos = async () => {
     try {
@@ -278,13 +279,14 @@ function DepositoPedidos() {
       body: JSON.stringify(payload)
     })
 
-    const data = await res.json().catch(() => ({}))
+    const data = await res.json().catch(() => ({ }))
     if (!res.ok) {
       setMsg({ text: data.error || 'No se pudo crear el pedido', type: 'error' })
       return
     }
 
     setForm({ producto_id: '', cantidad: '', notas: '' })
+    setCreateModalOpen(false)
     setMsg({ text: 'Pedido creado correctamente', type: 'success' })
     loadPedidos()
   }
@@ -332,35 +334,80 @@ function DepositoPedidos() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2>Gestión de Pedidos</h2>
-        <PrintButton targetRef={printRef} title="Reporte de Pedidos" />
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <h2 style={{ margin: 0 }}>Gestión de Pedidos</h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          {canCreatePedido && (
+            <button
+              type="button"
+              className="mov-action-btn"
+              style={{ width: 'auto', margin: 0, padding: '14px 22px', fontSize: '1rem' }}
+              onClick={() => {
+                setCreateModalOpen(true)
+                setMsg({ text: '', type: '' })
+              }}
+            >
+              <span aria-hidden="true" style={{ marginRight: 8, fontSize: '1.2rem' }}>📝</span>
+              Crear pedido
+            </button>
+          )}
+          <PrintButton targetRef={printRef} title="Reporte de Pedidos" />
+        </div>
       </div>
 
-      {canCreatePedido && (
-        <div style={{ background: '#f9fafb', padding: 24, borderRadius: 8, marginBottom: 32 }}>
-          <form onSubmit={handleCreate} className="grid">
-            <div>
-              <label>Producto</label>
-              <select value={form.producto_id} onChange={e => setForm({ ...form, producto_id: e.target.value })} required>
-                <option value="">Seleccionar producto...</option>
-                {productos.map(p => (
-                  <option key={p.id} value={p.id}>{p.nombre} ({p.unidad_medida || 'unidad'})</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label>Cantidad</label>
-              <input type="number" value={form.cantidad} onChange={e => setForm({ ...form, cantidad: e.target.value })} placeholder="0" min="1" required />
-            </div>
-            <div style={{ gridColumn: '1 / -1' }}>
-              <label>Notas</label>
-              <input type="text" value={form.notas} onChange={e => setForm({ ...form, notas: e.target.value })} placeholder="Observaciones del pedido" />
-            </div>
-            <div style={{ gridColumn: '1 / -1' }}>
-              <button type="submit">Crear pedido</button>
-            </div>
-          </form>
+      {canCreatePedido && createModalOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: 16
+          }}
+          onClick={e => {
+            if (e.target === e.currentTarget) {
+              setCreateModalOpen(false)
+            }
+          }}
+        >
+          <div style={{ background: '#f9fafb', padding: 24, borderRadius: 10, width: 'min(760px, 100%)', maxHeight: '90vh', overflowY: 'auto' }}>
+            <h3 style={{ marginTop: 0 }}>Nuevo pedido</h3>
+            <form onSubmit={handleCreate} className="grid">
+              <div>
+                <label>Producto</label>
+                <select value={form.producto_id} onChange={e => setForm({ ...form, producto_id: e.target.value })} required>
+                  <option value="">Seleccionar producto...</option>
+                  {productos.map(p => (
+                    <option key={p.id} value={p.id}>{p.nombre} ({p.unidad_medida || 'unidad'})</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label>Cantidad</label>
+                <input type="number" value={form.cantidad} onChange={e => setForm({ ...form, cantidad: e.target.value })} placeholder="0" min="1" required />
+              </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label>Notas</label>
+                <input type="text" value={form.notas} onChange={e => setForm({ ...form, notas: e.target.value })} placeholder="Observaciones del pedido" />
+              </div>
+              <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => {
+                    setCreateModalOpen(false)
+                    setForm({ producto_id: '', cantidad: '', notas: '' })
+                  }}
+                >
+                  Cancelar
+                </button>
+                <button type="submit">Crear pedido</button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 

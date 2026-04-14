@@ -114,12 +114,19 @@ router.use(authenticate);
 // Listar todas las instituciones con status de retiro
 router.get("/", async (req, res) => {
   try {
+    const nivelColumn = await getInstitucionNivelColumn();
+    if (!nivelColumn) {
+      return res.status(500).json({ error: "Configuración inválida: falta columna de nivel en institucion" });
+    }
+
     const instituciones = await all(`
       SELECT
         i.id_institucion AS id,
         i.nombre,
         i.cue,
+        i.${nivelColumn} AS nivel,
         e.cui,
+        COALESCE(NULLIF(TRIM(i.departamento), ''), NULLIF(TRIM(d.departamento), '')) AS departamento,
         d.latitud,
         d.longitud,
         CASE WHEN EXISTS (

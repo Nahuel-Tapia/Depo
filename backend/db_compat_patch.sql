@@ -13,6 +13,19 @@ BEGIN
 END $$;
 
 -- Estructura base minima
+CREATE TABLE IF NOT EXISTS direccion (
+  id_direccion SERIAL PRIMARY KEY,
+  calle VARCHAR(150),
+  numero_puerta VARCHAR(20),
+  localidad VARCHAR(100),
+  departamento VARCHAR(100),
+  codigo_postal INTEGER,
+  latitud NUMERIC,
+  longitud NUMERIC,
+  te_voip VARCHAR(30),
+  letra_zona VARCHAR(5)
+);
+
 CREATE TABLE IF NOT EXISTS edificio (
   id_edificio SERIAL PRIMARY KEY,
   cui VARCHAR(20) UNIQUE,
@@ -27,6 +40,68 @@ CREATE TABLE IF NOT EXISTS edificio (
   te_voip VARCHAR(30),
   letra_zona VARCHAR(5)
 );
+
+ALTER TABLE edificio ADD COLUMN IF NOT EXISTS id_direccion INT;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'fk_direccion'
+  ) THEN
+    ALTER TABLE edificio
+      ADD CONSTRAINT fk_direccion
+      FOREIGN KEY (id_direccion) REFERENCES direccion(id_direccion);
+  END IF;
+END $$;
+
+DO $$
+DECLARE
+  rec RECORD;
+  v_id_direccion INT;
+  has_legacy_address BOOLEAN;
+BEGIN
+  SELECT EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'edificio' AND column_name = 'calle'
+  ) INTO has_legacy_address;
+
+  IF has_legacy_address THEN
+    FOR rec IN EXECUTE '
+      SELECT id_edificio, calle, numero_puerta, localidad, departamento, codigo_postal, latitud, longitud, te_voip, letra_zona
+      FROM edificio
+      WHERE id_direccion IS NULL
+    '
+    LOOP
+      INSERT INTO direccion (
+        calle,
+        numero_puerta,
+        localidad,
+        departamento,
+        codigo_postal,
+        latitud,
+        longitud,
+        te_voip,
+        letra_zona
+      ) VALUES (
+        rec.calle,
+        rec.numero_puerta,
+        rec.localidad,
+        rec.departamento,
+        rec.codigo_postal,
+        rec.latitud,
+        rec.longitud,
+        rec.te_voip,
+        rec.letra_zona
+      )
+      RETURNING id_direccion INTO v_id_direccion;
+
+      UPDATE edificio
+      SET id_direccion = v_id_direccion
+      WHERE id_edificio = rec.id_edificio;
+    END LOOP;
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS institucion (
   id_institucion SERIAL PRIMARY KEY,
@@ -90,10 +165,20 @@ CREATE TABLE IF NOT EXISTS movimiento_stock (
 );
 
 -- Columnas de compatibilidad
+ALTER TABLE usuario ADD COLUMN IF NOT EXISTS apellido VARCHAR(50);
+ALTER TABLE usuario ADD COLUMN IF NOT EXISTS email VARCHAR(100);
+ALTER TABLE usuario ADD COLUMN IF NOT EXISTS password VARCHAR(255);
+ALTER TABLE usuario ADD COLUMN IF NOT EXISTS telefono VARCHAR(20);
+ALTER TABLE usuario ADD COLUMN IF NOT EXISTS id_institucion INT REFERENCES institucion(id_institucion);
 ALTER TABLE usuario ADD COLUMN IF NOT EXISTS role VARCHAR(50);
 ALTER TABLE usuario ADD COLUMN IF NOT EXISTS activo BOOLEAN DEFAULT TRUE;
 ALTER TABLE usuario ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW();
 
+ALTER TABLE institucion ADD COLUMN IF NOT EXISTS establecimiento_cabecera VARCHAR(100);
+ALTER TABLE institucion ADD COLUMN IF NOT EXISTS nivel_educativo VARCHAR(50);
+ALTER TABLE institucion ADD COLUMN IF NOT EXISTS categoria VARCHAR(20);
+ALTER TABLE institucion ADD COLUMN IF NOT EXISTS ambito VARCHAR(20);
+ALTER TABLE institucion ADD COLUMN IF NOT EXISTS activo BOOLEAN DEFAULT TRUE;
 ALTER TABLE institucion ADD COLUMN IF NOT EXISTS nivel VARCHAR(50);
 ALTER TABLE institucion ADD COLUMN IF NOT EXISTS tipo VARCHAR(20);
 ALTER TABLE institucion ADD COLUMN IF NOT EXISTS email VARCHAR(120);
@@ -107,11 +192,42 @@ ALTER TABLE institucion ADD COLUMN IF NOT EXISTS localidad VARCHAR(100);
 ALTER TABLE institucion ADD COLUMN IF NOT EXISTS departamento VARCHAR(100);
 ALTER TABLE institucion ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
 
+ALTER TABLE producto ADD COLUMN IF NOT EXISTS unidad_medida VARCHAR(20);
+ALTER TABLE producto ADD COLUMN IF NOT EXISTS stock_actual INT DEFAULT 0;
+ALTER TABLE producto ADD COLUMN IF NOT EXISTS stock_minimo INT DEFAULT 0;
+ALTER TABLE producto ADD COLUMN IF NOT EXISTS id_categoria INT;
 ALTER TABLE producto ADD COLUMN IF NOT EXISTS codigo VARCHAR(50);
 ALTER TABLE producto ADD COLUMN IF NOT EXISTS tipo VARCHAR(50) DEFAULT 'Insumos';
 ALTER TABLE producto ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW();
 ALTER TABLE producto ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
 
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'producto' AND column_name = 'stock'
+  ) THEN
+    EXECUTE 'UPDATE producto SET stock_actual = COALESCE(stock_actual, 0) + COALESCE(stock, 0) WHERE COALESCE(stock_actual, 0) = 0';
+  END IF;
+END $$;
+
+UPDATE producto
+SET codigo = COALESCE(codigo, nombre),
+    tipo = COALESCE(tipo, 'Insumos')
+WHERE codigo IS NULL OR tipo IS NULL;
+
+UPDATE institucion
+SET nivel_educativo = COALESCE(nivel_educativo, nivel),
+    nivel = COALESCE(nivel, nivel_educativo),
+    categoria = COALESCE(categoria, tipo),
+    tipo = COALESCE(tipo, categoria)
+WHERE nivel_educativo IS NULL
+   OR nivel IS NULL
+   OR categoria IS NULL
+   OR tipo IS NULL;
+
+ALTER TABLE proveedor ADD COLUMN IF NOT EXISTS contacto VARCHAR(100);
 ALTER TABLE proveedor ADD COLUMN IF NOT EXISTS telefono VARCHAR(30);
 ALTER TABLE proveedor ADD COLUMN IF NOT EXISTS email VARCHAR(120);
 ALTER TABLE proveedor ADD COLUMN IF NOT EXISTS categoria VARCHAR(50);
@@ -135,6 +251,15 @@ BEGIN
       FOREIGN KEY (id_proveedor) REFERENCES proveedor(id_proveedor);
   END IF;
 END $$;
+
+-- Permitir movimientos directos (sin detalle_ingreso ni detalle_orden)
+ALTER TABLE movimiento_stock DROP CONSTRAINT IF EXISTS chk_movimiento_origen;
+ALTER TABLE movimiento_stock
+  ADD CONSTRAINT chk_movimiento_origen CHECK (
+    (id_detalle_ingreso IS NOT NULL AND id_detalle_orden IS NULL)
+    OR (id_detalle_ingreso IS NULL AND id_detalle_orden IS NOT NULL)
+    OR (id_detalle_ingreso IS NULL AND id_detalle_orden IS NULL)
+  );
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_producto_codigo_not_null
   ON producto(codigo) WHERE codigo IS NOT NULL;
@@ -289,6 +414,20 @@ BEGIN
     NEW.nivel := NEW.nivel_educativo;
   END IF;
 
+  IF COALESCE(NULLIF(BTRIM(NEW.categoria), ''), NULL) IS NULL
+     AND COALESCE(NULLIF(BTRIM(NEW.tipo), ''), NULL) IS NOT NULL THEN
+    NEW.categoria := NEW.tipo;
+  END IF;
+
+  IF COALESCE(NULLIF(BTRIM(NEW.tipo), ''), NULL) IS NULL
+     AND COALESCE(NULLIF(BTRIM(NEW.categoria), ''), NULL) IS NOT NULL THEN
+    NEW.tipo := NEW.categoria;
+  END IF;
+
+  IF NEW.activo IS NULL THEN
+    NEW.activo := TRUE;
+  END IF;
+
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -341,6 +480,157 @@ DROP TRIGGER IF EXISTS trg_movimientos_updated_at ON movimientos;
 CREATE TRIGGER trg_movimientos_updated_at
 BEFORE UPDATE ON movimientos
 FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+
+CREATE OR REPLACE FUNCTION fn_producto_defaults_compat()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.codigo IS NULL OR BTRIM(COALESCE(NEW.codigo, '')) = '' THEN
+    NEW.codigo := NEW.nombre;
+  END IF;
+
+  IF NEW.tipo IS NULL OR BTRIM(COALESCE(NEW.tipo, '')) = '' THEN
+    NEW.tipo := 'Insumos';
+  END IF;
+
+  IF NEW.stock_actual IS NULL THEN
+    NEW.stock_actual := 0;
+  END IF;
+
+  IF NEW.stock_minimo IS NULL THEN
+    NEW.stock_minimo := 0;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_producto_defaults_compat ON producto;
+CREATE TRIGGER trg_producto_defaults_compat
+BEFORE INSERT OR UPDATE ON producto
+FOR EACH ROW EXECUTE FUNCTION fn_producto_defaults_compat();
+
+CREATE OR REPLACE FUNCTION fn_apply_stock_delta(p_producto_id INT, p_tipo TEXT, p_cantidad INT, p_factor INT)
+RETURNS VOID AS $$
+BEGIN
+  IF p_producto_id IS NULL OR COALESCE(p_cantidad, 0) = 0 THEN
+    RETURN;
+  END IF;
+
+  CASE LOWER(COALESCE(p_tipo, ''))
+    WHEN 'ingreso' THEN
+      UPDATE producto
+      SET stock_actual = COALESCE(stock_actual, 0) + (COALESCE(p_cantidad, 0) * p_factor)
+      WHERE id_producto = p_producto_id;
+    WHEN 'devolucion' THEN
+      UPDATE producto
+      SET stock_actual = COALESCE(stock_actual, 0) + (COALESCE(p_cantidad, 0) * p_factor)
+      WHERE id_producto = p_producto_id;
+    WHEN 'egreso' THEN
+      UPDATE producto
+      SET stock_actual = COALESCE(stock_actual, 0) - (COALESCE(p_cantidad, 0) * p_factor)
+      WHERE id_producto = p_producto_id;
+    WHEN 'salida' THEN
+      UPDATE producto
+      SET stock_actual = COALESCE(stock_actual, 0) - (COALESCE(p_cantidad, 0) * p_factor)
+      WHERE id_producto = p_producto_id;
+    ELSE
+      NULL;
+  END CASE;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION fn_sync_stock_from_movimiento_stock()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF current_setting('depo.skip_stock_sync', true) = 'on' THEN
+    IF TG_OP = 'DELETE' THEN
+      RETURN OLD;
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  IF TG_OP = 'INSERT' THEN
+    PERFORM fn_apply_stock_delta(NEW.id_producto, NEW.tipo::text, NEW.cantidad, 1);
+    RETURN NEW;
+  ELSIF TG_OP = 'UPDATE' THEN
+    PERFORM fn_apply_stock_delta(OLD.id_producto, OLD.tipo::text, OLD.cantidad, -1);
+    PERFORM fn_apply_stock_delta(NEW.id_producto, NEW.tipo::text, NEW.cantidad, 1);
+    RETURN NEW;
+  ELSIF TG_OP = 'DELETE' THEN
+    PERFORM fn_apply_stock_delta(OLD.id_producto, OLD.tipo::text, OLD.cantidad, -1);
+    RETURN OLD;
+  END IF;
+
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_movimiento_stock_sync_producto ON movimiento_stock;
+CREATE TRIGGER trg_movimiento_stock_sync_producto
+AFTER INSERT OR UPDATE OR DELETE ON movimiento_stock
+FOR EACH ROW EXECUTE FUNCTION fn_sync_stock_from_movimiento_stock();
+
+CREATE OR REPLACE FUNCTION fn_sync_legacy_movimientos_to_stock()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_tipo tipo_movimiento;
+  v_institucion_id INT;
+  v_cue VARCHAR(20);
+BEGIN
+  v_cue := NULLIF(REGEXP_REPLACE(COALESCE(NEW.cue, ''), '\\D', '', 'g'), '');
+
+  IF v_cue IS NOT NULL THEN
+    SELECT id_institucion
+      INTO v_institucion_id
+    FROM institucion
+    WHERE cue = v_cue
+    ORDER BY activo DESC NULLS LAST, id_institucion
+    LIMIT 1;
+  END IF;
+
+  v_tipo := CASE LOWER(COALESCE(NEW.tipo, ''))
+    WHEN 'salida' THEN 'egreso'::tipo_movimiento
+    WHEN 'egreso' THEN 'egreso'::tipo_movimiento
+    WHEN 'entrada' THEN 'ingreso'::tipo_movimiento
+    WHEN 'ingreso' THEN 'ingreso'::tipo_movimiento
+    WHEN 'ajuste' THEN 'ajuste'::tipo_movimiento
+    WHEN 'devolucion' THEN 'devolucion'::tipo_movimiento
+    ELSE NULL
+  END;
+
+  IF v_tipo IS NULL THEN
+    RAISE EXCEPTION 'Tipo de movimiento no compatible en tabla legacy movimientos: %', NEW.tipo;
+  END IF;
+
+  -- El endpoint legacy ya ajusta el stock manualmente, por eso evitamos duplicarlo aquí.
+  PERFORM set_config('depo.skip_stock_sync', 'on', true);
+
+  INSERT INTO movimiento_stock (
+    id_producto,
+    cantidad,
+    tipo,
+    fecha_movimiento,
+    id_usuario,
+    motivo,
+    id_institucion
+  ) VALUES (
+    NEW.producto_id,
+    NEW.cantidad,
+    v_tipo,
+    COALESCE(NEW.created_at, NOW()),
+    NEW.usuario_id,
+    NULLIF(NEW.motivo, ''),
+    v_institucion_id
+  );
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_sync_legacy_movimientos_to_stock ON movimientos;
+CREATE TRIGGER trg_sync_legacy_movimientos_to_stock
+AFTER INSERT ON movimientos
+FOR EACH ROW EXECUTE FUNCTION fn_sync_legacy_movimientos_to_stock();
 
 -- Vistas de compatibilidad
 DO $$
