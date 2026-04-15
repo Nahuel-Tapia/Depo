@@ -27,25 +27,21 @@ export function AuthProvider({ children }) {
     return permissions.includes(perm)
   }, [permissions])
 
-  const loadPermissions = useCallback(async () => {
-    if (!token) {
-      setPermissions([])
-      return
-    }
-    try {
-      const res = await apiFetch('/api/permissions/me', { token })
-      if (res.status === 401) {
-        logout()
-        return
-      }
-      if (res.ok) {
-        const data = await res.json()
-        setPermissions(data.permissions || [])
-      }
-    } catch {
-      setPermissions([])
-    }
-  }, [token, logout])
+ const loadPermissions = useCallback(async () => {
+  if (!token) {
+    setPermissions([])
+    return
+  }
+
+  try {
+    const data = await apiFetch('/permissions/me') // ✅ FIX
+
+    setPermissions(data.permissions || [])
+  } catch (err) {
+    console.error('Error cargando permisos:', err)
+    logout()
+  }
+}, [token, logout])
 
   useEffect(() => {
     if (token) {
