@@ -44,7 +44,7 @@ const PERMISSIONS = {
   LIMITES_EDIT: "limites.edit"
 };
 
-const ROLE_PERMISSIONS = {
+const DEFAULT_ROLE_PERMISSIONS = {
   admin: [
     PERMISSIONS.DASHBOARD_VIEW,
     PERMISSIONS.STOCK_VIEW,
@@ -139,17 +139,8 @@ const ROLE_PERMISSIONS = {
   ]
 };
 
-function getPermissionsForRole(role) {
-  return ROLE_PERMISSIONS[role] || [];
-}
-
-function hasPermission(role, permission) {
-  return getPermissionsForRole(role).includes(permission);
-}
-
 module.exports = {
   PERMISSIONS,
-  ROLE_PERMISSIONS,
-  getPermissionsForRole,
-  hasPermission
+  DEFAULT_ROLE_PERMISSIONS,
+  ROLE_PERMISSIONS: DEFAULT_ROLE_PERMISSIONS
 };

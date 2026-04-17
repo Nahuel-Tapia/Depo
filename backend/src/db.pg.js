@@ -110,6 +110,7 @@ async function initDb() {
       ["Administrador", "Inicial", "00000000", "admin@depo.local", hash, "admin"]
     );
   }
+
 }
 
 /**

@@ -1,5 +1,5 @@
 const jwt = require("jsonwebtoken");
-const { hasPermission } = require("../permissions");
+const { hasPermissionsForRole } = require("../services/rbac");
 
 function authenticate(req, res, next) {
   const authHeader = req.headers.authorization || "";
@@ -28,14 +28,17 @@ function authorizeRoles(...roles) {
 }
 
 function authorizePermissions(...permissions) {
-  return (req, res, next) => {
+  return async (req, res, next) => {
     if (!req.user) {
       return res.status(401).json({ error: "No autenticado" });
     }
 
-    const hasAllPermissions = permissions.every((permission) =>
-      hasPermission(req.user.role, permission)
-    );
+    let hasAllPermissions = false;
+    try {
+      hasAllPermissions = await hasPermissionsForRole(req.user.role, permissions);
+    } catch (err) {
+      return res.status(500).json({ error: "No se pudieron validar permisos" });
+    }
 
     if (!hasAllPermissions) {
       return res.status(403).json({ error: "No tenés permisos suficientes" });

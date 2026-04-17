@@ -3,9 +3,9 @@ const bcrypt = require("bcryptjs");
 const { all, get, run } = require("../db.pg");
 const { authenticate, authorizePermissions } = require("../middleware/auth");
 const { PERMISSIONS } = require("../permissions");
+const { roleExists, normalizeRoleName } = require("../services/roles");
 
 const router = express.Router();
-const VALID_ROLES = ["admin", "supervisor", "director_area", "directivo", "operador", "consulta"];
 
 function normalizeDni(dni) {
   if (!dni) return null;
@@ -33,6 +33,7 @@ router.get("/", authorizePermissions(PERMISSIONS.USERS_READ), async (req, res) =
 router.post("/", authorizePermissions(PERMISSIONS.USERS_CREATE), async (req, res) => {
   try {
     const { nombre, apellido, email, dni, password, role, telefono, institucion } = req.body;
+    const normalizedRole = normalizeRoleName(role);
     const dniNormalized = normalizeDni(dni);
     
     // Validar que institucion sea un número válido o null
@@ -42,11 +43,11 @@ router.post("/", authorizePermissions(PERMISSIONS.USERS_CREATE), async (req, res
       return res.status(400).json({ error: "Faltan campos obligatorios" });
     }
 
-    if (!VALID_ROLES.includes(role)) {
+    if (!(await roleExists(normalizedRole))) {
       return res.status(400).json({ error: "Rol inválido" });
     }
 
-    if (role === "directivo" && !institucionId) {
+    if (normalizedRole === "directivo" && !institucionId) {
       return res.status(400).json({ error: "La institución es obligatoria para rol directivo" });
     }
 
@@ -65,7 +66,7 @@ router.post("/", authorizePermissions(PERMISSIONS.USERS_CREATE), async (req, res
     const hash = await bcrypt.hash(password, 10);
     const result = await run(
       "INSERT INTO usuario (nombre, apellido, email, dni, password, telefono, id_institucion, role, activo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, TRUE)",
-      [nombre, apellido || null, email, dniNormalized, hash, telefono || null, institucionId, role]
+      [nombre, apellido || null, email, dniNormalized, hash, telefono || null, institucionId, normalizedRole]
     );
 
     return res.status(201).json({ id: result.lastID });
@@ -82,8 +83,9 @@ router.patch(
     try {
       const { id } = req.params;
       const { role, institucion } = req.body;
+      const normalizedRole = normalizeRoleName(role);
 
-      if (!VALID_ROLES.includes(role)) {
+      if (!(await roleExists(normalizedRole))) {
         return res.status(400).json({ error: "Rol inválido" });
       }
 
@@ -94,11 +96,11 @@ router.patch(
 
       const finalInstitucion = institucion || user.id_institucion || null;
 
-      if (role === "directivo" && !finalInstitucion) {
+      if (normalizedRole === "directivo" && !finalInstitucion) {
         return res.status(400).json({ error: "La institución es obligatoria para rol directivo" });
       }
 
-      await run("UPDATE usuario SET role = ?, id_institucion = ? WHERE id_usuario = ?", [role, finalInstitucion, id]);
+      await run("UPDATE usuario SET role = ?, id_institucion = ? WHERE id_usuario = ?", [normalizedRole, finalInstitucion, id]);
       return res.json({ ok: true });
     } catch (err) {
       return res.status(500).json({ error: "No se pudo actualizar el rol" });
