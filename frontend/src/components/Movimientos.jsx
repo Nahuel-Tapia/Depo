@@ -26,7 +26,7 @@ export default function Movimientos() {
   // Ingreso state
   const [ingresoMotivo, setIngresoMotivo] = useState('')
   const [loteIngreso, setLoteIngreso] = useState([])
-  const [ingresoItem, setIngresoItem] = useState({ productoNombre: '', cantidad: '', estado: 'nuevo' })
+  const [ingresoItem, setIngresoItem] = useState({ productoId: '', cantidad: '', estado: 'nuevo' })
 
   const loadProductos = async () => {
     try {
@@ -140,7 +140,8 @@ export default function Movimientos() {
 
   // Ingreso handlers
   const addToIngreso = () => {
-    const producto = findProducto(ingresoItem.productoNombre)
+    const productoId = parseInt(ingresoItem.productoId, 10)
+    const producto = productos.find(p => p.id === productoId)
     if (!producto) return setMsg({ text: 'Seleccione un producto válido', type: 'error' })
     const cantidad = parseInt(ingresoItem.cantidad)
     if (!cantidad || cantidad <= 0) return setMsg({ text: 'Ingrese una cantidad válida', type: 'error' })
@@ -151,7 +152,7 @@ export default function Movimientos() {
       cantidad,
       estado: ingresoItem.estado
     }])
-    setIngresoItem({ productoNombre: '', cantidad: '', estado: 'nuevo' })
+    setIngresoItem({ productoId: '', cantidad: '', estado: 'nuevo' })
     setMsg({ text: '', type: '' })
   }
 
@@ -404,18 +405,15 @@ export default function Movimientos() {
                     <div className="grid" style={{ marginBottom: 16 }}>
                       <div>
                         <label>Producto</label>
-                        <input
-                          list="ingresoProductoList"
-                          value={ingresoItem.productoNombre}
-                          onChange={e => setIngresoItem({ ...ingresoItem, productoNombre: e.target.value })}
-                          placeholder="Escriba para buscar producto..."
-                          autoComplete="off"
-                        />
-                        <datalist id="ingresoProductoList">
+                        <select
+                          value={ingresoItem.productoId}
+                          onChange={e => setIngresoItem({ ...ingresoItem, productoId: e.target.value })}
+                        >
+                          <option value="">Seleccionar producto...</option>
                           {productos.map(p => (
-                            <option key={p.id} value={p.nombre}>{p.nombre} ({p.unidad_medida || 'unidad'})</option>
+                            <option key={p.id} value={p.id}>{p.nombre} ({p.unidad_medida || 'unidad'})</option>
                           ))}
-                        </datalist>
+                        </select>
                       </div>
                       <div>
                         <label>Cantidad</label>
