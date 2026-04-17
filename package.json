@@ -12,6 +12,7 @@
     "db:import": "node backend/scripts/import-data.js",
     "db:dump": "node backend/scripts/dump-database.js",
     "db:restore": "node backend/scripts/restore-database.js",
+    "db:fingerprint": "node backend/scripts/db-fingerprint.js",
     "reset-admin": "node backend/scripts/reset-admin.js",
     "create-operador": "node backend/scripts/create-operador.js"
   },
