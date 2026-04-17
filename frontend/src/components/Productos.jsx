@@ -4,7 +4,7 @@ import { apiFetch } from '../api'
 import PrintButton from './PrintButton'
 
 export default function Productos() {
-  const { token, hasPermission } = useAuth()
+  const { token, user, hasPermission } = useAuth()
   const [productos, setProductos] = useState([])
   const [categorias, setCategorias] = useState([])
   const [msg, setMsg] = useState({ text: '', type: '' })
@@ -12,6 +12,7 @@ export default function Productos() {
   const [editModal, setEditModal] = useState(null)
   const [deleteModal, setDeleteModal] = useState(null)
   const [form, setForm] = useState({ nombre: '', unidad_medida: 'unidad', stock_actual: 0, stock_minimo: 0, id_categoria: '' })
+  const canDeleteProductos = hasPermission('productos.delete') || user?.role === 'admin'
 
   const loadCategorias = async () => {
     try {
@@ -201,7 +202,7 @@ export default function Productos() {
                   {hasPermission('productos.edit') && (
                     <button onClick={() => handleEdit(p.id)}>Editar</button>
                   )}
-                  {hasPermission('productos.delete') && (
+                  {canDeleteProductos && (
                     <button onClick={() => handleDelete(p.id)}>Eliminar</button>
                   )}
                 </div>
@@ -318,7 +319,7 @@ export default function Productos() {
         </div>
       )}
 
-      {deleteModal && hasPermission('productos.delete') && (
+      {deleteModal && canDeleteProductos && (
         <div
           style={{
             position: 'fixed',

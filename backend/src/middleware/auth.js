@@ -33,6 +33,10 @@ function authorizePermissions(...permissions) {
       return res.status(401).json({ error: "No autenticado" });
     }
 
+    if (String(req.user.role || "").toLowerCase() === "admin") {
+      return next();
+    }
+
     let hasAllPermissions = false;
     try {
       hasAllPermissions = await hasPermissionsForRole(req.user.role, permissions);
