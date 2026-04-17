@@ -5,9 +5,11 @@ const express = require("express");
 const cors = require("cors");
 const { initDb } = require("./db.pg");
 const { getDbConfigForLogs } = require("./config/database");
+const { ensureRbacSchemaAndSeed } = require("./services/rbac");
 
 const authRoutes = require("./routes/auth");
 const userRoutes = require("./routes/users");
+const roleRoutes = require("./routes/roles");
 const permissionsRoutes = require("./routes/permissions");
 const productosRoutes = require("./routes/productos");
 const movimientosRoutes = require("./routes/movimientos");
@@ -39,6 +41,7 @@ app.get("/api/health", (req, res) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/roles", roleRoutes);
 app.use("/api/permissions", permissionsRoutes);
 app.use("/api/productos", productosRoutes);
 app.use("/api/movimientos", movimientosRoutes);
@@ -65,7 +68,8 @@ app.get("*", (req, res) => {
 });
 
 initDb()
-  .then(() => {
+  .then(async () => {
+    await ensureRbacSchemaAndSeed();
     console.log("Database initialized");
     app.listen(PORT, () => {
       console.log(`Servidor corriendo en http://localhost:${PORT}`);

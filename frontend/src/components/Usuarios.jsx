@@ -5,6 +5,7 @@ import { apiFetch } from '../api'
 export default function Usuarios() {
   const { token, user, hasPermission } = useAuth()
   const [users, setUsers] = useState([])
+  const [roles, setRoles] = useState([])
   const [instituciones, setInstituciones] = useState([])
   const [msg, setMsg] = useState('')
   const [formOpen, setFormOpen] = useState(false)
@@ -31,10 +32,41 @@ export default function Usuarios() {
     } catch { /* ignore */ }
   }
 
+  const loadRoles = async () => {
+    try {
+      const res = await apiFetch('/api/roles', { token })
+      if (res.ok) {
+        const data = await res.json()
+        const roleNames = (data.roles || []).map(r => r.nombre).filter(Boolean)
+        setRoles(roleNames)
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
   useEffect(() => {
     loadUsers()
     loadInstituciones()
+    loadRoles()
   }, [])
+
+  const availableRoles = roles.length
+    ? roles
+    : ['consulta', 'operador', 'supervisor', 'director_area', 'directivo', 'admin']
+
+  const formatRoleLabel = (roleName) => {
+    const normalized = String(roleName || '').toLowerCase()
+    const labels = {
+      admin: 'Administrador',
+      supervisor: 'Supervisor',
+      director_area: 'Director de Area',
+      directivo: 'Directivo',
+      operador: 'Operador',
+      consulta: 'Consulta'
+    }
+    return labels[normalized] || normalized.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+  }
 
   const handleCreate = async (e) => {
     e.preventDefault()
@@ -233,12 +265,9 @@ export default function Usuarios() {
               <div>
                 <label>Rol</label>
                 <select value={form.role} onChange={e => setForm({ ...form, role: e.target.value })} required>
-                  <option value="consulta">Consulta (Solo lectura)</option>
-                  <option value="operador">Operador</option>
-                  <option value="supervisor">Supervisor</option>
-                  <option value="director_area">Director de Area</option>
-                  <option value="directivo">Directivo</option>
-                  <option value="admin">Administrador</option>
+                  {availableRoles.map(roleName => (
+                    <option key={roleName} value={roleName}>{formatRoleLabel(roleName)}</option>
+                  ))}
                 </select>
               </div>
               <div>
@@ -293,24 +322,17 @@ export default function Usuarios() {
 
             <label style={{ marginTop: 0 }}>Seleccionar rol</label>
             <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
-              {[
-                { value: 'admin', label: 'Administrador' },
-                { value: 'supervisor', label: 'Supervisor' },
-                { value: 'director_area', label: 'Director de Area' },
-                { value: 'directivo', label: 'Directivo' },
-                { value: 'operador', label: 'Operador' },
-                { value: 'consulta', label: 'Consulta' }
-              ].map(opt => (
-                <label key={opt.value} style={{ display: 'flex', alignItems: 'center', gap: 8, textTransform: 'none', letterSpacing: 0, fontSize: '0.95rem', margin: 0 }}>
+              {availableRoles.map(roleName => (
+                <label key={roleName} style={{ display: 'flex', alignItems: 'center', gap: 8, textTransform: 'none', letterSpacing: 0, fontSize: '0.95rem', margin: 0 }}>
                   <input
                     type="radio"
                     name="rol_usuario"
-                    value={opt.value}
-                    checked={roleModal.role === opt.value}
+                    value={roleName}
+                    checked={roleModal.role === roleName}
                     onChange={e => setRoleModal({ ...roleModal, role: e.target.value, error: '' })}
                     style={{ width: 16, minHeight: 16, margin: 0 }}
                   />
-                  {opt.label}
+                  {formatRoleLabel(roleName)}
                 </label>
               ))}
             </div>
