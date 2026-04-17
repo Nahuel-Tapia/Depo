@@ -25,6 +25,9 @@ const PERMISSIONS = {
   PEDIDOS_VIEW: "pedidos.view",
   PEDIDOS_CREATE: "pedidos.create",
   PEDIDOS_MANAGE: "pedidos.manage",
+  // Supervisión (Dirección de Área)
+  SUPERVISION_MANAGE: "supervision.manage",
+  SUPERVISION_REPORTS_REQUEST: "supervision.reports.request",
   // Instituciones
   INSTITUCIONES_VIEW: "instituciones.view",
   INSTITUCIONES_CREATE: "instituciones.create",
@@ -100,6 +103,13 @@ const ROLE_PERMISSIONS = {
     PERMISSIONS.PEDIDOS_VIEW,
     PERMISSIONS.PEDIDOS_MANAGE,
     PERMISSIONS.INSTITUCIONES_VIEW
+  ],
+  director_area: [
+    PERMISSIONS.DASHBOARD_VIEW,
+    PERMISSIONS.USERS_READ,
+    PERMISSIONS.INSTITUCIONES_VIEW,
+    PERMISSIONS.SUPERVISION_MANAGE,
+    PERMISSIONS.SUPERVISION_REPORTS_REQUEST
   ],
   operador: [
     PERMISSIONS.DASHBOARD_VIEW,

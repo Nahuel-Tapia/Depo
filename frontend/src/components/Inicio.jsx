@@ -6,6 +6,7 @@ import PrintButton from './PrintButton'
 const ROLE_LABELS = {
   admin: 'Administrador',
   supervisor: 'Supervisor',
+  director_area: 'Director de Area',
   directivo: 'Directivo',
   operador: 'Operador',
   consulta: 'Consulta',

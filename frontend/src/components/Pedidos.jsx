@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../api'
 import PrintButton from './PrintButton'
+import SupervisorSolicitudes from './supervisor/SupervisorSolicitudes'
 
 
 
@@ -495,7 +496,7 @@ export default function Pedidos() {
   const { user } = useAuth()
 
   if (user?.role === 'supervisor') {
-    return <SupervisorPedidos />
+    return <SupervisorSolicitudes />
   }
 
   return <DepositoPedidos />

@@ -9,17 +9,19 @@ import Proveedores from '../components/Proveedores'
 import Usuarios from '../components/Usuarios'
 import HistorialInstitucion from '../components/HistorialInstitucion'
 import SupervisorDashboard from '../components/SupervisorDashboard'
+import DirectorAreaPanel from '../components/DirectorAreaPanel'
 
 const TABS = [
   { key: 'inicio', label: 'Inicio', permission: null },
+  { key: 'director-area', label: 'Direccion de Area', permission: 'supervision.manage', role: 'director_area' },
   { key: 'supervisor', label: 'Patrimonio Escolar', permission: 'pedidos.manage', role: 'supervisor' },
   { key: 'mis-escuelas', label: 'Mis Escuelas', permission: 'instituciones.view', role: 'supervisor' },
-  { key: 'productos', label: 'Productos', permission: 'productos.view', hideForRole: 'supervisor' },
-  { key: 'movimientos', label: 'Movimientos', permission: 'movimientos.view', hideForRole: 'supervisor' },
-  { key: 'pedidos', label: 'Pedidos', permission: 'pedidos.view' },
-  { key: 'instituciones', label: 'Instituciones', permission: 'instituciones.view', hideForRole: 'supervisor' },
-  { key: 'historial', label: 'Historial', permission: 'instituciones.view', hideForRole: 'supervisor' },
-  { key: 'proveedores', label: 'Proveedores', permission: 'proveedores.view', hideForRole: 'supervisor' },
+  { key: 'productos', label: 'Productos', permission: 'productos.view', hideForRoles: ['supervisor', 'director_area'] },
+  { key: 'movimientos', label: 'Movimientos', permission: 'movimientos.view', hideForRoles: ['supervisor', 'director_area'] },
+  { key: 'pedidos', label: 'Pedidos', permission: 'pedidos.view', hideForRoles: ['director_area'] },
+  { key: 'instituciones', label: 'Instituciones', permission: 'instituciones.view', hideForRoles: ['supervisor', 'director_area'] },
+  { key: 'historial', label: 'Historial', permission: 'instituciones.view', hideForRoles: ['supervisor', 'director_area'] },
+  { key: 'proveedores', label: 'Proveedores', permission: 'proveedores.view', hideForRoles: ['supervisor', 'director_area'] },
   { key: 'usuarios', label: 'Usuarios', permission: 'users.read' }
 ]
 
@@ -29,6 +31,7 @@ export default function Dashboard() {
 
   const userInitial = user?.role === 'admin' ? 'A'
     : user?.role === 'supervisor' ? 'S'
+    : user?.role === 'director_area' ? 'DA'
     : user?.role === 'directivo' ? 'D'
     : user?.role === 'operador' ? 'O'
     : 'C'
@@ -39,6 +42,7 @@ export default function Dashboard() {
     }
     // Hide tabs explicitly hidden for this role
     if (tab.hideForRole && tab.hideForRole === user?.role) return false
+    if (tab.hideForRoles && tab.hideForRoles.includes(user?.role)) return false
     // Tabs restricted to a specific role: only show for that role (or admin)
     if (tab.role && tab.role !== user?.role && user?.role !== 'admin') return false
     return !tab.permission || hasPermission(tab.permission)
@@ -64,6 +68,7 @@ export default function Dashboard() {
       case 'mis-escuelas': return <Instituciones supervisorMode />
       case 'historial': return <HistorialInstitucion />
       case 'supervisor': return <SupervisorDashboard />
+      case 'director-area': return <DirectorAreaPanel />
       case 'proveedores': return <Proveedores />
       case 'usuarios': return <Usuarios />
       default: return <Inicio />

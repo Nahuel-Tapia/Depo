@@ -236,6 +236,7 @@ export default function Usuarios() {
                   <option value="consulta">Consulta (Solo lectura)</option>
                   <option value="operador">Operador</option>
                   <option value="supervisor">Supervisor</option>
+                  <option value="director_area">Director de Area</option>
                   <option value="directivo">Directivo</option>
                   <option value="admin">Administrador</option>
                 </select>
@@ -295,6 +296,7 @@ export default function Usuarios() {
               {[
                 { value: 'admin', label: 'Administrador' },
                 { value: 'supervisor', label: 'Supervisor' },
+                { value: 'director_area', label: 'Director de Area' },
                 { value: 'directivo', label: 'Directivo' },
                 { value: 'operador', label: 'Operador' },
                 { value: 'consulta', label: 'Consulta' }

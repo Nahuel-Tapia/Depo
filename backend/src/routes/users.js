@@ -5,7 +5,7 @@ const { authenticate, authorizePermissions } = require("../middleware/auth");
 const { PERMISSIONS } = require("../permissions");
 
 const router = express.Router();
-const VALID_ROLES = ["admin", "supervisor", "directivo", "operador", "consulta"];
+const VALID_ROLES = ["admin", "supervisor", "director_area", "directivo", "operador", "consulta"];
 
 function normalizeDni(dni) {
   if (!dni) return null;

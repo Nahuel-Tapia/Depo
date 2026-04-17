@@ -49,6 +49,7 @@ router.get("/pedidos-pendientes", async (req, res) => {
       `SELECT p.id, p.cantidad, p.notas, p.estado, p.created_at AS fecha,
               pr.nombre AS producto,
               i.nombre AS institucion, i.id AS institucion_id,
+              COALESCE(i.matriculados, 0) AS matricula,
               u.nombre AS solicitante
        FROM pedido p
        JOIN producto pr ON pr.id = p.producto_id
@@ -63,6 +64,38 @@ router.get("/pedidos-pendientes", async (req, res) => {
     res.json({ pedidos });
   } catch (err) {
     console.error("Error al obtener pedidos pendientes del supervisor:", err);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+});
+
+// ── Solicitudes por jurisdicción (pendiente, aprobado, rechazado) ──
+router.get("/solicitudes", async (req, res) => {
+  try {
+    const jurisdiccion = req.query.jurisdiccion || req.user.jurisdiccion;
+
+    if (!jurisdiccion) {
+      return res.status(400).json({ error: "Jurisdicción no especificada" });
+    }
+
+    const solicitudes = await all(
+      `SELECT p.id, p.cantidad, p.notas, p.estado, p.created_at AS fecha,
+              pr.nombre AS producto,
+              i.nombre AS institucion, i.id AS institucion_id,
+              COALESCE(i.matriculados, 0) AS matricula,
+              u.nombre AS solicitante
+       FROM pedido p
+       JOIN producto pr ON pr.id = p.producto_id
+       JOIN usuario u ON u.id = p.usuario_id
+       JOIN institucion i ON i.id = u.institucion_id
+       WHERE p.estado IN ('pendiente', 'aprobado', 'rechazado')
+         AND LOWER(i.jurisdiccion) = LOWER(?)
+       ORDER BY p.created_at DESC`,
+      [jurisdiccion]
+    );
+
+    res.json({ solicitudes });
+  } catch (err) {
+    console.error("Error al obtener solicitudes del supervisor:", err);
     res.status(500).json({ error: "Error interno del servidor" });
   }
 });
