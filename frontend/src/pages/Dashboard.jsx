@@ -10,10 +10,12 @@ import Usuarios from '../components/Usuarios'
 import HistorialInstitucion from '../components/HistorialInstitucion'
 import SupervisorDashboard from '../components/SupervisorDashboard'
 import DirectorAreaPanel from '../components/DirectorAreaPanel'
+import ComprasPanel from '../components/ComprasPanel'
 
 const TABS = [
   { key: 'inicio', label: 'Inicio', permission: null },
   { key: 'director-area', label: 'Direccion de Area', permission: 'supervision.manage', role: 'director_area' },
+    { key: 'compras', label: 'Area de Compras', permission: 'planilla.view', role: 'area_compras' },
   { key: 'supervisor', label: 'Patrimonio Escolar', permission: 'pedidos.manage', role: 'supervisor' },
   { key: 'mis-escuelas', label: 'Mis Escuelas', permission: 'instituciones.view', role: 'supervisor' },
   { key: 'productos', label: 'Productos', permission: 'productos.view', hideForRoles: ['supervisor', 'director_area'] },
@@ -34,12 +36,16 @@ export default function Dashboard() {
     : user?.role === 'director_area' ? 'DA'
     : user?.role === 'directivo' ? 'D'
     : user?.role === 'operador' ? 'O'
+    : user?.role === 'area_compras' ? 'AC'
     : 'C'
 
   const visibleTabs = TABS.filter(tab => {
     if (user?.role === 'directivo') {
       return tab.key === 'inicio' || tab.key === 'pedidos'
     }
+        if (user?.role === 'area_compras') {
+          return tab.key === 'inicio' || tab.key === 'compras'
+        }
     // Hide tabs explicitly hidden for this role
     if (tab.hideForRole && tab.hideForRole === user?.role) return false
     if (tab.hideForRoles && tab.hideForRoles.includes(user?.role)) return false
@@ -69,6 +75,7 @@ export default function Dashboard() {
       case 'historial': return <HistorialInstitucion />
       case 'supervisor': return <SupervisorDashboard />
       case 'director-area': return <DirectorAreaPanel />
+        case 'compras': return <ComprasPanel />
       case 'proveedores': return <Proveedores />
       case 'usuarios': return <Usuarios />
       default: return <Inicio />

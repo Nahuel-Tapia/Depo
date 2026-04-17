@@ -10,6 +10,10 @@ export default function DirectorAreaPanel() {
   const [asignaciones, setAsignaciones] = useState([])
   const [informes, setInformes] = useState([])
   const [solicitudes, setSolicitudes] = useState([])
+  const [planillas, setPlanillas] = useState([])
+  const [planillaDetalle, setPlanillaDetalle] = useState(null)
+  const [planillaObs, setPlanillaObs] = useState('')
+  const [creandoPlanilla, setCreandoPlanilla] = useState(false)
   const [updatingId, setUpdatingId] = useState(null)
   const [msg, setMsg] = useState({ text: '', type: '' })
 
@@ -39,6 +43,13 @@ export default function DirectorAreaPanel() {
       setAsignaciones(asignacionesData.asignaciones || [])
       setInformes(informesData.informes || [])
       setSolicitudes(solicitudesData.solicitudes || [])
+
+      // Cargar planillas
+      const planillasRes = await apiFetch('/api/compras/planillas', { token })
+      if (planillasRes.ok) {
+        const planillasData = await planillasRes.json()
+        setPlanillas(planillasData.planillas || [])
+      }
     } catch (err) {
       setMsg({ text: err.message || 'Error cargando datos', type: 'error' })
     }
@@ -139,6 +150,68 @@ export default function DirectorAreaPanel() {
       setUpdatingId(null)
     }
   }
+
+  const handleCrearPlanilla = async () => {
+    setCreandoPlanilla(true)
+    try {
+      const res = await apiFetch('/api/compras/planillas', {
+        token,
+        method: 'POST',
+        body: JSON.stringify({ observaciones: planillaObs.trim() || null })
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'No se pudo crear la planilla')
+      setPlanillaObs('')
+      setMsg({ text: `Planilla creada con ${data.items} solicitudes. Revisala antes de enviarla.`, type: 'success' })
+      loadAll()
+    } catch (err) {
+      setMsg({ text: err.message, type: 'error' })
+    } finally {
+      setCreandoPlanilla(false)
+    }
+  }
+
+  const handleVerDetalle = async (id) => {
+    if (planillaDetalle?.planilla?.id === id) { setPlanillaDetalle(null); return }
+    try {
+      const res = await apiFetch(`/api/compras/planillas/${id}`, { token })
+      if (!res.ok) throw new Error('No se pudo cargar el detalle')
+      const data = await res.json()
+      setPlanillaDetalle(data)
+    } catch (err) {
+      setMsg({ text: err.message, type: 'error' })
+    }
+  }
+
+  const handleEnviarPlanilla = async (id) => {
+    try {
+      const res = await apiFetch(`/api/compras/planillas/${id}/enviar`, { token, method: 'PATCH' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'No se pudo enviar')
+      setMsg({ text: 'Planilla enviada a Área de Compras.', type: 'success' })
+      if (planillaDetalle?.planilla?.id === id) setPlanillaDetalle(null)
+      loadAll()
+    } catch (err) {
+      setMsg({ text: err.message, type: 'error' })
+    }
+  }
+
+  const handleEliminarPlanilla = async (id) => {
+    try {
+      const res = await apiFetch(`/api/compras/planillas/${id}`, { token, method: 'DELETE' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'No se pudo eliminar')
+      setMsg({ text: 'Planilla eliminada.', type: 'success' })
+      if (planillaDetalle?.planilla?.id === id) setPlanillaDetalle(null)
+      loadAll()
+    } catch (err) {
+      setMsg({ text: err.message, type: 'error' })
+    }
+  }
+
+  const anioActual = new Date().getFullYear()
+  const planillaActivaAnio = planillas.find(p => p.anio === anioActual && p.estado !== 'procesada')
+  const solicitudesAnualesPendientes = solicitudes.filter(s => (s.tipo || 'anual') === 'anual' && s.estado === 'aprobado')
 
   const supervisorMap = useMemo(() => {
     return Object.fromEntries(supervisores.map(s => [String(s.id), `${s.nombre || ''} ${s.apellido || ''}`.trim()]))
@@ -331,6 +404,144 @@ export default function DirectorAreaPanel() {
           ))}
         </tbody>
       </table>
+
+      {/* ── Planilla de Pedido Anual ── */}
+      <h3 style={{ marginTop: 32 }}>Planilla de Pedido Anual {anioActual}</h3>
+      <p style={{ marginTop: 0, color: 'var(--muted)', fontSize: '0.9rem' }}>
+        Consolidá todas las solicitudes anuales aprobadas en una planilla y enviala al Área de Compras.
+      </p>
+
+      {!planillaActivaAnio ? (
+        <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 16, background: '#f8fafc', marginBottom: 16 }}>
+          {solicitudesAnualesPendientes.length === 0 ? (
+            <p style={{ color: 'var(--muted)', margin: 0 }}>
+              No hay solicitudes anuales aprobadas para este año. Las verás aquí cuando los supervisores aprueben los pedidos.
+            </p>
+          ) : (
+            <>
+              <p style={{ margin: '0 0 10px 0' }}>
+                <strong>{solicitudesAnualesPendientes.length}</strong> solicitudes anuales aprobadas listas para incluir en la planilla.
+              </p>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                <div style={{ flex: 1, minWidth: 200 }}>
+                  <label>Observaciones (opcional)</label>
+                  <input
+                    type="text"
+                    value={planillaObs}
+                    onChange={e => setPlanillaObs(e.target.value)}
+                    placeholder="Ej: Planilla anual 2026 — Zona Norte"
+                    style={{ marginBottom: 0 }}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCrearPlanilla}
+                  disabled={creandoPlanilla}
+                  style={{ marginBottom: 0 }}
+                >
+                  {creandoPlanilla ? 'Generando...' : 'Generar planilla anual'}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      ) : (
+        <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 16, background: '#f8fafc', marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+            <div>
+              <strong>Planilla #{planillaActivaAnio.id}</strong>
+              <span className={`badge badge-estado-${planillaActivaAnio.estado === 'enviada' ? 'aprobado' : 'pendiente'}`} style={{ marginLeft: 8 }}>
+                {planillaActivaAnio.estado}
+              </span>
+              {planillaActivaAnio.observaciones && (
+                <div style={{ color: 'var(--muted)', fontSize: '0.85rem', marginTop: 4 }}>{planillaActivaAnio.observaciones}</div>
+              )}
+              <div style={{ color: 'var(--muted)', fontSize: '0.82rem', marginTop: 2 }}>
+                Creada: {new Date(planillaActivaAnio.created_at).toLocaleDateString('es-AR')}
+                {planillaActivaAnio.enviada_at && ` · Enviada: ${new Date(planillaActivaAnio.enviada_at).toLocaleDateString('es-AR')}`}
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button
+                className="secondary"
+                style={{ margin: 0 }}
+                onClick={() => handleVerDetalle(planillaActivaAnio.id)}
+              >
+                {planillaDetalle?.planilla?.id === planillaActivaAnio.id ? 'Ocultar detalle' : 'Ver detalle'}
+              </button>
+              {planillaActivaAnio.estado === 'borrador' && (
+                <>
+                  <button
+                    style={{ margin: 0 }}
+                    onClick={() => handleEnviarPlanilla(planillaActivaAnio.id)}
+                  >
+                    Enviar a Compras
+                  </button>
+                  <button
+                    className="sv-btn-rechazar"
+                    style={{ margin: 0 }}
+                    onClick={() => handleEliminarPlanilla(planillaActivaAnio.id)}
+                  >
+                    Eliminar
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Detalle expandible */}
+          {planillaDetalle?.planilla?.id === planillaActivaAnio.id && (
+            <div style={{ marginTop: 16, overflowX: 'auto' }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Institución</th>
+                    <th>CUE</th>
+                    <th>Producto</th>
+                    <th>Unidad</th>
+                    <th>Cantidad</th>
+                    <th>Notas</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(planillaDetalle.detalles || []).map(d => (
+                    <tr key={d.id}>
+                      <td>{d.institucion}</td>
+                      <td>{d.cue || '-'}</td>
+                      <td>{d.producto}</td>
+                      <td>{d.unidad_medida || 'unidad'}</td>
+                      <td style={{ textAlign: 'center', fontWeight: 600 }}>{d.cantidad}</td>
+                      <td>{d.notas || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Historial de planillas anteriores */}
+      {planillas.filter(p => p.id !== planillaActivaAnio?.id).length > 0 && (
+        <>
+          <h4 style={{ marginBottom: 8 }}>Planillas anteriores</h4>
+          <table>
+            <thead>
+              <tr><th>ID</th><th>Año</th><th>Estado</th><th>Enviada</th></tr>
+            </thead>
+            <tbody>
+              {planillas.filter(p => p.id !== planillaActivaAnio?.id).map(p => (
+                <tr key={p.id}>
+                  <td>#{p.id}</td>
+                  <td>{p.anio}</td>
+                  <td><span className={`badge badge-estado-${p.estado === 'procesada' ? 'entregado' : p.estado === 'enviada' ? 'aprobado' : 'pendiente'}`}>{p.estado}</span></td>
+                  <td>{p.enviada_at ? new Date(p.enviada_at).toLocaleDateString('es-AR') : '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
     </div>
   )
 }
