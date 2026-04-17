@@ -9,6 +9,8 @@ export default function DirectorAreaPanel() {
   const [escuelas, setEscuelas] = useState([])
   const [asignaciones, setAsignaciones] = useState([])
   const [informes, setInformes] = useState([])
+  const [solicitudes, setSolicitudes] = useState([])
+  const [updatingId, setUpdatingId] = useState(null)
   const [msg, setMsg] = useState({ text: '', type: '' })
 
   const [asigForm, setAsigForm] = useState({ supervisor_id: '', institucion_id: '' })
@@ -16,10 +18,11 @@ export default function DirectorAreaPanel() {
 
   const loadAll = async () => {
     try {
-      const [catalogoRes, asigRes, informesRes] = await Promise.all([
+      const [catalogoRes, asigRes, informesRes, solicitudesRes] = await Promise.all([
         apiFetch('/api/director-area/catalogo', { token }),
         apiFetch('/api/director-area/asignaciones', { token }),
-        apiFetch('/api/director-area/informes', { token })
+        apiFetch('/api/director-area/informes', { token }),
+        apiFetch('/api/director-area/solicitudes', { token })
       ])
 
       if (!catalogoRes.ok || !asigRes.ok || !informesRes.ok) {
@@ -29,11 +32,13 @@ export default function DirectorAreaPanel() {
       const catalogo = await catalogoRes.json()
       const asignacionesData = await asigRes.json()
       const informesData = await informesRes.json()
+      const solicitudesData = solicitudesRes.ok ? await solicitudesRes.json() : { solicitudes: [] }
 
       setSupervisores(catalogo.supervisores || [])
       setEscuelas(catalogo.escuelas || [])
       setAsignaciones(asignacionesData.asignaciones || [])
       setInformes(informesData.informes || [])
+      setSolicitudes(solicitudesData.solicitudes || [])
     } catch (err) {
       setMsg({ text: err.message || 'Error cargando datos', type: 'error' })
     }
@@ -112,6 +117,27 @@ export default function DirectorAreaPanel() {
     setInformeForm({ supervisor_id: '', asunto: '', detalle: '', fecha_limite: '' })
     setMsg({ text: 'Solicitud de informe registrada', type: 'success' })
     loadAll()
+  }
+
+  const handleEntregarSolicitud = async (id) => {
+    setUpdatingId(id)
+    try {
+      const res = await apiFetch(`/api/pedidos/${id}/estado`, {
+        token,
+        method: 'PATCH',
+        body: JSON.stringify({ estado: 'entregado' })
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || 'No se pudo actualizar')
+      }
+      setSolicitudes(prev => prev.map(s => s.id === id ? { ...s, estado: 'entregado' } : s))
+      setMsg({ text: `Solicitud #${id} marcada como entregada.`, type: 'success' })
+    } catch (err) {
+      setMsg({ text: err.message || 'Error al marcar entregada', type: 'error' })
+    } finally {
+      setUpdatingId(null)
+    }
   }
 
   const supervisorMap = useMemo(() => {
@@ -219,6 +245,58 @@ export default function DirectorAreaPanel() {
                 <button className="secondary" style={{ margin: 0 }} onClick={() => handleEliminarAsignacion(a.id)}>
                   Quitar
                 </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <h3>Solicitudes aprobadas por supervisores</h3>
+      <p style={{ marginTop: 0, color: 'var(--muted)', fontSize: '0.9rem' }}>
+        Pedidos que el supervisor ya aprobó. Podés marcarlos como entregados una vez despachados.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Institución</th>
+            <th>Supervisor</th>
+            <th>Producto</th>
+            <th>Cantidad</th>
+            <th>Solicitante</th>
+            <th>Fecha</th>
+            <th>Estado</th>
+            <th>Acción</th>
+          </tr>
+        </thead>
+        <tbody>
+          {solicitudes.length === 0 ? (
+            <tr><td colSpan={9} style={{ textAlign: 'center', color: 'var(--muted)' }}>Sin solicitudes aprobadas.</td></tr>
+          ) : solicitudes.map(s => (
+            <tr key={s.id}>
+              <td>#{s.id}</td>
+              <td>{s.institucion}</td>
+              <td>{`${s.supervisor_nombre || ''} ${s.supervisor_apellido || ''}`.trim()}</td>
+              <td>{s.producto}</td>
+              <td>{s.cantidad}</td>
+              <td>{s.solicitante}</td>
+              <td>{s.fecha ? new Date(s.fecha).toLocaleDateString('es-AR') : '-'}</td>
+              <td>
+                <span className={`badge badge-estado-${s.estado === 'aprobado' ? 'aprobado' : 'entregado'}`}>
+                  {s.estado === 'entregado' || s.estado === 'finalizado' ? 'entregado' : s.estado}
+                </span>
+              </td>
+              <td>
+                {(s.estado === 'aprobado') ? (
+                  <button
+                    className="secondary"
+                    style={{ margin: 0 }}
+                    disabled={updatingId === s.id}
+                    onClick={() => handleEntregarSolicitud(s.id)}
+                  >
+                    {updatingId === s.id ? '...' : 'Marcar entregado'}
+                  </button>
+                ) : '-'}
               </td>
             </tr>
           ))}

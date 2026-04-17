@@ -6,6 +6,17 @@ const { PERMISSIONS } = require("../permissions");
 const router = express.Router();
 router.use(authenticate);
 
+// Agrega columna tipo si aún no existe
+async function ensureTipoPedido() {
+  try {
+    await run(`
+      ALTER TABLE pedido
+      ADD COLUMN IF NOT EXISTS tipo VARCHAR(20) DEFAULT 'anual'
+    `);
+  } catch (_) { /* ya existe o no se puede */ }
+}
+ensureTipoPedido();
+
 async function getEstadoEntregadoDb() {
   const rows = await all(`
     SELECT e.enumlabel
@@ -28,6 +39,7 @@ router.get("/", authorizePermissions(PERMISSIONS.PEDIDOS_VIEW), async (req, res)
         p.id_pedido as id,
         CASE WHEN p.estado::text = 'finalizado' THEN 'entregado' ELSE p.estado::text END as estado,
         p.observaciones_generales as notas,
+        COALESCE(p.tipo, 'anual') as tipo,
         p.fecha_creacion as created_at,
         p.id_institucion,
         pr.nombre as producto_nombre,
@@ -139,7 +151,8 @@ router.get("/:id", authorizePermissions(PERMISSIONS.PEDIDOS_VIEW), async (req, r
 // Crear pedido
 router.post("/", authorizePermissions(PERMISSIONS.PEDIDOS_CREATE), async (req, res) => {
   try {
-    const { producto_id, cantidad, notas } = req.body;
+    const { producto_id, cantidad, notas, tipo } = req.body;
+    const tipoValido = ['anual', 'refuerzo'].includes(tipo) ? tipo : 'anual';
 
     if (!producto_id || !cantidad || cantidad <= 0) {
       return res.status(400).json({ error: "Producto y cantidad son obligatorios" });
@@ -159,9 +172,26 @@ router.post("/", authorizePermissions(PERMISSIONS.PEDIDOS_CREATE), async (req, r
       return res.status(400).json({ error: "Tu usuario no tiene institución asignada" });
     }
 
+    // Validar que la solicitud anual sea única por institución por año
+    if (tipoValido === 'anual') {
+      const existente = await get(
+        `SELECT id_pedido FROM pedido
+         WHERE id_institucion = $1
+           AND COALESCE(tipo, 'anual') = 'anual'
+           AND EXTRACT(YEAR FROM fecha_creacion) = EXTRACT(YEAR FROM NOW())
+           AND estado NOT IN ('rechazado')`,
+        [usuario.id_institucion]
+      );
+      if (existente) {
+        return res.status(409).json({
+          error: "Ya existe una solicitud anual para este año. Solo se permite una por año."
+        });
+      }
+    }
+
     const pedidoResult = await run(
-      `INSERT INTO pedido (id_usuario_solicitante, id_institucion, observaciones_generales) VALUES (?, ?, ?)`,
-      [req.user.sub, usuario.id_institucion, notas || null]
+      `INSERT INTO pedido (id_usuario_solicitante, id_institucion, observaciones_generales, tipo) VALUES (?, ?, ?, ?)`,
+      [req.user.sub, usuario.id_institucion, notas || null, tipoValido]
     );
 
     await run(
