@@ -1,5 +1,5 @@
 const express = require("express");
-const { all, get, run } = require("../db.pg");
+const { all, get, run, pool } = require("../db.pg");
 const { authenticate, authorizePermissions } = require("../middleware/auth");
 const { PERMISSIONS } = require("../permissions");
 
@@ -145,20 +145,62 @@ router.patch("/:id", authorizePermissions(PERMISSIONS.PRODUCTOS_EDIT), async (re
 
 // Eliminar producto
 router.delete("/:id", authorizePermissions(PERMISSIONS.PRODUCTOS_DELETE), async (req, res) => {
+  const client = await pool.connect();
   try {
-    const { id } = req.params;
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ error: "ID de producto inválido" });
+    }
 
     const producto = await get("SELECT * FROM producto WHERE id_producto = ?", [id]);
     if (!producto) {
       return res.status(404).json({ error: "Producto no encontrado" });
     }
 
-    await run("DELETE FROM producto WHERE id_producto = ?", [id]);
+    await client.query("BEGIN");
+
+    // Limpia referencias históricas para permitir baja física del producto.
+    const relatedDeletes = [
+      ["movimiento_stock", "id_producto"],
+      ["movimientos", "producto_id"],
+      ["ajustes", "producto_id"],
+      ["asignaciones_stock", "producto_id"],
+      ["limite_stock", "id_producto"],
+      ["detalle_orden", "id_producto"],
+      ["detalle_ingreso", "id_producto"],
+      ["detalle_pedido", "id_producto"],
+      ["pedidos", "producto_id"],
+    ];
+
+    const existingTablesRes = await client.query(
+      `SELECT tablename
+       FROM pg_tables
+       WHERE schemaname = 'public'`
+    );
+    const existingTables = new Set(existingTablesRes.rows.map((row) => row.tablename));
+
+    for (const [table, column] of relatedDeletes) {
+      if (!existingTables.has(table)) {
+        continue;
+      }
+
+      await client.query(`DELETE FROM ${table} WHERE ${column} = $1`, [id]);
+    }
+
+    await client.query("DELETE FROM producto WHERE id_producto = $1", [id]);
+    await client.query("COMMIT");
 
     return res.json({ ok: true });
   } catch (err) {
+    try {
+      await client.query("ROLLBACK");
+    } catch (_) {
+      // ignore rollback errors
+    }
     console.error(err);
     return res.status(500).json({ error: "No se pudo eliminar el producto" });
+  } finally {
+    client.release();
   }
 });
 

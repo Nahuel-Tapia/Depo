@@ -614,7 +614,7 @@ function renderProductos() {
       <td>${p.id}</td>
       <td>${p.nombre}</td>
       <td>${p.unidad_medida || "unidad"}</td>
-      <td>${p.stock_minimo || 0}</td>
+      <td>${p.stock_actual || 0}</td>
       <td>${p.categoria_nombre || "-"}</td>
       <td>
         <div class="inline-actions">
@@ -684,7 +684,7 @@ document.getElementById("createProductForm")?.addEventListener("submit", async (
   const payload = {
     nombre: document.getElementById("productoNombre").value.trim(),
     unidad_medida: document.getElementById("productoUnidad").value.trim() || "unidad",
-    stock_minimo: parseInt(document.getElementById("productoStockMin").value) || 0,
+    stock_actual: parseInt(document.getElementById("productoStockActual").value) || 0,
     id_categoria: document.getElementById("productoCategoria").value || null
   };
   

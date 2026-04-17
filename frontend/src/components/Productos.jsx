@@ -11,7 +11,7 @@ export default function Productos() {
   const [formOpen, setFormOpen] = useState(false)
   const [editModal, setEditModal] = useState(null)
   const [deleteModal, setDeleteModal] = useState(null)
-  const [form, setForm] = useState({ nombre: '', unidad_medida: 'unidad', stock_actual: 0, stock_minimo: 0, id_categoria: '' })
+  const [form, setForm] = useState({ nombre: '', unidad_medida: 'unidad', stock_actual: 0, id_categoria: '' })
   const canDeleteProductos = hasPermission('productos.delete') || user?.role === 'admin'
 
   const loadCategorias = async () => {
@@ -47,7 +47,6 @@ export default function Productos() {
       nombre: form.nombre.trim(),
       unidad_medida: form.unidad_medida.trim() || 'unidad',
       stock_actual: parseInt(form.stock_actual) || 0,
-      stock_minimo: parseInt(form.stock_minimo) || 0,
       id_categoria: form.id_categoria || null
     }
 
@@ -63,7 +62,7 @@ export default function Productos() {
       return
     }
 
-    setForm({ nombre: '', unidad_medida: 'unidad', stock_actual: 0, stock_minimo: 0, id_categoria: '' })
+    setForm({ nombre: '', unidad_medida: 'unidad', stock_actual: 0, id_categoria: '' })
     setFormOpen(false)
     setMsg({ text: 'Producto creado', type: 'success' })
     loadProductos()
@@ -78,7 +77,6 @@ export default function Productos() {
       nombre: producto.nombre || '',
       unidad_medida: producto.unidad_medida || 'unidad',
       stock_actual: producto.stock_actual ?? 0,
-      stock_minimo: producto.stock_minimo ?? 0,
       id_categoria: producto.id_categoria || ''
     })
   }
@@ -91,7 +89,6 @@ export default function Productos() {
       nombre: String(editModal.nombre || '').trim(),
       unidad_medida: String(editModal.unidad_medida || '').trim() || 'unidad',
       stock_actual: parseInt(editModal.stock_actual, 10) || 0,
-      stock_minimo: parseInt(editModal.stock_minimo, 10) || 0,
       id_categoria: editModal.id_categoria || null
     }
 
@@ -176,7 +173,6 @@ export default function Productos() {
             <th>Nombre</th>
             <th>Unidad</th>
             <th>Stock Actual</th>
-            <th>Stock Mín.</th>
             <th>Categoría</th>
             <th>Estado</th>
             <th>Acciones</th>
@@ -189,10 +185,9 @@ export default function Productos() {
               <td>{p.nombre}</td>
               <td>{p.unidad_medida || 'unidad'}</td>
               <td>{p.stock_actual ?? 0}</td>
-              <td>{p.stock_minimo || 0}</td>
               <td>{p.categoria_nombre || '-'}</td>
               <td>
-                {(p.stock_actual ?? 0) <= (p.stock_minimo || 0)
+                {(p.stock_actual ?? 0) <= 0
                   ? <span style={{ color: '#ef4444', fontWeight: 600 }}>⚠ Bajo</span>
                   : <span style={{ color: '#10b981' }}>OK</span>
                 }
@@ -245,10 +240,6 @@ export default function Productos() {
                 <input type="number" value={form.stock_actual} onChange={e => setForm({ ...form, stock_actual: e.target.value })} placeholder="0" min="0" />
               </div>
               <div>
-                <label>Stock mínimo</label>
-                <input type="number" value={form.stock_minimo} onChange={e => setForm({ ...form, stock_minimo: e.target.value })} placeholder="0" min="0" />
-              </div>
-              <div>
                 <label>Categoría</label>
                 <select value={form.id_categoria} onChange={e => setForm({ ...form, id_categoria: e.target.value })}>
                   <option value="">-- Sin categoría --</option>
@@ -296,10 +287,6 @@ export default function Productos() {
               <div>
                 <label>Stock actual</label>
                 <input type="number" value={editModal.stock_actual} onChange={e => setEditModal({ ...editModal, stock_actual: e.target.value })} placeholder="0" min="0" />
-              </div>
-              <div>
-                <label>Stock mínimo</label>
-                <input type="number" value={editModal.stock_minimo} onChange={e => setEditModal({ ...editModal, stock_minimo: e.target.value })} placeholder="0" min="0" />
               </div>
               <div>
                 <label>Categoría</label>
