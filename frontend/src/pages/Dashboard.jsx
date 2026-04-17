@@ -33,17 +33,14 @@ export default function Dashboard() {
     : user?.role === 'operador' ? 'O'
     : 'C'
 
-<<<<<<< HEAD
-  const visibleTabs = TABS.filter(t => {
-    if (t.hideForRole && t.hideForRole === user?.role) return false
-    if (t.role && t.role !== user?.role && user?.role !== 'admin') return false
-    return !t.permission || hasPermission(t.permission)
-  })
-=======
   const visibleTabs = TABS.filter(tab => {
     if (user?.role === 'directivo') {
       return tab.key === 'inicio' || tab.key === 'pedidos'
     }
+    // Hide tabs explicitly hidden for this role
+    if (tab.hideForRole && tab.hideForRole === user?.role) return false
+    // Tabs restricted to a specific role: only show for that role (or admin)
+    if (tab.role && tab.role !== user?.role && user?.role !== 'admin') return false
     return !tab.permission || hasPermission(tab.permission)
   })
 
@@ -52,7 +49,6 @@ export default function Dashboard() {
       setActiveTab(visibleTabs[0]?.key || 'inicio')
     }
   }, [activeTab, visibleTabs])
->>>>>>> f327a75fa18187ba4bdf89c28ee2fd2c52dbd8ec
 
   const handleLogout = () => {
     logout()

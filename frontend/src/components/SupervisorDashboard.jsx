@@ -1,26 +1,11 @@
-import { useState, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../api'
 import PrintButton from './PrintButton'
 
-// ============================================================
-// MOCK DATA — Patrimonio Escolar (Tickets)
-// Reemplazar con llamadas reales al backend. Ver "TODO API"
-// ============================================================
-
-const MOCK_JURISDICCION = 'Rawson'
-
 const CATEGORIAS_PATRIMONIO = [
   'Bancos', 'Sillas', 'Escritorios', 'Pizarrones', 'Estantes',
   'Mesas', 'Armarios', 'Equipamiento informático', 'Otro'
-]
-
-const MOCK_TICKETS = [
-  { id: 1001, institucion: 'Escuela N° 12 "Domingo F. Sarmiento"', cue: '7000012', fecha: '2026-04-12', categoria: 'Bancos', descripcion: '15 bancos bipersonales con patas rotas y tablas astilladas', cantidad: 15, prioridad: 'alta', estado: 'pendiente', solicitante: 'María López' },
-  { id: 1002, institucion: 'Escuela N° 34 "San Martín"', cue: '7000034', fecha: '2026-04-11', categoria: 'Sillas', descripcion: '8 sillas con respaldo quebrado, no se pueden usar', cantidad: 8, prioridad: 'media', estado: 'pendiente', solicitante: 'Ana García' },
-  { id: 1003, institucion: 'Escuela N° 12 "Domingo F. Sarmiento"', cue: '7000012', fecha: '2026-04-10', categoria: 'Pizarrones', descripcion: '2 pizarrones blancos con superficie dañada, no se puede escribir', cantidad: 2, prioridad: 'baja', estado: 'pendiente', solicitante: 'María López' },
-  { id: 1004, institucion: 'Escuela N° 34 "San Martín"', cue: '7000034', fecha: '2026-04-09', categoria: 'Escritorios', descripcion: '3 escritorios docentes con cajones trabados y bisagras rotas', cantidad: 3, prioridad: 'media', estado: 'pendiente', solicitante: 'Ana García' },
-  { id: 1005, institucion: 'Escuela N° 12 "Domingo F. Sarmiento"', cue: '7000012', fecha: '2026-04-08', categoria: 'Equipamiento informático', descripcion: '5 monitores que no encienden, posible fuente dañada', cantidad: 5, prioridad: 'alta', estado: 'pendiente', solicitante: 'María López' },
 ]
 
 const PRIORIDAD_STYLE = {
@@ -33,7 +18,7 @@ export default function SupervisorDashboard() {
   const { token, user } = useAuth()
   const printRef = useRef(null)
 
-  const [tickets, setTickets] = useState(MOCK_TICKETS)
+  const [tickets, setTickets] = useState([])
   const [procesados, setProcesados] = useState([])
   const [msg, setMsg] = useState({ text: '', type: '' })
 
@@ -42,14 +27,42 @@ export default function SupervisorDashboard() {
   const [accionTipo, setAccionTipo] = useState('') // 'rechazar' | 'reparar'
   const [motivoAccion, setMotivoAccion] = useState('')
 
+  // Carga de tickets desde API
+  useEffect(() => {
+    const loadTickets = async () => {
+      try {
+        const res = await apiFetch('/api/patrimonio/tickets', { token })
+        if (res.ok) {
+          const data = await res.json()
+          setTickets(data.tickets || [])
+        }
+      } catch (err) {
+        console.error('Error cargando tickets de patrimonio:', err)
+      }
+    }
+    loadTickets()
+  }, [token])
+
   // Filtros
   const [busqueda, setBusqueda] = useState('')
   const [filtroCategoria, setFiltroCategoria] = useState('')
   const [filtroPrioridad, setFiltroPrioridad] = useState('')
 
   // ── Aprobar ticket (reemplazo completo del bien) ──
-  const handleAprobar = (ticketId) => {
-    // TODO API: await apiFetch(`/api/patrimonio/tickets/${ticketId}/estado`, { token, method: 'PATCH', body: JSON.stringify({ estado: 'aprobado' }) })
+  const handleAprobar = async (ticketId) => {
+    try {
+      const res = await apiFetch(`/api/patrimonio/tickets/${ticketId}/estado`, { token, method: 'PATCH', body: JSON.stringify({ estado: 'aprobado' }) })
+      if (!res.ok) {
+        const err = await res.json()
+        setMsg({ text: err.error || 'Error al aprobar ticket', type: 'error' })
+        setTimeout(() => setMsg({ text: '', type: '' }), 3000)
+        return
+      }
+    } catch (err) {
+      setMsg({ text: 'Error de conexión', type: 'error' })
+      setTimeout(() => setMsg({ text: '', type: '' }), 3000)
+      return
+    }
     const ticket = tickets.find(t => t.id === ticketId)
     setTickets(prev => prev.filter(t => t.id !== ticketId))
     setProcesados(prev => [...prev, { ...ticket, estado: 'aprobado', resolucion: 'Reemplazo aprobado', fechaProcesado: new Date().toISOString() }])
@@ -70,16 +83,28 @@ export default function SupervisorDashboard() {
     setMotivoAccion('')
   }
 
-  const confirmarAccion = (ticketId) => {
+  const confirmarAccion = async (ticketId) => {
     if (!motivoAccion.trim()) {
       setMsg({ text: `Debe ingresar una observación para ${accionTipo === 'rechazar' ? 'el rechazo' : 'la reparación'}`, type: 'error' })
       setTimeout(() => setMsg({ text: '', type: '' }), 3000)
       return
     }
 
-    // TODO API: await apiFetch(`/api/patrimonio/tickets/${ticketId}/estado`, { token, method: 'PATCH', body: JSON.stringify({ estado: accionTipo === 'rechazar' ? 'rechazado' : 'en_reparacion', observacion: motivoAccion.trim() }) })
-    const ticket = tickets.find(t => t.id === ticketId)
     const nuevoEstado = accionTipo === 'rechazar' ? 'rechazado' : 'en_reparacion'
+    try {
+      const res = await apiFetch(`/api/patrimonio/tickets/${ticketId}/estado`, { token, method: 'PATCH', body: JSON.stringify({ estado: nuevoEstado, observacion: motivoAccion.trim() }) })
+      if (!res.ok) {
+        const err = await res.json()
+        setMsg({ text: err.error || 'Error al procesar ticket', type: 'error' })
+        setTimeout(() => setMsg({ text: '', type: '' }), 3000)
+        return
+      }
+    } catch (err) {
+      setMsg({ text: 'Error de conexión', type: 'error' })
+      setTimeout(() => setMsg({ text: '', type: '' }), 3000)
+      return
+    }
+    const ticket = tickets.find(t => t.id === ticketId)
     const labelEstado = accionTipo === 'rechazar' ? 'Rechazado' : 'Enviado a reparación'
 
     setTickets(prev => prev.filter(t => t.id !== ticketId))
@@ -115,7 +140,7 @@ export default function SupervisorDashboard() {
 
       <div className="sv-jurisdiction-banner">
         <span className="sv-jurisdiction-dot"></span>
-        <span>Jurisdicción: <strong>{user?.jurisdiccion || MOCK_JURISDICCION}</strong></span>
+        <span>Jurisdicción: <strong>{user?.jurisdiccion || '-'}</strong></span>
         <span className="sv-jurisdiction-count">{tickets.length} tickets pendientes</span>
       </div>
 

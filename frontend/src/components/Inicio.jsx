@@ -326,27 +326,23 @@ function MiniCard({ label, value, color }) {
 }
 
 // ── Vista de Inicio para Supervisor ──
-const MOCK_SUPERVISOR_INSTITUCIONES = [
-  { id: 1, nombre: 'Escuela N° 12 "Domingo F. Sarmiento"', cue: '7000012', jurisdiccion: 'Rawson', pedidos_pendientes: 2, tickets_patrimonio: 3 },
-  { id: 3, nombre: 'Escuela N° 34 "San Martín"', cue: '7000034', jurisdiccion: 'Rawson', pedidos_pendientes: 1, tickets_patrimonio: 2 },
-]
-
 function SupervisorInicio({ onNavigate, token, user }) {
-  const [instituciones, setInstituciones] = useState(MOCK_SUPERVISOR_INSTITUCIONES)
+  const [instituciones, setInstituciones] = useState([])
 
-  // TODO API: Reemplazar mock con llamada real
-  // useEffect(() => {
-  //   const load = async () => {
-  //     try {
-  //       const res = await apiFetch(`/api/supervisor/instituciones?jurisdiccion=${encodeURIComponent(user?.jurisdiccion || '')}`, { token })
-  //       if (res.ok) {
-  //         const data = await res.json()
-  //         setInstituciones(data.instituciones || [])
-  //       }
-  //     } catch {}
-  //   }
-  //   load()
-  // }, [token])
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await apiFetch(`/api/supervisor/instituciones?jurisdiccion=${encodeURIComponent(user?.jurisdiccion || '')}`, { token })
+        if (res.ok) {
+          const data = await res.json()
+          setInstituciones(data.instituciones || [])
+        }
+      } catch (err) {
+        console.error('Error cargando instituciones del supervisor:', err)
+      }
+    }
+    load()
+  }, [token])
 
   const totalPendientes = instituciones.reduce((sum, i) => sum + (i.pedidos_pendientes || 0), 0)
   const totalTickets = instituciones.reduce((sum, i) => sum + (i.tickets_patrimonio || 0), 0)
@@ -355,7 +351,7 @@ function SupervisorInicio({ onNavigate, token, user }) {
     <div>
       <div className="sv-jurisdiction-banner">
         <span className="sv-jurisdiction-dot"></span>
-        <span>Jurisdicción: <strong>{user?.jurisdiccion || 'Rawson'}</strong></span>
+        <span>Jurisdicción: <strong>{user?.jurisdiccion || '-'}</strong></span>
         <span className="sv-jurisdiction-count">{instituciones.length} escuelas asignadas</span>
       </div>
 

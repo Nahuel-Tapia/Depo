@@ -3,34 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../api'
 import PrintButton from './PrintButton'
 
-// ============================================================
-// MOCK DATA para vista Supervisor — Reemplazar con API real
-// ============================================================
-const MOCK_JURISDICCION = 'Rawson'
 
-const MOCK_INSTITUCIONES = [
-  { id: 1, nombre: 'Escuela N° 12 "Domingo F. Sarmiento"', cue: '7000012', jurisdiccion: 'Rawson' },
-  { id: 3, nombre: 'Escuela N° 34 "San Martín"', cue: '7000034', jurisdiccion: 'Rawson' },
-]
-
-const MOCK_PEDIDOS_PENDIENTES = [
-  { id: 101, institucion_id: 1, institucion: 'Escuela N° 12 "Domingo F. Sarmiento"', fecha: '2026-04-12', producto: 'Lavandina (L)', cantidad: 5, notas: 'Para comedor escolar', estado: 'pendiente', solicitante: 'María López' },
-  { id: 103, institucion_id: 3, institucion: 'Escuela N° 34 "San Martín"', fecha: '2026-04-10', producto: 'Lampazo (U)', cantidad: 4, notas: 'Urgente', estado: 'pendiente', solicitante: 'Ana García' },
-  { id: 104, institucion_id: 1, institucion: 'Escuela N° 12 "Domingo F. Sarmiento"', fecha: '2026-04-10', producto: 'Tizas (Caja)', cantidad: 1, notas: '', estado: 'pendiente', solicitante: 'María López' },
-]
-
-const MOCK_HISTORIAL = {
-  1: [
-    { fecha: '2026-03-15', producto: 'Arroz (kg)', cantidad: 30, tipo: 'Entrega' },
-    { fecha: '2026-03-01', producto: 'Aceite (litro)', cantidad: 10, tipo: 'Entrega' },
-    { fecha: '2026-02-20', producto: 'Fideos (kg)', cantidad: 25, tipo: 'Entrega' },
-    { fecha: '2026-02-10', producto: 'Harina (kg)', cantidad: 15, tipo: 'Entrega' },
-  ],
-  3: [
-    { fecha: '2026-04-01', producto: 'Aceite (litro)', cantidad: 12, tipo: 'Entrega' },
-    { fecha: '2026-03-10', producto: 'Harina (kg)', cantidad: 20, tipo: 'Entrega' },
-  ],
-}
 
 // ============================================================
 // Vista Supervisor: Bandeja de aprobación de pedidos
@@ -49,23 +22,46 @@ function SupervisorPedidos() {
   const [historialData, setHistorialData] = useState([])
   const [busqueda, setBusqueda] = useState('')
 
+  const loadData = async () => {
+    try {
+      const jurisdiccion = user?.jurisdiccion || ''
+      const [instRes, pedRes] = await Promise.all([
+        apiFetch(`/api/supervisor/instituciones?jurisdiccion=${encodeURIComponent(jurisdiccion)}`, { token }),
+        apiFetch(`/api/supervisor/pedidos-pendientes?jurisdiccion=${encodeURIComponent(jurisdiccion)}`, { token }),
+      ])
+      if (instRes.ok) {
+        const instData = await instRes.json()
+        setInstituciones(instData.instituciones || [])
+      }
+      if (pedRes.ok) {
+        const pedData = await pedRes.json()
+        setPedidosPendientes(pedData.pedidos || [])
+      }
+    } catch (err) {
+      console.error('Error cargando datos del supervisor:', err)
+    }
+  }
+
   useEffect(() => {
-    // TODO API: Reemplazar mock data con llamadas al backend
-    // const jurisdiccion = user?.jurisdiccion || ''
-    // const res = await apiFetch(`/api/supervisor/pedidos-pendientes?jurisdiccion=${encodeURIComponent(jurisdiccion)}`, { token })
-    const jurisdiccion = user?.jurisdiccion || MOCK_JURISDICCION
-    const instFiltradas = MOCK_INSTITUCIONES.filter(i => i.jurisdiccion === jurisdiccion)
-    setInstituciones(instFiltradas)
-    const idsJurisdiccion = new Set(instFiltradas.map(i => i.id))
-    setPedidosPendientes(MOCK_PEDIDOS_PENDIENTES.filter(p => idsJurisdiccion.has(p.institucion_id)))
+    loadData()
   }, [])
 
   const handleAprobar = async (pedidoId) => {
-    // TODO API: await apiFetch(`/api/pedidos/${pedidoId}/estado`, { token, method: 'PATCH', body: JSON.stringify({ estado: 'aprobado' }) })
-    const pedido = pedidosPendientes.find(p => p.id === pedidoId)
-    setPedidosPendientes(prev => prev.filter(p => p.id !== pedidoId))
-    setProcesados(prev => [...prev, { ...pedido, estado: 'aprobado', fechaProcesado: new Date().toISOString() }])
-    setMsg({ text: `Pedido #${pedidoId} aprobado correctamente`, type: 'success' })
+    try {
+      const res = await apiFetch(`/api/pedidos/${pedidoId}/estado`, { token, method: 'PATCH', body: JSON.stringify({ estado: 'aprobado' }) })
+      if (!res.ok) {
+        const err = await res.json()
+        setMsg({ text: err.error || 'Error al aprobar pedido', type: 'error' })
+        setTimeout(() => setMsg({ text: '', type: '' }), 3000)
+        return
+      }
+      const pedido = pedidosPendientes.find(p => p.id === pedidoId)
+      setPedidosPendientes(prev => prev.filter(p => p.id !== pedidoId))
+      setProcesados(prev => [...prev, { ...pedido, estado: 'aprobado', fechaProcesado: new Date().toISOString() }])
+      setMsg({ text: `Pedido #${pedidoId} aprobado correctamente`, type: 'success' })
+    } catch (err) {
+      setMsg({ text: 'Error de conexión al aprobar pedido', type: 'error' })
+    }
     setTimeout(() => setMsg({ text: '', type: '' }), 3000)
   }
 
@@ -78,19 +74,38 @@ function SupervisorPedidos() {
       setTimeout(() => setMsg({ text: '', type: '' }), 3000)
       return
     }
-    // TODO API: await apiFetch(`/api/pedidos/${pedidoId}/estado`, { token, method: 'PATCH', body: JSON.stringify({ estado: 'rechazado', motivo: motivoRechazo.trim() }) })
-    const pedido = pedidosPendientes.find(p => p.id === pedidoId)
-    setPedidosPendientes(prev => prev.filter(p => p.id !== pedidoId))
-    setProcesados(prev => [...prev, { ...pedido, estado: 'rechazado', motivo: motivoRechazo.trim(), fechaProcesado: new Date().toISOString() }])
-    setMsg({ text: `Pedido #${pedidoId} rechazado`, type: 'success' })
+    try {
+      const res = await apiFetch(`/api/pedidos/${pedidoId}/estado`, { token, method: 'PATCH', body: JSON.stringify({ estado: 'rechazado', motivo: motivoRechazo.trim() }) })
+      if (!res.ok) {
+        const err = await res.json()
+        setMsg({ text: err.error || 'Error al rechazar pedido', type: 'error' })
+        setTimeout(() => setMsg({ text: '', type: '' }), 3000)
+        return
+      }
+      const pedido = pedidosPendientes.find(p => p.id === pedidoId)
+      setPedidosPendientes(prev => prev.filter(p => p.id !== pedidoId))
+      setProcesados(prev => [...prev, { ...pedido, estado: 'rechazado', motivo: motivoRechazo.trim(), fechaProcesado: new Date().toISOString() }])
+      setMsg({ text: `Pedido #${pedidoId} rechazado`, type: 'success' })
+    } catch (err) {
+      setMsg({ text: 'Error de conexión al rechazar pedido', type: 'error' })
+    }
     setRechazandoId(null); setMotivoRechazo('')
     setTimeout(() => setMsg({ text: '', type: '' }), 3000)
   }
 
-  const verHistorial = (institucionId) => {
+  const verHistorial = async (institucionId) => {
     if (historialVisible === institucionId) { setHistorialVisible(null); setHistorialData([]); return }
-    // TODO API: const res = await apiFetch(`/api/instituciones/${institucionId}/historial`, { token })
-    setHistorialData(MOCK_HISTORIAL[institucionId] || [])
+    try {
+      const res = await apiFetch(`/api/supervisor/instituciones/${institucionId}/historial`, { token })
+      if (res.ok) {
+        const data = await res.json()
+        setHistorialData(data.eventos || [])
+      } else {
+        setHistorialData([])
+      }
+    } catch {
+      setHistorialData([])
+    }
     setHistorialVisible(institucionId)
   }
 
@@ -107,7 +122,7 @@ function SupervisorPedidos() {
 
       <div className="sv-jurisdiction-banner">
         <span className="sv-jurisdiction-dot"></span>
-        <span>Jurisdicción: <strong>{user?.jurisdiccion || MOCK_JURISDICCION}</strong></span>
+        <span>Jurisdicción: <strong>{user?.jurisdiccion || '-'}</strong></span>
         <span className="sv-jurisdiction-count">{instituciones.length} escuelas</span>
       </div>
 
