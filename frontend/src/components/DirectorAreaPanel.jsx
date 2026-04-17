@@ -4,6 +4,7 @@ import { apiFetch } from '../api'
 
 export default function DirectorAreaPanel() {
   const { token } = useAuth()
+  const [activeSection, setActiveSection] = useState('pedidos')
 
   const [supervisores, setSupervisores] = useState([])
   const [escuelas, setEscuelas] = useState([])
@@ -151,6 +152,38 @@ export default function DirectorAreaPanel() {
     }
   }
 
+  const handleDecisionSolicitud = async (id, decision) => {
+    setUpdatingId(id)
+    try {
+      const res = await apiFetch(`/api/director-area/solicitudes/${id}/decision`, {
+        token,
+        method: 'PATCH',
+        body: JSON.stringify({ decision })
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'No se pudo registrar la decisión')
+
+      setSolicitudes(prev => prev.map(s => {
+        if (s.id !== id) return s
+        if (decision === 'aceptar') {
+          return { ...s, aprobado_director_area: true }
+        }
+        return { ...s, aprobado_director_area: false, estado: 'rechazado' }
+      }))
+
+      setMsg({
+        text: decision === 'aceptar'
+          ? `Solicitud #${id} aceptada para pedido anual.`
+          : `Solicitud #${id} denegada.`,
+        type: 'success'
+      })
+    } catch (err) {
+      setMsg({ text: err.message || 'Error al decidir solicitud', type: 'error' })
+    } finally {
+      setUpdatingId(null)
+    }
+  }
+
   const handleCrearPlanilla = async () => {
     setCreandoPlanilla(true)
     try {
@@ -211,7 +244,12 @@ export default function DirectorAreaPanel() {
 
   const anioActual = new Date().getFullYear()
   const planillaActivaAnio = planillas.find(p => p.anio === anioActual && p.estado !== 'procesada')
-  const solicitudesAnualesPendientes = solicitudes.filter(s => (s.tipo || 'anual') === 'anual' && s.estado === 'aprobado')
+  const solicitudesAnualesPorDecidir = solicitudes.filter(
+    s => (s.tipo || 'anual') === 'anual' && s.estado === 'aprobado' && s.aprobado_director_area == null
+  )
+  const solicitudesAnualesAceptadas = solicitudes.filter(
+    s => (s.tipo || 'anual') === 'anual' && s.estado === 'aprobado' && s.aprobado_director_area === true
+  )
 
   const supervisorMap = useMemo(() => {
     return Object.fromEntries(supervisores.map(s => [String(s.id), `${s.nombre || ''} ${s.apellido || ''}`.trim()]))
@@ -230,103 +268,127 @@ export default function DirectorAreaPanel() {
         </div>
       )}
 
-      <div className="grid" style={{ alignItems: 'start' }}>
-        <section style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 14, background: '#fff' }}>
-          <h3 style={{ marginTop: 0 }}>Asignar Escuelas a Supervisores</h3>
-          <form onSubmit={handleAsignar}>
-            <label>Supervisor</label>
-            <select value={asigForm.supervisor_id} onChange={e => setAsigForm({ ...asigForm, supervisor_id: e.target.value })}>
-              <option value="">Seleccionar supervisor</option>
-              {supervisores.map(s => (
-                <option key={s.id} value={s.id}>{`${s.nombre || ''} ${s.apellido || ''}`.trim()}</option>
-              ))}
-            </select>
-
-            <label>Escuela</label>
-            <select value={asigForm.institucion_id} onChange={e => setAsigForm({ ...asigForm, institucion_id: e.target.value })}>
-              <option value="">Seleccionar escuela</option>
-              {escuelas.map(i => (
-                <option key={i.id} value={i.id}>{i.nombre} ({i.cue || '-'})</option>
-              ))}
-            </select>
-
-            <button type="submit">Asignar escuela</button>
-          </form>
-        </section>
-
-        <section style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 14, background: '#fff' }}>
-          <h3 style={{ marginTop: 0 }}>Solicitar Informes a Supervisores</h3>
-          <form onSubmit={handleSolicitarInforme}>
-            <label>Supervisor</label>
-            <select value={informeForm.supervisor_id} onChange={e => setInformeForm({ ...informeForm, supervisor_id: e.target.value })}>
-              <option value="">Seleccionar supervisor</option>
-              {supervisores.map(s => (
-                <option key={s.id} value={s.id}>{`${s.nombre || ''} ${s.apellido || ''}`.trim()}</option>
-              ))}
-            </select>
-
-            <label>Asunto</label>
-            <input
-              type="text"
-              value={informeForm.asunto}
-              onChange={e => setInformeForm({ ...informeForm, asunto: e.target.value })}
-              placeholder="Ej: Informe mensual de solicitudes"
-            />
-
-            <label>Detalle</label>
-            <textarea
-              className="sv-rechazo-input"
-              rows={3}
-              value={informeForm.detalle}
-              onChange={e => setInformeForm({ ...informeForm, detalle: e.target.value })}
-              placeholder="Alcance, formato esperado, indicadores..."
-            />
-
-            <label>Fecha límite</label>
-            <input
-              type="date"
-              value={informeForm.fecha_limite}
-              onChange={e => setInformeForm({ ...informeForm, fecha_limite: e.target.value })}
-            />
-
-            <button type="submit">Solicitar informe</button>
-          </form>
-        </section>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 18, flexWrap: 'wrap' }}>
+        {[
+          { key: 'pedidos', label: 'Pedidos' },
+          { key: 'pedido-anual', label: 'Pedido anual' },
+          { key: 'gestion', label: 'Gestión' }
+        ].map(section => (
+          <button
+            key={section.key}
+            type="button"
+            className={activeSection === section.key ? '' : 'secondary'}
+            style={{ margin: 0 }}
+            onClick={() => setActiveSection(section.key)}
+          >
+            {section.label}
+          </button>
+        ))}
       </div>
 
-      <h3>Asignaciones actuales</h3>
-      <table>
-        <thead>
-          <tr>
-            <th>Supervisor</th>
-            <th>Escuela</th>
-            <th>CUE</th>
-            <th>Fecha</th>
-            <th>Acción</th>
-          </tr>
-        </thead>
-        <tbody>
-          {asignaciones.length === 0 ? (
-            <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--muted)' }}>Sin asignaciones.</td></tr>
-          ) : asignaciones.map(a => (
-            <tr key={a.id}>
-              <td>{`${a.supervisor_nombre || ''} ${a.supervisor_apellido || ''}`.trim()}</td>
-              <td>{a.institucion_nombre}</td>
-              <td>{a.cue || '-'}</td>
-              <td>{a.created_at ? new Date(a.created_at).toLocaleDateString('es-AR') : '-'}</td>
-              <td>
-                <button className="secondary" style={{ margin: 0 }} onClick={() => handleEliminarAsignacion(a.id)}>
-                  Quitar
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {activeSection === 'gestion' && (
+        <>
+          <div className="grid" style={{ alignItems: 'start' }}>
+            <section style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 14, background: '#fff' }}>
+              <h3 style={{ marginTop: 0 }}>Asignar Escuelas a Supervisores</h3>
+              <form onSubmit={handleAsignar}>
+                <label>Supervisor</label>
+                <select value={asigForm.supervisor_id} onChange={e => setAsigForm({ ...asigForm, supervisor_id: e.target.value })}>
+                  <option value="">Seleccionar supervisor</option>
+                  {supervisores.map(s => (
+                    <option key={s.id} value={s.id}>{`${s.nombre || ''} ${s.apellido || ''}`.trim()}</option>
+                  ))}
+                </select>
 
-      <h3>Solicitudes aprobadas por supervisores</h3>
+                <label>Escuela</label>
+                <select value={asigForm.institucion_id} onChange={e => setAsigForm({ ...asigForm, institucion_id: e.target.value })}>
+                  <option value="">Seleccionar escuela</option>
+                  {escuelas.map(i => (
+                    <option key={i.id} value={i.id}>{i.nombre} ({i.cue || '-'})</option>
+                  ))}
+                </select>
+
+                <button type="submit">Asignar escuela</button>
+              </form>
+            </section>
+
+            <section style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 14, background: '#fff' }}>
+              <h3 style={{ marginTop: 0 }}>Solicitar Informes a Supervisores</h3>
+              <form onSubmit={handleSolicitarInforme}>
+                <label>Supervisor</label>
+                <select value={informeForm.supervisor_id} onChange={e => setInformeForm({ ...informeForm, supervisor_id: e.target.value })}>
+                  <option value="">Seleccionar supervisor</option>
+                  {supervisores.map(s => (
+                    <option key={s.id} value={s.id}>{`${s.nombre || ''} ${s.apellido || ''}`.trim()}</option>
+                  ))}
+                </select>
+
+                <label>Asunto</label>
+                <input
+                  type="text"
+                  value={informeForm.asunto}
+                  onChange={e => setInformeForm({ ...informeForm, asunto: e.target.value })}
+                  placeholder="Ej: Informe mensual de solicitudes"
+                />
+
+                <label>Detalle</label>
+                <textarea
+                  className="sv-rechazo-input"
+                  rows={3}
+                  value={informeForm.detalle}
+                  onChange={e => setInformeForm({ ...informeForm, detalle: e.target.value })}
+                  placeholder="Alcance, formato esperado, indicadores..."
+                />
+
+                <label>Fecha límite</label>
+                <input
+                  type="date"
+                  value={informeForm.fecha_limite}
+                  onChange={e => setInformeForm({ ...informeForm, fecha_limite: e.target.value })}
+                />
+
+                <button type="submit">Solicitar informe</button>
+              </form>
+            </section>
+          </div>
+
+          <h3>Asignaciones actuales</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Supervisor</th>
+                <th>Escuela</th>
+                <th>CUE</th>
+                <th>Fecha</th>
+                <th>Acción</th>
+              </tr>
+            </thead>
+            <tbody>
+              {asignaciones.length === 0 ? (
+                <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--muted)' }}>Sin asignaciones.</td></tr>
+              ) : asignaciones.map(a => (
+                <tr key={a.id}>
+                  <td>{`${a.supervisor_nombre || ''} ${a.supervisor_apellido || ''}`.trim()}</td>
+                  <td>{a.institucion_nombre}</td>
+                  <td>{a.cue || '-'}</td>
+                  <td>{a.created_at ? new Date(a.created_at).toLocaleDateString('es-AR') : '-'}</td>
+                  <td>
+                    <button className="secondary" style={{ margin: 0 }} onClick={() => handleEliminarAsignacion(a.id)}>
+                      Quitar
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+
+      {activeSection === 'pedidos' && (
+        <>
+      <h3>Pedidos (Dirección de Área)</h3>
       <p style={{ marginTop: 0, color: 'var(--muted)', fontSize: '0.9rem' }}>
-        Pedidos que el supervisor ya aprobó. Podés marcarlos como entregados una vez despachados.
+        Revisá pedidos aprobados por supervisores. Podés aceptar o denegar los anuales para el pedido anual, y marcar entregados los ya autorizados.
       </p>
       <table>
         <thead>
@@ -339,12 +401,13 @@ export default function DirectorAreaPanel() {
             <th>Solicitante</th>
             <th>Fecha</th>
             <th>Estado</th>
+            <th>Decisión DA</th>
             <th>Acción</th>
           </tr>
         </thead>
         <tbody>
           {solicitudes.length === 0 ? (
-            <tr><td colSpan={9} style={{ textAlign: 'center', color: 'var(--muted)' }}>Sin solicitudes aprobadas.</td></tr>
+            <tr><td colSpan={10} style={{ textAlign: 'center', color: 'var(--muted)' }}>Sin solicitudes registradas.</td></tr>
           ) : solicitudes.map(s => (
             <tr key={s.id}>
               <td>#{s.id}</td>
@@ -360,22 +423,57 @@ export default function DirectorAreaPanel() {
                 </span>
               </td>
               <td>
-                {(s.estado === 'aprobado') ? (
-                  <button
-                    className="secondary"
-                    style={{ margin: 0 }}
-                    disabled={updatingId === s.id}
-                    onClick={() => handleEntregarSolicitud(s.id)}
-                  >
-                    {updatingId === s.id ? '...' : 'Marcar entregado'}
-                  </button>
-                ) : '-'}
+                {(s.tipo || 'anual') !== 'anual'
+                  ? '-'
+                  : s.aprobado_director_area === true
+                    ? <span className="badge badge-estado-aprobado">aceptado</span>
+                    : s.aprobado_director_area === false
+                      ? <span className="badge badge-estado-rechazado">denegado</span>
+                      : <span className="badge badge-estado-pendiente">pendiente</span>}
+              </td>
+              <td>
+                <div className="inline-actions">
+                  {(s.tipo || 'anual') === 'anual' && s.estado === 'aprobado' && s.aprobado_director_area == null && (
+                    <>
+                      <button
+                        style={{ margin: 0 }}
+                        disabled={updatingId === s.id}
+                        onClick={() => handleDecisionSolicitud(s.id, 'aceptar')}
+                      >
+                        {updatingId === s.id ? '...' : 'Aceptar'}
+                      </button>
+                      <button
+                        className="sv-btn-rechazar"
+                        style={{ margin: 0 }}
+                        disabled={updatingId === s.id}
+                        onClick={() => handleDecisionSolicitud(s.id, 'denegar')}
+                      >
+                        Denegar
+                      </button>
+                    </>
+                  )}
+
+                  {s.estado === 'aprobado' && (
+                    <button
+                      className="secondary"
+                      style={{ margin: 0 }}
+                      disabled={updatingId === s.id}
+                      onClick={() => handleEntregarSolicitud(s.id)}
+                    >
+                      {updatingId === s.id ? '...' : 'Marcar entregado'}
+                    </button>
+                  )}
+                </div>
               </td>
             </tr>
           ))}
         </tbody>
       </table>
+        </>
+      )}
 
+      {activeSection === 'gestion' && (
+        <>
       <h3>Solicitudes de informe</h3>
       <table>
         <thead>
@@ -404,23 +502,31 @@ export default function DirectorAreaPanel() {
           ))}
         </tbody>
       </table>
+        </>
+      )}
 
+      {activeSection === 'pedido-anual' && (
+        <>
       {/* ── Planilla de Pedido Anual ── */}
       <h3 style={{ marginTop: 32 }}>Planilla de Pedido Anual {anioActual}</h3>
       <p style={{ marginTop: 0, color: 'var(--muted)', fontSize: '0.9rem' }}>
-        Consolidá todas las solicitudes anuales aprobadas en una planilla y enviala al Área de Compras.
+        Consolidá solicitudes anuales aceptadas por Dirección de Área en una planilla y enviala al Área de Compras.
+      </p>
+
+      <p style={{ marginTop: 0, color: 'var(--muted)', fontSize: '0.85rem' }}>
+        Pendientes de decisión: <strong>{solicitudesAnualesPorDecidir.length}</strong> · Aceptadas para planilla: <strong>{solicitudesAnualesAceptadas.length}</strong>
       </p>
 
       {!planillaActivaAnio ? (
         <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 16, background: '#f8fafc', marginBottom: 16 }}>
-          {solicitudesAnualesPendientes.length === 0 ? (
+          {solicitudesAnualesAceptadas.length === 0 ? (
             <p style={{ color: 'var(--muted)', margin: 0 }}>
-              No hay solicitudes anuales aprobadas para este año. Las verás aquí cuando los supervisores aprueben los pedidos.
+              No hay solicitudes anuales aceptadas por Dirección para este año.
             </p>
           ) : (
             <>
               <p style={{ margin: '0 0 10px 0' }}>
-                <strong>{solicitudesAnualesPendientes.length}</strong> solicitudes anuales aprobadas listas para incluir en la planilla.
+                <strong>{solicitudesAnualesAceptadas.length}</strong> solicitudes anuales aceptadas listas para incluir en la planilla.
               </p>
               <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
                 <div style={{ flex: 1, minWidth: 200 }}>
@@ -540,6 +646,8 @@ export default function DirectorAreaPanel() {
               ))}
             </tbody>
           </table>
+        </>
+      )}
         </>
       )}
     </div>

@@ -10,15 +10,18 @@ const { authenticate } = require("../middleware/auth");
 const router = express.Router();
 router.use(authenticate);
 
+async function hasAsignacionesTable() {
+  const row = await get(
+    `SELECT to_regclass('public.supervisor_escuela_asignacion') AS regclass`
+  );
+  return Boolean(row?.regclass);
+}
+
 // ── Instituciones de la jurisdicción del supervisor ──
 router.get("/instituciones", async (req, res) => {
   try {
     if (req.user?.role === "supervisor") {
-      const asignacionesTable = await get(
-        `SELECT to_regclass('public.supervisor_escuela_asignacion') AS regclass`
-      );
-
-      if (!asignacionesTable?.regclass) {
+      if (!(await hasAsignacionesTable())) {
         return res.json({ instituciones: [] });
       }
 
@@ -27,8 +30,8 @@ router.get("/instituciones", async (req, res) => {
                 i.nombre,
                 i.cue,
                 i.departamento,
-                i.nivel,
-                i.tipo,
+                i.nivel_educativo AS nivel,
+                i.ambito AS tipo,
                 i.categoria
          FROM supervisor_escuela_asignacion sea
          JOIN institucion i ON i.id_institucion = sea.institucion_id
@@ -66,6 +69,37 @@ router.get("/instituciones", async (req, res) => {
 // ── Pedidos pendientes de la jurisdicción ──
 router.get("/pedidos-pendientes", async (req, res) => {
   try {
+    if (req.user?.role === "supervisor") {
+      if (!(await hasAsignacionesTable())) {
+        return res.json({ pedidos: [] });
+      }
+
+      const pedidos = await all(
+        `SELECT p.id_pedido AS id,
+                dp.cantidad_solicitada AS cantidad,
+                p.observaciones_generales AS notas,
+                CASE WHEN p.estado::text = 'finalizado' THEN 'entregado' ELSE p.estado::text END AS estado,
+                p.fecha_creacion AS fecha,
+                pr.nombre AS producto,
+                i.nombre AS institucion,
+                i.id_institucion AS institucion_id,
+                0 AS matricula,
+                u.nombre AS solicitante
+         FROM pedido p
+         JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido
+         JOIN producto pr ON pr.id_producto = dp.id_producto
+         JOIN usuario u ON u.id_usuario = p.id_usuario_solicitante
+         JOIN institucion i ON i.id_institucion = p.id_institucion
+         JOIN supervisor_escuela_asignacion sea ON sea.institucion_id = p.id_institucion
+         WHERE sea.supervisor_id = ?
+           AND p.estado = 'pendiente'
+         ORDER BY p.fecha_creacion DESC`,
+        [req.user.sub]
+      );
+
+      return res.json({ pedidos });
+    }
+
     const jurisdiccion = req.query.jurisdiccion || req.user.jurisdiccion;
 
     if (!jurisdiccion) {
@@ -73,18 +107,24 @@ router.get("/pedidos-pendientes", async (req, res) => {
     }
 
     const pedidos = await all(
-      `SELECT p.id, p.cantidad, p.notas, p.estado, p.created_at AS fecha,
+      `SELECT p.id_pedido AS id,
+              dp.cantidad_solicitada AS cantidad,
+              p.observaciones_generales AS notas,
+              CASE WHEN p.estado::text = 'finalizado' THEN 'entregado' ELSE p.estado::text END AS estado,
+              p.fecha_creacion AS fecha,
               pr.nombre AS producto,
-              i.nombre AS institucion, i.id AS institucion_id,
+              i.nombre AS institucion,
+              i.id_institucion AS institucion_id,
               COALESCE(i.matriculados, 0) AS matricula,
               u.nombre AS solicitante
        FROM pedido p
-       JOIN producto pr ON pr.id = p.producto_id
-       JOIN usuario u ON u.id = p.usuario_id
-       JOIN institucion i ON i.id = u.institucion_id
+       JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido
+       JOIN producto pr ON pr.id_producto = dp.id_producto
+       JOIN usuario u ON u.id_usuario = p.id_usuario_solicitante
+       JOIN institucion i ON i.id_institucion = p.id_institucion
        WHERE p.estado = 'pendiente'
          AND LOWER(i.jurisdiccion) = LOWER(?)
-       ORDER BY p.created_at DESC`,
+       ORDER BY p.fecha_creacion DESC`,
       [jurisdiccion]
     );
 
@@ -95,9 +135,40 @@ router.get("/pedidos-pendientes", async (req, res) => {
   }
 });
 
-// ── Solicitudes por jurisdicción (pendiente, aprobado, rechazado) ──
+// ── Solicitudes por jurisdicción (pendiente, aprobado, rechazado, cancelado) ──
 router.get("/solicitudes", async (req, res) => {
   try {
+    if (req.user?.role === "supervisor") {
+      if (!(await hasAsignacionesTable())) {
+        return res.json({ solicitudes: [] });
+      }
+
+      const solicitudes = await all(
+        `SELECT p.id_pedido AS id,
+                dp.cantidad_solicitada AS cantidad,
+                p.observaciones_generales AS notas,
+                CASE WHEN p.estado::text = 'finalizado' THEN 'entregado' ELSE p.estado::text END AS estado,
+                p.fecha_creacion AS fecha,
+                pr.nombre AS producto,
+                i.nombre AS institucion,
+                i.id_institucion AS institucion_id,
+                0 AS matricula,
+                u.nombre AS solicitante
+         FROM pedido p
+         JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido
+         JOIN producto pr ON pr.id_producto = dp.id_producto
+         JOIN usuario u ON u.id_usuario = p.id_usuario_solicitante
+         JOIN institucion i ON i.id_institucion = p.id_institucion
+         JOIN supervisor_escuela_asignacion sea ON sea.institucion_id = p.id_institucion
+         WHERE sea.supervisor_id = ?
+           AND p.estado::text IN ('pendiente', 'aprobado', 'rechazado', 'entregado', 'finalizado')
+         ORDER BY p.fecha_creacion DESC`,
+        [req.user.sub]
+      );
+
+      return res.json({ solicitudes });
+    }
+
     const jurisdiccion = req.query.jurisdiccion || req.user.jurisdiccion;
 
     if (!jurisdiccion) {
@@ -105,18 +176,24 @@ router.get("/solicitudes", async (req, res) => {
     }
 
     const solicitudes = await all(
-      `SELECT p.id, p.cantidad, p.notas, p.estado, p.created_at AS fecha,
+      `SELECT p.id_pedido AS id,
+              dp.cantidad_solicitada AS cantidad,
+              p.observaciones_generales AS notas,
+              CASE WHEN p.estado::text = 'finalizado' THEN 'entregado' ELSE p.estado::text END AS estado,
+              p.fecha_creacion AS fecha,
               pr.nombre AS producto,
-              i.nombre AS institucion, i.id AS institucion_id,
+              i.nombre AS institucion,
+              i.id_institucion AS institucion_id,
               COALESCE(i.matriculados, 0) AS matricula,
               u.nombre AS solicitante
        FROM pedido p
-       JOIN producto pr ON pr.id = p.producto_id
-       JOIN usuario u ON u.id = p.usuario_id
-       JOIN institucion i ON i.id = u.institucion_id
-       WHERE p.estado IN ('pendiente', 'aprobado', 'rechazado')
+       JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido
+       JOIN producto pr ON pr.id_producto = dp.id_producto
+       JOIN usuario u ON u.id_usuario = p.id_usuario_solicitante
+       JOIN institucion i ON i.id_institucion = p.id_institucion
+       WHERE p.estado::text IN ('pendiente', 'aprobado', 'rechazado', 'cancelado', 'entregado', 'finalizado')
          AND LOWER(i.jurisdiccion) = LOWER(?)
-       ORDER BY p.created_at DESC`,
+       ORDER BY p.fecha_creacion DESC`,
       [jurisdiccion]
     );
 
@@ -133,11 +210,11 @@ router.get("/instituciones/:id/historial", async (req, res) => {
     const { id } = req.params;
 
     const eventos = await all(
-      `SELECT ms.fecha, pr.nombre AS producto, ms.cantidad, ms.tipo
+      `SELECT ms.fecha_movimiento AS fecha, pr.nombre AS producto, ms.cantidad, ms.tipo
        FROM movimiento_stock ms
-       JOIN producto pr ON pr.id = ms.producto_id
-       WHERE ms.institucion_id = ?
-       ORDER BY ms.fecha DESC
+       JOIN producto pr ON pr.id_producto = ms.id_producto
+       WHERE ms.id_institucion = ?
+       ORDER BY ms.fecha_movimiento DESC
        LIMIT 50`,
       [id]
     );

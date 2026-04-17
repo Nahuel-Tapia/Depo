@@ -8,6 +8,7 @@ import { calculateRatio } from './ratioUtils'
 function normalizeEstado(estado) {
   if (estado === 'aprobado') return 'aprobado'
   if (estado === 'rechazado') return 'rechazado'
+  if (estado === 'cancelado') return 'cancelado'
   return 'pendiente'
 }
 
@@ -183,6 +184,7 @@ export default function SupervisorSolicitudes() {
             <option value="pendiente">Pendiente</option>
             <option value="aprobado">Aprobado</option>
             <option value="rechazado">Rechazado</option>
+            <option value="cancelado">Cancelado</option>
           </select>
         </div>
 

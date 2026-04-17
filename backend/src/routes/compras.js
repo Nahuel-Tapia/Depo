@@ -159,13 +159,14 @@ router.post("/planillas", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), asy
        WHERE sea.director_area_id = $1
          AND COALESCE(p.tipo, 'anual') = 'anual'
          AND p.estado = 'aprobado'
+         AND p.aprobado_director_area IS TRUE
          AND EXTRACT(YEAR FROM p.fecha_creacion) = $2`,
       [req.user.sub, anio]
     );
 
     if (solicitudes.length === 0) {
       return res.status(400).json({
-        error: "No hay solicitudes anuales aprobadas para incluir en la planilla."
+        error: "No hay solicitudes anuales aceptadas por Dirección de Área para incluir en la planilla."
       });
     }
 

@@ -471,7 +471,7 @@ function DepositoPedidos() {
                         <button onClick={() => handleAction(pedido.id, 'rechazar')}>Rechazar</button>
                       </>
                     )}
-                    {canManage && pedido.estado !== 'entregado' && pedido.estado !== 'rechazado' && (
+                    {canManage && pedido.estado !== 'entregado' && pedido.estado !== 'rechazado' && pedido.estado !== 'cancelado' && (
                       <button onClick={() => handleAction(pedido.id, 'entregar')}>Entregar</button>
                     )}
                     {canCancel && (
@@ -562,10 +562,11 @@ function DirectivoPedidos() {
   const pedidosFiltrados = pedidos.filter(p => (p.tipo || 'anual') === tab)
 
   const anioActual = new Date().getFullYear()
-  // Solicitud anual activa = existe una del año en curso que no fue rechazada
+    // Solicitud anual activa = existe una del año en curso que no fue rechazada ni cancelada
   const tieneAnualActiva = pedidos.some(
     p => (p.tipo || 'anual') === 'anual' &&
          p.estado !== 'rechazado' &&
+      p.estado !== 'cancelado' &&
          new Date(p.created_at).getFullYear() === anioActual
   )
   const puedeCrearAnual = !tieneAnualActiva

@@ -693,7 +693,7 @@ router.get("/resumen/:periodo", authorizePermissions(PERMISSIONS.INSTITUCIONES_V
 router.get("/:id/historial", authorizePermissions(PERMISSIONS.INSTITUCIONES_VIEW), async (req, res) => {
   try {
     const { id } = req.params;
-    const { desde, hasta, tipo } = req.query;
+    const { desde, hasta, tipo, subtipoPedido } = req.query;
 
     const institucion = await get(`
       SELECT id_institucion AS id, nombre, cue, nivel_educativo
@@ -725,12 +725,18 @@ router.get("/:id/historial", authorizePermissions(PERMISSIONS.INSTITUCIONES_VIEW
       params_movimientos.push(hasta + " 23:59:59");
     }
 
+    if (subtipoPedido === "anual" || subtipoPedido === "refuerzo") {
+      filtroPedidos += " AND COALESCE(p.tipo, 'anual') = ?";
+      params_pedidos.push(subtipoPedido);
+    }
+
     // 1. Pedidos de la institución
     if (!tipo || tipo === "pedido") {
       const pedidos = await all(`
         SELECT 
           p.id_pedido AS id,
           'pedido' AS tipo_evento,
+          COALESCE(p.tipo, 'anual') AS subtipo_pedido,
           p.fecha_creacion AS fecha,
           p.estado,
           p.observaciones_generales AS observacion,
@@ -750,7 +756,8 @@ router.get("/:id/historial", authorizePermissions(PERMISSIONS.INSTITUCIONES_VIEW
 
       pedidos.forEach(p => eventos.push({
         id: p.id,
-        tipo: 'Pedido',
+        tipo: p.subtipo_pedido === 'refuerzo' ? 'Pedido refuerzo' : 'Pedido anual',
+        subtipoPedido: p.subtipo_pedido,
         fecha: p.fecha,
         detalle: p.detalle,
         estado: p.estado,
@@ -797,7 +804,9 @@ router.get("/:id/historial", authorizePermissions(PERMISSIONS.INSTITUCIONES_VIEW
 
     // Resumen
     const resumen = {
-      total_pedidos: eventos.filter(e => e.tipo === 'Pedido').length,
+      total_pedidos: eventos.filter(e => e.tipo === 'Pedido anual' || e.tipo === 'Pedido refuerzo').length,
+      total_pedidos_anuales: eventos.filter(e => e.tipo === 'Pedido anual').length,
+      total_pedidos_refuerzo: eventos.filter(e => e.tipo === 'Pedido refuerzo').length,
       total_entregas: eventos.filter(e => e.tipo === 'Entrega').length,
       total_devoluciones: eventos.filter(e => e.tipo === 'Devolución').length,
       total_ingresos: eventos.filter(e => e.tipo === 'Ingreso').length,

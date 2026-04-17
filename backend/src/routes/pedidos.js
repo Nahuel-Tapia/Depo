@@ -17,6 +17,28 @@ async function ensureTipoPedido() {
 }
 ensureTipoPedido();
 
+// Asegura que exista el estado 'cancelado' en el enum de tramites.
+async function ensureEstadoCancelado() {
+  try {
+    await run(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_type t
+          JOIN pg_enum e ON e.enumtypid = t.oid
+          WHERE t.typname = 'estado_tramite'
+            AND e.enumlabel = 'cancelado'
+        ) THEN
+          ALTER TYPE estado_tramite ADD VALUE 'cancelado';
+        END IF;
+      END
+      $$;
+    `);
+  } catch (_) { /* ya existe o no aplica */ }
+}
+ensureEstadoCancelado();
+
 async function getEstadoEntregadoDb() {
   const rows = await all(`
     SELECT e.enumlabel
@@ -81,6 +103,7 @@ router.get("/institucion/:institucion", authorizePermissions(PERMISSIONS.PEDIDOS
         p.id_pedido as id,
         CASE WHEN p.estado::text = 'finalizado' THEN 'entregado' ELSE p.estado::text END as estado,
         p.observaciones_generales as notas,
+        COALESCE(p.tipo, 'anual') as tipo,
         p.fecha_creacion as created_at,
         pr.nombre as producto_nombre,
         dp.cantidad_solicitada as cantidad,
@@ -179,7 +202,7 @@ router.post("/", authorizePermissions(PERMISSIONS.PEDIDOS_CREATE), async (req, r
          WHERE id_institucion = $1
            AND COALESCE(tipo, 'anual') = 'anual'
            AND EXTRACT(YEAR FROM fecha_creacion) = EXTRACT(YEAR FROM NOW())
-           AND estado NOT IN ('rechazado')`,
+           AND estado NOT IN ('rechazado', 'cancelado')`,
         [usuario.id_institucion]
       );
       if (existente) {
@@ -212,7 +235,7 @@ router.patch("/:id/estado", authorizePermissions(PERMISSIONS.PEDIDOS_MANAGE), as
     const { id } = req.params;
     const { estado } = req.body;
 
-    const estadosValidos = ["pendiente", "aprobado", "rechazado", "entregado"];
+    const estadosValidos = ["pendiente", "aprobado", "rechazado", "cancelado", "entregado"];
     if (!estadosValidos.includes(estado)) {
       return res.status(400).json({ error: "Estado inválido" });
     }
@@ -331,7 +354,7 @@ router.patch("/:id/cancelar", authorizePermissions(PERMISSIONS.PEDIDOS_CREATE), 
       return res.status(400).json({ error: "Solo se pueden cancelar pedidos pendientes" });
     }
 
-    await run("UPDATE pedido SET estado = 'rechazado' WHERE id_pedido = ?", [id]);
+    await run("UPDATE pedido SET estado = 'cancelado' WHERE id_pedido = ?", [id]);
 
     return res.json({ ok: true });
   } catch (err) {

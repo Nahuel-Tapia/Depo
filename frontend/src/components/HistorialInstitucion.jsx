@@ -12,6 +12,7 @@ export default function HistorialInstitucion() {
   const [desde, setDesde] = useState('')
   const [hasta, setHasta] = useState('')
   const [filtroTipo, setFiltroTipo] = useState('')
+  const [filtroSubtipoPedido, setFiltroSubtipoPedido] = useState('')
   const [historial, setHistorial] = useState(null)
   const [loading, setLoading] = useState(false)
 
@@ -50,6 +51,7 @@ export default function HistorialInstitucion() {
       if (desde) params.set('desde', desde)
       if (hasta) params.set('hasta', hasta)
       if (filtroTipo) params.set('tipo', filtroTipo)
+      if (filtroSubtipoPedido) params.set('subtipoPedido', filtroSubtipoPedido)
 
       const res = await apiFetch(`/api/instituciones/${selectedId}/historial?${params}`, { token })
       if (res.ok) {
@@ -69,7 +71,8 @@ export default function HistorialInstitucion() {
 
   const tipoBadgeColor = (tipo) => {
     switch (tipo) {
-      case 'Pedido': return { bg: '#dbeafe', color: '#1d4ed8' }
+      case 'Pedido anual': return { bg: '#dbeafe', color: '#1d4ed8' }
+      case 'Pedido refuerzo': return { bg: '#ede9fe', color: '#6d28d9' }
       case 'Entrega': return { bg: '#d1fae5', color: '#065f46' }
       case 'Devolución': return { bg: '#fef3c7', color: '#92400e' }
       case 'Ingreso': return { bg: '#e0e7ff', color: '#3730a3' }
@@ -83,13 +86,77 @@ export default function HistorialInstitucion() {
       case 'pendiente': return { bg: '#fef3c7', color: '#92400e' }
       case 'aprobado': case 'OK': return { bg: '#d1fae5', color: '#065f46' }
       case 'rechazado': return { bg: '#fee2e2', color: '#991b1b' }
+      case 'cancelado': return { bg: '#e5e7eb', color: '#374151' }
       case 'en_revision': case 'aprobado_parcial': return { bg: '#dbeafe', color: '#1d4ed8' }
       case 'finalizado': return { bg: '#e0e7ff', color: '#3730a3' }
       default: return { bg: '#f3f4f6', color: '#374151' }
     }
   }
 
+  const renderEventosTable = (eventos, emptyText) => {
+    if (eventos.length === 0) {
+      return <p style={{ color: '#6b7280' }}>{emptyText}</p>
+    }
+
+    return (
+      <table>
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Tipo</th>
+            <th>Clase</th>
+            <th>Detalle</th>
+            <th>Estado</th>
+            <th>Usuario</th>
+            <th>Observación</th>
+          </tr>
+        </thead>
+        <tbody>
+          {eventos.map((e, i) => {
+            const tipoBadge = tipoBadgeColor(e.tipo)
+            const estadoBadge = estadoBadgeColor(e.estado)
+            return (
+              <tr key={`${e.tipo}-${e.id}-${i}`}>
+                <td style={{ whiteSpace: 'nowrap', fontSize: '0.85rem' }}>{formatFecha(e.fecha)}</td>
+                <td>
+                  <span style={{
+                    display: 'inline-block', padding: '2px 10px', borderRadius: 12,
+                    fontSize: '0.75rem', fontWeight: 600,
+                    background: tipoBadge.bg, color: tipoBadge.color
+                  }}>
+                    {e.tipo}
+                  </span>
+                </td>
+                <td style={{ fontSize: '0.85rem' }}>
+                  {e.subtipoPedido === 'anual' ? 'Anual' : e.subtipoPedido === 'refuerzo' ? 'Refuerzo' : '-'}
+                </td>
+                <td style={{ fontSize: '0.85rem' }}>{e.detalle}</td>
+                <td>
+                  <span style={{
+                    display: 'inline-block', padding: '2px 10px', borderRadius: 12,
+                    fontSize: '0.75rem', fontWeight: 600,
+                    background: estadoBadge.bg, color: estadoBadge.color
+                  }}>
+                    {e.estado || '-'}
+                  </span>
+                </td>
+                <td style={{ fontSize: '0.85rem' }}>{e.usuario || '-'}</td>
+                <td style={{ fontSize: '0.8rem', color: '#6b7280', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {e.observacion || '-'}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    )
+  }
+
   const printRef = useRef(null)
+
+  const eventosAnuales = (historial?.eventos || []).filter(e => e.subtipoPedido === 'anual')
+  const eventosRefuerzo = (historial?.eventos || []).filter(e => e.subtipoPedido === 'refuerzo')
+  const eventosMovimientos = (historial?.eventos || []).filter(e => !e.subtipoPedido)
 
   return (
     <div>
@@ -100,7 +167,7 @@ export default function HistorialInstitucion() {
 
       {/* Buscador */}
       <div style={{ background: '#f9fafb', padding: 24, borderRadius: 8, marginBottom: 24 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: 16, alignItems: 'end' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto auto', gap: 16, alignItems: 'end' }}>
           <div style={{ position: 'relative' }}>
             <label>Institución</label>
             {selectedId ? (
@@ -161,6 +228,19 @@ export default function HistorialInstitucion() {
               <option value="movimiento">Movimientos</option>
             </select>
           </div>
+
+          <div>
+            <label>Clase de pedido</label>
+            <select
+              value={filtroSubtipoPedido}
+              onChange={e => setFiltroSubtipoPedido(e.target.value)}
+              disabled={filtroTipo === 'movimiento'}
+            >
+              <option value="">Todos</option>
+              <option value="anual">Solicitud anual</option>
+              <option value="refuerzo">Solicitud de refuerzo</option>
+            </select>
+          </div>
         </div>
 
         <div style={{ marginTop: 16 }}>
@@ -173,9 +253,11 @@ export default function HistorialInstitucion() {
       {/* Resumen */}
       {historial && (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12, marginBottom: 24 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 12, marginBottom: 24 }}>
             {[
               { label: 'Pedidos', value: historial.resumen.total_pedidos, color: '#1d4ed8' },
+              { label: 'Anuales', value: historial.resumen.total_pedidos_anuales || 0, color: '#2563eb' },
+              { label: 'Refuerzos', value: historial.resumen.total_pedidos_refuerzo || 0, color: '#7c3aed' },
               { label: 'Entregas', value: historial.resumen.total_entregas, color: '#065f46' },
               { label: 'Devoluciones', value: historial.resumen.total_devoluciones, color: '#92400e' },
               { label: 'Ingresos', value: historial.resumen.total_ingresos, color: '#3730a3' },
@@ -192,57 +274,27 @@ export default function HistorialInstitucion() {
           </div>
 
           {/* Tabla de eventos */}
-          <h3>Timeline de actividad</h3>
+          <h3>Historial separado por tipo</h3>
           <div ref={printRef}>
           {historial.eventos.length === 0 ? (
             <p style={{ color: '#6b7280' }}>No hay actividad registrada para los filtros seleccionados.</p>
           ) : (
-            <table>
-              <thead>
-                <tr>
-                  <th>Fecha</th>
-                  <th>Tipo</th>
-                  <th>Detalle</th>
-                  <th>Estado</th>
-                  <th>Usuario</th>
-                  <th>Observación</th>
-                </tr>
-              </thead>
-              <tbody>
-                {historial.eventos.map((e, i) => {
-                  const tipoBadge = tipoBadgeColor(e.tipo)
-                  const estadoBadge = estadoBadgeColor(e.estado)
-                  return (
-                    <tr key={`${e.tipo}-${e.id}-${i}`}>
-                      <td style={{ whiteSpace: 'nowrap', fontSize: '0.85rem' }}>{formatFecha(e.fecha)}</td>
-                      <td>
-                        <span style={{
-                          display: 'inline-block', padding: '2px 10px', borderRadius: 12,
-                          fontSize: '0.75rem', fontWeight: 600,
-                          background: tipoBadge.bg, color: tipoBadge.color
-                        }}>
-                          {e.tipo}
-                        </span>
-                      </td>
-                      <td style={{ fontSize: '0.85rem' }}>{e.detalle}</td>
-                      <td>
-                        <span style={{
-                          display: 'inline-block', padding: '2px 10px', borderRadius: 12,
-                          fontSize: '0.75rem', fontWeight: 600,
-                          background: estadoBadge.bg, color: estadoBadge.color
-                        }}>
-                          {e.estado || '-'}
-                        </span>
-                      </td>
-                      <td style={{ fontSize: '0.85rem' }}>{e.usuario || '-'}</td>
-                      <td style={{ fontSize: '0.8rem', color: '#6b7280', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {e.observacion || '-'}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+            <>
+              <section style={{ marginBottom: 24 }}>
+                <h4 style={{ marginBottom: 10 }}>Solicitudes anuales</h4>
+                {renderEventosTable(eventosAnuales, 'No hay solicitudes anuales para los filtros seleccionados.')}
+              </section>
+
+              <section style={{ marginBottom: 24 }}>
+                <h4 style={{ marginBottom: 10 }}>Solicitudes de refuerzo</h4>
+                {renderEventosTable(eventosRefuerzo, 'No hay solicitudes de refuerzo para los filtros seleccionados.')}
+              </section>
+
+              <section>
+                <h4 style={{ marginBottom: 10 }}>Movimientos y entregas</h4>
+                {renderEventosTable(eventosMovimientos, 'No hay movimientos registrados para los filtros seleccionados.')}
+              </section>
+            </>
           )}
           </div>
         </>

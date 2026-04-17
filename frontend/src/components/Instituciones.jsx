@@ -363,7 +363,7 @@ export default function Instituciones({ supervisorMode = false }) {
                             <ul style={{ margin: 0, paddingLeft: 18 }}>
                               {pedidos.map(p => (
                                 <li key={p.id} style={{ marginBottom: 6 }}>
-                                  #{p.id} - {p.producto_nombre || '-'} x {p.cantidad} - {p.estado} - {new Date(p.created_at).toLocaleDateString('es-AR')}
+                                  #{p.id} - {p.producto_nombre || '-'} x {p.cantidad} - {p.tipo === 'refuerzo' ? 'Refuerzo' : 'Anual'} - {p.estado} - {new Date(p.created_at).toLocaleDateString('es-AR')}
                                 </li>
                               ))}
                             </ul>

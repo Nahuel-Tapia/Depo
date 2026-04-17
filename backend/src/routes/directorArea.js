@@ -39,6 +39,12 @@ async function ensureTables() {
       )
     `);
 
+    // Marca si Dirección de Área aceptó o denegó un pedido para planilla anual.
+    await run(`
+      ALTER TABLE pedido
+      ADD COLUMN IF NOT EXISTS aprobado_director_area BOOLEAN
+    `);
+
     tablesReady = true;
   })();
 
@@ -179,6 +185,8 @@ router.get("/solicitudes", async (req, res) => {
       `SELECT
          p.id_pedido AS id,
          p.estado::text AS estado,
+         COALESCE(p.tipo, 'anual') AS tipo,
+         p.aprobado_director_area,
          p.observaciones_generales AS notas,
          p.fecha_creacion AS fecha,
          pr.nombre AS producto,
@@ -196,7 +204,7 @@ router.get("/solicitudes", async (req, res) => {
        JOIN usuario u ON u.id_usuario = p.id_usuario_solicitante
        JOIN usuario sup ON sup.id_usuario = sea.supervisor_id
        WHERE sea.director_area_id = $1
-         AND p.estado IN ('aprobado', 'entregado', 'finalizado')
+         AND (p.estado::text IN ('pendiente', 'aprobado', 'rechazado', 'entregado', 'finalizado'))
        ORDER BY p.fecha_creacion DESC`,
       [req.user.sub]
     );
@@ -205,6 +213,66 @@ router.get("/solicitudes", async (req, res) => {
   } catch (err) {
     console.error("Error al listar solicitudes del director de área:", err);
     res.status(500).json({ error: "No se pudieron listar solicitudes" });
+  }
+});
+
+// ── Decisión de Dirección de Área sobre pedido anual (aceptar / denegar) ──
+router.patch("/solicitudes/:id/decision", async (req, res) => {
+  try {
+    await ensureTables();
+
+    const id = Number(req.params.id);
+    const decision = String(req.body.decision || '').trim().toLowerCase();
+
+    if (!Number.isInteger(id)) {
+      return res.status(400).json({ error: "ID inválido" });
+    }
+    if (!["aceptar", "denegar"].includes(decision)) {
+      return res.status(400).json({ error: "Decisión inválida" });
+    }
+
+    const pedido = await all(
+      `SELECT p.id_pedido, p.estado::text AS estado, COALESCE(p.tipo, 'anual') AS tipo
+       FROM pedido p
+       JOIN supervisor_escuela_asignacion sea ON sea.institucion_id = p.id_institucion
+       WHERE p.id_pedido = $1
+         AND sea.director_area_id = $2`,
+      [id, req.user.sub]
+    );
+
+    if (!pedido.length) {
+      return res.status(404).json({ error: "Solicitud no encontrada" });
+    }
+
+    const row = pedido[0];
+    if (row.tipo !== "anual") {
+      return res.status(400).json({ error: "Solo se pueden decidir solicitudes anuales" });
+    }
+    if (row.estado !== "aprobado") {
+      return res.status(400).json({ error: "La solicitud debe estar aprobada por supervisor" });
+    }
+
+    if (decision === "aceptar") {
+      await run(
+        `UPDATE pedido
+         SET aprobado_director_area = TRUE
+         WHERE id_pedido = $1`,
+        [id]
+      );
+      return res.json({ ok: true, aprobado_director_area: true });
+    }
+
+    await run(
+      `UPDATE pedido
+       SET estado = 'rechazado', aprobado_director_area = FALSE
+       WHERE id_pedido = $1`,
+      [id]
+    );
+
+    return res.json({ ok: true, aprobado_director_area: false, estado: 'rechazado' });
+  } catch (err) {
+    console.error("Error al decidir solicitud del director de área:", err);
+    res.status(500).json({ error: "No se pudo registrar la decisión" });
   }
 });
 
