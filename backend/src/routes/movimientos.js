@@ -1,5 +1,5 @@
 const express = require("express");
-const { all, get, run } = require("../db.pg");
+const { all, get, run, pool } = require("../db.pg");
 const { authenticate, authorizePermissions } = require("../middleware/auth");
 const { PERMISSIONS } = require("../permissions");
 
@@ -182,6 +182,7 @@ router.post("/lote", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), async
 
 // Crear movimiento directo (egreso/ingreso)
 router.post("/directo", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), async (req, res) => {
+  const client = await pool.connect();
   try {
     const { tipo, institucion_id, cargo_retira, proveedor_id, motivo, productos } = req.body;
 
@@ -216,16 +217,40 @@ router.post("/directo", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), as
       }
     }
 
-    // Insertar movimientos
+    await client.query("BEGIN");
+
+    // Insertar movimientos y actualizar stock
     const ids = [];
     for (const prod of productos) {
-      const result = await run(
-        `INSERT INTO movimiento_stock (id_producto, tipo, cantidad, estado_producto, cargo_retira, id_institucion, id_proveedor, id_usuario, motivo, fecha_movimiento)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+      const cantidadNum = parseInt(prod.cantidad, 10);
+
+      const prodRes = await client.query(
+        "SELECT id_producto, nombre, COALESCE(stock_actual, 0) AS stock_actual FROM producto WHERE id_producto = $1",
+        [prod.producto_id]
+      );
+      const producto = prodRes.rows[0];
+
+      if (!producto) {
+        await client.query("ROLLBACK");
+        return res.status(404).json({ error: `Producto con id ${prod.producto_id} no encontrado` });
+      }
+
+      if (tipo === "egreso" && Number(producto.stock_actual) < cantidadNum) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({
+          error: `Stock insuficiente para ${producto.nombre}. Stock actual: ${producto.stock_actual}, solicitado: ${cantidadNum}`
+        });
+      }
+
+      const movRes = await client.query(
+        `INSERT INTO movimiento_stock
+          (id_producto, tipo, cantidad, estado_producto, cargo_retira, id_institucion, id_proveedor, id_usuario, motivo, fecha_movimiento)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+         RETURNING id_movimiento`,
         [
           prod.producto_id,
           tipo,
-          parseInt(prod.cantidad),
+          cantidadNum,
           prod.estado,
           tipo === "egreso" ? cargo_retira : null,
           tipo === "egreso" ? institucion_id : null,
@@ -234,13 +259,35 @@ router.post("/directo", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), as
           motivo || null
         ]
       );
-      ids.push(result.lastID);
+
+      if (tipo === "ingreso") {
+        await client.query(
+          "UPDATE producto SET stock_actual = COALESCE(stock_actual, 0) + $1 WHERE id_producto = $2",
+          [cantidadNum, prod.producto_id]
+        );
+      } else if (tipo === "egreso") {
+        await client.query(
+          "UPDATE producto SET stock_actual = COALESCE(stock_actual, 0) - $1 WHERE id_producto = $2",
+          [cantidadNum, prod.producto_id]
+        );
+      }
+
+      ids.push(movRes.rows[0].id_movimiento);
     }
+
+    await client.query("COMMIT");
 
     return res.status(201).json({ ids });
   } catch (err) {
+    try {
+      await client.query("ROLLBACK");
+    } catch (_) {
+      // ignore rollback errors
+    }
     console.error("Error creando movimiento directo:", err);
     return res.status(500).json({ error: "No se pudo crear el movimiento directo" });
+  } finally {
+    client.release();
   }
 });
 
