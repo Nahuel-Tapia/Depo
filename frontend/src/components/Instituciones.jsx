@@ -34,19 +34,12 @@ export default function Instituciones({ supervisorMode = false }) {
     const fetchInstituciones = async () => {
       try {
         const token = localStorage.getItem('token')
-        const response = await apiFetch('/api/instituciones', { token })
+        const response = await apiFetch(supervisorMode ? '/api/supervisor/instituciones' : '/api/instituciones', { token })
         const data = await response.json()
         let list = data.instituciones || []
 
-        // En modo supervisor, filtrar solo las escuelas de la jurisdicción
+        // En modo supervisor, el backend ya devuelve solo escuelas asignadas.
         if (supervisorMode) {
-          const user = JSON.parse(localStorage.getItem('user') || '{}')
-          const jurisdiccion = (user.jurisdiccion || '').toLowerCase()
-          if (jurisdiccion) {
-            list = list.filter(i =>
-              (i.jurisdiccion || i.departamento || '').toLowerCase() === jurisdiccion
-            )
-          }
           // Excluir comedores — solo escuelas
           list = list.filter(i =>
             !(i.tipo || i.categoria || '').toLowerCase().includes('comedor')
@@ -157,6 +150,56 @@ export default function Instituciones({ supervisorMode = false }) {
 
   if (loading) return <div>Cargando mapa...</div>
   if (error) return <div>Error: {error}</div>
+
+  if (supervisorMode) {
+    return (
+      <div>
+        <h2>Mis Escuelas Asignadas</h2>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px', marginBottom: '20px' }}>
+          <input
+            type="text"
+            placeholder="Buscar por Nombre"
+            value={searchNombre}
+            onChange={(e) => setSearchNombre(e.target.value)}
+            style={{ flex: 1, padding: '8px' }}
+          />
+          <input
+            type="text"
+            placeholder="Buscar por CUE"
+            value={searchCUE}
+            onChange={(e) => setSearchCUE(e.target.value)}
+            style={{ flex: 1, padding: '8px' }}
+          />
+        </div>
+
+        {filteredInstituciones.length === 0 ? (
+          <div className="sv-empty-state">No tienes escuelas asignadas por el director de area.</div>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>Escuela</th>
+                <th>CUE</th>
+                <th>Departamento</th>
+                <th>Nivel</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredInstituciones.map(inst => (
+                <tr key={inst.id}>
+                  <td><strong>{inst.nombre}</strong></td>
+                  <td>{inst.cue || '-'}</td>
+                  <td>{inst.departamento || '-'}</td>
+                  <td>{inst.nivel || '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div>

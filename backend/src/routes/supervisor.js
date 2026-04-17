@@ -13,6 +13,33 @@ router.use(authenticate);
 // ── Instituciones de la jurisdicción del supervisor ──
 router.get("/instituciones", async (req, res) => {
   try {
+    if (req.user?.role === "supervisor") {
+      const asignacionesTable = await get(
+        `SELECT to_regclass('public.supervisor_escuela_asignacion') AS regclass`
+      );
+
+      if (!asignacionesTable?.regclass) {
+        return res.json({ instituciones: [] });
+      }
+
+      const institucionesAsignadas = await all(
+        `SELECT i.id_institucion AS id,
+                i.nombre,
+                i.cue,
+                i.departamento,
+                i.nivel,
+                i.tipo,
+                i.categoria
+         FROM supervisor_escuela_asignacion sea
+         JOIN institucion i ON i.id_institucion = sea.institucion_id
+         WHERE sea.supervisor_id = ?
+         ORDER BY i.nombre`,
+        [req.user.sub]
+      );
+
+      return res.json({ instituciones: institucionesAsignadas });
+    }
+
     const jurisdiccion = req.query.jurisdiccion || req.user.jurisdiccion;
 
     if (!jurisdiccion) {
@@ -22,7 +49,7 @@ router.get("/instituciones", async (req, res) => {
     // TODO: Ajustar el nombre de columna si en tu tabla 'institucion'
     // el campo de jurisdicción se llama diferente (ej: departamento, zona, etc.)
     const instituciones = await all(
-      `SELECT id, nombre, cue, tipo, jurisdiccion
+      `SELECT id_institucion AS id, nombre, cue, tipo, jurisdiccion
        FROM institucion
        WHERE LOWER(jurisdiccion) = LOWER(?)
        ORDER BY nombre`,

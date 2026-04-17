@@ -6,34 +6,47 @@ const { PERMISSIONS } = require("../permissions");
 const router = express.Router();
 
 let tablesReady = false;
+let tablesInitPromise = null;
 async function ensureTables() {
   if (tablesReady) return;
+  if (tablesInitPromise) {
+    await tablesInitPromise;
+    return;
+  }
 
-  await run(`
-    CREATE TABLE IF NOT EXISTS supervisor_escuela_asignacion (
-      id SERIAL PRIMARY KEY,
-      supervisor_id INT NOT NULL REFERENCES usuario(id_usuario) ON DELETE CASCADE,
-      institucion_id INT NOT NULL REFERENCES institucion(id_institucion) ON DELETE CASCADE,
-      director_area_id INT REFERENCES usuario(id_usuario),
-      created_at TIMESTAMP DEFAULT NOW(),
-      UNIQUE (supervisor_id, institucion_id)
-    )
-  `);
+  tablesInitPromise = (async () => {
+    await run(`
+      CREATE TABLE IF NOT EXISTS supervisor_escuela_asignacion (
+        id SERIAL PRIMARY KEY,
+        supervisor_id INT NOT NULL REFERENCES usuario(id_usuario) ON DELETE CASCADE,
+        institucion_id INT NOT NULL REFERENCES institucion(id_institucion) ON DELETE CASCADE,
+        director_area_id INT REFERENCES usuario(id_usuario),
+        created_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE (supervisor_id, institucion_id)
+      )
+    `);
 
-  await run(`
-    CREATE TABLE IF NOT EXISTS solicitud_informe_supervisor (
-      id SERIAL PRIMARY KEY,
-      supervisor_id INT NOT NULL REFERENCES usuario(id_usuario) ON DELETE CASCADE,
-      director_area_id INT REFERENCES usuario(id_usuario),
-      asunto VARCHAR(180) NOT NULL,
-      detalle TEXT,
-      fecha_limite DATE,
-      estado VARCHAR(20) DEFAULT 'pendiente',
-      created_at TIMESTAMP DEFAULT NOW()
-    )
-  `);
+    await run(`
+      CREATE TABLE IF NOT EXISTS solicitud_informe_supervisor (
+        id SERIAL PRIMARY KEY,
+        supervisor_id INT NOT NULL REFERENCES usuario(id_usuario) ON DELETE CASCADE,
+        director_area_id INT REFERENCES usuario(id_usuario),
+        asunto VARCHAR(180) NOT NULL,
+        detalle TEXT,
+        fecha_limite DATE,
+        estado VARCHAR(20) DEFAULT 'pendiente',
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
 
-  tablesReady = true;
+    tablesReady = true;
+  })();
+
+  try {
+    await tablesInitPromise;
+  } finally {
+    tablesInitPromise = null;
+  }
 }
 
 router.use(authenticate);
@@ -51,7 +64,7 @@ router.get("/catalogo", async (req, res) => {
     );
 
     const escuelas = await all(
-      `SELECT id_institucion AS id, nombre, cue, departamento, jurisdiccion
+      `SELECT id_institucion AS id, nombre, cue
        FROM institucion
        WHERE activo = TRUE
        ORDER BY nombre`
