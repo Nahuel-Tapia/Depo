@@ -490,6 +490,240 @@ function DepositoPedidos() {
 }
 
 // ============================================================
+// Vista Directivo: Solicitud Anual y Solicitud de Refuerzos
+// ============================================================
+function DirectivoPedidos() {
+  const { token } = useAuth()
+  const [tab, setTab] = useState('anual')
+  const [pedidos, setPedidos] = useState([])
+  const [productos, setProductos] = useState([])
+  const [msg, setMsg] = useState({ text: '', type: '' })
+  const [form, setForm] = useState({ producto_id: '', cantidad: '', notas: '' })
+  const [modalOpen, setModalOpen] = useState(false)
+  const printRef = useRef(null)
+
+  const loadProductos = async () => {
+    try {
+      const res = await apiFetch('/api/productos', { token })
+      if (res.ok) {
+        const data = await res.json()
+        setProductos(data.productos || [])
+      }
+    } catch { /* ignore */ }
+  }
+
+  const loadPedidos = async () => {
+    try {
+      const res = await apiFetch('/api/pedidos', { token })
+      if (res.ok) {
+        const data = await res.json()
+        setPedidos(data.pedidos || [])
+      }
+    } catch { /* ignore */ }
+  }
+
+  useEffect(() => {
+    loadProductos()
+    loadPedidos()
+  }, [])
+
+  const handleCreate = async (e) => {
+    e.preventDefault()
+    setMsg({ text: '', type: '' })
+    const payload = {
+      producto_id: parseInt(form.producto_id, 10),
+      cantidad: parseInt(form.cantidad, 10),
+      notas: form.notas.trim() || null,
+      tipo: tab
+    }
+    const res = await apiFetch('/api/pedidos', { token, method: 'POST', body: JSON.stringify(payload) })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      setMsg({ text: data.error || 'No se pudo crear el pedido', type: 'error' })
+      return
+    }
+    setForm({ producto_id: '', cantidad: '', notas: '' })
+    setModalOpen(false)
+    setMsg({ text: 'Pedido creado correctamente', type: 'success' })
+    loadPedidos()
+  }
+
+  const handleCancelar = async (id) => {
+    setMsg({ text: '', type: '' })
+    const res = await apiFetch(`/api/pedidos/${id}/cancelar`, { token, method: 'PATCH' })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      setMsg({ text: data.error || 'No se pudo cancelar el pedido', type: 'error' })
+      return
+    }
+    loadPedidos()
+  }
+
+  const pedidosFiltrados = pedidos.filter(p => (p.tipo || 'anual') === tab)
+
+  const anioActual = new Date().getFullYear()
+  // Solicitud anual activa = existe una del año en curso que no fue rechazada
+  const tieneAnualActiva = pedidos.some(
+    p => (p.tipo || 'anual') === 'anual' &&
+         p.estado !== 'rechazado' &&
+         new Date(p.created_at).getFullYear() === anioActual
+  )
+  const puedeCrearAnual = !tieneAnualActiva
+
+  const badgeTab = (tipo) => {
+    const count = pedidos.filter(p => (p.tipo || 'anual') === tipo && p.estado === 'pendiente').length
+    return count > 0 ? <span style={{ marginLeft: 6, background: '#ef4444', color: '#fff', borderRadius: 99, fontSize: '0.7rem', padding: '1px 7px' }}>{count}</span> : null
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <h2 style={{ margin: 0 }}>Mis Pedidos</h2>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          {(tab === 'refuerzo' || puedeCrearAnual) && (
+            <button
+              type="button"
+              className="mov-action-btn"
+              style={{ width: 'auto', margin: 0, padding: '14px 22px', fontSize: '1rem' }}
+              onClick={() => { setModalOpen(true); setMsg({ text: '', type: '' }) }}
+            >
+              <span aria-hidden="true" style={{ marginRight: 8, fontSize: '1.2rem' }}>📝</span>
+              Nueva solicitud
+            </button>
+          )}
+          <PrintButton targetRef={printRef} title="Reporte de Pedidos" />
+        </div>
+      </div>
+
+      {/* Pestañas */}
+      <div style={{ display: 'flex', gap: 4, marginTop: 20, borderBottom: '2px solid var(--border)' }}>
+        {[
+          { key: 'anual', label: 'Solicitud Anual' },
+          { key: 'refuerzo', label: 'Solicitud de Refuerzos' }
+        ].map(({ key, label }) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setTab(key)}
+            style={{
+              background: tab === key ? 'var(--primary, #2563eb)' : 'transparent',
+              color: tab === key ? '#fff' : 'var(--muted)',
+              border: 'none',
+              borderRadius: '6px 6px 0 0',
+              padding: '10px 22px',
+              fontWeight: tab === key ? 700 : 400,
+              cursor: 'pointer',
+              fontSize: '0.97rem',
+              transition: 'background 0.15s'
+            }}
+          >
+            {label}{badgeTab(key)}
+          </button>
+        ))}
+      </div>
+
+      {/* Descripción contextual */}
+      <p style={{ marginTop: 12, marginBottom: 4, color: 'var(--muted)', fontSize: '0.9rem' }}>
+        {tab === 'anual'
+          ? 'Pedido anual planificado para cubrir las necesidades regulares de la institución. Solo se puede realizar uno por año.'
+          : 'Pedidos extraordinarios para reforzar el stock cuando el pedido anual no fue suficiente.'}
+      </p>
+
+      {/* Aviso si ya existe solicitud anual */}
+      {tab === 'anual' && tieneAnualActiva && (
+        <div className="msg show" style={{ background: '#fef9c3', color: '#854d0e', border: '1px solid #fde047', marginTop: 8 }}>
+          Ya realizaste tu solicitud anual para {anioActual}. Podés hacer solicitudes de refuerzos si el stock no alcanza.
+        </div>
+      )}
+
+      {msg.text && (
+        <div className={`msg show ${msg.type === 'success' ? 'msg-success' : 'msg-error'}`}>{msg.text}</div>
+      )}
+
+      {/* Modal nuevo pedido */}
+      {modalOpen && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}
+          onClick={e => { if (e.target === e.currentTarget) setModalOpen(false) }}
+        >
+          <div style={{ background: '#f9fafb', padding: 24, borderRadius: 10, width: 'min(760px, 100%)', maxHeight: '90vh', overflowY: 'auto' }}>
+            <h3 style={{ marginTop: 0 }}>
+              Nueva {tab === 'anual' ? 'Solicitud Anual' : 'Solicitud de Refuerzos'}
+            </h3>
+            <form onSubmit={handleCreate} className="grid">
+              <div>
+                <label>Producto</label>
+                <select value={form.producto_id} onChange={e => setForm({ ...form, producto_id: e.target.value })} required>
+                  <option value="">Seleccionar producto...</option>
+                  {productos.map(p => (
+                    <option key={p.id} value={p.id}>{p.nombre} ({p.unidad_medida || 'unidad'})</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label>Cantidad</label>
+                <input type="number" value={form.cantidad} onChange={e => setForm({ ...form, cantidad: e.target.value })} placeholder="0" min="1" required />
+              </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label>Notas</label>
+                <input type="text" value={form.notas} onChange={e => setForm({ ...form, notas: e.target.value })} placeholder="Observaciones del pedido" />
+              </div>
+              <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                <button type="button" className="secondary" onClick={() => { setModalOpen(false); setForm({ producto_id: '', cantidad: '', notas: '' }) }}>
+                  Cancelar
+                </button>
+                <button type="submit">Crear solicitud</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      <div ref={printRef} style={{ marginTop: 16 }}>
+        {pedidosFiltrados.length === 0 ? (
+          <div className="sv-empty-state">
+            No hay {tab === 'anual' ? 'solicitudes anuales' : 'solicitudes de refuerzos'} registradas.
+          </div>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Producto</th>
+                <th>Cantidad</th>
+                <th>Estado</th>
+                <th>Notas</th>
+                <th>Fecha</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pedidosFiltrados.map(pedido => (
+                <tr key={pedido.id}>
+                  <td>#{pedido.id}</td>
+                  <td>{pedido.producto_nombre || '-'}</td>
+                  <td>{pedido.cantidad}</td>
+                  <td><span className={`badge badge-estado-${pedido.estado}`}>{pedido.estado}</span></td>
+                  <td>{pedido.notas || '-'}</td>
+                  <td>{new Date(pedido.created_at).toLocaleDateString('es-AR')}</td>
+                  <td>
+                    {pedido.estado === 'pendiente' && (
+                      <button className="sv-btn-rechazar" style={{ margin: 0 }} onClick={() => handleCancelar(pedido.id)}>
+                        Cancelar
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ============================================================
 // Export: muestra la vista correcta según el rol
 // ============================================================
 export default function Pedidos() {
@@ -497,6 +731,10 @@ export default function Pedidos() {
 
   if (user?.role === 'supervisor') {
     return <SupervisorSolicitudes />
+  }
+
+  if (user?.role === 'directivo') {
+    return <DirectivoPedidos />
   }
 
   return <DepositoPedidos />

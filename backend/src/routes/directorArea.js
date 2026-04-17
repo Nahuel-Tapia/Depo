@@ -170,6 +170,44 @@ router.get("/informes", async (req, res) => {
   }
 });
 
+// ── Solicitudes aprobadas por supervisores bajo este director ──
+router.get("/solicitudes", async (req, res) => {
+  try {
+    await ensureTables();
+
+    const solicitudes = await all(
+      `SELECT
+         p.id_pedido AS id,
+         p.estado::text AS estado,
+         p.observaciones_generales AS notas,
+         p.fecha_creacion AS fecha,
+         pr.nombre AS producto,
+         dp.cantidad_solicitada AS cantidad,
+         u.nombre AS solicitante,
+         i.id_institucion AS institucion_id,
+         i.nombre AS institucion,
+         sup.nombre AS supervisor_nombre,
+         sup.apellido AS supervisor_apellido
+       FROM supervisor_escuela_asignacion sea
+       JOIN institucion i ON i.id_institucion = sea.institucion_id
+       JOIN pedido p ON p.id_institucion = i.id_institucion
+       JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido
+       JOIN producto pr ON pr.id_producto = dp.id_producto
+       JOIN usuario u ON u.id_usuario = p.id_usuario_solicitante
+       JOIN usuario sup ON sup.id_usuario = sea.supervisor_id
+       WHERE sea.director_area_id = $1
+         AND p.estado IN ('aprobado', 'entregado', 'finalizado')
+       ORDER BY p.fecha_creacion DESC`,
+      [req.user.sub]
+    );
+
+    res.json({ solicitudes });
+  } catch (err) {
+    console.error("Error al listar solicitudes del director de área:", err);
+    res.status(500).json({ error: "No se pudieron listar solicitudes" });
+  }
+});
+
 router.post("/informes", async (req, res) => {
   try {
     await ensureTables();
