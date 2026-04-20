@@ -1,6 +1,6 @@
 -- ENUMS
 
-CREATE TYPE estado_tramite AS ENUM ('pendiente', 'en_revision', 'aprobado_parcial', 'aprobado', 'rechazado', 'entregado', 'finalizado');
+CREATE TYPE estado_tramite AS ENUM ('pendiente', 'en_revision', 'aprobado_parcial', 'aprobado', 'rechazado', 'entregado', 'finalizado', 'cancelado');
 CREATE TYPE tipo_movimiento AS ENUM ('ingreso', 'egreso', 'ajuste', 'devolucion');
 CREATE TYPE tipo_bien AS ENUM ('consumible', 'patrimonial');
 
@@ -103,9 +103,11 @@ CREATE TABLE pedido (
     id_pedido SERIAL PRIMARY KEY,
     fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     estado estado_tramite DEFAULT 'pendiente',
+    tipo VARCHAR(20) DEFAULT 'anual',
     id_usuario_solicitante INT,
     id_institucion INT,
     observaciones_generales TEXT,
+    aprobado_director_area BOOLEAN,
     FOREIGN KEY (id_usuario_solicitante) REFERENCES usuario(id_usuario),
     FOREIGN KEY (id_institucion) REFERENCES institucion(id_institucion)
 );
@@ -218,12 +220,14 @@ CREATE TABLE movimiento_stock (
     cargo_retira VARCHAR(50), -- cargo de quien retira (director/a, vicedirector/a, etc.)
     id_institucion INT, -- institución que recibe el egreso
     id_usuario INT, -- usuario que registra el movimiento
+    id_proveedor INT, -- proveedor (para ingresos)
     motivo TEXT, -- motivo del movimiento
     FOREIGN KEY (id_producto) REFERENCES producto(id_producto),
     FOREIGN KEY (id_detalle_ingreso) REFERENCES detalle_ingreso(id_detalle_ingreso),
     FOREIGN KEY (id_detalle_orden) REFERENCES detalle_orden(id_detalle_orden),
     FOREIGN KEY (id_institucion) REFERENCES institucion(id_institucion),
     FOREIGN KEY (id_usuario) REFERENCES usuario(id_usuario),
+    FOREIGN KEY (id_proveedor) REFERENCES proveedor(id_proveedor),
     CONSTRAINT chk_movimiento_origen CHECK (
         (id_detalle_ingreso IS NOT NULL AND id_detalle_orden IS NULL)
         OR
@@ -256,4 +260,62 @@ CREATE TABLE limite_stock (
     FOREIGN KEY (id_producto) REFERENCES producto(id_producto),
     FOREIGN KEY (id_usuario_asigna) REFERENCES usuario(id_usuario),
     UNIQUE(id_institucion, id_producto, periodo)
+);
+
+
+-- SUPERVISIÓN Y DIRECCIÓN DE ÁREA
+
+
+CREATE TABLE supervisor_escuela_asignacion (
+    id SERIAL PRIMARY KEY,
+    supervisor_id INT NOT NULL,
+    institucion_id INT NOT NULL,
+    director_area_id INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (supervisor_id) REFERENCES usuario(id_usuario) ON DELETE CASCADE,
+    FOREIGN KEY (institucion_id) REFERENCES institucion(id_institucion) ON DELETE CASCADE,
+    FOREIGN KEY (director_area_id) REFERENCES usuario(id_usuario),
+    UNIQUE (supervisor_id, institucion_id)
+);
+
+CREATE TABLE solicitud_informe_supervisor (
+    id SERIAL PRIMARY KEY,
+    supervisor_id INT NOT NULL,
+    director_area_id INT,
+    asunto VARCHAR(180) NOT NULL,
+    detalle TEXT,
+    fecha_limite DATE,
+    estado VARCHAR(20) DEFAULT 'pendiente',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (supervisor_id) REFERENCES usuario(id_usuario) ON DELETE CASCADE,
+    FOREIGN KEY (director_area_id) REFERENCES usuario(id_usuario)
+);
+
+
+-- PLANILLAS DE PEDIDO ANUAL (COMPRAS)
+
+
+CREATE TABLE planilla_pedido_anual (
+    id SERIAL PRIMARY KEY,
+    director_area_id INT NOT NULL,
+    anio INT NOT NULL,
+    estado VARCHAR(20) NOT NULL DEFAULT 'borrador',
+    observaciones TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    enviada_at TIMESTAMP,
+    FOREIGN KEY (director_area_id) REFERENCES usuario(id_usuario)
+);
+
+CREATE TABLE planilla_pedido_anual_detalle (
+    id SERIAL PRIMARY KEY,
+    planilla_id INT NOT NULL,
+    id_pedido INT NOT NULL,
+    id_institucion INT NOT NULL,
+    id_producto INT NOT NULL,
+    cantidad INT NOT NULL,
+    notas TEXT,
+    FOREIGN KEY (planilla_id) REFERENCES planilla_pedido_anual(id) ON DELETE CASCADE,
+    FOREIGN KEY (id_pedido) REFERENCES pedido(id_pedido),
+    FOREIGN KEY (id_institucion) REFERENCES institucion(id_institucion),
+    FOREIGN KEY (id_producto) REFERENCES producto(id_producto)
 );

@@ -759,4 +759,71 @@ INSERT INTO categoria (nombre, tipo_bien)
 SELECT 'Otros', 'consumible'
 WHERE NOT EXISTS (SELECT 1 FROM categoria WHERE nombre = 'Otros');
 
+-- ═══════════════════════════════════════════════
+-- Cambios de commits recientes
+-- ═══════════════════════════════════════════════
+
+-- Agregar valor 'cancelado' al enum estado_tramite
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_type t
+    JOIN pg_enum e ON e.enumtypid = t.oid
+    WHERE t.typname = 'estado_tramite'
+      AND e.enumlabel = 'cancelado'
+  ) THEN
+    ALTER TYPE estado_tramite ADD VALUE 'cancelado';
+  END IF;
+END $$;
+
+-- Columna tipo de pedido (anual / refuerzo)
+ALTER TABLE pedido ADD COLUMN IF NOT EXISTS tipo VARCHAR(20) DEFAULT 'anual';
+
+-- Columna de decisión de Director de Área sobre pedidos anuales
+ALTER TABLE pedido ADD COLUMN IF NOT EXISTS aprobado_director_area BOOLEAN;
+
+-- Tabla de asignaciones supervisor-escuela (director de área)
+CREATE TABLE IF NOT EXISTS supervisor_escuela_asignacion (
+  id SERIAL PRIMARY KEY,
+  supervisor_id INT NOT NULL REFERENCES usuario(id_usuario) ON DELETE CASCADE,
+  institucion_id INT NOT NULL REFERENCES institucion(id_institucion) ON DELETE CASCADE,
+  director_area_id INT REFERENCES usuario(id_usuario),
+  created_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE (supervisor_id, institucion_id)
+);
+
+-- Tabla de solicitudes de informe de supervisor
+CREATE TABLE IF NOT EXISTS solicitud_informe_supervisor (
+  id SERIAL PRIMARY KEY,
+  supervisor_id INT NOT NULL REFERENCES usuario(id_usuario) ON DELETE CASCADE,
+  director_area_id INT REFERENCES usuario(id_usuario),
+  asunto VARCHAR(180) NOT NULL,
+  detalle TEXT,
+  fecha_limite DATE,
+  estado VARCHAR(20) DEFAULT 'pendiente',
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Planillas de pedido anual (Compras)
+CREATE TABLE IF NOT EXISTS planilla_pedido_anual (
+  id SERIAL PRIMARY KEY,
+  director_area_id INT NOT NULL REFERENCES usuario(id_usuario),
+  anio INT NOT NULL,
+  estado VARCHAR(20) NOT NULL DEFAULT 'borrador',
+  observaciones TEXT,
+  created_at TIMESTAMP DEFAULT NOW(),
+  enviada_at TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS planilla_pedido_anual_detalle (
+  id SERIAL PRIMARY KEY,
+  planilla_id INT NOT NULL REFERENCES planilla_pedido_anual(id) ON DELETE CASCADE,
+  id_pedido INT NOT NULL REFERENCES pedido(id_pedido),
+  id_institucion INT NOT NULL REFERENCES institucion(id_institucion),
+  id_producto INT NOT NULL REFERENCES producto(id_producto),
+  cantidad INT NOT NULL,
+  notas TEXT
+);
+
 COMMIT;

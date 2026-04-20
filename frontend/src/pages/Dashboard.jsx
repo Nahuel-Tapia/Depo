@@ -14,8 +14,11 @@ import ComprasPanel from '../components/ComprasPanel'
 
 const TABS = [
   { key: 'inicio', label: 'Inicio', permission: null },
-  { key: 'director-area', label: 'Direccion de Area', permission: 'supervision.manage', role: 'director_area' },
-    { key: 'compras', label: 'Area de Compras', permission: 'planilla.view', role: 'area_compras' },
+  { key: 'gestion-escuelas', label: 'Gestión de Escuelas', permission: 'supervision.manage', role: 'director_area' },
+  { key: 'gestion-pedidos', label: 'Gestión de Pedidos', permission: 'supervision.manage', role: 'director_area' },
+  { key: 'usuarios', label: 'Usuarios', permission: 'users.read' },
+  // ...otros tabs originales si los necesitas...
+  { key: 'compras', label: 'Area de Compras', permission: 'planilla.view', role: 'area_compras' },
   { key: 'supervisor', label: 'Patrimonio Escolar', permission: 'pedidos.manage', role: 'supervisor' },
   { key: 'mis-escuelas', label: 'Mis Escuelas', permission: 'instituciones.view', role: 'supervisor' },
   { key: 'productos', label: 'Productos', permission: 'productos.view', hideForRoles: ['supervisor', 'director_area'] },
@@ -23,8 +26,7 @@ const TABS = [
   { key: 'pedidos', label: 'Pedidos', permission: 'pedidos.view', hideForRoles: ['director_area'] },
   { key: 'instituciones', label: 'Instituciones', permission: 'instituciones.view', hideForRoles: ['supervisor', 'director_area'] },
   { key: 'historial', label: 'Historial', permission: 'instituciones.view', hideForRoles: ['supervisor', 'director_area'] },
-  { key: 'proveedores', label: 'Proveedores', permission: 'proveedores.view', hideForRoles: ['supervisor', 'director_area'] },
-  { key: 'usuarios', label: 'Usuarios', permission: 'users.read' }
+  { key: 'proveedores', label: 'Proveedores', permission: 'proveedores.view', hideForRoles: ['supervisor', 'director_area'] }
 ]
 
 export default function Dashboard() {
@@ -67,6 +69,10 @@ export default function Dashboard() {
   const renderTab = () => {
     switch (activeTab) {
       case 'inicio': return <Inicio onNavigate={setActiveTab} />
+      case 'gestion-escuelas':
+        return <DirectorAreaPanel initialSection="gestion-escuelas" />
+      case 'gestion-pedidos':
+        return <DirectorAreaPanel initialSection="gestion-pedidos" />
       case 'productos': return <Productos />
       case 'movimientos': return <Movimientos />
       case 'pedidos': return <Pedidos />
@@ -74,8 +80,7 @@ export default function Dashboard() {
       case 'mis-escuelas': return <Instituciones supervisorMode />
       case 'historial': return <HistorialInstitucion />
       case 'supervisor': return <SupervisorDashboard />
-      case 'director-area': return <DirectorAreaPanel />
-        case 'compras': return <ComprasPanel />
+      case 'compras': return <ComprasPanel />
       case 'proveedores': return <Proveedores />
       case 'usuarios': return <Usuarios />
       default: return <Inicio />

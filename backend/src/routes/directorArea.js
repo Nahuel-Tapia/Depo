@@ -70,7 +70,7 @@ router.get("/catalogo", async (req, res) => {
     );
 
     const escuelas = await all(
-      `SELECT id_institucion AS id, nombre, cue
+      `SELECT id_institucion AS id, nombre, cue, nivel
        FROM institucion
        WHERE activo = TRUE
        ORDER BY nombre`
