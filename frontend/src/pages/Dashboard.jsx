@@ -14,16 +14,9 @@ import ComprasPanel from '../components/ComprasPanel'
 
 const TABS = [
   { key: 'inicio', label: 'Inicio', permission: null },
-<<<<<<< HEAD
   { key: 'gestion-escuelas', label: 'Gestión de Escuelas', permission: 'supervision.manage', role: 'director_area' },
   { key: 'gestion-pedidos', label: 'Gestión de Pedidos', permission: 'supervision.manage', role: 'director_area' },
-  { key: 'usuarios', label: 'Usuarios', permission: 'users.read' },
-  // ...otros tabs originales si los necesitas...
-  { key: 'compras', label: 'Area de Compras', permission: 'planilla.view', role: 'area_compras' },
-=======
-  { key: 'director-area', label: 'Dirección de Área', permission: 'supervision.manage', role: 'director_area' },
-    { key: 'compras', label: 'Área de Compras', permission: 'planilla.view', role: 'area_compras' },
->>>>>>> 37d01b5b34dd292a042dce10dffd4f1bc378d9dc
+  { key: 'compras', label: 'Área de Compras', permission: 'planilla.view', role: 'area_compras' },
   { key: 'supervisor', label: 'Patrimonio Escolar', permission: 'pedidos.manage', role: 'supervisor' },
   { key: 'mis-escuelas', label: 'Mis Escuelas', permission: 'instituciones.view', role: 'supervisor', hideForRoles: ['admin'] },
   { key: 'productos', label: 'Productos', permission: 'productos.view', hideForRoles: ['supervisor', 'director_area'] },
@@ -31,12 +24,8 @@ const TABS = [
   { key: 'pedidos', label: 'Pedidos', permission: 'pedidos.view', hideForRoles: ['director_area', 'admin'] },
   { key: 'instituciones', label: 'Instituciones', permission: 'instituciones.view', hideForRoles: ['supervisor', 'director_area'] },
   { key: 'historial', label: 'Historial', permission: 'instituciones.view', hideForRoles: ['supervisor', 'director_area'] },
-<<<<<<< HEAD
-  { key: 'proveedores', label: 'Proveedores', permission: 'proveedores.view', hideForRoles: ['supervisor', 'director_area'] }
-=======
   { key: 'proveedores', label: 'Proveedores', permission: 'proveedores.view', hideForRoles: ['supervisor', 'director_area'] },
   { key: 'usuarios', label: 'Usuarios', permission: 'users.read', role: 'admin' }
->>>>>>> 37d01b5b34dd292a042dce10dffd4f1bc378d9dc
 ]
 
 export default function Dashboard() {
