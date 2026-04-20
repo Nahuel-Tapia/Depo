@@ -88,7 +88,7 @@ export default function Register() {
       const loginData = await loginRes.json().catch(() => ({}))
 
       if (!loginRes.ok) {
-        setMsg({ text: 'Usuario creado pero hay error al iniciar sesión. Por favor inicia sesión manualmente.', type: 'error' })
+        setMsg({ text: 'Usuario creado, pero hubo un error al iniciar sesión. Por favor, iniciá sesión manualmente.', type: 'error' })
         return
       }
 

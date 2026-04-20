@@ -73,7 +73,7 @@ export default function DirectorAreaPanel({ initialSection }) {
     e.preventDefault()
     setMsg({ text: '', type: '' })
     if (!asigForm.supervisor_id || !asigForm.institucion_id) {
-      setMsg({ text: 'Debes seleccionar supervisor y escuela', type: 'error' })
+      setMsg({ text: 'Debés seleccionar un supervisor y una escuela', type: 'error' })
       return
     }
     const res = await apiFetch('/api/director-area/asignaciones', {
@@ -131,6 +131,7 @@ export default function DirectorAreaPanel({ initialSection }) {
     loadAll()
   }
 
+<<<<<<< HEAD
   // Handlers para pedidos anuales (puedes expandir según lógica anterior)
   const handleDecisionSolicitud = () => {}
   const handleEntregarSolicitud = () => {}
@@ -141,6 +142,145 @@ export default function DirectorAreaPanel({ initialSection }) {
 
   return (
     <div>
+=======
+  const handleEntregarSolicitud = async (id) => {
+    setUpdatingId(id)
+    try {
+      const res = await apiFetch(`/api/pedidos/${id}/estado`, {
+        token,
+        method: 'PATCH',
+        body: JSON.stringify({ estado: 'entregado' })
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || 'No se pudo actualizar')
+      }
+      setSolicitudes(prev => prev.map(s => s.id === id ? { ...s, estado: 'entregado' } : s))
+      setMsg({ text: `Solicitud #${id} marcada como entregada.`, type: 'success' })
+    } catch (err) {
+      setMsg({ text: err.message || 'Error al marcar entregada', type: 'error' })
+    } finally {
+      setUpdatingId(null)
+    }
+  }
+
+  const handleDecisionSolicitud = async (id, decision) => {
+    setUpdatingId(id)
+    try {
+      const res = await apiFetch(`/api/director-area/solicitudes/${id}/decision`, {
+        token,
+        method: 'PATCH',
+        body: JSON.stringify({ decision })
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'No se pudo registrar la decisión')
+
+      setSolicitudes(prev => prev.map(s => {
+        if (s.id !== id) return s
+        if (decision === 'aceptar') {
+          return { ...s, aprobado_director_area: true }
+        }
+        return { ...s, aprobado_director_area: false, estado: 'rechazado' }
+      }))
+
+      setMsg({
+        text: decision === 'aceptar'
+          ? `Solicitud #${id} aceptada para pedido anual.`
+          : `Solicitud #${id} denegada.`,
+        type: 'success'
+      })
+    } catch (err) {
+      setMsg({ text: err.message || 'Error al decidir solicitud', type: 'error' })
+    } finally {
+      setUpdatingId(null)
+    }
+  }
+
+  const handleCrearPlanilla = async () => {
+    setCreandoPlanilla(true)
+    try {
+      const res = await apiFetch('/api/compras/planillas', {
+        token,
+        method: 'POST',
+        body: JSON.stringify({ observaciones: planillaObs.trim() || null })
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'No se pudo crear la planilla')
+      setPlanillaObs('')
+      setMsg({ text: `Planilla creada con ${data.items} solicitudes. Revisá la planilla antes de enviarla.`, type: 'success' })
+      loadAll()
+    } catch (err) {
+      setMsg({ text: err.message, type: 'error' })
+    } finally {
+      setCreandoPlanilla(false)
+    }
+  }
+
+  const handleVerDetalle = async (id) => {
+    if (planillaDetalle?.planilla?.id === id) { setPlanillaDetalle(null); return }
+    try {
+      const res = await apiFetch(`/api/compras/planillas/${id}`, { token })
+      if (!res.ok) throw new Error('No se pudo cargar el detalle')
+      const data = await res.json()
+      setPlanillaDetalle(data)
+    } catch (err) {
+      setMsg({ text: err.message, type: 'error' })
+    }
+  }
+
+  const handleEnviarPlanilla = async (id) => {
+    try {
+      const res = await apiFetch(`/api/compras/planillas/${id}/enviar`, { token, method: 'PATCH' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'No se pudo enviar')
+      setMsg({ text: 'Planilla enviada a Área de Compras.', type: 'success' })
+      if (planillaDetalle?.planilla?.id === id) setPlanillaDetalle(null)
+      loadAll()
+    } catch (err) {
+      setMsg({ text: err.message, type: 'error' })
+    }
+  }
+
+  const handleEliminarPlanilla = async (id) => {
+    try {
+      const res = await apiFetch(`/api/compras/planillas/${id}`, { token, method: 'DELETE' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'No se pudo eliminar')
+      setMsg({ text: 'Planilla eliminada.', type: 'success' })
+      if (planillaDetalle?.planilla?.id === id) setPlanillaDetalle(null)
+      loadAll()
+    } catch (err) {
+      setMsg({ text: err.message, type: 'error' })
+    }
+  }
+
+  const anioActual = new Date().getFullYear()
+  const planillaActivaAnio = planillas.find(p => p.anio === anioActual && p.estado !== 'procesada')
+  const solicitudesAnualesPorDecidir = solicitudes.filter(
+    s => (s.tipo || 'anual') === 'anual' && s.estado === 'aprobado' && s.aprobado_director_area == null
+  )
+  const solicitudesAnualesAceptadas = solicitudes.filter(
+    s => (s.tipo || 'anual') === 'anual' && s.estado === 'aprobado' && s.aprobado_director_area === true
+  )
+
+  const supervisorMap = useMemo(() => {
+    return Object.fromEntries(supervisores.map(s => [String(s.id), `${s.nombre || ''} ${s.apellido || ''}`.trim()]))
+  }, [supervisores])
+
+  return (
+    <div>
+      <h2>Dirección de Área</h2>
+      <p style={{ marginTop: 0, color: 'var(--muted)' }}>
+        Gestioná la asignación de escuelas a supervisores y solicitá informes de seguimiento.
+      </p>
+
+      {msg.text && (
+        <div className={`msg show ${msg.type === 'success' ? 'msg-success' : 'msg-error'}`}>
+          {msg.text}
+        </div>
+      )}
+
+>>>>>>> 37d01b5b34dd292a042dce10dffd4f1bc378d9dc
       <div style={{ display: 'flex', gap: 6, marginBottom: 18, flexWrap: 'wrap' }}>
         {[
           { key: 'gestion-escuelas', label: 'Gestión de Escuelas' },
@@ -182,6 +322,7 @@ export default function DirectorAreaPanel({ initialSection }) {
       )}
       {activeSection === 'gestion-pedidos' && (
         <>
+<<<<<<< HEAD
           <h2 style={{marginTop:0}}>Gestión de Pedidos</h2>
           <DirectorAreaPedidosAnuales
             solicitudes={solicitudes}
@@ -198,6 +339,270 @@ export default function DirectorAreaPanel({ initialSection }) {
             handleEnviarPlanilla={handleEnviarPlanilla}
             handleEliminarPlanilla={handleEliminarPlanilla}
           />
+=======
+      <h3>Pedidos (Dirección de Área)</h3>
+      <p style={{ marginTop: 0, color: 'var(--muted)', fontSize: '0.9rem' }}>
+        Revisá pedidos aprobados por supervisores. Podés aceptar o denegar los anuales para el pedido anual y marcar como entregados los ya autorizados.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Institución</th>
+            <th>Supervisor</th>
+            <th>Producto</th>
+            <th>Cantidad</th>
+            <th>Solicitante</th>
+            <th>Fecha</th>
+            <th>Estado</th>
+            <th>Decisión DA</th>
+            <th>Acción</th>
+          </tr>
+        </thead>
+        <tbody>
+          {solicitudes.length === 0 ? (
+            <tr><td colSpan={10} style={{ textAlign: 'center', color: 'var(--muted)' }}>Sin solicitudes registradas.</td></tr>
+          ) : solicitudes.map(s => (
+            <tr key={s.id}>
+              <td>#{s.id}</td>
+              <td>{s.institucion}</td>
+              <td>{`${s.supervisor_nombre || ''} ${s.supervisor_apellido || ''}`.trim()}</td>
+              <td>{s.producto}</td>
+              <td>{s.cantidad}</td>
+              <td>{s.solicitante}</td>
+              <td>{s.fecha ? new Date(s.fecha).toLocaleDateString('es-AR') : '-'}</td>
+              <td>
+                <span className={`badge badge-estado-${s.estado === 'aprobado' ? 'aprobado' : 'entregado'}`}>
+                  {s.estado === 'entregado' || s.estado === 'finalizado' ? 'entregado' : s.estado}
+                </span>
+              </td>
+              <td>
+                {(s.tipo || 'anual') !== 'anual'
+                  ? '-'
+                  : s.aprobado_director_area === true
+                    ? <span className="badge badge-estado-aprobado">aceptado</span>
+                    : s.aprobado_director_area === false
+                      ? <span className="badge badge-estado-rechazado">denegado</span>
+                      : <span className="badge badge-estado-pendiente">pendiente</span>}
+              </td>
+              <td>
+                <div className="inline-actions">
+                  {(s.tipo || 'anual') === 'anual' && s.estado === 'aprobado' && s.aprobado_director_area == null && (
+                    <>
+                      <button
+                        style={{ margin: 0 }}
+                        disabled={updatingId === s.id}
+                        onClick={() => handleDecisionSolicitud(s.id, 'aceptar')}
+                      >
+                        {updatingId === s.id ? '...' : 'Aceptar'}
+                      </button>
+                      <button
+                        className="sv-btn-rechazar"
+                        style={{ margin: 0 }}
+                        disabled={updatingId === s.id}
+                        onClick={() => handleDecisionSolicitud(s.id, 'denegar')}
+                      >
+                        Denegar
+                      </button>
+                    </>
+                  )}
+
+                  {s.estado === 'aprobado' && (
+                    <button
+                      className="secondary"
+                      style={{ margin: 0 }}
+                      disabled={updatingId === s.id}
+                      onClick={() => handleEntregarSolicitud(s.id)}
+                    >
+                      {updatingId === s.id ? '...' : 'Marcar entregado'}
+                    </button>
+                  )}
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+        </>
+      )}
+
+      {activeSection === 'gestion' && (
+        <>
+      <h3>Solicitudes de informe</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Supervisor</th>
+            <th>Asunto</th>
+            <th>Fecha límite</th>
+            <th>Estado</th>
+            <th>Creado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {informes.length === 0 ? (
+            <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--muted)' }}>Sin solicitudes.</td></tr>
+          ) : informes.map(i => (
+            <tr key={i.id}>
+              <td>{supervisorMap[String(i.supervisor_id)] || `${i.supervisor_nombre || ''} ${i.supervisor_apellido || ''}`.trim()}</td>
+              <td>
+                <strong>{i.asunto}</strong>
+                {i.detalle ? <div style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>{i.detalle}</div> : null}
+              </td>
+              <td>{i.fecha_limite ? new Date(i.fecha_limite).toLocaleDateString('es-AR') : '-'}</td>
+              <td><span className="badge badge-estado-pendiente">{i.estado || 'pendiente'}</span></td>
+              <td>{i.created_at ? new Date(i.created_at).toLocaleDateString('es-AR') : '-'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+        </>
+      )}
+
+      {activeSection === 'pedido-anual' && (
+        <>
+      {/* ── Planilla de Pedido Anual ── */}
+      <h3 style={{ marginTop: 32 }}>Planilla de Pedido Anual {anioActual}</h3>
+      <p style={{ marginTop: 0, color: 'var(--muted)', fontSize: '0.9rem' }}>
+        Consolidá solicitudes anuales aceptadas por Dirección de Área en una planilla y envíala al Área de Compras.
+      </p>
+
+      <p style={{ marginTop: 0, color: 'var(--muted)', fontSize: '0.85rem' }}>
+        Pendientes de decisión: <strong>{solicitudesAnualesPorDecidir.length}</strong> · Aceptadas para planilla: <strong>{solicitudesAnualesAceptadas.length}</strong>
+      </p>
+
+      {!planillaActivaAnio ? (
+        <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 16, background: '#f8fafc', marginBottom: 16 }}>
+          {solicitudesAnualesAceptadas.length === 0 ? (
+            <p style={{ color: 'var(--muted)', margin: 0 }}>
+              No hay solicitudes anuales aceptadas por Dirección para este año.
+            </p>
+          ) : (
+            <>
+              <p style={{ margin: '0 0 10px 0' }}>
+                <strong>{solicitudesAnualesAceptadas.length}</strong> solicitudes anuales aceptadas listas para incluir en la planilla.
+              </p>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                <div style={{ flex: 1, minWidth: 200 }}>
+                  <label>Observaciones (opcional)</label>
+                  <input
+                    type="text"
+                    value={planillaObs}
+                    onChange={e => setPlanillaObs(e.target.value)}
+                    placeholder="Ej: Planilla anual 2026 — Zona Norte"
+                    style={{ marginBottom: 0 }}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCrearPlanilla}
+                  disabled={creandoPlanilla}
+                  style={{ marginBottom: 0 }}
+                >
+                  {creandoPlanilla ? 'Generando...' : 'Generar planilla anual'}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      ) : (
+        <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 16, background: '#f8fafc', marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+            <div>
+              <strong>Planilla #{planillaActivaAnio.id}</strong>
+              <span className={`badge badge-estado-${planillaActivaAnio.estado === 'enviada' ? 'aprobado' : 'pendiente'}`} style={{ marginLeft: 8 }}>
+                {planillaActivaAnio.estado}
+              </span>
+              {planillaActivaAnio.observaciones && (
+                <div style={{ color: 'var(--muted)', fontSize: '0.85rem', marginTop: 4 }}>{planillaActivaAnio.observaciones}</div>
+              )}
+              <div style={{ color: 'var(--muted)', fontSize: '0.82rem', marginTop: 2 }}>
+                Creada: {new Date(planillaActivaAnio.created_at).toLocaleDateString('es-AR')}
+                {planillaActivaAnio.enviada_at && ` · Enviada: ${new Date(planillaActivaAnio.enviada_at).toLocaleDateString('es-AR')}`}
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button
+                className="secondary"
+                style={{ margin: 0 }}
+                onClick={() => handleVerDetalle(planillaActivaAnio.id)}
+              >
+                {planillaDetalle?.planilla?.id === planillaActivaAnio.id ? 'Ocultar detalle' : 'Ver detalle'}
+              </button>
+              {planillaActivaAnio.estado === 'borrador' && (
+                <>
+                  <button
+                    style={{ margin: 0 }}
+                    onClick={() => handleEnviarPlanilla(planillaActivaAnio.id)}
+                  >
+                    Enviar a Compras
+                  </button>
+                  <button
+                    className="sv-btn-rechazar"
+                    style={{ margin: 0 }}
+                    onClick={() => handleEliminarPlanilla(planillaActivaAnio.id)}
+                  >
+                    Eliminar
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Detalle expandible */}
+          {planillaDetalle?.planilla?.id === planillaActivaAnio.id && (
+            <div style={{ marginTop: 16, overflowX: 'auto' }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Institución</th>
+                    <th>CUE</th>
+                    <th>Producto</th>
+                    <th>Unidad</th>
+                    <th>Cantidad</th>
+                    <th>Notas</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(planillaDetalle.detalles || []).map(d => (
+                    <tr key={d.id}>
+                      <td>{d.institucion}</td>
+                      <td>{d.cue || '-'}</td>
+                      <td>{d.producto}</td>
+                      <td>{d.unidad_medida || 'unidad'}</td>
+                      <td style={{ textAlign: 'center', fontWeight: 600 }}>{d.cantidad}</td>
+                      <td>{d.notas || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Historial de planillas anteriores */}
+      {planillas.filter(p => p.id !== planillaActivaAnio?.id).length > 0 && (
+        <>
+          <h4 style={{ marginBottom: 8 }}>Planillas anteriores</h4>
+          <table>
+            <thead>
+              <tr><th>ID</th><th>Año</th><th>Estado</th><th>Enviada</th></tr>
+            </thead>
+            <tbody>
+              {planillas.filter(p => p.id !== planillaActivaAnio?.id).map(p => (
+                <tr key={p.id}>
+                  <td>#{p.id}</td>
+                  <td>{p.anio}</td>
+                  <td><span className={`badge badge-estado-${p.estado === 'procesada' ? 'entregado' : p.estado === 'enviada' ? 'aprobado' : 'pendiente'}`}>{p.estado}</span></td>
+                  <td>{p.enviada_at ? new Date(p.enviada_at).toLocaleDateString('es-AR') : '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+>>>>>>> 37d01b5b34dd292a042dce10dffd4f1bc378d9dc
         </>
       )}
     </div>

@@ -19,7 +19,7 @@ export default function Usuarios() {
         const data = await res.json()
         setUsers(data.users || [])
       } else if (res.status === 403) {
-        setMsg('No tiene permiso para ver usuarios')
+        setMsg('No tenés permiso para ver usuarios')
       }
     } catch { /* ignore */ }
   }
@@ -60,7 +60,7 @@ export default function Usuarios() {
     const labels = {
       admin: 'Administrador',
       supervisor: 'Supervisor',
-      director_area: 'Director de Area',
+      director_area: 'Director de Área',
       directivo: 'Directivo',
       operador: 'Operador',
       consulta: 'Consulta'
@@ -174,6 +174,15 @@ export default function Usuarios() {
   const canDeleteUser = hasPermission('users.delete') && user?.role === 'admin'
   const institucionSeleccionada = instituciones.find(inst => String(inst.id) === String(form.institucion))
   const cueSeleccionado = institucionSeleccionada?.cue || ''
+
+  if (user?.role !== 'admin') {
+    return (
+      <div>
+        <h2>Gestión de Usuarios</h2>
+        <div className="msg show msg-error">No tenés permiso para acceder a esta sección.</div>
+      </div>
+    )
+  }
 
   return (
     <div>

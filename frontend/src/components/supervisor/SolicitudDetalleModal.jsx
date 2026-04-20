@@ -31,7 +31,7 @@ export default function SolicitudDetalleModal({ solicitud, historial, loadingHis
         <div className="sv-detalle-grid">
           <div><strong>Escuela:</strong> {solicitud.escuela}</div>
           <div><strong>Solicitante:</strong> {solicitud.solicitante || '-'}</div>
-          <div><strong>Matricula:</strong> {solicitud.matricula}</div>
+          <div><strong>Matrícula:</strong> {solicitud.matricula}</div>
           <div><strong>Producto:</strong> {solicitud.producto || '-'}</div>
           <div><strong>Cantidad solicitada:</strong> {solicitud.cantidad}</div>
           <div>
@@ -45,12 +45,12 @@ export default function SolicitudDetalleModal({ solicitud, historial, loadingHis
         </div>
 
         <div style={{ marginTop: 12 }}>
-          <label htmlFor="sv-observacion" style={{ marginTop: 0 }}>Observacion</label>
+          <label htmlFor="sv-observacion" style={{ marginTop: 0 }}>Observación</label>
           <textarea
             id="sv-observacion"
             className="sv-rechazo-input"
             rows={3}
-            placeholder="Agregar motivo de rechazo o pedir aclaracion..."
+            placeholder="Agregar motivo de rechazo o pedir aclaración..."
             value={observacion}
             onChange={e => setObservacion(e.target.value)}
           />
@@ -87,7 +87,7 @@ export default function SolicitudDetalleModal({ solicitud, historial, loadingHis
         <div className="inline-actions" style={{ marginTop: 12 }}>
           <button disabled={disabled || solicitud.estado !== 'pendiente'} onClick={onApprove}>Aprobar solicitud</button>
           <button disabled={disabled || solicitud.estado !== 'pendiente'} className="sv-btn-rechazar" onClick={submitReject}>Rechazar solicitud</button>
-          <button disabled={disabled} className="sv-btn-reparar" onClick={submitClarification}>Pedir aclaracion</button>
+          <button disabled={disabled} className="sv-btn-reparar" onClick={submitClarification}>Pedir aclaración</button>
         </div>
       </aside>
     </div>
