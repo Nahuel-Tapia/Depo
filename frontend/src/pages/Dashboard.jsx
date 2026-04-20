@@ -24,7 +24,7 @@ const TABS = [
   { key: 'instituciones', label: 'Instituciones', permission: 'instituciones.view', hideForRoles: ['supervisor', 'director_area'] },
   { key: 'historial', label: 'Historial', permission: 'instituciones.view', hideForRoles: ['supervisor', 'director_area'] },
   { key: 'proveedores', label: 'Proveedores', permission: 'proveedores.view', hideForRoles: ['supervisor', 'director_area'] },
-  { key: 'usuarios', label: 'Usuarios', permission: 'users.read' }
+  { key: 'usuarios', label: 'Usuarios', permission: 'users.read', role: 'admin' }
 ]
 
 export default function Dashboard() {

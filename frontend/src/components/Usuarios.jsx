@@ -175,6 +175,15 @@ export default function Usuarios() {
   const institucionSeleccionada = instituciones.find(inst => String(inst.id) === String(form.institucion))
   const cueSeleccionado = institucionSeleccionada?.cue || ''
 
+  if (user?.role !== 'admin') {
+    return (
+      <div>
+        <h2>Gestión de Usuarios</h2>
+        <div className="msg show msg-error">No tenés permiso para acceder a esta sección.</div>
+      </div>
+    )
+  }
+
   return (
     <div>
       <h2>Gestión de Usuarios</h2>
