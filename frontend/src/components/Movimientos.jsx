@@ -199,6 +199,60 @@ export default function Movimientos() {
 
   const printRef = useRef(null)
 
+  const handlePrintMovimiento = (movimiento) => {
+    const printWindow = window.open('', '_blank', 'width=700,height=600')
+    if (!printWindow) return
+
+    const institucionCargo = movimiento.institucion_nombre && movimiento.cargo_retira
+      ? `${movimiento.institucion_nombre} (${movimiento.cargo_retira})`
+      : movimiento.institucion_nombre || movimiento.cargo_retira || '-'
+
+    const fecha = movimiento.created_at
+      ? new Date(movimiento.created_at).toLocaleString('es-AR')
+      : '-'
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Movimiento #${movimiento.id || ''}</title>
+        <style>
+          @import url('https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;500;700&display=swap');
+          * { box-sizing: border-box; font-family: 'Ubuntu', sans-serif; }
+          body { margin: 24px; color: #1D252D; }
+          h2 { margin: 0 0 14px; font-size: 20px; }
+          table { width: 100%; border-collapse: collapse; }
+          th, td { border: 1px solid #d1d5db; padding: 8px 10px; text-align: left; }
+          th { background: #f3f4f6; width: 220px; font-size: 12px; text-transform: uppercase; }
+          .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 700; color: #111827; background: #e5e7eb; }
+          .footer { margin-top: 14px; color: #6b7280; font-size: 12px; }
+        </style>
+      </head>
+      <body>
+        <h2>Detalle de Movimiento</h2>
+        <table>
+          <tr><th>Producto</th><td>${movimiento.producto_nombre || '-'}</td></tr>
+          <tr><th>Tipo</th><td><span class="badge">${movimiento.tipo || '-'}</span></td></tr>
+          <tr><th>Cantidad</th><td>${movimiento.cantidad ?? '-'}</td></tr>
+          <tr><th>Estado</th><td>${movimiento.estado_producto || '-'}</td></tr>
+          <tr><th>Institucion/Cargo</th><td>${institucionCargo}</td></tr>
+          <tr><th>Motivo</th><td>${movimiento.motivo || '-'}</td></tr>
+          <tr><th>Registrado por</th><td>${movimiento.usuario_nombre || '-'}</td></tr>
+          <tr><th>Fecha</th><td>${fecha}</td></tr>
+        </table>
+        <div class="footer">Impreso: ${new Date().toLocaleString('es-AR')}</div>
+      </body>
+      </html>
+    `)
+
+    printWindow.document.close()
+    printWindow.focus()
+    setTimeout(() => {
+      printWindow.print()
+      printWindow.close()
+    }, 300)
+  }
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
@@ -505,6 +559,7 @@ export default function Movimientos() {
             <th>Motivo</th>
             <th>Registrado por</th>
             <th>Fecha</th>
+            <th style={{ textAlign: 'center' }}>Imprimir</th>
           </tr>
         </thead>
         <tbody>
@@ -522,6 +577,18 @@ export default function Movimientos() {
                 <td>{m.motivo || '-'}</td>
                 <td>{m.usuario_nombre || '-'}</td>
                 <td>{new Date(m.created_at).toLocaleDateString()}</td>
+                <td style={{ textAlign: 'center' }}>
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => handlePrintMovimiento(m)}
+                    title="Imprimir movimiento"
+                    aria-label="Imprimir movimiento"
+                    style={{ width: 'auto', margin: 0, minWidth: 36, padding: '6px 10px' }}
+                  >
+                    🖨️
+                  </button>
+                </td>
               </tr>
             )
           })}
