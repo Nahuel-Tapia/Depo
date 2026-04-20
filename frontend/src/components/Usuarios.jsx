@@ -10,7 +10,9 @@ export default function Usuarios() {
   const [msg, setMsg] = useState('')
   const [formOpen, setFormOpen] = useState(false)
   const [roleModal, setRoleModal] = useState(null)
-  const [form, setForm] = useState({ nombre: '', email: '', password: '', role: 'consulta', institucion: '' })
+  const [form, setForm] = useState({ nombre: '', email: '', password: '', role: 'consulta', institucion: '', cue: '', nivel: '' })
+  const [cueInfo, setCueInfo] = useState(null)
+  const [cueLoading, setCueLoading] = useState(false)
 
   const loadUsers = async () => {
     try {
@@ -31,6 +33,22 @@ export default function Usuarios() {
       setInstituciones(data.instituciones || [])
     } catch { /* ignore */ }
   }
+
+  // Buscar info de CUE cuando cambia el valor
+  useEffect(() => {
+    if (form.role === 'directivo' && form.cue && form.cue.length === 9) {
+      setCueLoading(true)
+      fetch(`/api/instituciones/public/cue/${form.cue}`)
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          setCueInfo(data)
+          setCueLoading(false)
+        })
+        .catch(() => { setCueInfo(null); setCueLoading(false) })
+    } else {
+      setCueInfo(null)
+    }
+  }, [form.cue, form.role])
 
   const loadRoles = async () => {
     try {
@@ -72,17 +90,25 @@ export default function Usuarios() {
     e.preventDefault()
     setMsg('')
 
-    if (form.role === 'directivo' && !form.institucion) {
-      setMsg('La institución es obligatoria para rol directivo')
-      return
+    if (form.role === 'directivo') {
+      if (!cueInfo || !cueInfo.cue) {
+        setMsg('Debe ingresar un CUE válido para un directivo')
+        return
+      }
+      if (!form.nivel) {
+        setMsg('Debe seleccionar un nivel educativo para el CUE')
+        return
+      }
     }
 
     const payload = {
       nombre: form.nombre.trim(),
       email: form.email.trim(),
-      institucion: form.institucion || null,
       password: form.password,
-      role: form.role
+      role: form.role,
+      institucion: form.role === 'directivo' && cueInfo ? cueInfo.modalidades.find(m => m.nivel_educativo === form.nivel)?.id : (form.institucion || null),
+      cue: form.role === 'directivo' ? form.cue : undefined,
+      nivel: form.role === 'directivo' ? form.nivel : undefined
     }
 
     const res = await apiFetch('/api/users', {
@@ -97,7 +123,7 @@ export default function Usuarios() {
       return
     }
 
-    setForm({ nombre: '', email: '', password: '', role: 'consulta', institucion: '' })
+    setForm({ nombre: '', email: '', password: '', role: 'consulta', institucion: '', cue: '', nivel: '' })
     setFormOpen(false)
     loadUsers()
   }
@@ -279,25 +305,42 @@ export default function Usuarios() {
                   ))}
                 </select>
               </div>
-              <div>
-                <label>Institución</label>
-                <select value={form.institucion} onChange={e => setForm({ ...form, institucion: e.target.value })}>
-                  <option value="">-- Seleccionar (obligatorio para directivo) --</option>
-                  {instituciones.map(inst => (
-                    <option key={inst.id} value={inst.id}>{inst.nombre}</option>
-                  ))}
-                </select>
-              </div>
-              {form.role === 'directivo' && (
+              {form.role === 'directivo' ? (
+                <>
+                  <div>
+                    <label>CUE</label>
+                    <input
+                      type="text"
+                      value={form.cue}
+                      onChange={e => setForm({ ...form, cue: e.target.value.replace(/\D/g, '').slice(0,9), nivel: '' })}
+                      placeholder="Ingresar CUE (9 dígitos)"
+                      required
+                    />
+                  </div>
+                  {cueLoading && <div style={{ color: '#888', fontSize: 13 }}>Buscando CUE...</div>}
+                  {cueInfo && cueInfo.nombre && (
+                    <div style={{ marginTop: 6 }}>
+                      <div><b>Escuela:</b> {cueInfo.nombre}</div>
+                      <label style={{ marginTop: 8 }}>Nivel educativo</label>
+                      <select value={form.nivel} onChange={e => setForm({ ...form, nivel: e.target.value })} required>
+                        <option value="">-- Seleccionar nivel --</option>
+                        {cueInfo.modalidades.map(m => (
+                          <option key={m.id} value={m.nivel_educativo}>{m.nivel_educativo}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  {cueInfo && !cueInfo.nombre && <div style={{ color: 'red', fontSize: 13 }}>CUE no encontrado</div>}
+                </>
+              ) : (
                 <div>
-                  <label>CUE</label>
-                  <input
-                    type="text"
-                    value={cueSeleccionado}
-                    readOnly
-                    disabled
-                    placeholder="Se completa al elegir institución"
-                  />
+                  <label>Institución</label>
+                  <select value={form.institucion} onChange={e => setForm({ ...form, institucion: e.target.value })}>
+                    <option value="">-- Seleccionar --</option>
+                    {instituciones.map(inst => (
+                      <option key={inst.id} value={inst.id}>{inst.nombre}</option>
+                    ))}
+                  </select>
                 </div>
               )}
               <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>

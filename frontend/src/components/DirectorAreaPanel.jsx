@@ -5,10 +5,17 @@ import { apiFetch } from '../api'
 import DirectorAreaGestion from './DirectorAreaGestion'
 import DirectorAreaPedidosAnuales from './DirectorAreaPedidosAnuales'
 
+
 export default function DirectorAreaPanel({ initialSection }) {
   const { token } = useAuth()
   const [activeSection, setActiveSection] = useState(initialSection || 'gestion-escuelas')
 
+  // Sincronizar sección activa con el prop initialSection
+  useEffect(() => {
+    if (initialSection && initialSection !== activeSection) {
+      setActiveSection(initialSection)
+    }
+  }, [initialSection])
   const [supervisores, setSupervisores] = useState([])
   const [escuelas, setEscuelas] = useState([])
   const [asignaciones, setAsignaciones] = useState([])
@@ -20,9 +27,17 @@ export default function DirectorAreaPanel({ initialSection }) {
   const [creandoPlanilla, setCreandoPlanilla] = useState(false)
   const [updatingId, setUpdatingId] = useState(null)
   const [msg, setMsg] = useState({ text: '', type: '' })
-
   const [asigForm, setAsigForm] = useState({ supervisor_id: '', institucion_id: '' })
   const [informeForm, setInformeForm] = useState({ supervisor_id: '', asunto: '', detalle: '', fecha_limite: '' })
+
+  // Resetear formularios al cambiar de sección
+  useEffect(() => {
+    setAsigForm({ supervisor_id: '', institucion_id: '' });
+    setInformeForm({ supervisor_id: '', asunto: '', detalle: '', fecha_limite: '' });
+    setMsg({ text: '', type: '' });
+    setPlanillaObs('');
+    setPlanillaDetalle(null);
+  }, [activeSection]);
 
   const loadAll = async () => {
     try {
@@ -250,68 +265,42 @@ export default function DirectorAreaPanel({ initialSection }) {
         Gestioná la asignación de escuelas a supervisores y solicitá informes de seguimiento.
       </p>
 
-      <div style={{ display: 'flex', gap: 6, marginBottom: 18, flexWrap: 'wrap' }}>
-        {[
-          { key: 'gestion-escuelas', label: 'Gestión de Escuelas' },
-          { key: 'gestion-pedidos', label: 'Gestión de Pedidos' }
-        ].map(section => (
-          <button
-            key={section.key}
-            type="button"
-            className={activeSection === section.key ? '' : 'secondary'}
-            style={{ margin: 0 }}
-            onClick={() => setActiveSection(section.key)}
-          >
-            {section.label}
-          </button>
-        ))}
-      </div>
-
-      {msg.text && (
-        <div className={`msg show ${msg.type === 'success' ? 'msg-success' : 'msg-error'}`}>{msg.text}</div>
-      )}
-
+      {/* Selector de sección eliminado. El control de sección es solo desde el Dashboard principal. */}
+      {/* Aquí puedes renderizar el contenido de la sección activa */}
       {activeSection === 'gestion-escuelas' && (
-        <>
-          <h2 style={{ marginTop: 0 }}>Gestión de Escuelas</h2>
-          <DirectorAreaGestion
-            supervisores={supervisores}
-            escuelas={escuelas}
-            asignaciones={asignaciones}
-            informes={informes}
-            asigForm={asigForm}
-            setAsigForm={setAsigForm}
-            handleAsignar={handleAsignar}
-            handleEliminarAsignacion={handleEliminarAsignacion}
-            informeForm={informeForm}
-            setInformeForm={setInformeForm}
-            handleSolicitarInforme={handleSolicitarInforme}
-            msg={msg}
-            supervisorMap={supervisorMap}
-          />
-        </>
+        <DirectorAreaGestion
+          supervisores={supervisores}
+          escuelas={escuelas}
+          asignaciones={asignaciones}
+          asigForm={asigForm}
+          setAsigForm={setAsigForm}
+          handleAsignar={handleAsignar}
+          handleEliminarAsignacion={handleEliminarAsignacion}
+          msg={msg}
+          informes={informes}
+          informeForm={informeForm}
+          setInformeForm={setInformeForm}
+          handleSolicitarInforme={handleSolicitarInforme}
+          supervisorMap={supervisorMap}
+        />
       )}
-
       {activeSection === 'gestion-pedidos' && (
-        <>
-          <h2 style={{ marginTop: 0 }}>Gestión de Pedidos</h2>
-          <DirectorAreaPedidosAnuales
-            solicitudes={solicitudes}
-            updatingId={updatingId}
-            handleDecisionSolicitud={handleDecisionSolicitud}
-            handleEntregarSolicitud={handleEntregarSolicitud}
-            planillas={planillas}
-            planillaDetalle={planillaDetalle}
-            planillaObs={planillaObs}
-            setPlanillaObs={setPlanillaObs}
-            creandoPlanilla={creandoPlanilla}
-            handleCrearPlanilla={handleCrearPlanilla}
-            handleVerDetalle={handleVerDetalle}
-            handleEnviarPlanilla={handleEnviarPlanilla}
-            handleEliminarPlanilla={handleEliminarPlanilla}
-          />
-        </>
+        <DirectorAreaPedidosAnuales
+          solicitudes={solicitudes}
+          updatingId={updatingId}
+          handleDecisionSolicitud={handleDecisionSolicitud}
+          handleEntregarSolicitud={handleEntregarSolicitud}
+          planillas={planillas}
+          planillaDetalle={planillaDetalle}
+          planillaObs={planillaObs}
+          setPlanillaObs={setPlanillaObs}
+          creandoPlanilla={creandoPlanilla}
+          handleCrearPlanilla={handleCrearPlanilla}
+          handleVerDetalle={handleVerDetalle}
+          handleEnviarPlanilla={handleEnviarPlanilla}
+          handleEliminarPlanilla={handleEliminarPlanilla}
+        />
       )}
     </div>
-  )
+  );
 }
