@@ -1,5 +1,7 @@
 import { useCallback } from 'react'
 
+const MINISTERIO_LOGO_URL = 'http://prod.eduge.com.ar/assets/logoGobierno-D5M0tUR9.png'
+
 export default function PrintButton({ targetRef, title }) {
   const handlePrint = useCallback(() => {
     if (!targetRef?.current) return
@@ -19,6 +21,8 @@ export default function PrintButton({ targetRef, title }) {
           * { box-sizing: border-box; font-family: 'Ubuntu', sans-serif; }
           body { margin: 20px 30px; color: #1D252D; font-size: 12px; }
           .print-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #FF8200; padding-bottom: 10px; margin-bottom: 16px; }
+          .print-brand { display: flex; align-items: center; gap: 12px; }
+          .print-brand img { height: 34px; width: auto; object-fit: contain; }
           .print-header h2 { margin: 0; font-size: 16px; color: #1D252D; }
           .print-header .date { color: #6b7280; font-size: 11px; }
           table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
@@ -32,7 +36,10 @@ export default function PrintButton({ targetRef, title }) {
       </head>
       <body>
         <div class="print-header">
-          <h2>${title || 'Reporte'}</h2>
+          <div class="print-brand">
+            <img src="${MINISTERIO_LOGO_URL}" alt="Logo Ministerio" />
+            <h2>${title || 'Reporte'}</h2>
+          </div>
           <span class="date">${new Date().toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
         </div>
         ${content}
