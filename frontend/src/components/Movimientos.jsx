@@ -5,6 +5,7 @@ import PrintButton from './PrintButton'
 
 const ESTADOS_PRODUCTO = ['nuevo', 'usado', 'dañado', 'reparado']
 const CARGOS = ['director/a', 'vicedirector/a', 'secretario/a', 'rector/a', 'maestro/a a cargo']
+const MINISTERIO_LOGO_URL = 'http://prod.eduge.com.ar/assets/logoGobierno-D5M0tUR9.png'
 
 export default function Movimientos() {
   const { token, hasPermission } = useAuth()
@@ -220,6 +221,8 @@ export default function Movimientos() {
           @import url('https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;500;700&display=swap');
           * { box-sizing: border-box; font-family: 'Ubuntu', sans-serif; }
           body { margin: 24px; color: #1D252D; }
+          .print-header { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+          .print-header img { height: 36px; width: auto; object-fit: contain; }
           h2 { margin: 0 0 14px; font-size: 20px; }
           table { width: 100%; border-collapse: collapse; }
           th, td { border: 1px solid #d1d5db; padding: 8px 10px; text-align: left; }
@@ -229,7 +232,10 @@ export default function Movimientos() {
         </style>
       </head>
       <body>
-        <h2>Detalle de Movimiento</h2>
+        <div class="print-header">
+          <img src="${MINISTERIO_LOGO_URL}" alt="Logo Ministerio" />
+          <h2>Detalle de Movimiento</h2>
+        </div>
         <table>
           <tr><th>Producto</th><td>${movimiento.producto_nombre || '-'}</td></tr>
           <tr><th>Tipo</th><td><span class="badge">${movimiento.tipo || '-'}</span></td></tr>
