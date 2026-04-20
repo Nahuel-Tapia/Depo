@@ -14,11 +14,11 @@ export default function SolicitudesTable({ solicitudes, onView }) {
           <th>Solicitante</th>
           <th>Producto</th>
           <th>Cantidad solicitada</th>
-          <th>Matricula</th>
+          <th>Matrícula</th>
           <th>Ratio</th>
           <th>Fecha</th>
           <th>Estado</th>
-          <th>Accion</th>
+          <th>Acción</th>
         </tr>
       </thead>
       <tbody>

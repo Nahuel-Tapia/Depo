@@ -345,6 +345,8 @@ function DepositoPedidos() {
 
   const canCreatePedido = hasPermission('pedidos.create') && user?.role === 'directivo'
   const canManage = hasPermission('pedidos.manage')
+  const canSupervisorDecision = canManage && user?.role === 'supervisor'
+  const canEntregar = canManage && user?.role !== 'supervisor'
 
   const printRef = useRef(null)
 
@@ -465,13 +467,13 @@ function DepositoPedidos() {
                 <td>{new Date(pedido.created_at).toLocaleDateString()}</td>
                 <td>
                   <div className="inline-actions">
-                    {canManage && pedido.estado === 'pendiente' && (
+                    {canSupervisorDecision && pedido.estado === 'pendiente' && (
                       <>
                         <button onClick={() => handleAction(pedido.id, 'aprobar')} disabled={!stockSuficiente} title={!stockSuficiente ? 'Stock insuficiente para aprobar' : ''}>Aprobar</button>
                         <button onClick={() => handleAction(pedido.id, 'rechazar')}>Rechazar</button>
                       </>
                     )}
-                    {canManage && pedido.estado !== 'entregado' && pedido.estado !== 'rechazado' && pedido.estado !== 'cancelado' && (
+                    {canEntregar && pedido.estado !== 'entregado' && pedido.estado !== 'rechazado' && pedido.estado !== 'cancelado' && (
                       <button onClick={() => handleAction(pedido.id, 'entregar')}>Entregar</button>
                     )}
                     {canCancel && (
@@ -500,7 +502,14 @@ function DirectivoPedidos() {
   const [msg, setMsg] = useState({ text: '', type: '' })
   const [form, setForm] = useState({ producto_id: '', cantidad: '', notas: '' })
   const [modalOpen, setModalOpen] = useState(false)
+  const [cuposAnuales, setCuposAnuales] = useState([])
+  const [cargandoCupos, setCargandoCupos] = useState(false)
   const printRef = useRef(null)
+
+  const cuposByProducto = cuposAnuales.reduce((acc, item) => {
+    acc[item.producto_id] = item
+    return acc
+  }, {})
 
   const loadProductos = async () => {
     try {
@@ -522,9 +531,24 @@ function DirectivoPedidos() {
     } catch { /* ignore */ }
   }
 
+  const loadCuposAnuales = async () => {
+    setCargandoCupos(true)
+    try {
+      const res = await apiFetch('/api/pedidos/cupos-anuales', { token })
+      if (res.ok) {
+        const data = await res.json()
+        setCuposAnuales(data.cupos || [])
+      }
+    } catch { /* ignore */ }
+    finally {
+      setCargandoCupos(false)
+    }
+  }
+
   useEffect(() => {
     loadProductos()
     loadPedidos()
+    loadCuposAnuales()
   }, [])
 
   const handleCreate = async (e) => {
@@ -546,6 +570,7 @@ function DirectivoPedidos() {
     setModalOpen(false)
     setMsg({ text: 'Pedido creado correctamente', type: 'success' })
     loadPedidos()
+    if (tab === 'anual') loadCuposAnuales()
   }
 
   const handleCancelar = async (id) => {
@@ -562,14 +587,9 @@ function DirectivoPedidos() {
   const pedidosFiltrados = pedidos.filter(p => (p.tipo || 'anual') === tab)
 
   const anioActual = new Date().getFullYear()
-    // Solicitud anual activa = existe una del año en curso que no fue rechazada ni cancelada
-  const tieneAnualActiva = pedidos.some(
-    p => (p.tipo || 'anual') === 'anual' &&
-         p.estado !== 'rechazado' &&
-      p.estado !== 'cancelado' &&
-         new Date(p.created_at).getFullYear() === anioActual
-  )
-  const puedeCrearAnual = !tieneAnualActiva
+  const productoSeleccionadoCupo = cuposByProducto[Number(form.producto_id)]
+  const tieneDatosCupo = cuposAnuales.length > 0
+  const puedeCrearAnual = !tieneDatosCupo || cuposAnuales.some(c => c.disponible_anual === null || Number(c.disponible_anual) > 0)
 
   const badgeTab = (tipo) => {
     const count = pedidos.filter(p => (p.tipo || 'anual') === tipo && p.estado === 'pendiente').length
@@ -626,14 +646,13 @@ function DirectivoPedidos() {
       {/* Descripción contextual */}
       <p style={{ marginTop: 12, marginBottom: 4, color: 'var(--muted)', fontSize: '0.9rem' }}>
         {tab === 'anual'
-          ? 'Pedido anual planificado para cubrir las necesidades regulares de la institución. Solo se puede realizar uno por año.'
+          ? 'Pedido anual planificado según kit de la escuela y matrícula. Cada producto consume cupo anual disponible.'
           : 'Pedidos extraordinarios para reforzar el stock cuando el pedido anual no fue suficiente.'}
       </p>
 
-      {/* Aviso si ya existe solicitud anual */}
-      {tab === 'anual' && tieneAnualActiva && (
-        <div className="msg show" style={{ background: '#fef9c3', color: '#854d0e', border: '1px solid #fde047', marginTop: 8 }}>
-          Ya realizaste tu solicitud anual para {anioActual}. Podés hacer solicitudes de refuerzos si el stock no alcanza.
+      {tab === 'anual' && (
+        <div className="msg show" style={{ background: '#ecfeff', color: '#155e75', border: '1px solid #67e8f9', marginTop: 8 }}>
+          Cupo anual {anioActual}: {cargandoCupos ? 'cargando...' : (tieneDatosCupo ? 'disponible por producto según tipo de escuela y matrícula.' : 'sin datos de cupo, podés crear solicitud y se validará al enviar.')}
         </div>
       )}
 
@@ -657,7 +676,16 @@ function DirectivoPedidos() {
                 <select value={form.producto_id} onChange={e => setForm({ ...form, producto_id: e.target.value })} required>
                   <option value="">Seleccionar producto...</option>
                   {productos.map(p => (
-                    <option key={p.id} value={p.id}>{p.nombre} ({p.unidad_medida || 'unidad'})</option>
+                    <option
+                      key={p.id}
+                      value={p.id}
+                      disabled={tab === 'anual' && cuposByProducto[p.id] && cuposByProducto[p.id].disponible_anual !== null && Number(cuposByProducto[p.id].disponible_anual) <= 0}
+                    >
+                      {p.nombre} ({p.unidad_medida || 'unidad'})
+                      {tab === 'anual' && cuposByProducto[p.id] && cuposByProducto[p.id].disponible_anual !== null
+                        ? ` · Disp anual: ${cuposByProducto[p.id].disponible_anual}`
+                        : ''}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -669,6 +697,11 @@ function DirectivoPedidos() {
                 <label>Notas</label>
                 <input type="text" value={form.notas} onChange={e => setForm({ ...form, notas: e.target.value })} placeholder="Observaciones del pedido" />
               </div>
+              {tab === 'anual' && productoSeleccionadoCupo && (
+                <div className="msg show" style={{ gridColumn: '1 / -1', marginBottom: 0, background: '#eff6ff', color: '#1e3a8a', border: '1px solid #93c5fd' }}>
+                  Cupo anual: {productoSeleccionadoCupo.cuota_anual ?? 'sin regla'} · Solicitado: {productoSeleccionadoCupo.solicitado_anual || 0} · Disponible: {productoSeleccionadoCupo.disponible_anual ?? 'sin limite'}
+                </div>
+              )}
               <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
                 <button type="button" className="secondary" onClick={() => { setModalOpen(false); setForm({ producto_id: '', cantidad: '', notas: '' }) }}>
                   Cancelar
@@ -695,6 +728,7 @@ function DirectivoPedidos() {
                 <th>Estado</th>
                 <th>Notas</th>
                 <th>Fecha</th>
+                {tab === 'anual' && <th>Cupo anual restante</th>}
                 <th>Acciones</th>
               </tr>
             </thead>
@@ -707,6 +741,11 @@ function DirectivoPedidos() {
                   <td><span className={`badge badge-estado-${pedido.estado}`}>{pedido.estado}</span></td>
                   <td>{pedido.notas || '-'}</td>
                   <td>{new Date(pedido.created_at).toLocaleDateString('es-AR')}</td>
+                  {tab === 'anual' && (
+                    <td>
+                      {cuposByProducto[pedido.producto_id]?.disponible_anual ?? '-'}
+                    </td>
+                  )}
                   <td>
                     {pedido.estado === 'pendiente' && (
                       <button className="sv-btn-rechazar" style={{ margin: 0 }} onClick={() => handleCancelar(pedido.id)}>

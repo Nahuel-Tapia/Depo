@@ -30,7 +30,7 @@ export default function Login() {
         const shouldUseUnifiedMessage = invalidCredentialsCodes.includes(data.code) || res.status === 401 || isInvalidCredentialsText
 
         const message = shouldUseUnifiedMessage
-          ? 'Contraseña o usuario incorrectos'
+          ? 'Usuario o contraseña incorrectos'
           : (data.error || 'No se pudo iniciar sesión. Intente nuevamente en unos minutos.')
 
         setMsg({ text: message, type: 'error' })

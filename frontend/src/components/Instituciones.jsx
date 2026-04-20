@@ -174,7 +174,7 @@ export default function Instituciones({ supervisorMode = false }) {
         </div>
 
         {filteredInstituciones.length === 0 ? (
-          <div className="sv-empty-state">No tienes escuelas asignadas por el director de area.</div>
+          <div className="sv-empty-state">No tenés escuelas asignadas por el director de área.</div>
         ) : (
           <table>
             <thead>

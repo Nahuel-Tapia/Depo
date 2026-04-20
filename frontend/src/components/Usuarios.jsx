@@ -19,7 +19,7 @@ export default function Usuarios() {
         const data = await res.json()
         setUsers(data.users || [])
       } else if (res.status === 403) {
-        setMsg('No tiene permiso para ver usuarios')
+        setMsg('No tenés permiso para ver usuarios')
       }
     } catch { /* ignore */ }
   }
@@ -60,7 +60,7 @@ export default function Usuarios() {
     const labels = {
       admin: 'Administrador',
       supervisor: 'Supervisor',
-      director_area: 'Director de Area',
+      director_area: 'Director de Área',
       directivo: 'Directivo',
       operador: 'Operador',
       consulta: 'Consulta'

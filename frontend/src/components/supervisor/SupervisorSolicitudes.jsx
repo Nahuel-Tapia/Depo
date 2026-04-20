@@ -136,8 +136,8 @@ export default function SupervisorSolicitudes() {
     if (!selected) return
     setMsg({
       text: nota
-        ? `Aclaracion solicitada para #${selected.id}: ${nota}`
-        : `Aclaracion solicitada para #${selected.id}.`,
+        ? `Aclaración solicitada para #${selected.id}: ${nota}`
+        : `Aclaración solicitada para #${selected.id}.`,
       type: 'success'
     })
   }
@@ -171,7 +171,7 @@ export default function SupervisorSolicitudes() {
       </div>
 
       <p style={{ marginTop: 0, color: 'var(--muted)' }}>
-        Revision por coherencia con matricula. Esta vista no muestra datos de stock.
+        Revisión por coherencia con matrícula. Esta vista no muestra datos de stock.
       </p>
 
       {msg.text && <div className={`msg show ${msg.type === 'success' ? 'msg-success' : 'msg-error'}`}>{msg.text}</div>}
@@ -191,8 +191,8 @@ export default function SupervisorSolicitudes() {
         <div>
           <label>Ordenar por</label>
           <select value={orden} onChange={e => setOrden(e.target.value)}>
-            <option value="fecha_desc">Fecha (mas reciente)</option>
-            <option value="fecha_asc">Fecha (mas antigua)</option>
+            <option value="fecha_desc">Fecha (más reciente)</option>
+            <option value="fecha_asc">Fecha (más antigua)</option>
             <option value="ratio_desc">Ratio (alto a bajo)</option>
             <option value="ratio_asc">Ratio (bajo a alto)</option>
           </select>

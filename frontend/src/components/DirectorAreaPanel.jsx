@@ -65,7 +65,7 @@ export default function DirectorAreaPanel() {
     setMsg({ text: '', type: '' })
 
     if (!asigForm.supervisor_id || !asigForm.institucion_id) {
-      setMsg({ text: 'Debes seleccionar supervisor y escuela', type: 'error' })
+      setMsg({ text: 'Debés seleccionar un supervisor y una escuela', type: 'error' })
       return
     }
 
@@ -195,7 +195,7 @@ export default function DirectorAreaPanel() {
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || 'No se pudo crear la planilla')
       setPlanillaObs('')
-      setMsg({ text: `Planilla creada con ${data.items} solicitudes. Revisala antes de enviarla.`, type: 'success' })
+      setMsg({ text: `Planilla creada con ${data.items} solicitudes. Revisá la planilla antes de enviarla.`, type: 'success' })
       loadAll()
     } catch (err) {
       setMsg({ text: err.message, type: 'error' })
@@ -259,7 +259,7 @@ export default function DirectorAreaPanel() {
     <div>
       <h2>Dirección de Área</h2>
       <p style={{ marginTop: 0, color: 'var(--muted)' }}>
-        Gestiona la asignación de escuelas a supervisores y solicita informes de seguimiento.
+        Gestioná la asignación de escuelas a supervisores y solicitá informes de seguimiento.
       </p>
 
       {msg.text && (
@@ -388,7 +388,7 @@ export default function DirectorAreaPanel() {
         <>
       <h3>Pedidos (Dirección de Área)</h3>
       <p style={{ marginTop: 0, color: 'var(--muted)', fontSize: '0.9rem' }}>
-        Revisá pedidos aprobados por supervisores. Podés aceptar o denegar los anuales para el pedido anual, y marcar entregados los ya autorizados.
+        Revisá pedidos aprobados por supervisores. Podés aceptar o denegar los anuales para el pedido anual y marcar como entregados los ya autorizados.
       </p>
       <table>
         <thead>
@@ -510,7 +510,7 @@ export default function DirectorAreaPanel() {
       {/* ── Planilla de Pedido Anual ── */}
       <h3 style={{ marginTop: 32 }}>Planilla de Pedido Anual {anioActual}</h3>
       <p style={{ marginTop: 0, color: 'var(--muted)', fontSize: '0.9rem' }}>
-        Consolidá solicitudes anuales aceptadas por Dirección de Área en una planilla y enviala al Área de Compras.
+        Consolidá solicitudes anuales aceptadas por Dirección de Área en una planilla y envíala al Área de Compras.
       </p>
 
       <p style={{ marginTop: 0, color: 'var(--muted)', fontSize: '0.85rem' }}>

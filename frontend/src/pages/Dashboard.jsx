@@ -14,8 +14,8 @@ import ComprasPanel from '../components/ComprasPanel'
 
 const TABS = [
   { key: 'inicio', label: 'Inicio', permission: null },
-  { key: 'director-area', label: 'Direccion de Area', permission: 'supervision.manage', role: 'director_area' },
-    { key: 'compras', label: 'Area de Compras', permission: 'planilla.view', role: 'area_compras' },
+  { key: 'director-area', label: 'Dirección de Área', permission: 'supervision.manage', role: 'director_area' },
+    { key: 'compras', label: 'Área de Compras', permission: 'planilla.view', role: 'area_compras' },
   { key: 'supervisor', label: 'Patrimonio Escolar', permission: 'pedidos.manage', role: 'supervisor' },
   { key: 'mis-escuelas', label: 'Mis Escuelas', permission: 'instituciones.view', role: 'supervisor', hideForRoles: ['admin'] },
   { key: 'productos', label: 'Productos', permission: 'productos.view', hideForRoles: ['supervisor', 'director_area'] },
