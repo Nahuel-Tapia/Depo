@@ -14,6 +14,13 @@ const USERS_TO_CREATE = [
     role: 'director_area'
   },
   {
+    nombre: 'Directivo',
+    apellido: 'Prueba',
+    dni: '90000010',
+    email: 'directivo@gmail.com',
+    role: 'directivo'
+  },
+  {
     nombre: 'Supervisor',
     apellido: 'Uno',
     dni: '90000002',
