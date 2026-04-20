@@ -45,6 +45,15 @@ export default function DirectorAreaGestion({
               autoComplete="off"
             />
 
+            {/* Mostrar CUE, nombre y nivel solo una vez, en ese orden */}
+            {asigForm.cue && (asigForm.nombre || asigForm.nivel) && (
+              <div style={{ margin: '8px 0 10px 0', color: '#333', fontSize: '1em' }}>
+                <div><b>CUE:</b> {asigForm.cue}</div>
+                {asigForm.nombre && <div><b>Escuela:</b> {asigForm.nombre}</div>}
+                {asigForm.nivel && <div><b>Nivel:</b> {asigForm.nivel}</div>}
+              </div>
+            )}
+
             {asigForm.opciones && asigForm.opciones.length > 1 && (
               <>
                 <label>Seleccionar nivel</label>
@@ -67,20 +76,6 @@ export default function DirectorAreaGestion({
                   ))}
                 </select>
               </>
-            )}
-
-            <label>Nombre de la escuela</label>
-            <input
-              type="text"
-              value={asigForm.nombre || ''}
-              readOnly
-              placeholder="Nombre de la escuela"
-              style={{ background: '#f8fafc', marginBottom: 0 }}
-            />
-            {asigForm.nivel && (
-              <div style={{ color: '#555', fontSize: '0.98em', margin: '2px 0 10px 0' }}>
-                Nivel: <strong>{asigForm.nivel}</strong>
-              </div>
             )}
 
             <button type="submit">Asignar escuela</button>
