@@ -4,6 +4,26 @@ import { apiFetch } from '../api'
 import PrintButton from './PrintButton'
 import SupervisorSolicitudes from './supervisor/SupervisorSolicitudes'
 
+function normalizeLabelText(value) {
+  const text = String(value || '').replace(/\s+/g, ' ').trim()
+  if (!text) return ''
+  return text.charAt(0).toUpperCase() + text.slice(1)
+}
+
+function formatUnidad(unidad) {
+  const value = String(unidad || '').trim().toLowerCase()
+  if (!value || value === 'unidad') return 'Unidades'
+  if (value === 'kg') return 'Kilogramos'
+  if (value === 'l' || value === 'lt' || value === 'litro') return 'Litros'
+  return normalizeLabelText(unidad)
+}
+
+function formatProductoOptionLabel(producto) {
+  const nombre = normalizeLabelText(producto?.nombre) || 'Producto sin nombre'
+  const unidad = formatUnidad(producto?.unidad_medida)
+  return `${nombre} (${unidad})`
+}
+
 
 
 // ============================================================
@@ -347,6 +367,9 @@ function DepositoPedidos() {
   const canManage = hasPermission('pedidos.manage')
   const canSupervisorDecision = canManage && user?.role === 'supervisor'
   const canEntregar = canManage && user?.role !== 'supervisor'
+  const productosOrdenados = [...productos].sort((a, b) =>
+    String(a?.nombre || '').localeCompare(String(b?.nombre || ''), 'es', { sensitivity: 'base' })
+  )
 
   const printRef = useRef(null)
 
@@ -398,8 +421,8 @@ function DepositoPedidos() {
                 <label>Producto</label>
                 <select value={form.producto_id} onChange={e => setForm({ ...form, producto_id: e.target.value })} required>
                   <option value="">Seleccionar producto...</option>
-                  {productos.map(p => (
-                    <option key={p.id} value={p.id}>{p.nombre} ({p.unidad_medida || 'unidad'})</option>
+                  {productosOrdenados.map(p => (
+                    <option key={p.id} value={p.id}>{formatProductoOptionLabel(p)}</option>
                   ))}
                 </select>
               </div>
@@ -511,6 +534,12 @@ function DirectivoPedidos() {
     return acc
   }, {})
 
+  const productosOrdenados = [...productos].sort((a, b) =>
+    String(a?.nombre || '').localeCompare(String(b?.nombre || ''), 'es', { sensitivity: 'base' })
+  )
+
+  const productosKitOrdenados = productosOrdenados.filter((p) => Boolean(cuposByProducto[p.id]))
+
   const loadProductos = async () => {
     try {
       const res = await apiFetch('/api/productos', { token })
@@ -589,7 +618,9 @@ function DirectivoPedidos() {
   const anioActual = new Date().getFullYear()
   const productoSeleccionadoCupo = cuposByProducto[Number(form.producto_id)]
   const tieneDatosCupo = cuposAnuales.length > 0
-  const puedeCrearAnual = !tieneDatosCupo || cuposAnuales.some(c => c.disponible_anual === null || Number(c.disponible_anual) > 0)
+  const tieneProductosKit = productosKitOrdenados.length > 0
+  const puedeCrearAnual = tieneProductosKit && (!tieneDatosCupo || cuposAnuales.some(c => c.disponible_anual === null || Number(c.disponible_anual) > 0))
+  const puedeCrearRefuerzo = tieneProductosKit
 
   const badgeTab = (tipo) => {
     const count = pedidos.filter(p => (p.tipo || 'anual') === tipo && p.estado === 'pendiente').length
@@ -601,7 +632,7 @@ function DirectivoPedidos() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <h2 style={{ margin: 0 }}>Mis Pedidos</h2>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          {(tab === 'refuerzo' || puedeCrearAnual) && (
+          {((tab === 'refuerzo' && puedeCrearRefuerzo) || (tab === 'anual' && puedeCrearAnual)) && (
             <button
               type="button"
               className="mov-action-btn"
@@ -656,6 +687,12 @@ function DirectivoPedidos() {
         </div>
       )}
 
+      {!cargandoCupos && !tieneProductosKit && (
+        <div className="msg show msg-error">
+          Tu escuela no tiene productos de kit asignados. Contactá al administrador para configurar el kit.
+        </div>
+      )}
+
       {msg.text && (
         <div className={`msg show ${msg.type === 'success' ? 'msg-success' : 'msg-error'}`}>{msg.text}</div>
       )}
@@ -675,15 +712,15 @@ function DirectivoPedidos() {
                 <label>Producto</label>
                 <select value={form.producto_id} onChange={e => setForm({ ...form, producto_id: e.target.value })} required>
                   <option value="">Seleccionar producto...</option>
-                  {productos.map(p => (
+                  {productosKitOrdenados.map(p => (
                     <option
                       key={p.id}
                       value={p.id}
                       disabled={tab === 'anual' && cuposByProducto[p.id] && cuposByProducto[p.id].disponible_anual !== null && Number(cuposByProducto[p.id].disponible_anual) <= 0}
                     >
-                      {p.nombre} ({p.unidad_medida || 'unidad'})
+                      {formatProductoOptionLabel(p)}
                       {tab === 'anual' && cuposByProducto[p.id] && cuposByProducto[p.id].disponible_anual !== null
-                        ? ` · Disp anual: ${cuposByProducto[p.id].disponible_anual}`
+                        ? ` · Disponible anual: ${cuposByProducto[p.id].disponible_anual}`
                         : ''}
                     </option>
                   ))}
@@ -699,7 +736,7 @@ function DirectivoPedidos() {
               </div>
               {tab === 'anual' && productoSeleccionadoCupo && (
                 <div className="msg show" style={{ gridColumn: '1 / -1', marginBottom: 0, background: '#eff6ff', color: '#1e3a8a', border: '1px solid #93c5fd' }}>
-                  Cupo anual: {productoSeleccionadoCupo.cuota_anual ?? 'sin regla'} · Solicitado: {productoSeleccionadoCupo.solicitado_anual || 0} · Disponible: {productoSeleccionadoCupo.disponible_anual ?? 'sin limite'}
+                  Cupo anual: {productoSeleccionadoCupo.cuota_anual ?? 'sin regla'} · Solicitado: {productoSeleccionadoCupo.solicitado_anual || 0} · Disponible: {productoSeleccionadoCupo.disponible_anual ?? 'sin límite'}
                 </div>
               )}
               <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>

@@ -372,11 +372,10 @@ router.get("/cupos-anuales", authorizePermissions(PERMISSIONS.PEDIDOS_VIEW), asy
     const productos = await all(
       `SELECT p.id_producto AS id, p.nombre, p.unidad_medida,
               k.cantidad_base, k.alumnos_por_unidad, k.cantidad_por_unidad
-       FROM producto p
-       LEFT JOIN kit_producto_anual k
-         ON k.id_producto = p.id_producto
-        AND k.tipo_escuela = ?
-        AND k.activo = TRUE
+       FROM kit_producto_anual k
+       JOIN producto p ON p.id_producto = k.id_producto
+       WHERE k.tipo_escuela = ?
+         AND k.activo = TRUE
        ORDER BY p.nombre ASC`,
       [perfil.tipo_escuela]
     );
@@ -542,6 +541,18 @@ router.post("/", authorizePermissions(PERMISSIONS.PEDIDOS_CREATE), async (req, r
 
     if (!usuario || !usuario.id_institucion) {
       return res.status(400).json({ error: "Tu usuario no tiene institución asignada" });
+    }
+
+    const perfilInstitucion = await getInstitucionPerfil(usuario.id_institucion);
+    if (!perfilInstitucion) {
+      return res.status(404).json({ error: "Institución no encontrada" });
+    }
+
+    const reglaKit = await getReglaKit(perfilInstitucion.tipo_escuela, producto_id);
+    if (!reglaKit) {
+      return res.status(400).json({
+        error: "El producto seleccionado no forma parte del kit asignado a tu escuela."
+      });
     }
 
     if (tipoValido === 'anual') {
