@@ -14,7 +14,8 @@
     "db:restore": "node backend/scripts/restore-database.js",
     "db:fingerprint": "node backend/scripts/db-fingerprint.js",
     "reset-admin": "node backend/scripts/reset-admin.js",
-    "create-operador": "node backend/scripts/create-operador.js"
+    "create-operador": "node backend/scripts/create-operador.js",
+    "seed:test-schools": "node backend/scripts/seed-test-schools.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
