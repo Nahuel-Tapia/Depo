@@ -141,12 +141,24 @@ router.delete("/:id", authorizePermissions(PERMISSIONS.USERS_DELETE), async (req
       return res.status(404).json({ error: "Usuario no encontrado" });
     }
 
-    // Verificar si tiene registros asociados en otras tablas
-    // Por ahora permitimos eliminar
+    const pedidosAsociados = await get(
+      "SELECT COUNT(*)::int AS total FROM pedido WHERE id_usuario_solicitante = ?",
+      [userId]
+    );
+    if ((pedidosAsociados?.total || 0) > 0) {
+      return res.status(409).json({
+        error: "No se puede eliminar el usuario porque tiene pedidos asociados. Desactivalo en lugar de eliminarlo."
+      });
+    }
 
     await run("DELETE FROM usuario WHERE id_usuario = ?", [userId]);
     return res.json({ ok: true });
   } catch (err) {
+    if (err && String(err.code) === "23503") {
+      return res.status(409).json({
+        error: "No se puede eliminar el usuario porque tiene registros relacionados en el sistema."
+      });
+    }
     return res.status(500).json({ error: "No se pudo eliminar usuario" });
   }
 });

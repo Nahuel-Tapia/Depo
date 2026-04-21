@@ -18,6 +18,7 @@ export default function HistorialInstitucion() {
 
   useEffect(() => {
     loadInstituciones()
+    loadHistorial()
   }, [])
 
   const loadInstituciones = async () => {
@@ -44,7 +45,6 @@ export default function HistorialInstitucion() {
   }
 
   const loadHistorial = async () => {
-    if (!selectedId) return
     setLoading(true)
     try {
       const params = new URLSearchParams()
@@ -52,8 +52,9 @@ export default function HistorialInstitucion() {
       if (hasta) params.set('hasta', hasta)
       if (filtroTipo) params.set('tipo', filtroTipo)
       if (filtroSubtipoPedido) params.set('subtipoPedido', filtroSubtipoPedido)
+      if (selectedId) params.set('institucionId', String(selectedId))
 
-      const res = await apiFetch(`/api/instituciones/${selectedId}/historial?${params}`, { token })
+      const res = await apiFetch(`/api/instituciones/historial?${params}`, { token })
       if (res.ok) {
         const data = await res.json()
         setHistorial(data)
@@ -103,6 +104,7 @@ export default function HistorialInstitucion() {
         <thead>
           <tr>
             <th>Fecha</th>
+            <th>Institución</th>
             <th>Tipo</th>
             <th>Clase</th>
             <th>Detalle</th>
@@ -118,6 +120,9 @@ export default function HistorialInstitucion() {
             return (
               <tr key={`${e.tipo}-${e.id}-${i}`}>
                 <td style={{ whiteSpace: 'nowrap', fontSize: '0.85rem' }}>{formatFecha(e.fecha)}</td>
+                <td style={{ fontSize: '0.85rem' }}>
+                  {e.institucionNombre ? `${e.institucionNombre} (CUE: ${e.institucionCue || '-'})` : '-'}
+                </td>
                 <td>
                   <span style={{
                     display: 'inline-block', padding: '2px 10px', borderRadius: 12,
@@ -162,7 +167,7 @@ export default function HistorialInstitucion() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2>Historial por Institución</h2>
-        <PrintButton targetRef={printRef} title={`Historial — ${selectedNombre || 'Institución'}`} />
+        <PrintButton targetRef={printRef} title={`Historial — ${selectedNombre || 'General'}`} />
       </div>
 
       {/* Buscador */}
@@ -174,7 +179,7 @@ export default function HistorialInstitucion() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontSize: '0.9rem', flex: 1 }}>{selectedNombre}</span>
                 <button type="button" className="secondary" style={{ fontSize: '0.75rem', padding: '4px 8px' }}
-                  onClick={() => { setSelectedId(null); setSelectedNombre(''); setHistorial(null) }}>
+                  onClick={() => { setSelectedId(null); setSelectedNombre('') }}>
                   Cambiar
                 </button>
               </div>
@@ -244,8 +249,8 @@ export default function HistorialInstitucion() {
         </div>
 
         <div style={{ marginTop: 16 }}>
-          <button onClick={loadHistorial} disabled={!selectedId || loading}>
-            {loading ? 'Cargando...' : 'Buscar historial'}
+          <button onClick={loadHistorial} disabled={loading}>
+            {loading ? 'Cargando...' : 'Aplicar filtros'}
           </button>
         </div>
       </div>

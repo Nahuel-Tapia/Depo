@@ -145,8 +145,143 @@ router.get("/", async (req, res) => {
   }
 });
 
+// === HISTORIAL GLOBAL (todas las instituciones) ===
+router.get("/historial", authorizePermissions(PERMISSIONS.INSTITUCIONES_VIEW), async (req, res) => {
+  try {
+    const { desde, hasta, tipo, subtipoPedido, institucionId } = req.query;
+
+    const eventos = [];
+    const params_pedidos = [];
+    const params_movimientos = [];
+
+    let filtroPedidos = "";
+    let filtroMovimientos = "";
+
+    if (institucionId) {
+      filtroPedidos += " AND p.id_institucion = ?";
+      filtroMovimientos += " AND ms.id_institucion = ?";
+      params_pedidos.push(institucionId);
+      params_movimientos.push(institucionId);
+    }
+
+    if (desde) {
+      filtroPedidos += " AND p.fecha_creacion >= ?";
+      filtroMovimientos += " AND ms.fecha_movimiento >= ?";
+      params_pedidos.push(desde);
+      params_movimientos.push(desde);
+    }
+    if (hasta) {
+      filtroPedidos += " AND p.fecha_creacion <= ?";
+      filtroMovimientos += " AND ms.fecha_movimiento <= ?";
+      params_pedidos.push(hasta + " 23:59:59");
+      params_movimientos.push(hasta + " 23:59:59");
+    }
+
+    if (subtipoPedido === "anual" || subtipoPedido === "refuerzo") {
+      filtroPedidos += " AND COALESCE(p.tipo, 'anual') = ?";
+      params_pedidos.push(subtipoPedido);
+    }
+
+    if (!tipo || tipo === "pedido") {
+      const pedidos = await all(`
+        SELECT
+          p.id_pedido AS id,
+          i.id_institucion AS institucion_id,
+          i.nombre AS institucion_nombre,
+          i.cue AS institucion_cue,
+          COALESCE(p.tipo, 'anual') AS subtipo_pedido,
+          p.fecha_creacion AS fecha,
+          p.estado,
+          p.observaciones_generales AS observacion,
+          u.nombre AS usuario_nombre,
+          COALESCE(
+            (SELECT string_agg(pr.nombre || ' x' || dp.cantidad_solicitada, ', ')
+             FROM detalle_pedido dp
+             JOIN producto pr ON dp.id_producto = pr.id_producto
+             WHERE dp.id_pedido = p.id_pedido),
+            'Sin detalle'
+          ) AS detalle
+        FROM pedido p
+        JOIN institucion i ON p.id_institucion = i.id_institucion
+        LEFT JOIN usuario u ON p.id_usuario_solicitante = u.id_usuario
+        WHERE 1=1${filtroPedidos}
+        ORDER BY p.fecha_creacion DESC
+      `, params_pedidos);
+
+      pedidos.forEach(p => eventos.push({
+        id: p.id,
+        institucionId: p.institucion_id,
+        institucionNombre: p.institucion_nombre,
+        institucionCue: p.institucion_cue,
+        tipo: p.subtipo_pedido === "refuerzo" ? "Pedido refuerzo" : "Pedido anual",
+        subtipoPedido: p.subtipo_pedido,
+        fecha: p.fecha,
+        detalle: p.detalle,
+        estado: p.estado,
+        usuario: p.usuario_nombre,
+        observacion: p.observacion
+      }));
+    }
+
+    if (!tipo || tipo === "movimiento") {
+      const movimientos = await all(`
+        SELECT
+          ms.id_movimiento AS id,
+          i.id_institucion AS institucion_id,
+          i.nombre AS institucion_nombre,
+          i.cue AS institucion_cue,
+          ms.tipo AS tipo_mov,
+          ms.fecha_movimiento AS fecha,
+          ms.cantidad,
+          ms.motivo,
+          ms.estado_producto,
+          pr.nombre AS producto_nombre,
+          u.nombre AS usuario_nombre
+        FROM movimiento_stock ms
+        LEFT JOIN producto pr ON ms.id_producto = pr.id_producto
+        LEFT JOIN usuario u ON ms.id_usuario = u.id_usuario
+        JOIN institucion i ON ms.id_institucion = i.id_institucion
+        WHERE 1=1${filtroMovimientos}
+        ORDER BY ms.fecha_movimiento DESC
+      `, params_movimientos);
+
+      movimientos.forEach(m => eventos.push({
+        id: m.id,
+        institucionId: m.institucion_id,
+        institucionNombre: m.institucion_nombre,
+        institucionCue: m.institucion_cue,
+        tipo: m.tipo_mov === "ingreso" ? "Ingreso"
+          : m.tipo_mov === "egreso" ? "Entrega"
+          : m.tipo_mov === "devolucion" ? "Devolución" : "Ajuste",
+        fecha: m.fecha,
+        detalle: `${m.producto_nombre} x${m.cantidad}`,
+        estado: m.estado_producto || "OK",
+        usuario: m.usuario_nombre,
+        observacion: m.motivo
+      }));
+    }
+
+    eventos.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+
+    const resumen = {
+      total_pedidos: eventos.filter(e => e.tipo === "Pedido anual" || e.tipo === "Pedido refuerzo").length,
+      total_pedidos_anuales: eventos.filter(e => e.tipo === "Pedido anual").length,
+      total_pedidos_refuerzo: eventos.filter(e => e.tipo === "Pedido refuerzo").length,
+      total_entregas: eventos.filter(e => e.tipo === "Entrega").length,
+      total_devoluciones: eventos.filter(e => e.tipo === "Devolución").length,
+      total_ingresos: eventos.filter(e => e.tipo === "Ingreso").length,
+      total_ajustes: eventos.filter(e => e.tipo === "Ajuste").length
+    };
+
+    return res.json({ eventos, resumen });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "No se pudo obtener el historial" });
+  }
+});
+
 // Obtener una institución por ID
-router.get("/:id", authorizePermissions(PERMISSIONS.INSTITUCIONES_VIEW), async (req, res) => {
+router.get("/:id(\\d+)", authorizePermissions(PERMISSIONS.INSTITUCIONES_VIEW), async (req, res) => {
   try {
     const { id } = req.params;
     const institucion = await get(`
