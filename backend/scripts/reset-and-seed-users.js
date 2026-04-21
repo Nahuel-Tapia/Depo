@@ -61,6 +61,13 @@ const USERS_TO_CREATE = [
     dni: '90000007',
     email: 'sup6@gmail.com',
     role: 'supervisor'
+  },
+  {
+    nombre: 'Area',
+    apellido: 'Compras',
+    dni: '90000023',
+    email: 'compras@depo.local',
+    role: 'area_compras'
   }
 ]
 
@@ -83,7 +90,7 @@ async function ensureRoleConstraint(client) {
   await client.query(`
     ALTER TABLE usuario
     ADD CONSTRAINT usuario_role_check
-    CHECK (role IN ('admin', 'supervisor', 'director_area', 'directivo', 'operador', 'consulta', 'control_ministerio'))
+    CHECK (role IN ('admin', 'supervisor', 'director_area', 'directivo', 'operador', 'consulta', 'control_ministerio', 'area_compras'))
   `)
 }
 

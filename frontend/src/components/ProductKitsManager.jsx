@@ -43,12 +43,22 @@ export default function ProductKitsManager() {
       ])
 
       const kitsData = kitsRes.ok ? await kitsRes.json() : { kits: [] }
-      const productosData = productosRes.ok ? await productosRes.json() : { productos: [] }
+      const productosData = await productosRes.json().catch(() => ({}))
+
+      if (!kitsRes.ok) {
+        const kitsError = await kitsRes.json().catch(() => ({}))
+        throw new Error(kitsError.error || 'No se pudieron cargar los kits.')
+      }
+
+      if (!productosRes.ok) {
+        throw new Error(productosData.error || 'No se pudieron cargar los productos para armar el kit.')
+      }
 
       setKits(kitsData.kits || [])
       setProductos(productosData.productos || [])
-    } catch {
-      setMsg({ text: 'No se pudieron cargar los kits.', type: 'error' })
+    } catch (err) {
+      setProductos([])
+      setMsg({ text: err.message || 'No se pudieron cargar los datos del kit.', type: 'error' })
     } finally {
       setLoading(false)
     }

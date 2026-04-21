@@ -1,6 +1,8 @@
 require("dotenv").config({ path: require("path").join(__dirname, "..", "..", ".env") });
 const { Pool } = require("pg");
+const bcrypt = require("bcryptjs");
 const dbConfig = require("../src/config/database");
+const { DEFAULT_ROLE_PERMISSIONS } = require("../src/permissions");
 
 const pool = new Pool(dbConfig);
 
@@ -180,6 +182,47 @@ const SCHOOL_SEEDS = [
 
 const DIRECTIVO_EMAIL = "directivo@gmail.com";
 const DIRECTOR_AREA_EMAIL = "direc@gmail.com";
+const TEST_USER_PASSWORD = "111111";
+
+const TEST_USERS = [
+  {
+    nombre: "Director",
+    apellido: "Area",
+    dni: "90000001",
+    email: DIRECTOR_AREA_EMAIL,
+    role: "director_area"
+  },
+  {
+    nombre: "Control",
+    apellido: "Ministerio",
+    dni: "90000020",
+    email: "control.ministerio@test.local",
+    role: "control_ministerio"
+  },
+  {
+    nombre: "Operador",
+    apellido: "Prueba",
+    dni: "90000021",
+    email: "operador@depo.local",
+    role: "operador"
+  },
+  {
+    nombre: "Consulta",
+    apellido: "Prueba",
+    dni: "90000022",
+    email: "consulta@depo.local",
+    role: "consulta"
+  },
+  {
+    nombre: "Area",
+    apellido: "Compras",
+    dni: "90000023",
+    email: "compras@depo.local",
+    role: "area_compras"
+  }
+];
+
+const ALLOWED_ROLES = Object.keys(DEFAULT_ROLE_PERMISSIONS).sort();
 
 const SUPERVISOR_ASSIGNMENTS = [
   { email: "sup1@gmail.com", cues: ["700000101", "700000102"] },
@@ -200,6 +243,52 @@ async function ensureDirectorTable(client) {
       UNIQUE (supervisor_id, institucion_id)
     )
   `);
+}
+
+async function ensureUserRoleConstraint(client) {
+  const checks = await client.query(
+    `SELECT conname
+     FROM pg_constraint c
+     JOIN pg_class t ON t.oid = c.conrelid
+     JOIN pg_namespace n ON n.oid = t.relnamespace
+     WHERE n.nspname = 'public'
+       AND t.relname = 'usuario'
+       AND c.contype = 'c'
+       AND pg_get_constraintdef(c.oid) ILIKE '%role%'`
+  );
+
+  for (const row of checks.rows) {
+    await client.query(`ALTER TABLE usuario DROP CONSTRAINT IF EXISTS ${row.conname}`);
+  }
+
+  const roleList = ALLOWED_ROLES.map((role) => `'${role}'`).join(", ");
+  await client.query(`
+    ALTER TABLE usuario
+    ADD CONSTRAINT usuario_role_check
+    CHECK (role IN (${roleList}))
+  `);
+}
+
+async function ensureTestUsers(client) {
+  const passwordHash = await bcrypt.hash(TEST_USER_PASSWORD, 10);
+
+  for (const user of TEST_USERS) {
+    await client.query(
+      `INSERT INTO usuario (
+        nombre, apellido, dni, email, password, telefono, id_institucion, role, activo, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, NULL, NULL, $6, TRUE, NOW(), NOW())
+      ON CONFLICT (email)
+      DO UPDATE SET
+        nombre = EXCLUDED.nombre,
+        apellido = EXCLUDED.apellido,
+        dni = EXCLUDED.dni,
+        password = EXCLUDED.password,
+        role = EXCLUDED.role,
+        activo = TRUE,
+        updated_at = NOW()`,
+      [user.nombre, user.apellido, user.dni, user.email.toLowerCase(), passwordHash, user.role]
+    );
+  }
 }
 
 async function upsertDireccion(client, school) {
@@ -443,6 +532,8 @@ async function main() {
   try {
     await client.query("BEGIN");
     await ensureDirectorTable(client);
+    await ensureUserRoleConstraint(client);
+    await ensureTestUsers(client);
 
     const institutionsByKey = new Map();
 
@@ -478,23 +569,25 @@ async function main() {
       `SELECT u.email, u.role, u.id_institucion, i.nombre AS institucion
        FROM usuario u
        LEFT JOIN institucion i ON i.id_institucion = u.id_institucion
-       WHERE LOWER(u.email) IN (LOWER($1), LOWER($2), LOWER($3), LOWER($4), LOWER($5), LOWER($6), LOWER($7))
+       WHERE LOWER(u.email) = ANY($1::text[])
        ORDER BY u.id_usuario`,
-      [
+      [[
         DIRECTIVO_EMAIL,
-        DIRECTOR_AREA_EMAIL,
+        ...TEST_USERS.map((user) => user.email),
         "sup1@gmail.com",
         "sup2@gmail.com",
         "sup3@gmail.com",
         "sup4@gmail.com",
         "sup5@gmail.com"
-      ]
+      ].map((email) => email.toLowerCase())]
     );
 
     console.log("Usuarios vinculados:");
     for (const row of usuarios.rows) {
       console.log(`- ${row.email} | ${row.role} | institucion_id=${row.id_institucion || "-"} | ${row.institucion || "-"}`);
     }
+
+    console.log(`Clave comun para usuarios de prueba creados por este script: ${TEST_USER_PASSWORD}`);
   } catch (err) {
     await client.query("ROLLBACK");
     throw err;
