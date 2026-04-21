@@ -189,13 +189,27 @@ router.get("/solicitudes", async (req, res) => {
          p.aprobado_director_area,
          p.observaciones_generales AS notas,
          p.fecha_creacion AS fecha,
-         pr.nombre AS producto,
-         dp.cantidad_solicitada AS cantidad,
+         COALESCE(
+           p.kit_nombre,
+           STRING_AGG(pr.nombre || ' x' || dp.cantidad_solicitada::text, ', ' ORDER BY pr.nombre)
+         ) AS producto,
+         COALESCE(p.kit_cantidad, SUM(dp.cantidad_solicitada)) AS cantidad,
          u.nombre AS solicitante,
          i.id_institucion AS institucion_id,
          i.nombre AS institucion,
+         i.nombre AS escuela_nombre,
          sup.nombre AS supervisor_nombre,
-         sup.apellido AS supervisor_apellido
+         sup.apellido AS supervisor_apellido,
+         COALESCE(
+           JSON_AGG(
+             JSON_BUILD_OBJECT(
+               'producto', pr.nombre,
+               'cantidad', dp.cantidad_solicitada
+             )
+             ORDER BY pr.nombre
+           ) FILTER (WHERE pr.id_producto IS NOT NULL),
+           '[]'::json
+         ) AS items
        FROM supervisor_escuela_asignacion sea
        JOIN institucion i ON i.id_institucion = sea.institucion_id
        JOIN pedido p ON p.id_institucion = i.id_institucion
@@ -205,6 +219,9 @@ router.get("/solicitudes", async (req, res) => {
        JOIN usuario sup ON sup.id_usuario = sea.supervisor_id
        WHERE sea.director_area_id = $1
          AND (p.estado::text IN ('pendiente', 'aprobado', 'rechazado', 'entregado', 'finalizado'))
+       GROUP BY p.id_pedido, p.estado, p.tipo, p.aprobado_director_area, p.observaciones_generales,
+                p.fecha_creacion, p.kit_nombre, p.kit_cantidad, u.nombre, i.id_institucion, i.nombre,
+                sup.nombre, sup.apellido
        ORDER BY p.fecha_creacion DESC`,
       [req.user.sub]
     );

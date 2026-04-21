@@ -76,15 +76,25 @@ router.get("/pedidos-pendientes", async (req, res) => {
 
       const pedidos = await all(
         `SELECT p.id_pedido AS id,
-                dp.cantidad_solicitada AS cantidad,
+                COALESCE(p.kit_cantidad, SUM(dp.cantidad_solicitada)) AS cantidad,
                 p.observaciones_generales AS notas,
                 CASE WHEN p.estado::text = 'finalizado' THEN 'entregado' ELSE p.estado::text END AS estado,
                 p.fecha_creacion AS fecha,
-                pr.nombre AS producto,
+                COALESCE(
+                  p.kit_nombre,
+                  STRING_AGG(pr.nombre || ' x' || dp.cantidad_solicitada::text, ', ' ORDER BY pr.nombre)
+                ) AS producto,
                 i.nombre AS institucion,
                 i.id_institucion AS institucion_id,
                 0 AS matricula,
-                u.nombre AS solicitante
+                u.nombre AS solicitante,
+                COALESCE(
+                  JSON_AGG(
+                    JSON_BUILD_OBJECT('producto', pr.nombre, 'cantidad', dp.cantidad_solicitada)
+                    ORDER BY pr.nombre
+                  ) FILTER (WHERE pr.id_producto IS NOT NULL),
+                  '[]'::json
+                ) AS items
          FROM pedido p
          JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido
          JOIN producto pr ON pr.id_producto = dp.id_producto
@@ -93,6 +103,8 @@ router.get("/pedidos-pendientes", async (req, res) => {
          JOIN supervisor_escuela_asignacion sea ON sea.institucion_id = p.id_institucion
          WHERE sea.supervisor_id = ?
            AND p.estado = 'pendiente'
+         GROUP BY p.id_pedido, p.kit_nombre, p.kit_cantidad, p.observaciones_generales, p.estado, p.fecha_creacion,
+                  i.nombre, i.id_institucion, u.nombre
          ORDER BY p.fecha_creacion DESC`,
         [req.user.sub]
       );
@@ -108,15 +120,25 @@ router.get("/pedidos-pendientes", async (req, res) => {
 
     const pedidos = await all(
       `SELECT p.id_pedido AS id,
-              dp.cantidad_solicitada AS cantidad,
+              COALESCE(p.kit_cantidad, SUM(dp.cantidad_solicitada)) AS cantidad,
               p.observaciones_generales AS notas,
               CASE WHEN p.estado::text = 'finalizado' THEN 'entregado' ELSE p.estado::text END AS estado,
               p.fecha_creacion AS fecha,
-              pr.nombre AS producto,
+              COALESCE(
+                p.kit_nombre,
+                STRING_AGG(pr.nombre || ' x' || dp.cantidad_solicitada::text, ', ' ORDER BY pr.nombre)
+              ) AS producto,
               i.nombre AS institucion,
               i.id_institucion AS institucion_id,
               COALESCE(i.matriculados, 0) AS matricula,
-              u.nombre AS solicitante
+              u.nombre AS solicitante,
+              COALESCE(
+                JSON_AGG(
+                  JSON_BUILD_OBJECT('producto', pr.nombre, 'cantidad', dp.cantidad_solicitada)
+                  ORDER BY pr.nombre
+                ) FILTER (WHERE pr.id_producto IS NOT NULL),
+                '[]'::json
+              ) AS items
        FROM pedido p
        JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido
        JOIN producto pr ON pr.id_producto = dp.id_producto
@@ -124,6 +146,8 @@ router.get("/pedidos-pendientes", async (req, res) => {
        JOIN institucion i ON i.id_institucion = p.id_institucion
        WHERE p.estado = 'pendiente'
          AND LOWER(i.jurisdiccion) = LOWER(?)
+       GROUP BY p.id_pedido, p.kit_nombre, p.kit_cantidad, p.observaciones_generales, p.estado, p.fecha_creacion,
+                i.nombre, i.id_institucion, i.matriculados, u.nombre
        ORDER BY p.fecha_creacion DESC`,
       [jurisdiccion]
     );
@@ -145,15 +169,25 @@ router.get("/solicitudes", async (req, res) => {
 
       const solicitudes = await all(
         `SELECT p.id_pedido AS id,
-                dp.cantidad_solicitada AS cantidad,
+                COALESCE(p.kit_cantidad, SUM(dp.cantidad_solicitada)) AS cantidad,
                 p.observaciones_generales AS notas,
                 CASE WHEN p.estado::text = 'finalizado' THEN 'entregado' ELSE p.estado::text END AS estado,
                 p.fecha_creacion AS fecha,
-                pr.nombre AS producto,
+                COALESCE(
+                  p.kit_nombre,
+                  STRING_AGG(pr.nombre || ' x' || dp.cantidad_solicitada::text, ', ' ORDER BY pr.nombre)
+                ) AS producto,
                 i.nombre AS institucion,
                 i.id_institucion AS institucion_id,
                 0 AS matricula,
-                u.nombre AS solicitante
+                u.nombre AS solicitante,
+                COALESCE(
+                  JSON_AGG(
+                    JSON_BUILD_OBJECT('producto', pr.nombre, 'cantidad', dp.cantidad_solicitada)
+                    ORDER BY pr.nombre
+                  ) FILTER (WHERE pr.id_producto IS NOT NULL),
+                  '[]'::json
+                ) AS items
          FROM pedido p
          JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido
          JOIN producto pr ON pr.id_producto = dp.id_producto
@@ -162,6 +196,8 @@ router.get("/solicitudes", async (req, res) => {
          JOIN supervisor_escuela_asignacion sea ON sea.institucion_id = p.id_institucion
          WHERE sea.supervisor_id = ?
            AND p.estado::text IN ('pendiente', 'aprobado', 'rechazado', 'entregado', 'finalizado')
+         GROUP BY p.id_pedido, p.kit_nombre, p.kit_cantidad, p.observaciones_generales, p.estado, p.fecha_creacion,
+                  i.nombre, i.id_institucion, u.nombre
          ORDER BY p.fecha_creacion DESC`,
         [req.user.sub]
       );
@@ -177,15 +213,25 @@ router.get("/solicitudes", async (req, res) => {
 
     const solicitudes = await all(
       `SELECT p.id_pedido AS id,
-              dp.cantidad_solicitada AS cantidad,
+              COALESCE(p.kit_cantidad, SUM(dp.cantidad_solicitada)) AS cantidad,
               p.observaciones_generales AS notas,
               CASE WHEN p.estado::text = 'finalizado' THEN 'entregado' ELSE p.estado::text END AS estado,
               p.fecha_creacion AS fecha,
-              pr.nombre AS producto,
+              COALESCE(
+                p.kit_nombre,
+                STRING_AGG(pr.nombre || ' x' || dp.cantidad_solicitada::text, ', ' ORDER BY pr.nombre)
+              ) AS producto,
               i.nombre AS institucion,
               i.id_institucion AS institucion_id,
               COALESCE(i.matriculados, 0) AS matricula,
-              u.nombre AS solicitante
+              u.nombre AS solicitante,
+              COALESCE(
+                JSON_AGG(
+                  JSON_BUILD_OBJECT('producto', pr.nombre, 'cantidad', dp.cantidad_solicitada)
+                  ORDER BY pr.nombre
+                ) FILTER (WHERE pr.id_producto IS NOT NULL),
+                '[]'::json
+              ) AS items
        FROM pedido p
        JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido
        JOIN producto pr ON pr.id_producto = dp.id_producto
@@ -193,6 +239,8 @@ router.get("/solicitudes", async (req, res) => {
        JOIN institucion i ON i.id_institucion = p.id_institucion
        WHERE p.estado::text IN ('pendiente', 'aprobado', 'rechazado', 'cancelado', 'entregado', 'finalizado')
          AND LOWER(i.jurisdiccion) = LOWER(?)
+       GROUP BY p.id_pedido, p.kit_nombre, p.kit_cantidad, p.observaciones_generales, p.estado, p.fecha_creacion,
+                i.nombre, i.id_institucion, i.matriculados, u.nombre
        ORDER BY p.fecha_creacion DESC`,
       [jurisdiccion]
     );
