@@ -16,7 +16,7 @@ export default function DirectorAreaPedidosAnuales({
   handleEnviarPlanilla,
   handleEliminarPlanilla
 }) {
-  const [tab, setTab] = useState('kits')
+  const [tab, setTab] = useState('gestion')
   const anioActual = new Date().getFullYear()
   const solicitudesAnualesPorDecidir = solicitudes.filter(
     s => (s.tipo || 'anual') === 'anual' && s.estado === 'aprobado' && s.aprobado_director_area == null
@@ -31,12 +31,9 @@ export default function DirectorAreaPedidosAnuales({
     <div style={{ background: '#f9fafb', borderRadius: 8, padding: 18 }}>
       <h2 style={{ color: '#2a4d8f' }}>Gestion de Pedidos</h2>
       <div style={{ display: 'flex', gap: 16, marginBottom: 24, flexWrap: 'wrap' }}>
-        <button className={tab === 'kits' ? 'tab-btn active' : 'tab-btn'} onClick={() => setTab('kits')}>Kits</button>
         <button className={tab === 'gestion' ? 'tab-btn active' : 'tab-btn'} onClick={() => setTab('gestion')}>Gestion de Pedidos</button>
         <button className={tab === 'resumen' ? 'tab-btn active' : 'tab-btn'} onClick={() => setTab('resumen')}>Resumen Pedido Anual</button>
       </div>
-
-      {tab === 'kits' && <ProductKitsManager />}
 
       {tab === 'gestion' && (
         <section>

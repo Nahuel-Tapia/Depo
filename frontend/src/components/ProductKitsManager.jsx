@@ -14,6 +14,7 @@ function emptyForm() {
     nombre: '',
     tipo_escuela: 'normal',
     descripcion: '',
+    cantidad_alumnos: '',
     items: [{ producto_id: '', cantidad: '' }]
   }
 }
@@ -80,6 +81,7 @@ export default function ProductKitsManager() {
       nombre: kit.nombre || '',
       tipo_escuela: kit.tipo_escuela || 'normal',
       descripcion: kit.descripcion || '',
+      cantidad_alumnos: kit.cantidad_alumnos || '',
       items: (kit.items || []).length
         ? kit.items.map((item) => ({
             producto_id: String(item.producto_id),
@@ -126,6 +128,7 @@ export default function ProductKitsManager() {
       nombre: form.nombre.trim(),
       tipo_escuela: form.tipo_escuela,
       descripcion: form.descripcion.trim(),
+      cantidad_alumnos: form.cantidad_alumnos ? Number(form.cantidad_alumnos) : null,
       items: form.items
         .filter((item) => item.producto_id && item.cantidad)
         .map((item) => ({
@@ -276,6 +279,17 @@ export default function ProductKitsManager() {
                     <option key={type.value} value={type.value}>{type.label}</option>
                   ))}
                 </select>
+              </div>
+              <div>
+                <label>Cantidad de alumnos (referencia)</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={form.cantidad_alumnos}
+                  onChange={e => setForm({ ...form, cantidad_alumnos: e.target.value })}
+                  placeholder="Ej: 100"
+                  required
+                />
               </div>
               <div style={{ gridColumn: '1 / -1' }}>
                 <label>Descripción</label>

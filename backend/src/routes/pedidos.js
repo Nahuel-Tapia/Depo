@@ -91,6 +91,7 @@ function normalizeKitRows(rows = []) {
         activo: Boolean(row.activo),
         created_at: row.created_at,
         updated_at: row.updated_at,
+        cantidad_alumnos: row.cantidad_alumnos || null,
         items: []
       });
     }
@@ -509,28 +510,12 @@ router.get("/kits", authorizePermissions(PERMISSIONS.PEDIDOS_VIEW), async (req, 
   try {
     await ensurePedidosSchema();
 
-    let tipoEscuela = String(req.query.tipo_escuela || "").trim();
-    if (req.user.role === "directivo") {
-      const usuario = await get(
-        "SELECT id_institucion FROM usuario WHERE id_usuario = ?",
-        [req.user.sub]
-      );
-      const perfil = await getInstitucionPerfil(usuario?.id_institucion);
-      tipoEscuela = perfil?.tipo_escuela || "";
-    }
-
     const includeInactive = canManageKits(req) && String(req.query.include_inactive || "") === "1";
-    const params = [];
     let whereSql = "WHERE 1 = 1";
-
     if (!includeInactive) {
       whereSql += " AND k.activo = TRUE";
     }
-    if (tipoEscuela) {
-      whereSql += " AND k.tipo_escuela = ?";
-      params.push(normalizeTipoEscuela(tipoEscuela));
-    }
-
+    // Mostrar todos los kits, sin filtrar por tipo_escuela
     const rows = await all(
       `SELECT k.id,
               k.nombre,
@@ -539,6 +524,7 @@ router.get("/kits", authorizePermissions(PERMISSIONS.PEDIDOS_VIEW), async (req, 
               k.activo,
               k.created_at,
               k.updated_at,
+              k.cantidad_alumnos,
               d.id_producto AS producto_id,
               p.nombre AS producto_nombre,
               p.unidad_medida,
@@ -547,8 +533,7 @@ router.get("/kits", authorizePermissions(PERMISSIONS.PEDIDOS_VIEW), async (req, 
        LEFT JOIN producto_kit_detalle d ON d.kit_id = k.id
        LEFT JOIN producto p ON p.id_producto = d.id_producto
        ${whereSql}
-       ORDER BY k.nombre ASC, p.nombre ASC`,
-      params
+       ORDER BY k.nombre ASC, p.nombre ASC`
     );
 
     return res.json({ kits: normalizeKitRows(rows) });
@@ -988,9 +973,6 @@ router.post("/", authorizePermissions(PERMISSIONS.PEDIDOS_CREATE), async (req, r
       kit = await getKitById(Number(kit_id));
       if (!kit) {
         return res.status(404).json({ error: "Kit no encontrado o inactivo." });
-      }
-      if (kit.tipo_escuela !== perfilInstitucion.tipo_escuela) {
-        return res.status(400).json({ error: "El kit seleccionado no corresponde al tipo de escuela." });
       }
       if (!kit.items.length) {
         return res.status(400).json({ error: "El kit seleccionado no tiene productos configurados." });

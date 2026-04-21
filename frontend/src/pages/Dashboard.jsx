@@ -11,6 +11,7 @@ import HistorialInstitucion from '../components/HistorialInstitucion'
 import SupervisorDashboard from '../components/SupervisorDashboard'
 import DirectorAreaPanel from '../components/DirectorAreaPanel'
 import ComprasPanel from '../components/ComprasPanel'
+import ProductKitsManager from '../components/ProductKitsManager'
 
 const TABS = [
   { key: 'inicio', label: 'Inicio', permission: null },
@@ -25,7 +26,8 @@ const TABS = [
   { key: 'instituciones', label: 'Instituciones', permission: 'instituciones.view', hideForRoles: ['supervisor', 'director_area'] },
   { key: 'historial', label: 'Historial', permission: 'instituciones.view', hideForRoles: ['supervisor', 'director_area'] },
   { key: 'proveedores', label: 'Proveedores', permission: 'proveedores.view', hideForRoles: ['supervisor', 'director_area'] },
-  { key: 'usuarios', label: 'Usuarios', permission: 'users.read', role: 'admin' }
+  { key: 'usuarios', label: 'Usuarios', permission: 'users.read', role: 'admin' },
+  { key: 'kits', label: 'Kits de Productos', permission: 'supervision.manage', role: 'director_area' }
 ]
 
 export default function Dashboard() {
@@ -82,6 +84,7 @@ export default function Dashboard() {
       case 'compras': return <ComprasPanel />
       case 'proveedores': return <Proveedores />
       case 'usuarios': return <Usuarios />
+      case 'kits': return <ProductKitsManager />
       default: return <Inicio />
     }
   }

@@ -524,7 +524,26 @@ function DirectivoPedidos() {
   const [productos, setProductos] = useState([])
   const [kits, setKits] = useState([])
   const [msg, setMsg] = useState({ text: '', type: '' })
-  const [form, setForm] = useState({ kit_id: '', producto_id: '', cantidad: '1', notas: '' })
+  const [form, setForm] = useState({ kit_id: '', cantidad: '1', notas: '', adicionales: [{ producto_id: '', cantidad: '' }] })
+    // Productos adicionales seleccionados
+    const handleAddAdicional = () => {
+      setForm((prev) => ({
+        ...prev,
+        adicionales: [...prev.adicionales, { producto_id: '', cantidad: '' }]
+      }))
+    }
+    const handleRemoveAdicional = (idx) => {
+      setForm((prev) => ({
+        ...prev,
+        adicionales: prev.adicionales.filter((_, i) => i !== idx)
+      }))
+    }
+    const handleAdicionalChange = (idx, field, value) => {
+      setForm((prev) => ({
+        ...prev,
+        adicionales: prev.adicionales.map((item, i) => i === idx ? { ...item, [field]: value } : item)
+      }))
+    }
   const [modalOpen, setModalOpen] = useState(false)
   const printRef = useRef(null)
 
@@ -560,7 +579,11 @@ function DirectivoPedidos() {
       kit_id: parseInt(form.kit_id, 10),
       cantidad: parseInt(form.cantidad, 10),
       notas: form.notas.trim() || null,
-      tipo: tab
+      tipo: tab,
+      adicionales: form.adicionales.filter(a => a.producto_id && a.cantidad).map(a => ({
+        producto_id: parseInt(a.producto_id, 10),
+        cantidad: parseFloat(a.cantidad)
+      }))
     }
     const res = await apiFetch('/api/pedidos', { token, method: 'POST', body: JSON.stringify(payload) })
     const data = await res.json().catch(() => ({}))
@@ -568,7 +591,7 @@ function DirectivoPedidos() {
       setMsg({ text: data.error || 'No se pudo crear el pedido', type: 'error' })
       return
     }
-    setForm({ kit_id: '', cantidad: '1', notas: '' })
+    setForm({ kit_id: '', cantidad: '1', notas: '', adicionales: [{ producto_id: '', cantidad: '' }] })
     setModalOpen(false)
     setMsg({ text: 'Pedido creado correctamente', type: 'success' })
     loadPedidos()
@@ -690,40 +713,59 @@ function DirectivoPedidos() {
             </h3>
             <form onSubmit={handleCreate} className="grid">
               <div>
-                <label>Producto</label>
-                <select value={form.producto_id} onChange={e => setForm({ ...form, producto_id: e.target.value })} required>
-                  <option value="">Seleccionar producto...</option>
-                  {productosKitOrdenados.map(p => (
-                    <option
-                      key={p.id}
-                      value={p.id}
-                      disabled={tab === 'anual' && cuposByProducto[p.id] && cuposByProducto[p.id].disponible_anual !== null && Number(cuposByProducto[p.id].disponible_anual) <= 0}
-                    >
-                      {p.nombre}
-                    </option>
+                <label>Kit</label>
+                <select value={form.kit_id} onChange={e => setForm({ ...form, kit_id: e.target.value })} required>
+                  <option value="">Seleccionar kit...</option>
+                  {kits.map(k => (
+                    <option key={k.id} value={k.id}>{k.nombre}</option>
                   ))}
                 </select>
-              </div>
-              <div>
-                <label>Cantidad</label>
-                <input type="number" value={form.cantidad} onChange={e => setForm({ ...form, cantidad: e.target.value })} placeholder="0" min="1" required />
-              </div>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <label>Notas</label>
-                <input type="text" value={form.notas} onChange={e => setForm({ ...form, notas: e.target.value })} placeholder="Observaciones del pedido" />
               </div>
               {kitSeleccionado && (
                 <div className="msg show" style={{ gridColumn: '1 / -1', marginBottom: 0, background: '#eff6ff', color: '#1e3a8a', border: '1px solid #93c5fd' }}>
                   <strong>{kitSeleccionado.nombre}</strong>
                   <div style={{ marginTop: 8 }}>
-                    {(kitSeleccionado.items || []).map((item) => (
-                      <div key={`${kitSeleccionado.id}-${item.producto_id}`}>
-                        {item.producto_nombre}: {Number(item.cantidad) * cantidadKits} {item.unidad_medida || 'unidad'}
+                    <b>Detalle de productos del kit:</b>
+                    <ul style={{ margin: 0, paddingLeft: 18 }}>
+                      {(kitSeleccionado.items || []).map((item) => (
+                        <li key={`${kitSeleccionado.id}-${item.producto_id}`}>
+                          {item.producto_nombre}: {Number(item.cantidad) * cantidadKits} {item.unidad_medida || 'unidad'}
+                        </li>
+                      ))}
+                    </ul>
+                    {kitSeleccionado.cantidad_alumnos && (
+                      <div style={{ marginTop: 6 }}>
+                        <b>Cantidad de alumnos para este kit:</b> {kitSeleccionado.cantidad_alumnos}
                       </div>
-                    ))}
+                    )}
                   </div>
                 </div>
               )}
+              <div>
+                <label>Cantidad de kits</label>
+                <input type="number" value={form.cantidad} onChange={e => setForm({ ...form, cantidad: e.target.value })} placeholder="0" min="1" required />
+              </div>
+              {/* Productos adicionales */}
+              <div style={{ gridColumn: '1 / -1', marginTop: 12 }}>
+                <label>Agregar productos adicionales al kit</label>
+                {form.adicionales.map((item, idx) => (
+                  <div key={idx} style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
+                    <select value={item.producto_id} onChange={e => handleAdicionalChange(idx, 'producto_id', e.target.value)}>
+                      <option value="">Producto...</option>
+                      {productos.map(p => (
+                        <option key={p.id_producto} value={p.id_producto}>{p.nombre}</option>
+                      ))}
+                    </select>
+                    <input type="number" min="1" placeholder="Cantidad" value={item.cantidad} onChange={e => handleAdicionalChange(idx, 'cantidad', e.target.value)} />
+                    <button type="button" onClick={() => handleRemoveAdicional(idx)} style={{ color: 'red' }}>Quitar</button>
+                  </div>
+                ))}
+                <button type="button" onClick={handleAddAdicional}>+ Agregar producto</button>
+              </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label>Notas</label>
+                <input type="text" value={form.notas} onChange={e => setForm({ ...form, notas: e.target.value })} placeholder="Observaciones del pedido" />
+              </div>
               <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
                 <button type="button" className="secondary" onClick={() => { setModalOpen(false); setForm({ kit_id: '', producto_id: '', cantidad: '1', notas: '' }) }}>
                   Cancelar
