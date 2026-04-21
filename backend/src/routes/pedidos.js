@@ -18,6 +18,133 @@ function normalizeTipoEscuela(rawValue) {
   return "normal";
 }
 
+function formatTipoEscuelaLabel(tipo) {
+  if (tipo === "albergue") return "Escuela Albergue";
+  if (tipo === "jornada_extendida") return "Jornada Completa";
+  return "Jornada Normal";
+}
+
+function summarizePedidoItems(items = []) {
+  return items
+    .map((item) => `${item.producto_nombre} x${item.cantidad}`)
+    .join(", ");
+}
+
+function groupPedidos(rows = []) {
+  const grouped = new Map();
+
+  for (const row of rows) {
+    const pedidoId = Number(row.id);
+    if (!grouped.has(pedidoId)) {
+      grouped.set(pedidoId, {
+        id: pedidoId,
+        estado: row.estado,
+        notas: row.notas,
+        motivo_supervisor: row.motivo_supervisor || null,
+        tipo: row.tipo || "anual",
+        created_at: row.created_at,
+        id_institucion: row.id_institucion || null,
+        aprobado_por_supervisor_id: row.aprobado_por_supervisor_id || null,
+        fecha_aprobacion_supervisor: row.fecha_aprobacion_supervisor || null,
+        usuario_nombre: row.usuario_nombre || null,
+        institucion: row.institucion || null,
+        kit_id: row.kit_id ? Number(row.kit_id) : null,
+        kit_nombre: row.kit_nombre || null,
+        producto_id: row.detalle_producto_id ? Number(row.detalle_producto_id) : null,
+        producto_nombre: row.kit_nombre || row.detalle_producto_nombre || null,
+        stock_actual: row.kit_id ? null : (row.detalle_stock_actual ?? null),
+        cantidad: row.kit_id ? Number(row.kit_cantidad || 1) : Number(row.detalle_cantidad || 0),
+        items: []
+      });
+    }
+
+    const pedido = grouped.get(pedidoId);
+    if (row.detalle_producto_id) {
+      pedido.items.push({
+        producto_id: Number(row.detalle_producto_id),
+        producto_nombre: row.detalle_producto_nombre,
+        cantidad: Number(row.detalle_cantidad || 0),
+        unidad_medida: row.detalle_unidad_medida || "unidad",
+        stock_actual: row.detalle_stock_actual ?? null
+      });
+    }
+  }
+
+  return Array.from(grouped.values()).map((pedido) => ({
+    ...pedido,
+    resumen_items: summarizePedidoItems(pedido.items)
+  }));
+}
+
+function normalizeKitRows(rows = []) {
+  const grouped = new Map();
+
+  for (const row of rows) {
+    const kitId = Number(row.id);
+    if (!grouped.has(kitId)) {
+      grouped.set(kitId, {
+        id: kitId,
+        nombre: row.nombre,
+        tipo_escuela: row.tipo_escuela,
+        tipo_escuela_label: formatTipoEscuelaLabel(row.tipo_escuela),
+        descripcion: row.descripcion || "",
+        activo: Boolean(row.activo),
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        items: []
+      });
+    }
+
+    if (row.producto_id) {
+      grouped.get(kitId).items.push({
+        producto_id: Number(row.producto_id),
+        producto_nombre: row.producto_nombre,
+        unidad_medida: row.unidad_medida || "unidad",
+        cantidad: Number(row.cantidad || 0)
+      });
+    }
+  }
+
+  return Array.from(grouped.values()).map((kit) => ({
+    ...kit,
+    items: kit.items.sort((a, b) =>
+      String(a.producto_nombre || "").localeCompare(String(b.producto_nombre || ""), "es", { sensitivity: "base" })
+    )
+  }));
+}
+
+function sanitizeKitItems(rawItems = []) {
+  if (!Array.isArray(rawItems) || rawItems.length === 0) {
+    return { error: "Debés agregar al menos un producto al kit." };
+  }
+
+  const normalized = [];
+  const seen = new Set();
+
+  for (const rawItem of rawItems) {
+    const productoId = Number(rawItem?.producto_id);
+    const cantidad = Number(rawItem?.cantidad);
+
+    if (!Number.isInteger(productoId) || productoId <= 0) {
+      return { error: "Cada ítem del kit debe tener un producto válido." };
+    }
+    if (!Number.isFinite(cantidad) || cantidad <= 0) {
+      return { error: "Cada ítem del kit debe tener una cantidad mayor a cero." };
+    }
+    if (seen.has(productoId)) {
+      return { error: "No podés repetir productos dentro del mismo kit." };
+    }
+
+    seen.add(productoId);
+    normalized.push({
+      producto_id: productoId,
+      cantidad: Math.round(cantidad * 100) / 100
+    });
+  }
+
+  return { items: normalized };
+}
+
 function calcularCupoAnual(matriculados, regla) {
   if (!regla) return null;
 
@@ -67,6 +194,27 @@ async function ensurePedidosSchema() {
         ADD COLUMN IF NOT EXISTS motivo_supervisor TEXT
       `);
     } catch (_) { /* no aplica en alguna base */ }
+
+    try {
+      await run(`
+        ALTER TABLE pedido
+        ADD COLUMN IF NOT EXISTS kit_id INT
+      `);
+    } catch (_) { /* ya existe o no se puede */ }
+
+    try {
+      await run(`
+        ALTER TABLE pedido
+        ADD COLUMN IF NOT EXISTS kit_nombre VARCHAR(180)
+      `);
+    } catch (_) { /* ya existe o no se puede */ }
+
+    try {
+      await run(`
+        ALTER TABLE pedido
+        ADD COLUMN IF NOT EXISTS kit_cantidad NUMERIC(12,2)
+      `);
+    } catch (_) { /* ya existe o no se puede */ }
 
     try {
       await run(`
@@ -125,6 +273,29 @@ async function ensurePedidosSchema() {
       FROM producto p
       CROSS JOIN (VALUES ('normal'), ('albergue'), ('jornada_extendida')) AS tipos(tipo_escuela)
       ON CONFLICT (tipo_escuela, id_producto) DO NOTHING
+    `);
+
+    await run(`
+      CREATE TABLE IF NOT EXISTS producto_kit (
+        id SERIAL PRIMARY KEY,
+        nombre VARCHAR(180) NOT NULL,
+        tipo_escuela VARCHAR(40) NOT NULL,
+        descripcion TEXT,
+        activo BOOLEAN NOT NULL DEFAULT TRUE,
+        created_by INT REFERENCES usuario(id_usuario),
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+      )
+    `);
+
+    await run(`
+      CREATE TABLE IF NOT EXISTS producto_kit_detalle (
+        id SERIAL PRIMARY KEY,
+        kit_id INT NOT NULL REFERENCES producto_kit(id) ON DELETE CASCADE,
+        id_producto INT NOT NULL REFERENCES producto(id_producto) ON DELETE CASCADE,
+        cantidad NUMERIC(12,2) NOT NULL,
+        UNIQUE (kit_id, id_producto)
+      )
     `);
 
     pedidosSchemaReady = true;
@@ -298,6 +469,241 @@ async function hasAsignacionesTable() {
   return Boolean(row?.regclass);
 }
 
+async function getKitById(kitId, { includeInactive = false } = {}) {
+  const rows = await all(
+    `SELECT k.id,
+            k.nombre,
+            k.tipo_escuela,
+            k.descripcion,
+            k.activo,
+            k.created_at,
+            k.updated_at,
+            d.id_producto AS producto_id,
+            p.nombre AS producto_nombre,
+            p.unidad_medida,
+            d.cantidad
+     FROM producto_kit k
+     LEFT JOIN producto_kit_detalle d ON d.kit_id = k.id
+     LEFT JOIN producto p ON p.id_producto = d.id_producto
+     WHERE k.id = ?
+       ${includeInactive ? "" : "AND k.activo = TRUE"}
+     ORDER BY p.nombre ASC`,
+    [kitId]
+  );
+
+  return normalizeKitRows(rows)[0] || null;
+}
+
+function canManageKits(req) {
+  return req.user?.role === "admin" || req.user?.role === "director_area";
+}
+
+function requireKitManager(req, res, next) {
+  if (!canManageKits(req)) {
+    return res.status(403).json({ error: "No tenés permiso para gestionar kits." });
+  }
+  return next();
+}
+
+router.get("/kits", authorizePermissions(PERMISSIONS.PEDIDOS_VIEW), async (req, res) => {
+  try {
+    await ensurePedidosSchema();
+
+    let tipoEscuela = String(req.query.tipo_escuela || "").trim();
+    if (req.user.role === "directivo") {
+      const usuario = await get(
+        "SELECT id_institucion FROM usuario WHERE id_usuario = ?",
+        [req.user.sub]
+      );
+      const perfil = await getInstitucionPerfil(usuario?.id_institucion);
+      tipoEscuela = perfil?.tipo_escuela || "";
+    }
+
+    const includeInactive = canManageKits(req) && String(req.query.include_inactive || "") === "1";
+    const params = [];
+    let whereSql = "WHERE 1 = 1";
+
+    if (!includeInactive) {
+      whereSql += " AND k.activo = TRUE";
+    }
+    if (tipoEscuela) {
+      whereSql += " AND k.tipo_escuela = ?";
+      params.push(normalizeTipoEscuela(tipoEscuela));
+    }
+
+    const rows = await all(
+      `SELECT k.id,
+              k.nombre,
+              k.tipo_escuela,
+              k.descripcion,
+              k.activo,
+              k.created_at,
+              k.updated_at,
+              d.id_producto AS producto_id,
+              p.nombre AS producto_nombre,
+              p.unidad_medida,
+              d.cantidad
+       FROM producto_kit k
+       LEFT JOIN producto_kit_detalle d ON d.kit_id = k.id
+       LEFT JOIN producto p ON p.id_producto = d.id_producto
+       ${whereSql}
+       ORDER BY k.nombre ASC, p.nombre ASC`,
+      params
+    );
+
+    return res.json({ kits: normalizeKitRows(rows) });
+  } catch (err) {
+    console.error("Error al listar kits:", err);
+    return res.status(500).json({ error: "No se pudieron listar los kits" });
+  }
+});
+
+router.post("/kits", authorizePermissions(PERMISSIONS.PEDIDOS_VIEW), requireKitManager, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await ensurePedidosSchema();
+
+    const nombre = String(req.body?.nombre || "").trim();
+    const tipoEscuela = normalizeTipoEscuela(req.body?.tipo_escuela);
+    const descripcion = String(req.body?.descripcion || "").trim() || null;
+    const parsedItems = sanitizeKitItems(req.body?.items);
+
+    if (!nombre) {
+      return res.status(400).json({ error: "El nombre del kit es obligatorio." });
+    }
+    if (parsedItems.error) {
+      return res.status(400).json({ error: parsedItems.error });
+    }
+
+    const productoIds = parsedItems.items.map((item) => item.producto_id);
+    const productos = await all(
+      `SELECT id_producto FROM producto WHERE id_producto = ANY($1::int[])`,
+      [productoIds]
+    );
+    if (productos.length !== productoIds.length) {
+      return res.status(400).json({ error: "Uno o más productos seleccionados no existen." });
+    }
+
+    await client.query("BEGIN");
+    const insertKit = await client.query(
+      `INSERT INTO producto_kit (nombre, tipo_escuela, descripcion, activo, created_by)
+       VALUES ($1, $2, $3, TRUE, $4)
+       RETURNING id`,
+      [nombre, tipoEscuela, descripcion, req.user.sub]
+    );
+    const kitId = Number(insertKit.rows[0].id);
+
+    for (const item of parsedItems.items) {
+      await client.query(
+        `INSERT INTO producto_kit_detalle (kit_id, id_producto, cantidad)
+         VALUES ($1, $2, $3)`,
+        [kitId, item.producto_id, item.cantidad]
+      );
+    }
+
+    await client.query("COMMIT");
+    const kit = await getKitById(kitId, { includeInactive: true });
+    return res.status(201).json({ kit });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("Error al crear kit:", err);
+    return res.status(500).json({ error: "No se pudo crear el kit" });
+  } finally {
+    client.release();
+  }
+});
+
+router.put("/kits/:id(\\d+)", authorizePermissions(PERMISSIONS.PEDIDOS_VIEW), requireKitManager, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await ensurePedidosSchema();
+
+    const id = Number(req.params.id);
+    const nombre = String(req.body?.nombre || "").trim();
+    const tipoEscuela = normalizeTipoEscuela(req.body?.tipo_escuela);
+    const descripcion = String(req.body?.descripcion || "").trim() || null;
+    const activo = req.body?.activo !== false;
+    const parsedItems = sanitizeKitItems(req.body?.items);
+
+    if (!nombre) {
+      return res.status(400).json({ error: "El nombre del kit es obligatorio." });
+    }
+    if (parsedItems.error) {
+      return res.status(400).json({ error: parsedItems.error });
+    }
+
+    const existing = await get(`SELECT id FROM producto_kit WHERE id = ?`, [id]);
+    if (!existing) {
+      return res.status(404).json({ error: "Kit no encontrado." });
+    }
+
+    const productoIds = parsedItems.items.map((item) => item.producto_id);
+    const productos = await all(
+      `SELECT id_producto FROM producto WHERE id_producto = ANY($1::int[])`,
+      [productoIds]
+    );
+    if (productos.length !== productoIds.length) {
+      return res.status(400).json({ error: "Uno o más productos seleccionados no existen." });
+    }
+
+    await client.query("BEGIN");
+    await client.query(
+      `UPDATE producto_kit
+       SET nombre = $1,
+           tipo_escuela = $2,
+           descripcion = $3,
+           activo = $4,
+           updated_at = NOW()
+       WHERE id = $5`,
+      [nombre, tipoEscuela, descripcion, activo, id]
+    );
+    await client.query(`DELETE FROM producto_kit_detalle WHERE kit_id = $1`, [id]);
+
+    for (const item of parsedItems.items) {
+      await client.query(
+        `INSERT INTO producto_kit_detalle (kit_id, id_producto, cantidad)
+         VALUES ($1, $2, $3)`,
+        [id, item.producto_id, item.cantidad]
+      );
+    }
+
+    await client.query("COMMIT");
+    const kit = await getKitById(id, { includeInactive: true });
+    return res.json({ kit });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("Error al actualizar kit:", err);
+    return res.status(500).json({ error: "No se pudo actualizar el kit" });
+  } finally {
+    client.release();
+  }
+});
+
+router.delete("/kits/:id(\\d+)", authorizePermissions(PERMISSIONS.PEDIDOS_VIEW), requireKitManager, async (req, res) => {
+  try {
+    await ensurePedidosSchema();
+    const id = Number(req.params.id);
+
+    const existing = await get(`SELECT id FROM producto_kit WHERE id = ?`, [id]);
+    if (!existing) {
+      return res.status(404).json({ error: "Kit no encontrado." });
+    }
+
+    await run(
+      `UPDATE producto_kit
+       SET activo = FALSE,
+           updated_at = NOW()
+       WHERE id = ?`,
+      [id]
+    );
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("Error al eliminar kit:", err);
+    return res.status(500).json({ error: "No se pudo eliminar el kit" });
+  }
+});
+
 // Listar pedidos
 router.get("/", authorizePermissions(PERMISSIONS.PEDIDOS_VIEW), async (req, res) => {
   try {
@@ -314,10 +720,14 @@ router.get("/", authorizePermissions(PERMISSIONS.PEDIDOS_VIEW), async (req, res)
         p.id_institucion,
         p.aprobado_por_supervisor_id,
         p.fecha_aprobacion_supervisor,
-        dp.id_producto as producto_id,
-        pr.nombre as producto_nombre,
-        pr.stock_actual as stock_actual,
-        dp.cantidad_solicitada as cantidad,
+        p.kit_id,
+        p.kit_nombre,
+        p.kit_cantidad,
+        dp.id_producto as detalle_producto_id,
+        pr.nombre as detalle_producto_nombre,
+        pr.unidad_medida as detalle_unidad_medida,
+        pr.stock_actual as detalle_stock_actual,
+        dp.cantidad_solicitada as detalle_cantidad,
         u.nombre as usuario_nombre,
         i.nombre as institucion
       FROM pedido p
@@ -334,8 +744,9 @@ router.get("/", authorizePermissions(PERMISSIONS.PEDIDOS_VIEW), async (req, res)
       params.push(req.user.sub);
     }
 
-    query += " ORDER BY p.fecha_creacion DESC";
-    const pedidos = await all(query, params);
+    query += " ORDER BY p.fecha_creacion DESC, pr.nombre ASC";
+    const pedidoRows = await all(query, params);
+    const pedidos = groupPedidos(pedidoRows);
     return res.json({ pedidos });
   } catch (err) {
     console.error("Error al listar pedidos:", err);
@@ -451,20 +862,31 @@ router.get("/institucion/:institucion", authorizePermissions(PERMISSIONS.PEDIDOS
         p.observaciones_generales as notas,
         COALESCE(p.tipo, 'anual') as tipo,
         p.fecha_creacion as created_at,
-        pr.nombre as producto_nombre,
-        dp.cantidad_solicitada as cantidad,
-        u.nombre as usuario_nombre
+        p.id_institucion,
+        p.kit_id,
+        p.kit_nombre,
+        p.kit_cantidad,
+        dp.id_producto as detalle_producto_id,
+        pr.nombre as detalle_producto_nombre,
+        pr.unidad_medida as detalle_unidad_medida,
+        pr.stock_actual as detalle_stock_actual,
+        dp.cantidad_solicitada as detalle_cantidad,
+        u.nombre as usuario_nombre,
+        NULL::text as institucion,
+        NULL::int as aprobado_por_supervisor_id,
+        NULL::timestamp as fecha_aprobacion_supervisor,
+        NULL::text as motivo_supervisor
       FROM pedido p
       JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido
       JOIN producto pr ON dp.id_producto = pr.id_producto
       JOIN usuario u ON p.id_usuario_solicitante = u.id_usuario
       WHERE p.id_institucion = ?
-      ORDER BY p.fecha_creacion DESC
+      ORDER BY p.fecha_creacion DESC, pr.nombre ASC
       `,
       [institucion]
     );
 
-    return res.json({ pedidos });
+    return res.json({ pedidos: groupPedidos(pedidos) });
   } catch (err) {
     console.error("Error al obtener historial:", err);
     return res.status(500).json({ error: "No se pudo obtener historial" });
@@ -476,7 +898,7 @@ router.get("/:id(\\d+)", authorizePermissions(PERMISSIONS.PEDIDOS_VIEW), async (
   try {
     const { id } = req.params;
 
-    const pedido = await get(
+    const pedidoRows = await all(
       `
       SELECT
         p.id_pedido as id,
@@ -484,17 +906,32 @@ router.get("/:id(\\d+)", authorizePermissions(PERMISSIONS.PEDIDOS_VIEW), async (
         p.observaciones_generales as notas,
         p.fecha_creacion as created_at,
         p.id_institucion,
-        pr.nombre as producto_nombre,
-        dp.cantidad_solicitada as cantidad,
-        u.nombre as usuario_nombre
+        COALESCE(p.tipo, 'anual') as tipo,
+        p.motivo_supervisor,
+        p.aprobado_por_supervisor_id,
+        p.fecha_aprobacion_supervisor,
+        p.kit_id,
+        p.kit_nombre,
+        p.kit_cantidad,
+        dp.id_producto as detalle_producto_id,
+        pr.nombre as detalle_producto_nombre,
+        pr.unidad_medida as detalle_unidad_medida,
+        pr.stock_actual as detalle_stock_actual,
+        dp.cantidad_solicitada as detalle_cantidad,
+        u.nombre as usuario_nombre,
+        i.nombre as institucion
       FROM pedido p
       JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido
       JOIN producto pr ON dp.id_producto = pr.id_producto
       JOIN usuario u ON p.id_usuario_solicitante = u.id_usuario
+      LEFT JOIN institucion i ON i.id_institucion = p.id_institucion
       WHERE p.id_pedido = ?
+      ORDER BY pr.nombre ASC
       `,
       [id]
     );
+
+    const pedido = groupPedidos(pedidoRows)[0];
 
     if (!pedido) {
       return res.status(404).json({ error: "Pedido no encontrado" });
@@ -522,16 +959,12 @@ router.post("/", authorizePermissions(PERMISSIONS.PEDIDOS_CREATE), async (req, r
   try {
     await ensurePedidosSchema();
 
-    const { producto_id, cantidad, notas, tipo } = req.body;
+    const { producto_id, kit_id, cantidad, notas, tipo } = req.body;
     const tipoValido = ['anual', 'refuerzo'].includes(tipo) ? tipo : 'anual';
+    const cantidadSolicitada = Number(cantidad);
 
-    if (!producto_id || !cantidad || cantidad <= 0) {
-      return res.status(400).json({ error: "Producto y cantidad son obligatorios" });
-    }
-
-    const producto = await get("SELECT id_producto as id FROM producto WHERE id_producto = ?", [producto_id]);
-    if (!producto) {
-      return res.status(404).json({ error: "Producto no encontrado" });
+    if ((!producto_id && !kit_id) || !cantidadSolicitada || cantidadSolicitada <= 0) {
+      return res.status(400).json({ error: "Debés seleccionar un kit o producto y una cantidad válida" });
     }
 
     const usuario = await get(
@@ -548,43 +981,82 @@ router.post("/", authorizePermissions(PERMISSIONS.PEDIDOS_CREATE), async (req, r
       return res.status(404).json({ error: "Institución no encontrada" });
     }
 
-    const reglaKit = await getReglaKit(perfilInstitucion.tipo_escuela, producto_id);
-    if (!reglaKit) {
-      return res.status(400).json({
-        error: "El producto seleccionado no forma parte del kit asignado a tu escuela."
-      });
+    let kit = null;
+    let detalleItems = [];
+
+    if (kit_id) {
+      kit = await getKitById(Number(kit_id));
+      if (!kit) {
+        return res.status(404).json({ error: "Kit no encontrado o inactivo." });
+      }
+      if (kit.tipo_escuela !== perfilInstitucion.tipo_escuela) {
+        return res.status(400).json({ error: "El kit seleccionado no corresponde al tipo de escuela." });
+      }
+      if (!kit.items.length) {
+        return res.status(400).json({ error: "El kit seleccionado no tiene productos configurados." });
+      }
+
+      detalleItems = kit.items.map((item) => ({
+        producto_id: item.producto_id,
+        cantidad: Number(item.cantidad) * cantidadSolicitada
+      }));
+    } else {
+      const producto = await get("SELECT id_producto as id FROM producto WHERE id_producto = ?", [producto_id]);
+      if (!producto) {
+        return res.status(404).json({ error: "Producto no encontrado" });
+      }
+
+      const reglaKit = await getReglaKit(perfilInstitucion.tipo_escuela, producto_id);
+      if (!reglaKit) {
+        return res.status(400).json({
+          error: "El producto seleccionado no forma parte del kit asignado a tu escuela."
+        });
+      }
+
+      detalleItems = [{ producto_id: Number(producto_id), cantidad: cantidadSolicitada }];
     }
 
     if (tipoValido === 'anual') {
       const anioActual = new Date().getFullYear();
-      const disponibilidad = await getDisponibilidadAnual(usuario.id_institucion, producto_id, anioActual);
+      for (const item of detalleItems) {
+        const disponibilidad = await getDisponibilidadAnual(usuario.id_institucion, item.producto_id, anioActual);
+        if (disponibilidad && disponibilidad.disponible_anual !== null) {
+          if (Number(item.cantidad) > Number(disponibilidad.disponible_anual)) {
+            return res.status(409).json({
+              error: `La solicitud excede el cupo anual disponible para ${kit ? `el kit "${kit.nombre}"` : "el producto seleccionado"}.`,
+              detalle: {
+                ...disponibilidad,
+                producto_id: item.producto_id,
+                cantidad_solicitada: item.cantidad
+              }
+            });
+          }
 
-      if (disponibilidad && disponibilidad.disponible_anual !== null) {
-        if (Number(cantidad) > Number(disponibilidad.disponible_anual)) {
-          return res.status(409).json({
-            error: `Cantidad excede el cupo anual disponible para este producto. Disponible: ${disponibilidad.disponible_anual}.`,
-            detalle: disponibilidad
-          });
-        }
-
-        if (Number(disponibilidad.disponible_anual) <= 0) {
-          return res.status(409).json({
-            error: "No hay cupo anual disponible para este producto.",
-            detalle: disponibilidad
-          });
+          if (Number(disponibilidad.disponible_anual) <= 0) {
+            return res.status(409).json({
+              error: "No hay cupo anual disponible para uno de los productos del pedido.",
+              detalle: {
+                ...disponibilidad,
+                producto_id: item.producto_id
+              }
+            });
+          }
         }
       }
     }
 
     const pedidoResult = await run(
-      `INSERT INTO pedido (id_usuario_solicitante, id_institucion, observaciones_generales, tipo) VALUES (?, ?, ?, ?)`,
-      [req.user.sub, usuario.id_institucion, notas || null, tipoValido]
+      `INSERT INTO pedido (id_usuario_solicitante, id_institucion, observaciones_generales, tipo, kit_id, kit_nombre, kit_cantidad)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [req.user.sub, usuario.id_institucion, notas || null, tipoValido, kit?.id || null, kit?.nombre || null, kit ? cantidadSolicitada : null]
     );
 
-    await run(
-      `INSERT INTO detalle_pedido (id_pedido, id_producto, cantidad_solicitada, observacion) VALUES (?, ?, ?, ?)`,
-      [pedidoResult.lastID, producto_id, cantidad, null]
-    );
+    for (const item of detalleItems) {
+      await run(
+        `INSERT INTO detalle_pedido (id_pedido, id_producto, cantidad_solicitada, observacion) VALUES (?, ?, ?, ?)`,
+        [pedidoResult.lastID, item.producto_id, item.cantidad, null]
+      );
+    }
 
     return res.status(201).json({ id: pedidoResult.lastID, estado: "pendiente" });
   } catch (err) {

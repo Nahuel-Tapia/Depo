@@ -164,7 +164,7 @@ function SupervisorPedidos() {
               <tr>
                 <th>Institución</th>
                 <th>Fecha</th>
-                <th>Producto</th>
+                <th>Pedido</th>
                 <th>Cantidad</th>
                 <th>Solicitante</th>
                 <th>Notas</th>
@@ -269,7 +269,7 @@ function SupervisorPedidos() {
 function DepositoPedidos() {
   const { token, user, hasPermission } = useAuth()
   const [pedidos, setPedidos] = useState([])
-  const [productos, setProductos] = useState([])
+  const [kits, setKits] = useState([])
   const [msg, setMsg] = useState({ text: '', type: '' })
   const [form, setForm] = useState({ producto_id: '', cantidad: '', notas: '' })
   const [createModalOpen, setCreateModalOpen] = useState(false)
@@ -418,16 +418,16 @@ function DepositoPedidos() {
             <h3 style={{ marginTop: 0 }}>Nuevo pedido</h3>
             <form onSubmit={handleCreate} className="grid">
               <div>
-                <label>Producto</label>
-                <select value={form.producto_id} onChange={e => setForm({ ...form, producto_id: e.target.value })} required>
-                  <option value="">Seleccionar producto...</option>
+                <label>Kit</label>
+                <select value={form.kit_id} onChange={e => setForm({ ...form, kit_id: e.target.value, producto_id: e.target.value })} required>
+                  <option value="">Seleccionar kit...</option>
                   {productosOrdenados.map(p => (
                     <option key={p.id} value={p.id}>{formatProductoOptionLabel(p)}</option>
                   ))}
                 </select>
               </div>
               <div>
-                <label>Cantidad</label>
+                <label>Cantidad de kits</label>
                 <input type="number" value={form.cantidad} onChange={e => setForm({ ...form, cantidad: e.target.value })} placeholder="0" min="1" required />
               </div>
               <div style={{ gridColumn: '1 / -1' }}>
@@ -522,30 +522,18 @@ function DirectivoPedidos() {
   const [tab, setTab] = useState('anual')
   const [pedidos, setPedidos] = useState([])
   const [productos, setProductos] = useState([])
+  const [kits, setKits] = useState([])
   const [msg, setMsg] = useState({ text: '', type: '' })
-  const [form, setForm] = useState({ producto_id: '', cantidad: '', notas: '' })
+  const [form, setForm] = useState({ kit_id: '', producto_id: '', cantidad: '1', notas: '' })
   const [modalOpen, setModalOpen] = useState(false)
-  const [cuposAnuales, setCuposAnuales] = useState([])
-  const [cargandoCupos, setCargandoCupos] = useState(false)
   const printRef = useRef(null)
 
-  const cuposByProducto = cuposAnuales.reduce((acc, item) => {
-    acc[item.producto_id] = item
-    return acc
-  }, {})
-
-  const productosOrdenados = [...productos].sort((a, b) =>
-    String(a?.nombre || '').localeCompare(String(b?.nombre || ''), 'es', { sensitivity: 'base' })
-  )
-
-  const productosKitOrdenados = productosOrdenados.filter((p) => Boolean(cuposByProducto[p.id]))
-
-  const loadProductos = async () => {
+  const loadKits = async () => {
     try {
-      const res = await apiFetch('/api/productos', { token })
+      const res = await apiFetch('/api/pedidos/kits', { token })
       if (res.ok) {
         const data = await res.json()
-        setProductos(data.productos || [])
+        setKits(data.kits || [])
       }
     } catch { /* ignore */ }
   }
@@ -560,31 +548,16 @@ function DirectivoPedidos() {
     } catch { /* ignore */ }
   }
 
-  const loadCuposAnuales = async () => {
-    setCargandoCupos(true)
-    try {
-      const res = await apiFetch('/api/pedidos/cupos-anuales', { token })
-      if (res.ok) {
-        const data = await res.json()
-        setCuposAnuales(data.cupos || [])
-      }
-    } catch { /* ignore */ }
-    finally {
-      setCargandoCupos(false)
-    }
-  }
-
   useEffect(() => {
-    loadProductos()
+    loadKits()
     loadPedidos()
-    loadCuposAnuales()
   }, [])
 
   const handleCreate = async (e) => {
     e.preventDefault()
     setMsg({ text: '', type: '' })
     const payload = {
-      producto_id: parseInt(form.producto_id, 10),
+      kit_id: parseInt(form.kit_id, 10),
       cantidad: parseInt(form.cantidad, 10),
       notas: form.notas.trim() || null,
       tipo: tab
@@ -595,11 +568,10 @@ function DirectivoPedidos() {
       setMsg({ text: data.error || 'No se pudo crear el pedido', type: 'error' })
       return
     }
-    setForm({ producto_id: '', cantidad: '', notas: '' })
+    setForm({ kit_id: '', cantidad: '1', notas: '' })
     setModalOpen(false)
     setMsg({ text: 'Pedido creado correctamente', type: 'success' })
     loadPedidos()
-    if (tab === 'anual') loadCuposAnuales()
   }
 
   const handleCancelar = async (id) => {
@@ -614,13 +586,22 @@ function DirectivoPedidos() {
   }
 
   const pedidosFiltrados = pedidos.filter(p => (p.tipo || 'anual') === tab)
-
+  const tieneKits = kits.length > 0
+  const kitSeleccionado = kits.find((kit) => Number(kit.id) === Number(form.kit_id))
+  const cantidadKits = Math.max(1, parseInt(form.cantidad, 10) || 1)
   const anioActual = new Date().getFullYear()
-  const productoSeleccionadoCupo = cuposByProducto[Number(form.producto_id)]
-  const tieneDatosCupo = cuposAnuales.length > 0
-  const tieneProductosKit = productosKitOrdenados.length > 0
-  const puedeCrearAnual = tieneProductosKit && (!tieneDatosCupo || cuposAnuales.some(c => c.disponible_anual === null || Number(c.disponible_anual) > 0))
-  const puedeCrearRefuerzo = tieneProductosKit
+  const cargandoCupos = false
+  const tieneDatosCupo = false
+  const tieneProductosKit = tieneKits
+  const puedeCrearAnual = tieneKits
+  const puedeCrearRefuerzo = tieneKits
+  const cuposByProducto = {}
+  const productoSeleccionadoCupo = null
+  const productosKitOrdenados = kits.map((kit) => ({
+    id: kit.id,
+    nombre: kit.nombre,
+    unidad_medida: kit.tipo_escuela_label
+  }))
 
   const badgeTab = (tipo) => {
     const count = pedidos.filter(p => (p.tipo || 'anual') === tipo && p.estado === 'pendiente').length
@@ -683,13 +664,13 @@ function DirectivoPedidos() {
 
       {tab === 'anual' && (
         <div className="msg show" style={{ background: '#ecfeff', color: '#155e75', border: '1px solid #67e8f9', marginTop: 8 }}>
-          Cupo anual {anioActual}: {cargandoCupos ? 'cargando...' : (tieneDatosCupo ? 'disponible por producto según tipo de escuela y matrícula.' : 'sin datos de cupo, podés crear solicitud y se validará al enviar.')}
+          Pedido anual por kit: al seleccionar un kit se enviará el conjunto completo de productos configurados.
         </div>
       )}
 
       {!cargandoCupos && !tieneProductosKit && (
         <div className="msg show msg-error">
-          Tu escuela no tiene productos de kit asignados. Contactá al administrador para configurar el kit.
+          Tu escuela no tiene kits asignados. Contactá al director de área o al administrador para configurarlos.
         </div>
       )}
 
@@ -718,10 +699,7 @@ function DirectivoPedidos() {
                       value={p.id}
                       disabled={tab === 'anual' && cuposByProducto[p.id] && cuposByProducto[p.id].disponible_anual !== null && Number(cuposByProducto[p.id].disponible_anual) <= 0}
                     >
-                      {formatProductoOptionLabel(p)}
-                      {tab === 'anual' && cuposByProducto[p.id] && cuposByProducto[p.id].disponible_anual !== null
-                        ? ` · Disponible anual: ${cuposByProducto[p.id].disponible_anual}`
-                        : ''}
+                      {p.nombre}
                     </option>
                   ))}
                 </select>
@@ -734,13 +712,20 @@ function DirectivoPedidos() {
                 <label>Notas</label>
                 <input type="text" value={form.notas} onChange={e => setForm({ ...form, notas: e.target.value })} placeholder="Observaciones del pedido" />
               </div>
-              {tab === 'anual' && productoSeleccionadoCupo && (
+              {kitSeleccionado && (
                 <div className="msg show" style={{ gridColumn: '1 / -1', marginBottom: 0, background: '#eff6ff', color: '#1e3a8a', border: '1px solid #93c5fd' }}>
-                  Cupo anual: {productoSeleccionadoCupo.cuota_anual ?? 'sin regla'} · Solicitado: {productoSeleccionadoCupo.solicitado_anual || 0} · Disponible: {productoSeleccionadoCupo.disponible_anual ?? 'sin límite'}
+                  <strong>{kitSeleccionado.nombre}</strong>
+                  <div style={{ marginTop: 8 }}>
+                    {(kitSeleccionado.items || []).map((item) => (
+                      <div key={`${kitSeleccionado.id}-${item.producto_id}`}>
+                        {item.producto_nombre}: {Number(item.cantidad) * cantidadKits} {item.unidad_medida || 'unidad'}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
               <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-                <button type="button" className="secondary" onClick={() => { setModalOpen(false); setForm({ producto_id: '', cantidad: '', notas: '' }) }}>
+                <button type="button" className="secondary" onClick={() => { setModalOpen(false); setForm({ kit_id: '', producto_id: '', cantidad: '1', notas: '' }) }}>
                   Cancelar
                 </button>
                 <button type="submit">Crear solicitud</button>
@@ -765,7 +750,7 @@ function DirectivoPedidos() {
                 <th>Estado</th>
                 <th>Notas</th>
                 <th>Fecha</th>
-                {tab === 'anual' && <th>Cupo anual restante</th>}
+                <th>Detalle</th>
                 <th>Acciones</th>
               </tr>
             </thead>
@@ -778,11 +763,7 @@ function DirectivoPedidos() {
                   <td><span className={`badge badge-estado-${pedido.estado}`}>{pedido.estado}</span></td>
                   <td>{pedido.notas || '-'}</td>
                   <td>{new Date(pedido.created_at).toLocaleDateString('es-AR')}</td>
-                  {tab === 'anual' && (
-                    <td>
-                      {cuposByProducto[pedido.producto_id]?.disponible_anual ?? '-'}
-                    </td>
-                  )}
+                  <td>{pedido.resumen_items || '-'}</td>
                   <td>
                     {pedido.estado === 'pendiente' && (
                       <button className="sv-btn-rechazar" style={{ margin: 0 }} onClick={() => handleCancelar(pedido.id)}>
