@@ -882,6 +882,29 @@ tbody tr:hover td {
   font-size: 0.82rem;
 }
 
+.sv-kit-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.sv-kit-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px;
+  background: #fff;
+}
+
+.sv-kit-meta {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 12px 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
 @media (max-width: 768px) {
   .sv-instituciones-grid {
     grid-template-columns: 1fr;
@@ -894,6 +917,10 @@ tbody tr:hover td {
 
   .sv-rechazo-box {
     min-width: 140px;
+  }
+
+  .sv-kit-grid {
+    grid-template-columns: 1fr;
   }
 }
 

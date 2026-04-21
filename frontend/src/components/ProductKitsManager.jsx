@@ -1,12 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../api'
-
-const SCHOOL_TYPES = [
-  { value: 'normal', label: 'Jornada Normal' },
-  { value: 'jornada_extendida', label: 'Jornada Completa' },
-  { value: 'albergue', label: 'Escuela Albergue' }
-]
+import { SCHOOL_TYPE_OPTIONS } from '../constants/schoolTypes'
 
 function emptyForm() {
   return {
@@ -275,7 +270,7 @@ export default function ProductKitsManager() {
                   onChange={(e) => setForm({ ...form, tipo_escuela: e.target.value })}
                   required
                 >
-                  {SCHOOL_TYPES.map((type) => (
+                  {SCHOOL_TYPE_OPTIONS.map((type) => (
                     <option key={type.value} value={type.value}>{type.label}</option>
                   ))}
                 </select>

@@ -10,6 +10,15 @@ const { authenticate } = require("../middleware/auth");
 const router = express.Router();
 router.use(authenticate);
 
+const ESCUELA_TIPOS = ["normal", "albergue", "jornada_extendida"];
+
+function normalizeTipoEscuela(rawValue) {
+  const value = String(rawValue || "").trim().toLowerCase();
+  if (value.includes("alberg")) return "albergue";
+  if (value.includes("jornada")) return "jornada_extendida";
+  return "normal";
+}
+
 async function hasAsignacionesTable() {
   const row = await get(
     `SELECT to_regclass('public.supervisor_escuela_asignacion') AS regclass`
@@ -31,6 +40,7 @@ router.get("/instituciones", async (req, res) => {
                 i.cue,
                 i.departamento,
                 i.nivel_educativo AS nivel,
+                COALESCE(i.tipo_escuela, 'normal') AS tipo_escuela,
                 i.ambito AS tipo,
                 i.categoria
          FROM supervisor_escuela_asignacion sea
@@ -63,6 +73,54 @@ router.get("/instituciones", async (req, res) => {
   } catch (err) {
     console.error("Error al obtener instituciones del supervisor:", err);
     res.status(500).json({ error: "Error interno del servidor" });
+  }
+});
+
+router.patch("/instituciones/:id/tipo-kit", async (req, res) => {
+  try {
+    if (req.user?.role !== "supervisor") {
+      return res.status(403).json({ error: "Solo el supervisor puede asignar kit." });
+    }
+
+    if (!(await hasAsignacionesTable())) {
+      return res.status(400).json({ error: "No hay escuelas asignadas para este supervisor." });
+    }
+
+    const institucionId = Number(req.params.id);
+    const tipoEscuela = normalizeTipoEscuela(req.body?.tipo_escuela);
+
+    if (!Number.isInteger(institucionId) || institucionId <= 0) {
+      return res.status(400).json({ error: "Institución inválida." });
+    }
+
+    if (!ESCUELA_TIPOS.includes(tipoEscuela)) {
+      return res.status(400).json({ error: "Tipo de kit inválido." });
+    }
+
+    const asignacion = await get(
+      `SELECT 1
+       FROM supervisor_escuela_asignacion
+       WHERE supervisor_id = ? AND institucion_id = ?`,
+      [req.user.sub, institucionId]
+    );
+
+    if (!asignacion) {
+      return res.status(404).json({ error: "La escuela no está asignada a este supervisor." });
+    }
+
+    await get(
+      `UPDATE institucion
+       SET tipo_escuela = $1,
+           updated_at = NOW()
+       WHERE id_institucion = $2
+       RETURNING id_institucion`,
+      [tipoEscuela, institucionId]
+    );
+
+    return res.json({ ok: true, tipo_escuela: tipoEscuela });
+  } catch (err) {
+    console.error("Error al actualizar tipo de kit de la institución:", err);
+    return res.status(500).json({ error: "No se pudo actualizar el tipo de kit." });
   }
 });
 
