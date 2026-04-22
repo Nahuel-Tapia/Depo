@@ -16,19 +16,13 @@ import MiCuenta from '../components/MiCuenta'
 
 const TABS = [
   { key: 'inicio', label: 'Inicio', permission: null },
-<<<<<<< HEAD
   { key: 'mi-cuenta', label: 'Mi cuenta', permission: null },
   { key: 'gestion-escuelas', label: 'Gestión de Escuelas', permission: 'supervision.manage', role: 'director_area' },
   { key: 'gestion-pedidos', label: 'Gestión de Pedidos', permission: 'supervision.manage', role: 'director_area' },
-  { key: 'compras', label: 'Área de Compras', permission: 'planilla.view', role: 'area_compras' },
-=======
-  { key: 'gestion-escuelas', label: 'Gestion de Escuelas', permission: 'supervision.manage', role: 'director_area' },
-  { key: 'gestion-pedidos', label: 'Gestion de Pedidos', permission: 'supervision.manage', role: 'director_area' },
-  { key: 'compras-pedidos', label: 'Gestion de Pedidos Anuales', permission: 'planilla.view', role: 'area_compras' },
-  { key: 'compras-licitacion', label: 'Licitacion Anual', permission: 'planilla.view', role: 'area_compras' },
+  { key: 'compras-pedidos', label: 'Gestión de Pedidos Anuales', permission: 'planilla.view', role: 'area_compras' },
+  { key: 'compras-licitacion', label: 'Licitación Anual', permission: 'planilla.view', role: 'area_compras' },
   { key: 'compras-listado-final', label: 'Listado Final a Licitar', permission: 'planilla.view', role: 'area_compras' },
-  { key: 'compras-adjudicacion', label: 'Adjudicacion y Cierre', permission: 'planilla.manage', role: 'area_compras' },
->>>>>>> d421baab8b0ab7c64412b5b5b97a2f9ccff12403
+  { key: 'compras-adjudicacion', label: 'Adjudicación y Cierre', permission: 'planilla.manage', role: 'area_compras' },
   { key: 'supervisor', label: 'Patrimonio Escolar', permission: 'pedidos.manage', role: 'supervisor' },
   { key: 'mis-escuelas', label: 'Mis Escuelas', permission: 'instituciones.view', role: 'supervisor', hideForRoles: ['admin'] },
   { key: 'productos', label: 'Productos', permission: 'productos.view', hideForRoles: ['supervisor', 'director_area'] },
@@ -62,23 +56,16 @@ export default function Dashboard() {
       return tab.key === 'inicio' || tab.key === 'pedidos' || tab.key === 'mi-cuenta'
     }
     if (user?.role === 'area_compras') {
-      return tab.key === 'inicio' || tab.key === 'compras' || tab.key === 'mi-cuenta'
-    }
-<<<<<<< HEAD
-    // Hide tabs explicitly hidden for this role
-=======
-
-    if (user?.role === 'area_compras') {
       return [
         'inicio',
+        'mi-cuenta',
         'compras-pedidos',
         'compras-licitacion',
         'compras-listado-final',
         'compras-adjudicacion'
       ].includes(tab.key)
     }
-
->>>>>>> d421baab8b0ab7c64412b5b5b97a2f9ccff12403
+    // Hide tabs explicitly hidden for this role
     if (tab.hideForRole && tab.hideForRole === user?.role) return false
     if (tab.hideForRoles && tab.hideForRoles.includes(user?.role)) return false
     if (tab.role && tab.role !== user?.role && user?.role !== 'admin') return false
@@ -94,20 +81,13 @@ export default function Dashboard() {
   const renderTab = () => {
     switch (activeTab) {
       case 'inicio': return <Inicio onNavigate={setActiveTab} />
-<<<<<<< HEAD
       case 'mi-cuenta': return <MiCuenta />
-      case 'gestion-escuelas':
-        return <DirectorAreaPanel initialSection="gestion-escuelas" />
-      case 'gestion-pedidos':
-        return <DirectorAreaPanel initialSection="gestion-pedidos" />
-=======
       case 'gestion-escuelas': return <DirectorAreaPanel initialSection="gestion-escuelas" />
       case 'gestion-pedidos': return <DirectorAreaPanel initialSection="gestion-pedidos" />
       case 'compras-pedidos': return <ComprasPanel section="pedidos" />
       case 'compras-licitacion': return <ComprasPanel section="licitacion" />
       case 'compras-listado-final': return <ComprasPanel section="listado-final" />
       case 'compras-adjudicacion': return <ComprasPanel section="adjudicacion" />
->>>>>>> d421baab8b0ab7c64412b5b5b97a2f9ccff12403
       case 'productos': return <Productos />
       case 'movimientos': return <Movimientos />
       case 'pedidos': return <Pedidos />
