@@ -77,7 +77,7 @@ export default function Inicio({ onNavigate }) {
             Bienvenido, {user?.nombre || 'Usuario'}
           </div>
           <p className="stock-alert-role">{ROLE_LABELS[user?.role]}</p>
-          <p className="stock-alert-role" style={{ marginTop: 4 }}>
+          <p className="stock-alert-role directivo-institucion" style={{ marginTop: 4 }}>
             {user?.institucion?.nombre || 'Sin institución asignada'}
           </p>
         </div>
@@ -466,8 +466,8 @@ function DirectivoInicio({ onNavigate, token, user }) {
   return (
     <div>
       {/* Header con institución */}
-      <div style={{
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      <div className="directivo-header" style={{
+        background: 'linear-gradient(135deg, var(--orange) 0%, var(--red) 100%)',
         color: 'white',
         padding: '24px',
         borderRadius: '10px',
@@ -477,7 +477,7 @@ function DirectivoInicio({ onNavigate, token, user }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '12px' }}>
           <span style={{ fontSize: '3rem' }}>🏫</span>
           <div>
-            <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700 }}>
+            <h2 className="directivo-institucion" style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700 }}>
               {institucion?.nombre || 'Tu institución'}
             </h2>
             <p style={{ margin: '4px 0 0 0', opacity: 0.9, fontSize: '0.9rem' }}>
