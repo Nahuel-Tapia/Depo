@@ -15,9 +15,9 @@ import ProductKitsManager from '../components/ProductKitsManager'
 
 const TABS = [
   { key: 'inicio', label: 'Inicio', permission: null },
-  { key: 'gestion-escuelas', label: 'Gestión de Escuelas', permission: 'supervision.manage', role: 'director_area' },
-  { key: 'gestion-pedidos', label: 'Gestión de Pedidos', permission: 'supervision.manage', role: 'director_area' },
-  { key: 'compras', label: 'Área de Compras', permission: 'planilla.view', role: 'area_compras' },
+  { key: 'gestion-escuelas', label: 'Supervisores del Nivel', permission: 'supervision.manage', role: 'director_area' },
+  { key: 'gestion-pedidos', label: 'Gestion de Pedidos', permission: 'supervision.manage', role: 'director_area' },
+  { key: 'compras', label: 'Area de Compras', permission: 'planilla.view', role: 'area_compras' },
   { key: 'supervisor', label: 'Patrimonio Escolar', permission: 'pedidos.manage', role: 'supervisor' },
   { key: 'mis-escuelas', label: 'Mis Escuelas', permission: 'instituciones.view', role: 'supervisor', hideForRoles: ['admin'] },
   { key: 'productos', label: 'Productos', permission: 'productos.view', hideForRoles: ['supervisor', 'director_area'] },
@@ -42,23 +42,21 @@ export default function Dashboard() {
     : user?.role === 'area_compras' ? 'AC'
     : 'C'
 
-  const visibleTabs = TABS.filter(tab => {
+  const visibleTabs = TABS.filter((tab) => {
     if (user?.role === 'directivo') {
       return tab.key === 'inicio' || tab.key === 'pedidos'
     }
-        if (user?.role === 'area_compras') {
-          return tab.key === 'inicio' || tab.key === 'compras'
-        }
-    // Hide tabs explicitly hidden for this role
+    if (user?.role === 'area_compras') {
+      return tab.key === 'inicio' || tab.key === 'compras'
+    }
     if (tab.hideForRole && tab.hideForRole === user?.role) return false
     if (tab.hideForRoles && tab.hideForRoles.includes(user?.role)) return false
-    // Tabs restricted to a specific role: only show for that role (or admin)
     if (tab.role && tab.role !== user?.role && user?.role !== 'admin') return false
     return !tab.permission || hasPermission(tab.permission)
   })
 
   useEffect(() => {
-    if (!visibleTabs.some(tab => tab.key === activeTab)) {
+    if (!visibleTabs.some((tab) => tab.key === activeTab)) {
       setActiveTab(visibleTabs[0]?.key || 'inicio')
     }
   }, [activeTab, visibleTabs])
@@ -103,7 +101,7 @@ export default function Dashboard() {
         </div>
 
         <div className="tabs">
-          {visibleTabs.map(tab => (
+          {visibleTabs.map((tab) => (
             <button
               key={tab.key}
               className={`tab-btn ${activeTab === tab.key ? 'active' : ''}`}
