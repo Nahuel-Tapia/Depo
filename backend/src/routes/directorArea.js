@@ -189,11 +189,8 @@ router.get("/solicitudes", async (req, res) => {
          p.aprobado_director_area,
          p.observaciones_generales AS notas,
          p.fecha_creacion AS fecha,
-         COALESCE(
-           p.kit_nombre,
-           STRING_AGG(pr.nombre || ' x' || dp.cantidad_solicitada::text, ', ' ORDER BY pr.nombre)
-         ) AS producto,
-         COALESCE(p.kit_cantidad, SUM(dp.cantidad_solicitada)) AS cantidad,
+         STRING_AGG(pr.nombre || ' x' || dp.cantidad_solicitada::text, ', ' ORDER BY pr.nombre) AS producto,
+         SUM(dp.cantidad_solicitada) AS cantidad,
          u.nombre AS solicitante,
          i.id_institucion AS institucion_id,
          i.nombre AS institucion,

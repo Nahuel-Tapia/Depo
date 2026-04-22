@@ -148,11 +148,17 @@ router.post("/planillas", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), asy
     // Obtener todas las solicitudes anuales aprobadas de las instituciones asignadas
     const solicitudes = await all(
       `SELECT
-         p.id_pedido,
+         MIN(p.id_pedido) AS id_pedido,
          p.id_institucion,
          dp.id_producto,
-         dp.cantidad_solicitada AS cantidad,
-         p.observaciones_generales AS notas
+         SUM(dp.cantidad_solicitada) AS cantidad,
+         NULLIF(
+           STRING_AGG(
+             DISTINCT NULLIF(BTRIM(p.observaciones_generales), ''),
+             ' | '
+           ),
+           ''
+         ) AS notas
        FROM supervisor_escuela_asignacion sea
        JOIN pedido p ON p.id_institucion = sea.institucion_id
        JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido
@@ -160,7 +166,8 @@ router.post("/planillas", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), asy
          AND COALESCE(p.tipo, 'anual') = 'anual'
          AND p.estado = 'aprobado'
          AND p.aprobado_director_area IS TRUE
-         AND EXTRACT(YEAR FROM p.fecha_creacion) = $2`,
+         AND EXTRACT(YEAR FROM p.fecha_creacion) = $2
+       GROUP BY p.id_institucion, dp.id_producto`,
       [req.user.sub, anio]
     );
 
