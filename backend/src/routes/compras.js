@@ -8,11 +8,39 @@ router.use(authenticate);
 
 let tablesReady = false;
 
+<<<<<<< HEAD
+async function getInstitucionNivelColumn() {
+  const row = await get(`
+    SELECT CASE
+      WHEN EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'institucion' AND column_name = 'nivel_educativo'
+      ) THEN 'nivel_educativo'
+      WHEN EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'institucion' AND column_name = 'nivel'
+      ) THEN 'nivel'
+      ELSE NULL
+    END AS col
+  `);
+  return row?.col || null;
+}
+
+async function getDirectorAreaNivel(userId) {
+  const row = await get(
+    `SELECT NULLIF(BTRIM(nivel_educativo), '') AS nivel_educativo
+     FROM usuario
+     WHERE id_usuario = ?`,
+    [userId]
+  );
+  return row?.nivel_educativo || null;
+=======
 function normalizeEstadoPlanilla(estado) {
   const value = String(estado || "").trim().toLowerCase();
   if (!value) return null;
   if (value === "procesada") return "aceptada";
   return value;
+>>>>>>> d421baab8b0ab7c64412b5b5b97a2f9ccff12403
 }
 
 async function ensureTables() {
@@ -56,6 +84,10 @@ async function ensureTables() {
     `);
 
     await client.query(`
+<<<<<<< HEAD
+      ALTER TABLE usuario
+      ADD COLUMN IF NOT EXISTS nivel_educativo VARCHAR(120)
+=======
       ALTER TABLE planilla_pedido_anual
       ADD COLUMN IF NOT EXISTS aceptada_at TIMESTAMP
     `);
@@ -81,6 +113,7 @@ async function ensureTables() {
       UPDATE planilla_pedido_anual
       SET estado = 'aceptada'
       WHERE estado = 'procesada'
+>>>>>>> d421baab8b0ab7c64412b5b5b97a2f9ccff12403
     `);
 
     tablesReady = true;
@@ -379,6 +412,15 @@ router.post("/planillas", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), asy
 
     const { observaciones } = req.body;
     const anio = new Date().getFullYear();
+    const nivelColumn = await getInstitucionNivelColumn();
+    const directorNivel = await getDirectorAreaNivel(req.user.sub);
+
+    if (!nivelColumn) {
+      return res.status(500).json({ error: "No se encontro la columna de nivel educativo en instituciones" });
+    }
+    if (!directorNivel) {
+      return res.status(400).json({ error: "El Director de Area no tiene un nivel educativo configurado" });
+    }
 
     const existente = await get(
       `SELECT id
@@ -396,6 +438,22 @@ router.post("/planillas", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), asy
     }
 
     const solicitudes = await all(
+<<<<<<< HEAD
+      `SELECT
+         MIN(p.id_pedido) AS id_pedido,
+         p.id_institucion,
+         dp.id_producto,
+         SUM(dp.cantidad_solicitada) AS cantidad,
+         NULLIF(
+           STRING_AGG(
+             DISTINCT NULLIF(BTRIM(p.observaciones_generales), ''),
+             ' | '
+           ),
+           ''
+         ) AS notas
+       FROM pedido p
+       JOIN institucion i ON i.id_institucion = p.id_institucion
+=======
       `SELECT MIN(p.id_pedido) AS id_pedido,
               p.id_institucion,
               dp.id_producto,
@@ -406,14 +464,15 @@ router.post("/planillas", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), asy
               ) AS notas
        FROM supervisor_escuela_asignacion sea
        JOIN pedido p ON p.id_institucion = sea.institucion_id
+>>>>>>> d421baab8b0ab7c64412b5b5b97a2f9ccff12403
        JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido
-       WHERE sea.director_area_id = $1
+       WHERE LOWER(COALESCE(i.${nivelColumn}, '')) = LOWER($1)
          AND COALESCE(p.tipo, 'anual') = 'anual'
          AND p.estado = 'aprobado'
          AND p.aprobado_director_area IS TRUE
          AND EXTRACT(YEAR FROM p.fecha_creacion) = $2
        GROUP BY p.id_institucion, dp.id_producto`,
-      [req.user.sub, anio]
+      [directorNivel, anio]
     );
 
     if (solicitudes.length === 0) {
