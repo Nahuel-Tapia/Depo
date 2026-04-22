@@ -12,9 +12,11 @@ import SupervisorDashboard from '../components/SupervisorDashboard'
 import DirectorAreaPanel from '../components/DirectorAreaPanel'
 import ComprasPanel from '../components/ComprasPanel'
 import ProductKitsManager from '../components/ProductKitsManager'
+import MiCuenta from '../components/MiCuenta'
 
 const TABS = [
   { key: 'inicio', label: 'Inicio', permission: null },
+  { key: 'mi-cuenta', label: 'Mi cuenta', permission: null },
   { key: 'gestion-escuelas', label: 'Gestion de Escuelas', permission: 'supervision.manage', role: 'director_area' },
   { key: 'gestion-pedidos', label: 'Gestion de Pedidos', permission: 'supervision.manage', role: 'director_area' },
   { key: 'compras-pedidos', label: 'Gestion de Pedidos Anuales', permission: 'planilla.view', role: 'area_compras' },
@@ -51,7 +53,7 @@ export default function Dashboard() {
 
   const visibleTabs = TABS.filter(tab => {
     if (user?.role === 'directivo') {
-      return tab.key === 'inicio' || tab.key === 'pedidos'
+      return tab.key === 'inicio' || tab.key === 'pedidos' || tab.key === 'mi-cuenta'
     }
     if (user?.role === 'area_compras') {
       return [
@@ -59,7 +61,8 @@ export default function Dashboard() {
         'compras-pedidos',
         'compras-licitacion',
         'compras-listado-final',
-        'compras-adjudicacion'
+        'compras-adjudicacion',
+        'mi-cuenta'
       ].includes(tab.key)
     }
     if (tab.hideForRole && tab.hideForRole === user?.role) return false
@@ -77,6 +80,7 @@ export default function Dashboard() {
   const renderTab = () => {
     switch (activeTab) {
       case 'inicio': return <Inicio onNavigate={setActiveTab} />
+      case 'mi-cuenta': return <MiCuenta />
       case 'gestion-escuelas': return <DirectorAreaPanel initialSection="gestion-escuelas" />
       case 'gestion-pedidos': return <DirectorAreaPanel initialSection="gestion-pedidos" />
       case 'compras-pedidos': return <ComprasPanel section="pedidos" />

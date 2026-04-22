@@ -7,6 +7,7 @@ const { roleExists, normalizeRoleName } = require("../services/roles");
 
 const router = express.Router();
 
+<<<<<<< HEAD
 let schemaReady = false;
 let schemaPromise = null;
 
@@ -30,6 +31,12 @@ async function ensureUsersSchema() {
   } finally {
     schemaPromise = null;
   }
+=======
+function getAuthUserId(req) {
+  const raw = req?.user?.sub ?? req?.user?.id;
+  const id = Number(raw);
+  return Number.isFinite(id) && id > 0 ? id : null;
+>>>>>>> 7227e8e974c91d434be0e0d94d9c33ecf0e8125d
 }
 
 function normalizeDni(dni) {
@@ -40,8 +47,135 @@ function normalizeDni(dni) {
 
 router.use(authenticate);
 
-router.get("/me", (req, res) => {
-  return res.json({ user: req.user });
+router.get("/me", async (req, res) => {
+  try {
+    const userId = getAuthUserId(req);
+    if (!userId) return res.status(401).json({ error: "No autenticado" });
+
+    const user = await get(
+      "SELECT id_usuario as id, nombre, apellido, email, dni, role, telefono, id_institucion FROM usuario WHERE id_usuario = ?",
+      [userId]
+    );
+    if (!user) return res.status(404).json({ error: "Usuario no encontrado" });
+
+    let institucion = null;
+    if (String(user.role || "").toLowerCase() === "directivo" && user.id_institucion) {
+      const row = await get(
+        "SELECT id_institucion as id, nombre, cue FROM institucion WHERE id_institucion = ?",
+        [user.id_institucion]
+      );
+      if (row) institucion = row;
+    }
+
+    return res.json({
+      user: {
+        id: user.id,
+        nombre: user.nombre,
+        apellido: user.apellido,
+        email: user.email,
+        dni: user.dni,
+        role: user.role,
+        telefono: user.telefono,
+        institucion
+      }
+    });
+  } catch (err) {
+    return res.status(500).json({ error: "No se pudo obtener el perfil" });
+  }
+});
+
+router.patch("/me", async (req, res) => {
+  try {
+    const userId = getAuthUserId(req);
+    if (!userId) return res.status(401).json({ error: "No autenticado" });
+
+    const { nombre, apellido, email, telefono } = req.body;
+
+    const existing = await get(
+      "SELECT id_usuario as id, email, role, id_institucion FROM usuario WHERE id_usuario = ?",
+      [userId]
+    );
+    if (!existing) return res.status(404).json({ error: "Usuario no encontrado" });
+
+    const finalNombre = typeof nombre === "string" ? nombre.trim() : null;
+    const finalApellido = typeof apellido === "string" ? apellido.trim() : null;
+    const finalTelefono = typeof telefono === "string" ? telefono.trim() : null;
+    const finalEmail = typeof email === "string" ? email.trim().toLowerCase() : null;
+
+    if (finalEmail && !finalEmail.includes("@")) {
+      return res.status(400).json({ error: "El email no es válido" });
+    }
+
+    if (finalEmail && finalEmail !== String(existing.email || "").toLowerCase()) {
+      const other = await get(
+        "SELECT id_usuario FROM usuario WHERE LOWER(email) = ? AND id_usuario <> ?",
+        [finalEmail, userId]
+      );
+      if (other) return res.status(409).json({ error: "Ya existe un usuario con ese email" });
+    }
+
+    await run(
+      "UPDATE usuario SET nombre = COALESCE(?, nombre), apellido = COALESCE(?, apellido), email = COALESCE(?, email), telefono = COALESCE(?, telefono) WHERE id_usuario = ?",
+      [finalNombre || null, finalApellido || null, finalEmail || null, finalTelefono || null, userId]
+    );
+
+    const updated = await get(
+      "SELECT id_usuario as id, nombre, apellido, email, dni, role, telefono, id_institucion FROM usuario WHERE id_usuario = ?",
+      [userId]
+    );
+
+    let institucion = null;
+    if (String(updated.role || "").toLowerCase() === "directivo" && updated.id_institucion) {
+      const row = await get(
+        "SELECT id_institucion as id, nombre, cue FROM institucion WHERE id_institucion = ?",
+        [updated.id_institucion]
+      );
+      if (row) institucion = row;
+    }
+
+    return res.json({
+      ok: true,
+      user: {
+        id: updated.id,
+        nombre: updated.nombre,
+        apellido: updated.apellido,
+        email: updated.email,
+        dni: updated.dni,
+        role: updated.role,
+        telefono: updated.telefono,
+        institucion
+      }
+    });
+  } catch (err) {
+    return res.status(500).json({ error: "No se pudo actualizar el perfil" });
+  }
+});
+
+router.patch("/me/password", async (req, res) => {
+  try {
+    const userId = getAuthUserId(req);
+    if (!userId) return res.status(401).json({ error: "No autenticado" });
+
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: "Debe ingresar contraseña actual y nueva" });
+    }
+    if (String(newPassword).length < 6) {
+      return res.status(400).json({ error: "La contraseña debe tener al menos 6 caracteres" });
+    }
+
+    const user = await get("SELECT password FROM usuario WHERE id_usuario = ?", [userId]);
+    if (!user) return res.status(404).json({ error: "Usuario no encontrado" });
+
+    const ok = await bcrypt.compare(String(currentPassword), user.password);
+    if (!ok) return res.status(401).json({ error: "La contraseña actual es incorrecta" });
+
+    const hash = await bcrypt.hash(String(newPassword), 10);
+    await run("UPDATE usuario SET password = ? WHERE id_usuario = ?", [hash, userId]);
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ error: "No se pudo cambiar la contraseña" });
+  }
 });
 
 router.get("/", authorizePermissions(PERMISSIONS.USERS_READ), async (req, res) => {
