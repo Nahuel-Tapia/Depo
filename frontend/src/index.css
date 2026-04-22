@@ -369,6 +369,22 @@ button.secondary:hover {
   font-size: 0.85rem;
 }
 
+.directivo-institucion {
+  background: linear-gradient(135deg, var(--orange) 0%, var(--red) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-weight: 700;
+}
+
+.directivo-header .directivo-institucion {
+  background: none;
+  -webkit-background-clip: initial;
+  background-clip: initial;
+  -webkit-text-fill-color: currentColor;
+  color: white;
+}
+
 .stock-alert-triangle {
   width: 8px;
   height: 8px;
