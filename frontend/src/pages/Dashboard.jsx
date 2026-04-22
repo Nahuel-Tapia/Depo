@@ -15,9 +15,12 @@ import ProductKitsManager from '../components/ProductKitsManager'
 
 const TABS = [
   { key: 'inicio', label: 'Inicio', permission: null },
-  { key: 'gestion-escuelas', label: 'Supervisores del Nivel', permission: 'supervision.manage', role: 'director_area' },
+  { key: 'gestion-escuelas', label: 'Gestion de Escuelas', permission: 'supervision.manage', role: 'director_area' },
   { key: 'gestion-pedidos', label: 'Gestion de Pedidos', permission: 'supervision.manage', role: 'director_area' },
-  { key: 'compras', label: 'Area de Compras', permission: 'planilla.view', role: 'area_compras' },
+  { key: 'compras-pedidos', label: 'Gestion de Pedidos Anuales', permission: 'planilla.view', role: 'area_compras' },
+  { key: 'compras-licitacion', label: 'Licitacion Anual', permission: 'planilla.view', role: 'area_compras' },
+  { key: 'compras-listado-final', label: 'Listado Final a Licitar', permission: 'planilla.view', role: 'area_compras' },
+  { key: 'compras-adjudicacion', label: 'Adjudicacion y Cierre', permission: 'planilla.manage', role: 'area_compras' },
   { key: 'supervisor', label: 'Patrimonio Escolar', permission: 'pedidos.manage', role: 'supervisor' },
   { key: 'mis-escuelas', label: 'Mis Escuelas', permission: 'instituciones.view', role: 'supervisor', hideForRoles: ['admin'] },
   { key: 'productos', label: 'Productos', permission: 'productos.view', hideForRoles: ['supervisor', 'director_area'] },
@@ -51,7 +54,13 @@ export default function Dashboard() {
       return tab.key === 'inicio' || tab.key === 'pedidos'
     }
     if (user?.role === 'area_compras') {
-      return tab.key === 'inicio' || tab.key === 'compras'
+      return [
+        'inicio',
+        'compras-pedidos',
+        'compras-licitacion',
+        'compras-listado-final',
+        'compras-adjudicacion'
+      ].includes(tab.key)
     }
     if (tab.hideForRole && tab.hideForRole === user?.role) return false
     if (tab.hideForRoles && tab.hideForRoles.includes(user?.role)) return false
@@ -65,17 +74,15 @@ export default function Dashboard() {
     }
   }, [activeTab, visibleTabs])
 
-  const handleLogout = () => {
-    logout()
-  }
-
   const renderTab = () => {
     switch (activeTab) {
       case 'inicio': return <Inicio onNavigate={setActiveTab} />
-      case 'gestion-escuelas':
-        return <DirectorAreaPanel initialSection="gestion-escuelas" />
-      case 'gestion-pedidos':
-        return <DirectorAreaPanel initialSection="gestion-pedidos" />
+      case 'gestion-escuelas': return <DirectorAreaPanel initialSection="gestion-escuelas" />
+      case 'gestion-pedidos': return <DirectorAreaPanel initialSection="gestion-pedidos" />
+      case 'compras-pedidos': return <ComprasPanel section="pedidos" />
+      case 'compras-licitacion': return <ComprasPanel section="licitacion" />
+      case 'compras-listado-final': return <ComprasPanel section="listado-final" />
+      case 'compras-adjudicacion': return <ComprasPanel section="adjudicacion" />
       case 'productos': return <Productos />
       case 'movimientos': return <Movimientos />
       case 'pedidos': return <Pedidos />
@@ -83,7 +90,6 @@ export default function Dashboard() {
       case 'mis-escuelas': return <Instituciones supervisorMode />
       case 'historial': return <HistorialInstitucion />
       case 'supervisor': return <SupervisorDashboard />
-      case 'compras': return <ComprasPanel />
       case 'proveedores': return <Proveedores />
       case 'usuarios': return <Usuarios />
       case 'kits': return <ProductKitsManager />
@@ -100,7 +106,7 @@ export default function Dashboard() {
           </div>
           <div className="user-info">
             <span id="currentUser">{userDisplay}</span>
-            <button className="secondary" onClick={handleLogout} style={{ fontSize: '0.8rem' }}>Salir</button>
+            <button className="secondary" onClick={logout} style={{ fontSize: '0.8rem' }}>Salir</button>
           </div>
         </div>
 
