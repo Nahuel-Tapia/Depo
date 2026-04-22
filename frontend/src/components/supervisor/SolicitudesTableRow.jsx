@@ -1,6 +1,7 @@
 import { formatRatio, getRatioMeta } from './ratioUtils'
 
 function formatEstado(estado) {
+  if (estado === 'aclaracion') return 'Aclaracion solicitada'
   if (estado === 'aprobado') return 'Aprobado'
   if (estado === 'rechazado') return 'Rechazado'
   if (estado === 'cancelado') return 'Cancelado'

@@ -32,6 +32,14 @@ async function ensureSupervisorSchema() {
       ALTER TABLE institucion
       ADD COLUMN IF NOT EXISTS kit_id INT REFERENCES producto_kit(id)
     `);
+    await run(`
+      ALTER TABLE pedido
+      ADD COLUMN IF NOT EXISTS motivo_supervisor TEXT
+    `);
+    await run(`
+      ALTER TABLE pedido
+      ADD COLUMN IF NOT EXISTS respuesta_supervisor_tipo VARCHAR(30)
+    `);
     schemaReady = true;
   })();
 
@@ -160,6 +168,8 @@ router.patch("/instituciones/:id/tipo-kit", async (req, res) => {
 // ── Pedidos pendientes de la jurisdicción ──
 router.get("/pedidos-pendientes", async (req, res) => {
   try {
+    await ensureSupervisorSchema();
+
     if (req.user?.role === "supervisor") {
       if (!(await hasAsignacionesTable())) {
         return res.json({ pedidos: [] });
@@ -169,6 +179,8 @@ router.get("/pedidos-pendientes", async (req, res) => {
         `SELECT p.id_pedido AS id,
                 COALESCE(p.kit_cantidad, SUM(dp.cantidad_solicitada)) AS cantidad,
                 p.observaciones_generales AS notas,
+                p.motivo_supervisor,
+                p.respuesta_supervisor_tipo,
                 CASE WHEN p.estado::text = 'finalizado' THEN 'entregado' ELSE p.estado::text END AS estado,
                 p.fecha_creacion AS fecha,
                 COALESCE(
@@ -194,8 +206,9 @@ router.get("/pedidos-pendientes", async (req, res) => {
          JOIN supervisor_escuela_asignacion sea ON sea.institucion_id = p.id_institucion
          WHERE sea.supervisor_id = ?
            AND p.estado = 'pendiente'
-         GROUP BY p.id_pedido, p.kit_nombre, p.kit_cantidad, p.observaciones_generales, p.estado, p.fecha_creacion,
-                  i.nombre, i.id_institucion, u.nombre
+           AND COALESCE(p.respuesta_supervisor_tipo, '') <> 'aclaracion'
+         GROUP BY p.id_pedido, p.kit_nombre, p.kit_cantidad, p.observaciones_generales, p.motivo_supervisor,
+                  p.respuesta_supervisor_tipo, p.estado, p.fecha_creacion, i.nombre, i.id_institucion, u.nombre
          ORDER BY p.fecha_creacion DESC`,
         [req.user.sub]
       );
@@ -213,6 +226,8 @@ router.get("/pedidos-pendientes", async (req, res) => {
       `SELECT p.id_pedido AS id,
               COALESCE(p.kit_cantidad, SUM(dp.cantidad_solicitada)) AS cantidad,
               p.observaciones_generales AS notas,
+              p.motivo_supervisor,
+              p.respuesta_supervisor_tipo,
               CASE WHEN p.estado::text = 'finalizado' THEN 'entregado' ELSE p.estado::text END AS estado,
               p.fecha_creacion AS fecha,
               COALESCE(
@@ -236,9 +251,11 @@ router.get("/pedidos-pendientes", async (req, res) => {
        JOIN usuario u ON u.id_usuario = p.id_usuario_solicitante
        JOIN institucion i ON i.id_institucion = p.id_institucion
        WHERE p.estado = 'pendiente'
+         AND COALESCE(p.respuesta_supervisor_tipo, '') <> 'aclaracion'
          AND LOWER(i.jurisdiccion) = LOWER(?)
-       GROUP BY p.id_pedido, p.kit_nombre, p.kit_cantidad, p.observaciones_generales, p.estado, p.fecha_creacion,
-                i.nombre, i.id_institucion, i.matriculados, u.nombre
+       GROUP BY p.id_pedido, p.kit_nombre, p.kit_cantidad, p.observaciones_generales, p.motivo_supervisor,
+                p.respuesta_supervisor_tipo, p.estado, p.fecha_creacion, i.nombre, i.id_institucion,
+                i.matriculados, u.nombre
        ORDER BY p.fecha_creacion DESC`,
       [jurisdiccion]
     );
@@ -253,6 +270,8 @@ router.get("/pedidos-pendientes", async (req, res) => {
 // ── Solicitudes por jurisdicción (pendiente, aprobado, rechazado, cancelado) ──
 router.get("/solicitudes", async (req, res) => {
   try {
+    await ensureSupervisorSchema();
+
     if (req.user?.role === "supervisor") {
       if (!(await hasAsignacionesTable())) {
         return res.json({ solicitudes: [] });
@@ -262,6 +281,8 @@ router.get("/solicitudes", async (req, res) => {
         `SELECT p.id_pedido AS id,
                 COALESCE(p.kit_cantidad, SUM(dp.cantidad_solicitada)) AS cantidad,
                 p.observaciones_generales AS notas,
+                p.motivo_supervisor,
+                p.respuesta_supervisor_tipo,
                 CASE WHEN p.estado::text = 'finalizado' THEN 'entregado' ELSE p.estado::text END AS estado,
                 p.fecha_creacion AS fecha,
                 COALESCE(
@@ -286,9 +307,9 @@ router.get("/solicitudes", async (req, res) => {
          JOIN institucion i ON i.id_institucion = p.id_institucion
          JOIN supervisor_escuela_asignacion sea ON sea.institucion_id = p.id_institucion
          WHERE sea.supervisor_id = ?
-           AND p.estado::text IN ('pendiente', 'aprobado', 'rechazado', 'entregado', 'finalizado')
-         GROUP BY p.id_pedido, p.kit_nombre, p.kit_cantidad, p.observaciones_generales, p.estado, p.fecha_creacion,
-                  i.nombre, i.id_institucion, u.nombre
+           AND p.estado::text IN ('pendiente', 'aprobado', 'rechazado', 'cancelado', 'entregado', 'finalizado')
+         GROUP BY p.id_pedido, p.kit_nombre, p.kit_cantidad, p.observaciones_generales, p.motivo_supervisor,
+                  p.respuesta_supervisor_tipo, p.estado, p.fecha_creacion, i.nombre, i.id_institucion, u.nombre
          ORDER BY p.fecha_creacion DESC`,
         [req.user.sub]
       );
@@ -306,6 +327,8 @@ router.get("/solicitudes", async (req, res) => {
       `SELECT p.id_pedido AS id,
               COALESCE(p.kit_cantidad, SUM(dp.cantidad_solicitada)) AS cantidad,
               p.observaciones_generales AS notas,
+              p.motivo_supervisor,
+              p.respuesta_supervisor_tipo,
               CASE WHEN p.estado::text = 'finalizado' THEN 'entregado' ELSE p.estado::text END AS estado,
               p.fecha_creacion AS fecha,
               COALESCE(
@@ -330,8 +353,9 @@ router.get("/solicitudes", async (req, res) => {
        JOIN institucion i ON i.id_institucion = p.id_institucion
        WHERE p.estado::text IN ('pendiente', 'aprobado', 'rechazado', 'cancelado', 'entregado', 'finalizado')
          AND LOWER(i.jurisdiccion) = LOWER(?)
-       GROUP BY p.id_pedido, p.kit_nombre, p.kit_cantidad, p.observaciones_generales, p.estado, p.fecha_creacion,
-                i.nombre, i.id_institucion, i.matriculados, u.nombre
+       GROUP BY p.id_pedido, p.kit_nombre, p.kit_cantidad, p.observaciones_generales, p.motivo_supervisor,
+                p.respuesta_supervisor_tipo, p.estado, p.fecha_creacion, i.nombre, i.id_institucion,
+                i.matriculados, u.nombre
        ORDER BY p.fecha_creacion DESC`,
       [jurisdiccion]
     );

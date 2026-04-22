@@ -5,7 +5,8 @@ import SolicitudesTable from './SolicitudesTable'
 import SolicitudDetalleModal from './SolicitudDetalleModal'
 import { calculateRatio } from './ratioUtils'
 
-function normalizeEstado(estado) {
+function normalizeEstado(estado, respuestaSupervisorTipo) {
+  if (estado === 'pendiente' && respuestaSupervisorTipo === 'aclaracion') return 'aclaracion'
   if (estado === 'aprobado') return 'aprobado'
   if (estado === 'rechazado') return 'rechazado'
   if (estado === 'cancelado') return 'cancelado'
@@ -53,6 +54,7 @@ export default function SupervisorSolicitudes() {
         const data = await res.json().catch(() => ({}))
         throw new Error(data.error || 'No se pudieron cargar las solicitudes')
       }
+
       const data = await res.json()
       const normalized = (data.solicitudes || []).map(item => ({
         id: item.id,
@@ -63,7 +65,9 @@ export default function SupervisorSolicitudes() {
         cantidad: Number(item.cantidad) || 0,
         matricula: Number(item.matricula) || 0,
         fecha: item.fecha,
-        estado: normalizeEstado(item.estado)
+        estado: normalizeEstado(item.estado, item.respuesta_supervisor_tipo),
+        respuesta_supervisor_tipo: item.respuesta_supervisor_tipo || null,
+        motivo_supervisor: item.motivo_supervisor || null
       }))
       setSolicitudes(normalized)
     } catch (err) {
@@ -100,9 +104,9 @@ export default function SupervisorSolicitudes() {
     await loadHistorial(solicitud)
   }
 
-  const updateEstadoLocal = (id, estado) => {
-    setSolicitudes(prev => prev.map(item => (item.id === id ? { ...item, estado } : item)))
-    setSelected(prev => (prev && prev.id === id ? { ...prev, estado } : prev))
+  const updateEstadoLocal = (id, changes) => {
+    setSolicitudes(prev => prev.map(item => (item.id === id ? { ...item, ...changes } : item)))
+    setSelected(prev => (prev && prev.id === id ? { ...prev, ...changes } : prev))
   }
 
   const processEstado = async (nuevoEstado, observacion = '') => {
@@ -123,8 +127,25 @@ export default function SupervisorSolicitudes() {
         throw new Error(data.error || 'No se pudo actualizar la solicitud')
       }
 
-      updateEstadoLocal(selected.id, nuevoEstado)
-      setMsg({ text: `Solicitud #${selected.id} actualizada a ${nuevoEstado}.`, type: 'success' })
+      const nextChanges = nuevoEstado === 'aclaracion'
+        ? {
+            estado: 'aclaracion',
+            respuesta_supervisor_tipo: 'aclaracion',
+            motivo_supervisor: observacion || null
+          }
+        : {
+            estado: nuevoEstado,
+            respuesta_supervisor_tipo: nuevoEstado === 'rechazado' ? 'rechazo' : 'aprobacion',
+            motivo_supervisor: nuevoEstado === 'rechazado' ? (observacion || null) : null
+          }
+
+      updateEstadoLocal(selected.id, nextChanges)
+      setMsg({
+        text: nuevoEstado === 'aclaracion'
+          ? `Se pidio aclaracion para la solicitud #${selected.id}.`
+          : `Solicitud #${selected.id} actualizada a ${nuevoEstado}.`,
+        type: 'success'
+      })
     } catch (err) {
       setMsg({ text: err.message || 'Error procesando solicitud', type: 'error' })
     } finally {
@@ -132,14 +153,8 @@ export default function SupervisorSolicitudes() {
     }
   }
 
-  const handleClarification = (nota) => {
-    if (!selected) return
-    setMsg({
-      text: nota
-        ? `Aclaración solicitada para #${selected.id}: ${nota}`
-        : `Aclaración solicitada para #${selected.id}.`,
-      type: 'success'
-    })
+  const handleClarification = async (nota) => {
+    await processEstado('aclaracion', nota)
   }
 
   const solicitudesVista = useMemo(() => {
@@ -171,7 +186,7 @@ export default function SupervisorSolicitudes() {
       </div>
 
       <p style={{ marginTop: 0, color: 'var(--muted)' }}>
-        Revisión por coherencia con matrícula. Esta vista no muestra datos de stock.
+        Revision por coherencia con matricula. Esta vista no muestra datos de stock.
       </p>
 
       {msg.text && <div className={`msg show ${msg.type === 'success' ? 'msg-success' : 'msg-error'}`}>{msg.text}</div>}
@@ -182,6 +197,7 @@ export default function SupervisorSolicitudes() {
           <select value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)}>
             <option value="todos">Todos</option>
             <option value="pendiente">Pendiente</option>
+            <option value="aclaracion">Aclaracion solicitada</option>
             <option value="aprobado">Aprobado</option>
             <option value="rechazado">Rechazado</option>
             <option value="cancelado">Cancelado</option>
@@ -191,8 +207,8 @@ export default function SupervisorSolicitudes() {
         <div>
           <label>Ordenar por</label>
           <select value={orden} onChange={e => setOrden(e.target.value)}>
-            <option value="fecha_desc">Fecha (más reciente)</option>
-            <option value="fecha_asc">Fecha (más antigua)</option>
+            <option value="fecha_desc">Fecha (mas reciente)</option>
+            <option value="fecha_asc">Fecha (mas antigua)</option>
             <option value="ratio_desc">Ratio (alto a bajo)</option>
             <option value="ratio_asc">Ratio (bajo a alto)</option>
           </select>
