@@ -77,6 +77,9 @@ export default function Inicio({ onNavigate }) {
             Bienvenido, {user?.nombre || 'Usuario'}
           </div>
           <p className="stock-alert-role">{ROLE_LABELS[user?.role]}</p>
+          <p className="stock-alert-role" style={{ marginTop: 4 }}>
+            {user?.institucion?.nombre || 'Sin institución asignada'}
+          </p>
         </div>
         <DirectivoInicio onNavigate={onNavigate} token={token} user={user} />
       </div>
@@ -455,7 +458,7 @@ function DirectivoInicio({ onNavigate, token, user }) {
     return <p style={{ color: 'var(--muted)', padding: '24px 0' }}>Cargando información...</p>
   }
 
-  const institucion = alertas?.institucion
+  const institucion = alertas?.institucion || user?.institucion
   const pedidosAprobados = alertas?.alertas?.pedidosAprobados || {}
   const movimientosPendientes = alertas?.alertas?.movimientosPendientes || {}
   const ultimasTransacciones = alertas?.ultimasTransacciones || []
@@ -475,7 +478,7 @@ function DirectivoInicio({ onNavigate, token, user }) {
           <span style={{ fontSize: '3rem' }}>🏫</span>
           <div>
             <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700 }}>
-              {institucion?.nombre || 'Tu Institución'}
+              {institucion?.nombre || 'Tu institución'}
             </h2>
             <p style={{ margin: '4px 0 0 0', opacity: 0.9, fontSize: '0.9rem' }}>
               CUE: {institucion?.cue || '—'}
