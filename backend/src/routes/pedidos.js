@@ -41,6 +41,7 @@ function groupPedidos(rows = []) {
         estado: row.estado,
         notas: row.notas,
         motivo_supervisor: row.motivo_supervisor || null,
+        respuesta_supervisor_tipo: row.respuesta_supervisor_tipo || null,
         tipo: row.tipo || "anual",
         created_at: row.created_at,
         id_institucion: row.id_institucion || null,
@@ -193,6 +194,13 @@ async function ensurePedidosSchema() {
       await run(`
         ALTER TABLE pedido
         ADD COLUMN IF NOT EXISTS motivo_supervisor TEXT
+      `);
+    } catch (_) { /* no aplica en alguna base */ }
+
+    try {
+      await run(`
+        ALTER TABLE pedido
+        ADD COLUMN IF NOT EXISTS respuesta_supervisor_tipo VARCHAR(30)
       `);
     } catch (_) { /* no aplica en alguna base */ }
 
@@ -456,6 +464,30 @@ async function getDisponibilidadAnual(institucionId, productoId, anio) {
     disponible_anual: Math.max(0, cuota - solicitado),
     tiene_regla: true
   };
+}
+
+async function getPedidoAnualBloqueante(institucionId, anio) {
+  return get(
+    `SELECT p.id_pedido AS id,
+            CASE WHEN p.estado::text = 'finalizado' THEN 'entregado' ELSE p.estado::text END AS estado,
+            p.motivo_supervisor,
+            p.respuesta_supervisor_tipo,
+            p.fecha_creacion AS created_at
+     FROM pedido p
+     WHERE p.id_institucion = ?
+       AND COALESCE(p.tipo, 'anual') = 'anual'
+       AND EXTRACT(YEAR FROM p.fecha_creacion) = ?
+       AND (
+         p.estado::text IN ('aprobado', 'entregado', 'finalizado')
+         OR (
+           p.estado::text = 'pendiente'
+           AND COALESCE(p.respuesta_supervisor_tipo, '') <> 'aclaracion'
+         )
+       )
+     ORDER BY p.fecha_creacion DESC
+     LIMIT 1`,
+    [institucionId, anio]
+  );
 }
 
 async function getEstadoEntregadoDb() {
@@ -730,6 +762,7 @@ router.get("/", authorizePermissions(PERMISSIONS.PEDIDOS_VIEW), async (req, res)
         CASE WHEN p.estado::text = 'finalizado' THEN 'entregado' ELSE p.estado::text END as estado,
         p.observaciones_generales as notas,
         p.motivo_supervisor,
+        p.respuesta_supervisor_tipo,
         COALESCE(p.tipo, 'anual') as tipo,
         p.fecha_creacion as created_at,
         p.id_institucion,
@@ -890,7 +923,8 @@ router.get("/institucion/:institucion", authorizePermissions(PERMISSIONS.PEDIDOS
         NULL::text as institucion,
         NULL::int as aprobado_por_supervisor_id,
         NULL::timestamp as fecha_aprobacion_supervisor,
-        NULL::text as motivo_supervisor
+        NULL::text as motivo_supervisor,
+        NULL::text as respuesta_supervisor_tipo
       FROM pedido p
       JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido
       JOIN producto pr ON dp.id_producto = pr.id_producto
@@ -923,6 +957,7 @@ router.get("/:id(\\d+)", authorizePermissions(PERMISSIONS.PEDIDOS_VIEW), async (
         p.id_institucion,
         COALESCE(p.tipo, 'anual') as tipo,
         p.motivo_supervisor,
+        p.respuesta_supervisor_tipo,
         p.aprobado_por_supervisor_id,
         p.fecha_aprobacion_supervisor,
         p.kit_id,
@@ -996,6 +1031,28 @@ router.post("/", authorizePermissions(PERMISSIONS.PEDIDOS_CREATE), async (req, r
       return res.status(404).json({ error: "Institución no encontrada" });
     }
 
+    if (req.user.role === "directivo" && tipoValido === "anual") {
+      const anioActual = new Date().getFullYear();
+      const pedidoBloqueante = await getPedidoAnualBloqueante(usuario.id_institucion, anioActual);
+
+      if (pedidoBloqueante) {
+        const error = pedidoBloqueante.estado === "pendiente"
+          ? "Ya tenés una solicitud anual en curso para este año. Vas a poder crear otra si el supervisor la rechaza o te pide una aclaración."
+          : "Tu institución ya tiene una solicitud anual registrada para este año.";
+
+        return res.status(409).json({
+          error,
+          detalle: {
+            pedido_id: Number(pedidoBloqueante.id),
+            estado: pedidoBloqueante.estado,
+            respuesta_supervisor_tipo: pedidoBloqueante.respuesta_supervisor_tipo || null,
+            motivo_supervisor: pedidoBloqueante.motivo_supervisor || null,
+            created_at: pedidoBloqueante.created_at
+          }
+        });
+      }
+    }
+
     let kit = null;
     let detalleItems = [];
 
@@ -1028,35 +1085,6 @@ router.post("/", authorizePermissions(PERMISSIONS.PEDIDOS_CREATE), async (req, r
       detalleItems = [{ producto_id: Number(producto_id), cantidad: cantidadSolicitada }];
     }
 
-    if (tipoValido === 'anual') {
-      const anioActual = new Date().getFullYear();
-      for (const item of detalleItems) {
-        const disponibilidad = await getDisponibilidadAnual(usuario.id_institucion, item.producto_id, anioActual);
-        if (disponibilidad && disponibilidad.disponible_anual !== null) {
-          if (Number(item.cantidad) > Number(disponibilidad.disponible_anual)) {
-            return res.status(409).json({
-              error: `La solicitud excede el cupo anual disponible para ${kit ? `el kit "${kit.nombre}"` : "el producto seleccionado"}.`,
-              detalle: {
-                ...disponibilidad,
-                producto_id: item.producto_id,
-                cantidad_solicitada: item.cantidad
-              }
-            });
-          }
-
-          if (Number(disponibilidad.disponible_anual) <= 0) {
-            return res.status(409).json({
-              error: "No hay cupo anual disponible para uno de los productos del pedido.",
-              detalle: {
-                ...disponibilidad,
-                producto_id: item.producto_id
-              }
-            });
-          }
-        }
-      }
-    }
-
     const pedidoResult = await run(
       `INSERT INTO pedido (id_usuario_solicitante, id_institucion, observaciones_generales, tipo, kit_id, kit_nombre, kit_cantidad)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -1085,7 +1113,7 @@ router.patch("/:id/estado", authorizePermissions(PERMISSIONS.PEDIDOS_MANAGE), as
     const { id } = req.params;
     const { estado, motivo } = req.body;
 
-    const estadosValidos = ["pendiente", "aprobado", "rechazado", "cancelado", "entregado"];
+    const estadosValidos = ["pendiente", "aprobado", "rechazado", "cancelado", "entregado", "aclaracion"];
     if (!estadosValidos.includes(estado)) {
       return res.status(400).json({ error: "Estado inválido" });
     }
@@ -1102,8 +1130,9 @@ router.patch("/:id/estado", authorizePermissions(PERMISSIONS.PEDIDOS_MANAGE), as
     const estadoEntregadoDb = await getEstadoEntregadoDb();
     const estadoObjetivoDb = estado === "entregado" ? estadoEntregadoDb : estado;
     const pedidoYaEntregado = pedido.estado_db === "entregado" || pedido.estado_db === "finalizado";
+    const solicitaAclaracion = estado === "aclaracion";
 
-    const transicionSupervisor = estadoObjetivoDb === "aprobado" || estadoObjetivoDb === "rechazado";
+    const transicionSupervisor = solicitaAclaracion || estadoObjetivoDb === "aprobado" || estadoObjetivoDb === "rechazado";
 
     if (transicionSupervisor) {
       if (req.user.role !== "supervisor") {
@@ -1129,17 +1158,39 @@ router.patch("/:id/estado", authorizePermissions(PERMISSIONS.PEDIDOS_MANAGE), as
         return res.status(400).json({ error: "Solo se pueden aprobar o rechazar pedidos pendientes" });
       }
 
+      const motivoSupervisor = String(motivo || "").trim() || null;
+
+      if (solicitaAclaracion) {
+        if (!motivoSupervisor) {
+          return res.status(400).json({ error: "Debés ingresar una aclaración para enviar la réplica." });
+        }
+
+        await run(
+          `UPDATE pedido
+           SET aprobado_por_supervisor_id = ?,
+               fecha_aprobacion_supervisor = NOW(),
+               motivo_supervisor = ?,
+               respuesta_supervisor_tipo = 'aclaracion'
+           WHERE id_pedido = ?`,
+          [req.user.sub, motivoSupervisor, id]
+        );
+
+        return res.json({ ok: true, estado: "pendiente", respuesta_supervisor_tipo: "aclaracion" });
+      }
+
       await run(
         `UPDATE pedido
          SET estado = ?,
              aprobado_por_supervisor_id = ?,
              fecha_aprobacion_supervisor = NOW(),
-             motivo_supervisor = ?
+             motivo_supervisor = ?,
+             respuesta_supervisor_tipo = ?
          WHERE id_pedido = ?`,
         [
           estadoObjetivoDb,
           req.user.sub,
-          estadoObjetivoDb === "rechazado" ? (String(motivo || "").trim() || null) : null,
+          estadoObjetivoDb === "rechazado" ? motivoSupervisor : null,
+          estadoObjetivoDb === "rechazado" ? "rechazo" : "aprobacion",
           id
         ]
       );

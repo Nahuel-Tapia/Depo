@@ -608,26 +608,55 @@ function DirectivoPedidos() {
     loadPedidos()
   }
 
+  const getEstadoVisiblePedido = (pedido) => {
+    if (pedido.estado === 'pendiente' && pedido.respuesta_supervisor_tipo === 'aclaracion') {
+      return 'aclaracion'
+    }
+    return pedido.estado
+  }
+
+  const formatEstadoPedido = (estado) => {
+    if (estado === 'aclaracion') return 'Aclaracion solicitada'
+    if (estado === 'aprobado') return 'Aprobado'
+    if (estado === 'rechazado') return 'Rechazado'
+    if (estado === 'cancelado') return 'Cancelado'
+    if (estado === 'entregado') return 'Entregado'
+    return 'Pendiente'
+  }
+
   const pedidosFiltrados = pedidos.filter(p => (p.tipo || 'anual') === tab)
   const tieneKits = kits.length > 0
   const kitSeleccionado = kits.find((kit) => Number(kit.id) === Number(form.kit_id))
   const cantidadKits = Math.max(1, parseInt(form.cantidad, 10) || 1)
-  const anioActual = new Date().getFullYear()
   const cargandoCupos = false
-  const tieneDatosCupo = false
   const tieneProductosKit = tieneKits
-  const puedeCrearAnual = tieneKits
+  const anioActual = new Date().getFullYear()
+  const pedidosAnualesDelAnio = pedidos.filter((pedido) => {
+    if ((pedido.tipo || 'anual') !== 'anual' || !pedido.created_at) return false
+    return new Date(pedido.created_at).getFullYear() === anioActual
+  })
+  const pedidoAnualBloqueante = pedidosAnualesDelAnio.find((pedido) => {
+    const estadoVisible = getEstadoVisiblePedido(pedido)
+    return estadoVisible === 'pendiente' || estadoVisible === 'aprobado' || estadoVisible === 'entregado'
+  }) || null
+  const pedidoAnualConAclaracion = pedidosAnualesDelAnio.find(
+    pedido => getEstadoVisiblePedido(pedido) === 'aclaracion'
+  ) || null
+  const puedeCrearAnual = tieneKits && !pedidoAnualBloqueante
   const puedeCrearRefuerzo = tieneKits
-  const cuposByProducto = {}
-  const productoSeleccionadoCupo = null
   const productosKitOrdenados = kits.map((kit) => ({
     id: kit.id,
     nombre: kit.nombre,
     unidad_medida: kit.tipo_escuela_label
   }))
+  const textoBloqueoAnual = pedidoAnualBloqueante
+    ? getEstadoVisiblePedido(pedidoAnualBloqueante) === 'pendiente'
+      ? `Ya enviaste la solicitud anual #${pedidoAnualBloqueante.id}. Vas a poder generar otra si el supervisor la rechaza o te pide una aclaracion.`
+      : `Tu escuela ya tiene una solicitud anual registrada este ano (#${pedidoAnualBloqueante.id}).`
+    : ''
 
   const badgeTab = (tipo) => {
-    const count = pedidos.filter(p => (p.tipo || 'anual') === tipo && p.estado === 'pendiente').length
+    const count = pedidos.filter(p => (p.tipo || 'anual') === tipo && getEstadoVisiblePedido(p) === 'pendiente').length
     return count > 0 ? <span style={{ marginLeft: 6, background: '#ef4444', color: '#fff', borderRadius: 99, fontSize: '0.7rem', padding: '1px 7px' }}>{count}</span> : null
   }
 
@@ -636,12 +665,25 @@ function DirectivoPedidos() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <h2 style={{ margin: 0 }}>Mis Pedidos</h2>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          {((tab === 'refuerzo' && puedeCrearRefuerzo) || (tab === 'anual' && puedeCrearAnual)) && (
+          {((tab === 'refuerzo' && puedeCrearRefuerzo) || (tab === 'anual' && tieneKits)) && (
             <button
               type="button"
               className="mov-action-btn"
-              style={{ width: 'auto', margin: 0, padding: '14px 22px', fontSize: '1rem' }}
-              onClick={() => { setModalOpen(true); setMsg({ text: '', type: '' }) }}
+              disabled={tab === 'anual' && !puedeCrearAnual}
+              title={tab === 'anual' && !puedeCrearAnual ? textoBloqueoAnual : undefined}
+              style={{
+                width: 'auto',
+                margin: 0,
+                padding: '14px 22px',
+                fontSize: '1rem',
+                opacity: tab === 'anual' && !puedeCrearAnual ? 0.6 : 1,
+                cursor: tab === 'anual' && !puedeCrearAnual ? 'not-allowed' : 'pointer'
+              }}
+              onClick={() => {
+                if (tab === 'anual' && !puedeCrearAnual) return
+                setModalOpen(true)
+                setMsg({ text: '', type: '' })
+              }}
             >
               <span aria-hidden="true" style={{ marginRight: 8, fontSize: '1.2rem' }}>📝</span>
               Nueva solicitud
@@ -681,13 +723,30 @@ function DirectivoPedidos() {
       {/* Descripción contextual */}
       <p style={{ marginTop: 12, marginBottom: 4, color: 'var(--muted)', fontSize: '0.9rem' }}>
         {tab === 'anual'
-          ? 'Pedido anual planificado según kit de la escuela y matrícula. Cada producto consume cupo anual disponible.'
+          ? 'Pedido anual planificado según el kit asignado a la escuela.'
           : 'Pedidos extraordinarios para reforzar el stock cuando el pedido anual no fue suficiente.'}
       </p>
 
       {tab === 'anual' && (
         <div className="msg show" style={{ background: '#ecfeff', color: '#155e75', border: '1px solid #67e8f9', marginTop: 8 }}>
           Pedido anual por kit: al seleccionar un kit se enviará el conjunto completo de productos configurados.
+        </div>
+      )}
+
+      {tab === 'anual' && pedidoAnualBloqueante && (
+        <div className="msg show msg-error">
+          {textoBloqueoAnual}
+        </div>
+      )}
+
+      {tab === 'anual' && !pedidoAnualBloqueante && pedidoAnualConAclaracion && (
+        <div className="msg show" style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', marginTop: 8 }}>
+          El supervisor respondio la solicitud anual #{pedidoAnualConAclaracion.id}. Podes enviar una nueva solicitud anual.
+          {pedidoAnualConAclaracion.motivo_supervisor && (
+            <div style={{ marginTop: 6 }}>
+              <strong>Observacion:</strong> {pedidoAnualConAclaracion.motivo_supervisor}
+            </div>
+          )}
         </div>
       )}
 
@@ -767,7 +826,7 @@ function DirectivoPedidos() {
                 <input type="text" value={form.notas} onChange={e => setForm({ ...form, notas: e.target.value })} placeholder="Observaciones del pedido" />
               </div>
               <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-                <button type="button" className="secondary" onClick={() => { setModalOpen(false); setForm({ kit_id: '', producto_id: '', cantidad: '1', notas: '' }) }}>
+                <button type="button" className="secondary" onClick={() => { setModalOpen(false); setForm({ kit_id: '', cantidad: '1', notas: '', adicionales: [{ producto_id: '', cantidad: '' }] }) }}>
                   Cancelar
                 </button>
                 <button type="submit">Crear solicitud</button>
@@ -797,24 +856,38 @@ function DirectivoPedidos() {
               </tr>
             </thead>
             <tbody>
-              {pedidosFiltrados.map(pedido => (
-                <tr key={pedido.id}>
-                  <td>#{pedido.id}</td>
-                  <td>{pedido.producto_nombre || '-'}</td>
-                  <td>{pedido.cantidad}</td>
-                  <td><span className={`badge badge-estado-${pedido.estado}`}>{pedido.estado}</span></td>
-                  <td>{pedido.notas || '-'}</td>
-                  <td>{new Date(pedido.created_at).toLocaleDateString('es-AR')}</td>
-                  <td>{pedido.resumen_items || '-'}</td>
-                  <td>
-                    {pedido.estado === 'pendiente' && (
-                      <button className="sv-btn-rechazar" style={{ margin: 0 }} onClick={() => handleCancelar(pedido.id)}>
-                        Cancelar
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
+              {pedidosFiltrados.map(pedido => {
+                const estadoVisible = getEstadoVisiblePedido(pedido)
+                return (
+                  <tr key={pedido.id}>
+                    <td>#{pedido.id}</td>
+                    <td>{pedido.producto_nombre || '-'}</td>
+                    <td>{pedido.cantidad}</td>
+                    <td>
+                      <span className={`badge badge-estado-${estadoVisible}`}>
+                        {formatEstadoPedido(estadoVisible)}
+                      </span>
+                    </td>
+                    <td>
+                      {pedido.notas || '-'}
+                      {pedido.motivo_supervisor && (
+                        <div style={{ marginTop: 6, fontSize: '0.85rem', color: estadoVisible === 'aclaracion' ? '#1d4ed8' : '#991b1b' }}>
+                          <strong>{estadoVisible === 'aclaracion' ? 'Replica del supervisor:' : 'Respuesta del supervisor:'}</strong> {pedido.motivo_supervisor}
+                        </div>
+                      )}
+                    </td>
+                    <td>{new Date(pedido.created_at).toLocaleDateString('es-AR')}</td>
+                    <td>{pedido.resumen_items || '-'}</td>
+                    <td>
+                      {pedido.estado === 'pendiente' && (
+                        <button className="sv-btn-rechazar" style={{ margin: 0 }} onClick={() => handleCancelar(pedido.id)}>
+                          Cancelar
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         )}

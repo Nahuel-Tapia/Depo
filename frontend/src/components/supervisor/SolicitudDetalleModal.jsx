@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { formatRatio, getRatioMeta } from './ratioUtils'
 
 function formatEstado(estado) {
+  if (estado === 'aclaracion') return 'Aclaracion solicitada'
   if (estado === 'aprobado') return 'Aprobado'
   if (estado === 'rechazado') return 'Rechazado'
   if (estado === 'cancelado') return 'Cancelado'
@@ -31,7 +32,7 @@ export default function SolicitudDetalleModal({ solicitud, historial, loadingHis
         <div className="sv-detalle-grid">
           <div><strong>Escuela:</strong> {solicitud.escuela}</div>
           <div><strong>Solicitante:</strong> {solicitud.solicitante || '-'}</div>
-          <div><strong>Matrícula:</strong> {solicitud.matricula}</div>
+          <div><strong>Matricula:</strong> {solicitud.matricula}</div>
           <div><strong>Producto:</strong> {solicitud.producto || '-'}</div>
           <div><strong>Cantidad solicitada:</strong> {solicitud.cantidad}</div>
           <div>
@@ -45,16 +46,22 @@ export default function SolicitudDetalleModal({ solicitud, historial, loadingHis
         </div>
 
         <div style={{ marginTop: 12 }}>
-          <label htmlFor="sv-observacion" style={{ marginTop: 0 }}>Observación</label>
+          <label htmlFor="sv-observacion" style={{ marginTop: 0 }}>Observacion</label>
           <textarea
             id="sv-observacion"
             className="sv-rechazo-input"
             rows={3}
-            placeholder="Agregar motivo de rechazo o pedir aclaración..."
+            placeholder="Agregar motivo de rechazo o pedir aclaracion..."
             value={observacion}
             onChange={e => setObservacion(e.target.value)}
           />
         </div>
+
+        {solicitud.motivo_supervisor && (
+          <div className="msg show" style={{ marginTop: 12, background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>
+            <strong>Ultima observacion del supervisor:</strong> {solicitud.motivo_supervisor}
+          </div>
+        )}
 
         <h4 style={{ marginTop: 20 }}>Historial de pedidos de la escuela</h4>
         {loadingHistorial ? (
@@ -87,7 +94,7 @@ export default function SolicitudDetalleModal({ solicitud, historial, loadingHis
         <div className="inline-actions" style={{ marginTop: 12 }}>
           <button disabled={disabled || solicitud.estado !== 'pendiente'} onClick={onApprove}>Aprobar solicitud</button>
           <button disabled={disabled || solicitud.estado !== 'pendiente'} className="sv-btn-rechazar" onClick={submitReject}>Rechazar solicitud</button>
-          <button disabled={disabled} className="sv-btn-reparar" onClick={submitClarification}>Pedir aclaración</button>
+          <button disabled={disabled || solicitud.estado !== 'pendiente'} className="sv-btn-reparar" onClick={submitClarification}>Pedir aclaracion</button>
         </div>
       </aside>
     </div>
