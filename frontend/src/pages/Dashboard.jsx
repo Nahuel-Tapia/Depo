@@ -17,21 +17,12 @@ import MiCuenta from '../components/MiCuenta'
 const TABS = [
   { key: 'inicio', label: 'Inicio', permission: null },
   { key: 'mi-cuenta', label: 'Mi cuenta', permission: null },
-<<<<<<< HEAD
-  { key: 'gestion-escuelas', label: 'Gestion de Escuelas', permission: 'supervision.manage', role: 'director_area' },
-  { key: 'gestion-pedidos', label: 'Gestion de Pedidos', permission: 'supervision.manage', role: 'director_area' },
-  { key: 'compras-pedidos', label: 'Gestion de Pedidos Anuales', permission: 'planilla.view', role: 'area_compras' },
-  { key: 'compras-licitacion', label: 'Licitacion Anual', permission: 'planilla.view', role: 'area_compras' },
-  { key: 'compras-listado-final', label: 'Listado Final a Licitar', permission: 'planilla.view', role: 'area_compras' },
-  { key: 'compras-adjudicacion', label: 'Adjudicacion y Cierre', permission: 'planilla.manage', role: 'area_compras' },
-=======
   { key: 'gestion-escuelas', label: 'Gestión de Escuelas', permission: 'supervision.manage', role: 'director_area' },
   { key: 'gestion-pedidos', label: 'Gestión de Pedidos', permission: 'supervision.manage', role: 'director_area' },
   { key: 'compras-pedidos', label: 'Gestión de Pedidos Anuales', permission: 'planilla.view', role: 'area_compras' },
   { key: 'compras-licitacion', label: 'Licitación Anual', permission: 'planilla.view', role: 'area_compras' },
   { key: 'compras-listado-final', label: 'Listado Final a Licitar', permission: 'planilla.view', role: 'area_compras' },
   { key: 'compras-adjudicacion', label: 'Adjudicación y Cierre', permission: 'planilla.manage', role: 'area_compras' },
->>>>>>> 319c27b9ef175fa06c8d02ddf7dc018fdc53a930
   { key: 'supervisor', label: 'Patrimonio Escolar', permission: 'pedidos.manage', role: 'supervisor' },
   { key: 'mis-escuelas', label: 'Mis Escuelas', permission: 'instituciones.view', role: 'supervisor', hideForRoles: ['admin'] },
   { key: 'productos', label: 'Productos', permission: 'productos.view', hideForRoles: ['supervisor', 'director_area'] },
@@ -69,14 +60,10 @@ export default function Dashboard() {
         'compras-pedidos',
         'compras-licitacion',
         'compras-listado-final',
-        'compras-adjudicacion',
-        'mi-cuenta'
+        'compras-adjudicacion'
       ].includes(tab.key)
     }
-<<<<<<< HEAD
-=======
     // Hide tabs explicitly hidden for this role
->>>>>>> 319c27b9ef175fa06c8d02ddf7dc018fdc53a930
     if (tab.hideForRole && tab.hideForRole === user?.role) return false
     if (tab.hideForRoles && tab.hideForRoles.includes(user?.role)) return false
     if (tab.role && tab.role !== user?.role && user?.role !== 'admin') return false
@@ -134,11 +121,7 @@ export default function Dashboard() {
         </div>
 
         <div className="tabs">
-<<<<<<< HEAD
           {visibleTabs.filter(tab => tab.key !== 'mi-cuenta').map(tab => (
-=======
-          {visibleTabs.map((tab) => (
->>>>>>> a766cc0e8c92203cf9fe682a861aa13a9b164434
             <button
               key={tab.key}
               className={`tab-btn ${activeTab === tab.key ? 'active' : ''}`}

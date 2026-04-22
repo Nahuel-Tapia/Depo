@@ -7,7 +7,6 @@ const { roleExists, normalizeRoleName } = require("../services/roles");
 
 const router = express.Router();
 
-<<<<<<< HEAD
 let schemaReady = false;
 let schemaPromise = null;
 
@@ -31,12 +30,12 @@ async function ensureUsersSchema() {
   } finally {
     schemaPromise = null;
   }
-=======
+}
+
 function getAuthUserId(req) {
   const raw = req?.user?.sub ?? req?.user?.id;
   const id = Number(raw);
   return Number.isFinite(id) && id > 0 ? id : null;
->>>>>>> 7227e8e974c91d434be0e0d94d9c33ecf0e8125d
 }
 
 function normalizeDni(dni) {
