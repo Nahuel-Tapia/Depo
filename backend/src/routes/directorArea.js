@@ -1,5 +1,5 @@
 const express = require("express");
-const { all, run } = require("../db.pg");
+const { all, get, run } = require("../db.pg");
 const { authenticate, authorizePermissions } = require("../middleware/auth");
 const { PERMISSIONS } = require("../permissions");
 
@@ -7,6 +7,34 @@ const router = express.Router();
 
 let tablesReady = false;
 let tablesInitPromise = null;
+
+async function getInstitucionNivelColumn() {
+  const row = await get(`
+    SELECT CASE
+      WHEN EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'institucion' AND column_name = 'nivel_educativo'
+      ) THEN 'nivel_educativo'
+      WHEN EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'institucion' AND column_name = 'nivel'
+      ) THEN 'nivel'
+      ELSE NULL
+    END AS col
+  `);
+  return row?.col || null;
+}
+
+async function getDirectorAreaNivel(userId) {
+  const row = await get(
+    `SELECT NULLIF(BTRIM(nivel_educativo), '') AS nivel_educativo
+     FROM usuario
+     WHERE id_usuario = ?`,
+    [userId]
+  );
+  return row?.nivel_educativo || null;
+}
+
 async function ensureTables() {
   if (tablesReady) return;
   if (tablesInitPromise) {
@@ -39,10 +67,14 @@ async function ensureTables() {
       )
     `);
 
-    // Marca si Dirección de Área aceptó o denegó un pedido para planilla anual.
     await run(`
       ALTER TABLE pedido
       ADD COLUMN IF NOT EXISTS aprobado_director_area BOOLEAN
+    `);
+
+    await run(`
+      ALTER TABLE usuario
+      ADD COLUMN IF NOT EXISTS nivel_educativo VARCHAR(120)
     `);
 
     tablesReady = true;
@@ -62,6 +94,16 @@ router.get("/catalogo", async (req, res) => {
   try {
     await ensureTables();
 
+    const nivelColumn = await getInstitucionNivelColumn();
+    const directorNivel = await getDirectorAreaNivel(req.user.sub);
+
+    if (!nivelColumn) {
+      return res.status(500).json({ error: "No se encontro la columna de nivel educativo en instituciones" });
+    }
+    if (!directorNivel) {
+      return res.status(400).json({ error: "El Director de Area no tiene un nivel educativo configurado" });
+    }
+
     const supervisores = await all(
       `SELECT id_usuario AS id, nombre, apellido, email
        FROM usuario
@@ -70,16 +112,18 @@ router.get("/catalogo", async (req, res) => {
     );
 
     const escuelas = await all(
-      `SELECT id_institucion AS id, nombre, cue, nivel
+      `SELECT id_institucion AS id, nombre, cue, ${nivelColumn} AS nivel
        FROM institucion
        WHERE activo = TRUE
-       ORDER BY nombre`
+         AND LOWER(COALESCE(${nivelColumn}, '')) = LOWER($1)
+       ORDER BY nombre`,
+      [directorNivel]
     );
 
-    res.json({ supervisores, escuelas });
+    res.json({ supervisores, escuelas, nivel_educativo: directorNivel });
   } catch (err) {
-    console.error("Error al cargar catálogo de Dirección de Área:", err);
-    res.status(500).json({ error: "No se pudo cargar catálogo" });
+    console.error("Error al cargar catalogo de Direccion de Area:", err);
+    res.status(500).json({ error: "No se pudo cargar catalogo" });
   }
 });
 
@@ -99,7 +143,9 @@ router.get("/asignaciones", async (req, res) => {
        FROM supervisor_escuela_asignacion a
        JOIN usuario u ON u.id_usuario = a.supervisor_id
        JOIN institucion i ON i.id_institucion = a.institucion_id
-       ORDER BY a.created_at DESC`
+       WHERE a.director_area_id = $1
+       ORDER BY a.created_at DESC`,
+      [req.user.sub]
     );
 
     res.json({ asignaciones });
@@ -113,11 +159,31 @@ router.post("/asignaciones", async (req, res) => {
   try {
     await ensureTables();
 
+    const nivelColumn = await getInstitucionNivelColumn();
+    const directorNivel = await getDirectorAreaNivel(req.user.sub);
     const supervisorId = Number(req.body.supervisor_id);
     const institucionId = Number(req.body.institucion_id);
 
     if (!Number.isInteger(supervisorId) || !Number.isInteger(institucionId)) {
       return res.status(400).json({ error: "supervisor_id e institucion_id son obligatorios" });
+    }
+    if (!nivelColumn) {
+      return res.status(500).json({ error: "No se encontro la columna de nivel educativo en instituciones" });
+    }
+    if (!directorNivel) {
+      return res.status(400).json({ error: "El Director de Area no tiene un nivel educativo configurado" });
+    }
+
+    const institucion = await get(
+      `SELECT id_institucion
+       FROM institucion
+       WHERE id_institucion = $1
+         AND LOWER(COALESCE(${nivelColumn}, '')) = LOWER($2)`,
+      [institucionId, directorNivel]
+    );
+
+    if (!institucion) {
+      return res.status(400).json({ error: "La escuela no pertenece al nivel educativo del Director de Area" });
     }
 
     await run(
@@ -131,7 +197,7 @@ router.post("/asignaciones", async (req, res) => {
     res.status(201).json({ ok: true });
   } catch (err) {
     console.error("Error al asignar escuela a supervisor:", err);
-    res.status(500).json({ error: "No se pudo crear asignación" });
+    res.status(500).json({ error: "No se pudo crear asignacion" });
   }
 });
 
@@ -140,13 +206,13 @@ router.delete("/asignaciones/:id", async (req, res) => {
     await ensureTables();
 
     const id = Number(req.params.id);
-    if (!Number.isInteger(id)) return res.status(400).json({ error: "ID inválido" });
+    if (!Number.isInteger(id)) return res.status(400).json({ error: "ID invalido" });
 
-    await run("DELETE FROM supervisor_escuela_asignacion WHERE id = ?", [id]);
+    await run("DELETE FROM supervisor_escuela_asignacion WHERE id = ? AND director_area_id = ?", [id, req.user.sub]);
     res.json({ ok: true });
   } catch (err) {
-    console.error("Error al eliminar asignación:", err);
-    res.status(500).json({ error: "No se pudo eliminar asignación" });
+    console.error("Error al eliminar asignacion:", err);
+    res.status(500).json({ error: "No se pudo eliminar asignacion" });
   }
 });
 
@@ -166,7 +232,9 @@ router.get("/informes", async (req, res) => {
               u.apellido AS supervisor_apellido
        FROM solicitud_informe_supervisor s
        JOIN usuario u ON u.id_usuario = s.supervisor_id
-       ORDER BY s.created_at DESC`
+       WHERE s.director_area_id = $1
+       ORDER BY s.created_at DESC`,
+      [req.user.sub]
     );
 
     res.json({ informes });
@@ -176,10 +244,19 @@ router.get("/informes", async (req, res) => {
   }
 });
 
-// ── Solicitudes aprobadas por supervisores bajo este director ──
 router.get("/solicitudes", async (req, res) => {
   try {
     await ensureTables();
+
+    const nivelColumn = await getInstitucionNivelColumn();
+    const directorNivel = await getDirectorAreaNivel(req.user.sub);
+
+    if (!nivelColumn) {
+      return res.status(500).json({ error: "No se encontro la columna de nivel educativo en instituciones" });
+    }
+    if (!directorNivel) {
+      return res.status(400).json({ error: "El Director de Area no tiene un nivel educativo configurado" });
+    }
 
     const solicitudes = await all(
       `SELECT
@@ -207,51 +284,57 @@ router.get("/solicitudes", async (req, res) => {
            ) FILTER (WHERE pr.id_producto IS NOT NULL),
            '[]'::json
          ) AS items
-       FROM supervisor_escuela_asignacion sea
-       JOIN institucion i ON i.id_institucion = sea.institucion_id
+       FROM institucion i
        JOIN pedido p ON p.id_institucion = i.id_institucion
        JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido
        JOIN producto pr ON pr.id_producto = dp.id_producto
        JOIN usuario u ON u.id_usuario = p.id_usuario_solicitante
-       JOIN usuario sup ON sup.id_usuario = sea.supervisor_id
-       WHERE sea.director_area_id = $1
-         AND (p.estado::text IN ('pendiente', 'aprobado', 'rechazado', 'entregado', 'finalizado'))
+       LEFT JOIN usuario sup ON sup.id_usuario = p.aprobado_por_supervisor_id
+       WHERE LOWER(COALESCE(i.${nivelColumn}, '')) = LOWER($1)
+         AND p.estado::text IN ('pendiente', 'aprobado', 'rechazado', 'entregado', 'finalizado')
        GROUP BY p.id_pedido, p.estado, p.tipo, p.aprobado_director_area, p.observaciones_generales,
                 p.fecha_creacion, p.kit_nombre, p.kit_cantidad, u.nombre, i.id_institucion, i.nombre,
                 sup.nombre, sup.apellido
        ORDER BY p.fecha_creacion DESC`,
-      [req.user.sub]
+      [directorNivel]
     );
 
     res.json({ solicitudes });
   } catch (err) {
-    console.error("Error al listar solicitudes del director de área:", err);
+    console.error("Error al listar solicitudes del director de area:", err);
     res.status(500).json({ error: "No se pudieron listar solicitudes" });
   }
 });
 
-// ── Decisión de Dirección de Área sobre pedido anual (aceptar / denegar) ──
 router.patch("/solicitudes/:id/decision", async (req, res) => {
   try {
     await ensureTables();
 
+    const nivelColumn = await getInstitucionNivelColumn();
+    const directorNivel = await getDirectorAreaNivel(req.user.sub);
     const id = Number(req.params.id);
-    const decision = String(req.body.decision || '').trim().toLowerCase();
+    const decision = String(req.body.decision || "").trim().toLowerCase();
 
     if (!Number.isInteger(id)) {
-      return res.status(400).json({ error: "ID inválido" });
+      return res.status(400).json({ error: "ID invalido" });
     }
     if (!["aceptar", "denegar"].includes(decision)) {
-      return res.status(400).json({ error: "Decisión inválida" });
+      return res.status(400).json({ error: "Decision invalida" });
+    }
+    if (!nivelColumn) {
+      return res.status(500).json({ error: "No se encontro la columna de nivel educativo en instituciones" });
+    }
+    if (!directorNivel) {
+      return res.status(400).json({ error: "El Director de Area no tiene un nivel educativo configurado" });
     }
 
     const pedido = await all(
       `SELECT p.id_pedido, p.estado::text AS estado, COALESCE(p.tipo, 'anual') AS tipo
        FROM pedido p
-       JOIN supervisor_escuela_asignacion sea ON sea.institucion_id = p.id_institucion
+       JOIN institucion i ON i.id_institucion = p.id_institucion
        WHERE p.id_pedido = $1
-         AND sea.director_area_id = $2`,
-      [id, req.user.sub]
+         AND LOWER(COALESCE(i.${nivelColumn}, '')) = LOWER($2)`,
+      [id, directorNivel]
     );
 
     if (!pedido.length) {
@@ -283,10 +366,10 @@ router.patch("/solicitudes/:id/decision", async (req, res) => {
       [id]
     );
 
-    return res.json({ ok: true, aprobado_director_area: false, estado: 'rechazado' });
+    return res.json({ ok: true, aprobado_director_area: false, estado: "rechazado" });
   } catch (err) {
-    console.error("Error al decidir solicitud del director de área:", err);
-    res.status(500).json({ error: "No se pudo registrar la decisión" });
+    console.error("Error al decidir solicitud del director de area:", err);
+    res.status(500).json({ error: "No se pudo registrar la decision" });
   }
 });
 

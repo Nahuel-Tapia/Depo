@@ -1,23 +1,15 @@
-
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../api'
 import DirectorAreaGestion from './DirectorAreaGestion'
 import DirectorAreaPedidosAnuales from './DirectorAreaPedidosAnuales'
 
-
 export default function DirectorAreaPanel({ initialSection }) {
   const { token } = useAuth()
   const [activeSection, setActiveSection] = useState(initialSection || 'gestion-escuelas')
-
-  // Sincronizar sección activa con el prop initialSection
-  useEffect(() => {
-    if (initialSection && initialSection !== activeSection) {
-      setActiveSection(initialSection)
-    }
-  }, [initialSection])
   const [supervisores, setSupervisores] = useState([])
   const [escuelas, setEscuelas] = useState([])
+  const [nivelEducativo, setNivelEducativo] = useState('')
   const [asignaciones, setAsignaciones] = useState([])
   const [informes, setInformes] = useState([])
   const [solicitudes, setSolicitudes] = useState([])
@@ -30,14 +22,19 @@ export default function DirectorAreaPanel({ initialSection }) {
   const [asigForm, setAsigForm] = useState({ supervisor_id: '', institucion_id: '' })
   const [informeForm, setInformeForm] = useState({ supervisor_id: '', asunto: '', detalle: '', fecha_limite: '' })
 
-  // Resetear formularios al cambiar de sección
   useEffect(() => {
-    setAsigForm({ supervisor_id: '', institucion_id: '' });
-    setInformeForm({ supervisor_id: '', asunto: '', detalle: '', fecha_limite: '' });
-    setMsg({ text: '', type: '' });
-    setPlanillaObs('');
-    setPlanillaDetalle(null);
-  }, [activeSection]);
+    if (initialSection && initialSection !== activeSection) {
+      setActiveSection(initialSection)
+    }
+  }, [initialSection, activeSection])
+
+  useEffect(() => {
+    setAsigForm({ supervisor_id: '', institucion_id: '' })
+    setInformeForm({ supervisor_id: '', asunto: '', detalle: '', fecha_limite: '' })
+    setMsg({ text: '', type: '' })
+    setPlanillaObs('')
+    setPlanillaDetalle(null)
+  }, [activeSection])
 
   const loadAll = async () => {
     try {
@@ -49,7 +46,7 @@ export default function DirectorAreaPanel({ initialSection }) {
       ])
 
       if (!catalogoRes.ok || !asigRes.ok || !informesRes.ok) {
-        throw new Error('No se pudo cargar la información de Dirección de Área')
+        throw new Error('No se pudo cargar la informacion de Direccion de Area')
       }
 
       const catalogo = await catalogoRes.json()
@@ -59,6 +56,7 @@ export default function DirectorAreaPanel({ initialSection }) {
 
       setSupervisores(catalogo.supervisores || [])
       setEscuelas(catalogo.escuelas || [])
+      setNivelEducativo(catalogo.nivel_educativo || '')
       setAsignaciones(asignacionesData.asignaciones || [])
       setInformes(informesData.informes || [])
       setSolicitudes(solicitudesData.solicitudes || [])
@@ -75,20 +73,20 @@ export default function DirectorAreaPanel({ initialSection }) {
 
   useEffect(() => {
     loadAll()
-    // eslint-disable-next-line
   }, [token])
 
-  const supervisorMap = useMemo(() => {
-    return Object.fromEntries(supervisores.map(s => [String(s.id), `${s.nombre || ''} ${s.apellido || ''}`.trim()]))
-  }, [supervisores])
+  const supervisorMap = useMemo(() => (
+    Object.fromEntries(supervisores.map((s) => [String(s.id), `${s.nombre || ''} ${s.apellido || ''}`.trim()]))
+  ), [supervisores])
 
   const handleAsignar = async (e) => {
     e.preventDefault()
     setMsg({ text: '', type: '' })
     if (!asigForm.supervisor_id || !asigForm.institucion_id) {
-      setMsg({ text: 'Debés seleccionar un supervisor y una escuela', type: 'error' })
+      setMsg({ text: 'Debes seleccionar un supervisor y una escuela', type: 'error' })
       return
     }
+
     const res = await apiFetch('/api/director-area/asignaciones', {
       token,
       method: 'POST',
@@ -97,11 +95,13 @@ export default function DirectorAreaPanel({ initialSection }) {
         institucion_id: Number(asigForm.institucion_id)
       })
     })
+
     if (!res.ok) {
       const data = await res.json().catch(() => ({}))
-      setMsg({ text: data.error || 'No se pudo crear la asignación', type: 'error' })
+      setMsg({ text: data.error || 'No se pudo crear la asignacion', type: 'error' })
       return
     }
+
     setAsigForm({ supervisor_id: '', institucion_id: '' })
     setMsg({ text: 'Escuela asignada correctamente', type: 'success' })
     loadAll()
@@ -110,10 +110,10 @@ export default function DirectorAreaPanel({ initialSection }) {
   const handleEliminarAsignacion = async (id) => {
     const res = await apiFetch(`/api/director-area/asignaciones/${id}`, { token, method: 'DELETE' })
     if (!res.ok) {
-      setMsg({ text: 'No se pudo eliminar asignación', type: 'error' })
+      setMsg({ text: 'No se pudo eliminar asignacion', type: 'error' })
       return
     }
-    setMsg({ text: 'Asignación eliminada', type: 'success' })
+    setMsg({ text: 'Asignacion eliminada', type: 'success' })
     loadAll()
   }
 
@@ -124,6 +124,7 @@ export default function DirectorAreaPanel({ initialSection }) {
       setMsg({ text: 'Supervisor y asunto son obligatorios', type: 'error' })
       return
     }
+
     const res = await apiFetch('/api/director-area/informes', {
       token,
       method: 'POST',
@@ -134,11 +135,13 @@ export default function DirectorAreaPanel({ initialSection }) {
         fecha_limite: informeForm.fecha_limite || null
       })
     })
+
     if (!res.ok) {
       const data = await res.json().catch(() => ({}))
       setMsg({ text: data.error || 'No se pudo solicitar informe', type: 'error' })
       return
     }
+
     setInformeForm({ supervisor_id: '', asunto: '', detalle: '', fecha_limite: '' })
     setMsg({ text: 'Solicitud de informe registrada', type: 'success' })
     loadAll()
@@ -156,7 +159,7 @@ export default function DirectorAreaPanel({ initialSection }) {
         const data = await res.json().catch(() => ({}))
         throw new Error(data.error || 'No se pudo actualizar')
       }
-      setSolicitudes(prev => prev.map(s => s.id === id ? { ...s, estado: 'entregado' } : s))
+      setSolicitudes((prev) => prev.map((s) => (s.id === id ? { ...s, estado: 'entregado' } : s)))
       setMsg({ text: `Solicitud #${id} marcada como entregada.`, type: 'success' })
     } catch (err) {
       setMsg({ text: err.message || 'Error al marcar entregada', type: 'error' })
@@ -174,9 +177,9 @@ export default function DirectorAreaPanel({ initialSection }) {
         body: JSON.stringify({ decision })
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error || 'No se pudo registrar la decisión')
+      if (!res.ok) throw new Error(data.error || 'No se pudo registrar la decision')
 
-      setSolicitudes(prev => prev.map(s => {
+      setSolicitudes((prev) => prev.map((s) => {
         if (s.id !== id) return s
         if (decision === 'aceptar') {
           return { ...s, aprobado_director_area: true }
@@ -208,7 +211,7 @@ export default function DirectorAreaPanel({ initialSection }) {
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || 'No se pudo crear la planilla')
       setPlanillaObs('')
-      setMsg({ text: `Planilla creada con ${data.items} solicitudes. Revisá la planilla antes de enviarla.`, type: 'success' })
+      setMsg({ text: `Planilla creada con ${data.items} solicitudes. Revisa la planilla antes de enviarla.`, type: 'success' })
       loadAll()
     } catch (err) {
       setMsg({ text: err.message, type: 'error' })
@@ -237,7 +240,7 @@ export default function DirectorAreaPanel({ initialSection }) {
       const res = await apiFetch(`/api/compras/planillas/${id}/enviar`, { token, method: 'PATCH' })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || 'No se pudo enviar')
-      setMsg({ text: 'Planilla enviada a Área de Compras.', type: 'success' })
+      setMsg({ text: 'Planilla enviada a Area de Compras.', type: 'success' })
       if (planillaDetalle?.planilla?.id === id) setPlanillaDetalle(null)
       loadAll()
     } catch (err) {
@@ -260,15 +263,14 @@ export default function DirectorAreaPanel({ initialSection }) {
 
   return (
     <div>
-      <h2>Dirección de Área</h2>
+      <h2>Supervisores del Nivel</h2>
       <p style={{ marginTop: 0, color: 'var(--muted)' }}>
-        Gestioná la asignación de escuelas a supervisores y solicitá informes de seguimiento.
+        Organiza los supervisores de tu nivel educativo, distribui escuelas y pedi informes de seguimiento.
       </p>
 
-      {/* Selector de sección eliminado. El control de sección es solo desde el Dashboard principal. */}
-      {/* Aquí puedes renderizar el contenido de la sección activa */}
       {activeSection === 'gestion-escuelas' && (
         <DirectorAreaGestion
+          nivelEducativo={nivelEducativo}
           supervisores={supervisores}
           escuelas={escuelas}
           asignaciones={asignaciones}
@@ -284,6 +286,7 @@ export default function DirectorAreaPanel({ initialSection }) {
           supervisorMap={supervisorMap}
         />
       )}
+
       {activeSection === 'gestion-pedidos' && (
         <DirectorAreaPedidosAnuales
           solicitudes={solicitudes}
@@ -302,5 +305,5 @@ export default function DirectorAreaPanel({ initialSection }) {
         />
       )}
     </div>
-  );
+  )
 }

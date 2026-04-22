@@ -7,10 +7,36 @@ const { roleExists, normalizeRoleName } = require("../services/roles");
 
 const router = express.Router();
 
+<<<<<<< HEAD
+let schemaReady = false;
+let schemaPromise = null;
+
+async function ensureUsersSchema() {
+  if (schemaReady) return;
+  if (schemaPromise) {
+    await schemaPromise;
+    return;
+  }
+
+  schemaPromise = (async () => {
+    await run(`
+      ALTER TABLE usuario
+      ADD COLUMN IF NOT EXISTS nivel_educativo VARCHAR(120)
+    `);
+    schemaReady = true;
+  })();
+
+  try {
+    await schemaPromise;
+  } finally {
+    schemaPromise = null;
+  }
+=======
 function getAuthUserId(req) {
   const raw = req?.user?.sub ?? req?.user?.id;
   const id = Number(raw);
   return Number.isFinite(id) && id > 0 ? id : null;
+>>>>>>> 7227e8e974c91d434be0e0d94d9c33ecf0e8125d
 }
 
 function normalizeDni(dni) {
@@ -154,8 +180,9 @@ router.patch("/me/password", async (req, res) => {
 
 router.get("/", authorizePermissions(PERMISSIONS.USERS_READ), async (req, res) => {
   try {
+    await ensureUsersSchema();
     const users = await all(
-      "SELECT id_usuario as id, nombre, apellido, email, dni, role, activo, created_at FROM usuario ORDER BY id_usuario DESC"
+      "SELECT id_usuario as id, nombre, apellido, email, dni, role, activo, created_at, nivel_educativo FROM usuario ORDER BY id_usuario DESC"
     );
     return res.json({ users });
   } catch (err) {
@@ -165,23 +192,28 @@ router.get("/", authorizePermissions(PERMISSIONS.USERS_READ), async (req, res) =
 
 router.post("/", authorizePermissions(PERMISSIONS.USERS_CREATE), async (req, res) => {
   try {
-    const { nombre, apellido, email, dni, password, role, telefono, institucion } = req.body;
+    await ensureUsersSchema();
+
+    const { nombre, apellido, email, dni, password, role, telefono, institucion, nivel } = req.body;
     const normalizedRole = normalizeRoleName(role);
     const dniNormalized = normalizeDni(dni);
-    
-    // Validar que institucion sea un número válido o null
-    const institucionId = institucion && !isNaN(parseInt(institucion)) ? parseInt(institucion) : null;
-    
+    const institucionId = institucion && !isNaN(parseInt(institucion, 10)) ? parseInt(institucion, 10) : null;
+    const nivelEducativo = String(nivel || "").trim() || null;
+
     if (!nombre || !email || !password || !role) {
       return res.status(400).json({ error: "Faltan campos obligatorios" });
     }
 
     if (!(await roleExists(normalizedRole))) {
-      return res.status(400).json({ error: "Rol inválido" });
+      return res.status(400).json({ error: "Rol invalido" });
     }
 
     if (normalizedRole === "directivo" && !institucionId) {
-      return res.status(400).json({ error: "La institución es obligatoria para rol directivo" });
+      return res.status(400).json({ error: "La institucion es obligatoria para rol directivo" });
+    }
+
+    if (normalizedRole === "director_area" && !nivelEducativo) {
+      return res.status(400).json({ error: "El nivel educativo es obligatorio para Director de Area" });
     }
 
     const existing = await get("SELECT id_usuario FROM usuario WHERE email = ?", [email]);
@@ -198,8 +230,18 @@ router.post("/", authorizePermissions(PERMISSIONS.USERS_CREATE), async (req, res
 
     const hash = await bcrypt.hash(password, 10);
     const result = await run(
-      "INSERT INTO usuario (nombre, apellido, email, dni, password, telefono, id_institucion, role, activo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, TRUE)",
-      [nombre, apellido || null, email, dniNormalized, hash, telefono || null, institucionId, normalizedRole]
+      "INSERT INTO usuario (nombre, apellido, email, dni, password, telefono, id_institucion, role, activo, nivel_educativo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, TRUE, ?)",
+      [
+        nombre,
+        apellido || null,
+        email,
+        dniNormalized,
+        hash,
+        telefono || null,
+        institucionId,
+        normalizedRole,
+        normalizedRole === "director_area" ? nivelEducativo : null
+      ]
     );
 
     return res.status(201).json({ id: result.lastID });
@@ -214,12 +256,15 @@ router.patch(
   authorizePermissions(PERMISSIONS.USERS_ROLE_UPDATE),
   async (req, res) => {
     try {
+      await ensureUsersSchema();
+
       const { id } = req.params;
-      const { role, institucion } = req.body;
+      const { role, institucion, nivel } = req.body;
       const normalizedRole = normalizeRoleName(role);
+      const nivelEducativo = String(nivel || "").trim() || null;
 
       if (!(await roleExists(normalizedRole))) {
-        return res.status(400).json({ error: "Rol inválido" });
+        return res.status(400).json({ error: "Rol invalido" });
       }
 
       const user = await get("SELECT id_usuario, id_institucion FROM usuario WHERE id_usuario = ?", [id]);
@@ -227,13 +272,22 @@ router.patch(
         return res.status(404).json({ error: "Usuario no encontrado" });
       }
 
-      const finalInstitucion = institucion || user.id_institucion || null;
+      const finalInstitucion = normalizedRole === "directivo"
+        ? (institucion || user.id_institucion || null)
+        : null;
 
       if (normalizedRole === "directivo" && !finalInstitucion) {
-        return res.status(400).json({ error: "La institución es obligatoria para rol directivo" });
+        return res.status(400).json({ error: "La institucion es obligatoria para rol directivo" });
       }
 
-      await run("UPDATE usuario SET role = ?, id_institucion = ? WHERE id_usuario = ?", [normalizedRole, finalInstitucion, id]);
+      if (normalizedRole === "director_area" && !nivelEducativo) {
+        return res.status(400).json({ error: "El nivel educativo es obligatorio para Director de Area" });
+      }
+
+      await run(
+        "UPDATE usuario SET role = ?, id_institucion = ?, nivel_educativo = ? WHERE id_usuario = ?",
+        [normalizedRole, finalInstitucion, normalizedRole === "director_area" ? nivelEducativo : null, id]
+      );
       return res.json({ ok: true });
     } catch (err) {
       return res.status(500).json({ error: "No se pudo actualizar el rol" });
@@ -262,11 +316,11 @@ router.delete("/:id", authorizePermissions(PERMISSIONS.USERS_DELETE), async (req
     const userId = Number(req.params.id);
 
     if (!Number.isInteger(userId) || userId <= 0) {
-      return res.status(400).json({ error: "ID inválido" });
+      return res.status(400).json({ error: "ID invalido" });
     }
 
     if (req.user && Number(req.user.id) === userId) {
-      return res.status(400).json({ error: "No podés eliminar tu propio usuario" });
+      return res.status(400).json({ error: "No podes eliminar tu propio usuario" });
     }
 
     const existing = await get("SELECT id_usuario, role FROM usuario WHERE id_usuario = ?", [userId]);

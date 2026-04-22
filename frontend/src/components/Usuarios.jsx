@@ -14,6 +14,8 @@ export default function Usuarios() {
   const [cueInfo, setCueInfo] = useState(null)
   const [cueLoading, setCueLoading] = useState(false)
 
+  const nivelesDisponibles = [...new Set(instituciones.map((inst) => String(inst.nivel_educativo || '').trim()).filter(Boolean))]
+
   const loadUsers = async () => {
     try {
       const res = await apiFetch('/api/users', { token })
@@ -21,7 +23,7 @@ export default function Usuarios() {
         const data = await res.json()
         setUsers(data.users || [])
       } else if (res.status === 403) {
-        setMsg('No tenés permiso para ver usuarios')
+        setMsg('No tenes permiso para ver usuarios')
       }
     } catch { /* ignore */ }
   }
@@ -34,17 +36,19 @@ export default function Usuarios() {
     } catch { /* ignore */ }
   }
 
-  // Buscar info de CUE cuando cambia el valor
   useEffect(() => {
     if (form.role === 'directivo' && form.cue && form.cue.length === 9) {
       setCueLoading(true)
       fetch(`/api/instituciones/public/cue/${form.cue}`)
-        .then(res => res.ok ? res.json() : null)
-        .then(data => {
+        .then((res) => res.ok ? res.json() : null)
+        .then((data) => {
           setCueInfo(data)
           setCueLoading(false)
         })
-        .catch(() => { setCueInfo(null); setCueLoading(false) })
+        .catch(() => {
+          setCueInfo(null)
+          setCueLoading(false)
+        })
     } else {
       setCueInfo(null)
     }
@@ -55,7 +59,7 @@ export default function Usuarios() {
       const res = await apiFetch('/api/roles', { token })
       if (res.ok) {
         const data = await res.json()
-        const roleNames = (data.roles || []).map(r => r.nombre).filter(Boolean)
+        const roleNames = (data.roles || []).map((r) => r.nombre).filter(Boolean)
         setRoles(roleNames)
       }
     } catch {
@@ -78,12 +82,12 @@ export default function Usuarios() {
     const labels = {
       admin: 'Administrador',
       supervisor: 'Supervisor',
-      director_area: 'Director de Área',
+      director_area: 'Director de Area',
       directivo: 'Directivo',
       operador: 'Operador',
       consulta: 'Consulta'
     }
-    return labels[normalized] || normalized.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+    return labels[normalized] || normalized.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
   }
 
   const handleCreate = async (e) => {
@@ -92,7 +96,7 @@ export default function Usuarios() {
 
     if (form.role === 'directivo') {
       if (!cueInfo || !cueInfo.cue) {
-        setMsg('Debe ingresar un CUE válido para un directivo')
+        setMsg('Debe ingresar un CUE valido para un directivo')
         return
       }
       if (!form.nivel) {
@@ -101,14 +105,21 @@ export default function Usuarios() {
       }
     }
 
+    if (form.role === 'director_area' && !form.nivel) {
+      setMsg('Debe seleccionar un nivel educativo para Director de Area')
+      return
+    }
+
     const payload = {
       nombre: form.nombre.trim(),
       email: form.email.trim(),
       password: form.password,
       role: form.role,
-      institucion: form.role === 'directivo' && cueInfo ? cueInfo.modalidades.find(m => m.nivel_educativo === form.nivel)?.id : (form.institucion || null),
+      institucion: form.role === 'directivo' && cueInfo
+        ? cueInfo.modalidades.find((m) => m.nivel_educativo === form.nivel)?.id
+        : (form.institucion || null),
       cue: form.role === 'directivo' ? form.cue : undefined,
-      nivel: form.role === 'directivo' ? form.nivel : undefined
+      nivel: ['directivo', 'director_area'].includes(form.role) ? form.nivel : undefined
     }
 
     const res = await apiFetch('/api/users', {
@@ -134,6 +145,7 @@ export default function Usuarios() {
       nombre: u.nombre,
       role: u.role || 'consulta',
       institucion: '',
+      nivel: u.nivel_educativo || '',
       error: ''
     })
   }
@@ -142,17 +154,22 @@ export default function Usuarios() {
     if (!roleModal) return
 
     const role = roleModal.role
-    let institucion = roleModal.institucion || null
+    const institucion = roleModal.institucion || null
+    const nivel = roleModal.nivel || null
 
     if (role === 'directivo' && !institucion) {
-      setRoleModal({ ...roleModal, error: 'La institución es obligatoria para rol directivo' })
+      setRoleModal({ ...roleModal, error: 'La institucion es obligatoria para rol directivo' })
+      return
+    }
+    if (role === 'director_area' && !nivel) {
+      setRoleModal({ ...roleModal, error: 'El nivel educativo es obligatorio para Director de Area' })
       return
     }
 
     const res = await apiFetch(`/api/users/${roleModal.id}/role`, {
       token,
       method: 'PATCH',
-      body: JSON.stringify({ role, institucion })
+      body: JSON.stringify({ role, institucion, nivel })
     })
 
     const data = await res.json().catch(() => ({}))
@@ -182,7 +199,7 @@ export default function Usuarios() {
   }
 
   const handleDelete = async (id) => {
-    if (!window.confirm('¿Seguro que querés eliminar este usuario?')) return
+    if (!window.confirm('Seguro que queres eliminar este usuario?')) return
 
     const res = await apiFetch(`/api/users/${id}`, { token, method: 'DELETE' })
     const data = await res.json().catch(() => ({}))
@@ -198,21 +215,19 @@ export default function Usuarios() {
   const canChangeRole = hasPermission('users.role.update')
   const canToggleStatus = hasPermission('users.status.update')
   const canDeleteUser = hasPermission('users.delete') && user?.role === 'admin'
-  const institucionSeleccionada = instituciones.find(inst => String(inst.id) === String(form.institucion))
-  const cueSeleccionado = institucionSeleccionada?.cue || ''
 
   if (user?.role !== 'admin') {
     return (
       <div>
-        <h2>Gestión de Usuarios</h2>
-        <div className="msg show msg-error">No tenés permiso para acceder a esta sección.</div>
+        <h2>Gestion de Usuarios</h2>
+        <div className="msg show msg-error">No tenes permiso para acceder a esta seccion.</div>
       </div>
     )
   }
 
   return (
     <div>
-      <h2>Gestión de Usuarios</h2>
+      <h2>Gestion de Usuarios</h2>
 
       {hasPermission('users.create') && (
         <div style={{ marginBottom: 24 }}>
@@ -234,20 +249,20 @@ export default function Usuarios() {
           <tr>
             <th>Nombre</th>
             <th>Email</th>
-            <th>CUE</th>
+            <th>Nivel</th>
             <th>Rol</th>
             <th>Activo</th>
             <th>Acciones</th>
           </tr>
         </thead>
         <tbody>
-          {users.map(u => (
+          {users.map((u) => (
             <tr key={u.id}>
               <td>{u.nombre}</td>
               <td>{u.email}</td>
-              <td>{u.cue || '-'}</td>
+              <td>{u.nivel_educativo || '-'}</td>
               <td><span className="badge">{u.role}</span></td>
-              <td>{u.activo ? 'Sí' : 'No'}</td>
+              <td>{u.activo ? 'Si' : 'No'}</td>
               <td>
                 <div className="inline-actions">
                   {canChangeRole && <button onClick={() => handleChangeRole(u)}>Rol +</button>}
@@ -278,7 +293,7 @@ export default function Usuarios() {
             zIndex: 1000,
             padding: 16
           }}
-          onClick={e => {
+          onClick={(e) => {
             if (e.target === e.currentTarget) setFormOpen(false)
           }}
         >
@@ -287,24 +302,25 @@ export default function Usuarios() {
             <form onSubmit={handleCreate} className="grid">
               <div>
                 <label>Nombre Completo</label>
-                <input type="text" value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Ej: Juan García" required />
+                <input type="text" value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} placeholder="Ej: Juan Garcia" required />
               </div>
               <div>
-                <label>Correo Electrónico</label>
-                <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="usuario@depo.local" required />
+                <label>Correo Electronico</label>
+                <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="usuario@depo.local" required />
               </div>
               <div>
-                <label>Contraseña</label>
-                <input type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} placeholder="●●●●●●●●" required />
+                <label>Contrasena</label>
+                <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
               </div>
               <div>
                 <label>Rol</label>
-                <select value={form.role} onChange={e => setForm({ ...form, role: e.target.value })} required>
-                  {availableRoles.map(roleName => (
+                <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value, nivel: '', institucion: '', cue: '' })} required>
+                  {availableRoles.map((roleName) => (
                     <option key={roleName} value={roleName}>{formatRoleLabel(roleName)}</option>
                   ))}
                 </select>
               </div>
+
               {form.role === 'directivo' ? (
                 <>
                   <div>
@@ -312,8 +328,8 @@ export default function Usuarios() {
                     <input
                       type="text"
                       value={form.cue}
-                      onChange={e => setForm({ ...form, cue: e.target.value.replace(/\D/g, '').slice(0,9), nivel: '' })}
-                      placeholder="Ingresar CUE (9 dígitos)"
+                      onChange={(e) => setForm({ ...form, cue: e.target.value.replace(/\D/g, '').slice(0, 9), nivel: '' })}
+                      placeholder="Ingresar CUE (9 digitos)"
                       required
                     />
                   </div>
@@ -322,9 +338,9 @@ export default function Usuarios() {
                     <div style={{ marginTop: 6 }}>
                       <div><b>Escuela:</b> {cueInfo.nombre}</div>
                       <label style={{ marginTop: 8 }}>Nivel educativo</label>
-                      <select value={form.nivel} onChange={e => setForm({ ...form, nivel: e.target.value })} required>
+                      <select value={form.nivel} onChange={(e) => setForm({ ...form, nivel: e.target.value })} required>
                         <option value="">-- Seleccionar nivel --</option>
-                        {cueInfo.modalidades.map(m => (
+                        {cueInfo.modalidades.map((m) => (
                           <option key={m.id} value={m.nivel_educativo}>{m.nivel_educativo}</option>
                         ))}
                       </select>
@@ -332,17 +348,28 @@ export default function Usuarios() {
                   )}
                   {cueInfo && !cueInfo.nombre && <div style={{ color: 'red', fontSize: 13 }}>CUE no encontrado</div>}
                 </>
+              ) : form.role === 'director_area' ? (
+                <div>
+                  <label>Nivel educativo</label>
+                  <select value={form.nivel} onChange={(e) => setForm({ ...form, nivel: e.target.value })} required>
+                    <option value="">-- Seleccionar nivel --</option>
+                    {nivelesDisponibles.map((nivel) => (
+                      <option key={nivel} value={nivel}>{nivel}</option>
+                    ))}
+                  </select>
+                </div>
               ) : (
                 <div>
-                  <label>Institución</label>
-                  <select value={form.institucion} onChange={e => setForm({ ...form, institucion: e.target.value })}>
+                  <label>Institucion</label>
+                  <select value={form.institucion} onChange={(e) => setForm({ ...form, institucion: e.target.value })}>
                     <option value="">-- Seleccionar --</option>
-                    {instituciones.map(inst => (
+                    {instituciones.map((inst) => (
                       <option key={inst.id} value={inst.id}>{inst.nombre}</option>
                     ))}
                   </select>
                 </div>
               )}
+
               <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
                 <button type="button" className="secondary" onClick={() => setFormOpen(false)}>Cancelar</button>
                 <button type="submit" style={{ width: 'auto', margin: 0, padding: '10px 18px' }}>Guardar usuario</button>
@@ -364,7 +391,7 @@ export default function Usuarios() {
             zIndex: 1000,
             padding: 16
           }}
-          onClick={e => {
+          onClick={(e) => {
             if (e.target === e.currentTarget) setRoleModal(null)
           }}
         >
@@ -374,14 +401,14 @@ export default function Usuarios() {
 
             <label style={{ marginTop: 0 }}>Seleccionar rol</label>
             <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
-              {availableRoles.map(roleName => (
+              {availableRoles.map((roleName) => (
                 <label key={roleName} style={{ display: 'flex', alignItems: 'center', gap: 8, textTransform: 'none', letterSpacing: 0, fontSize: '0.95rem', margin: 0 }}>
                   <input
                     type="radio"
                     name="rol_usuario"
                     value={roleName}
                     checked={roleModal.role === roleName}
-                    onChange={e => setRoleModal({ ...roleModal, role: e.target.value, error: '' })}
+                    onChange={(e) => setRoleModal({ ...roleModal, role: e.target.value, error: '' })}
                     style={{ width: 16, minHeight: 16, margin: 0 }}
                   />
                   {formatRoleLabel(roleName)}
@@ -391,11 +418,23 @@ export default function Usuarios() {
 
             {roleModal.role === 'directivo' && (
               <div style={{ marginTop: 16 }}>
-                <label>Institución</label>
-                <select value={roleModal.institucion} onChange={e => setRoleModal({ ...roleModal, institucion: e.target.value, error: '' })}>
-                  <option value="">-- Seleccionar institución --</option>
-                  {instituciones.map(inst => (
+                <label>Institucion</label>
+                <select value={roleModal.institucion} onChange={(e) => setRoleModal({ ...roleModal, institucion: e.target.value, error: '' })}>
+                  <option value="">-- Seleccionar institucion --</option>
+                  {instituciones.map((inst) => (
                     <option key={inst.id} value={inst.id}>{inst.nombre}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {roleModal.role === 'director_area' && (
+              <div style={{ marginTop: 16 }}>
+                <label>Nivel educativo</label>
+                <select value={roleModal.nivel} onChange={(e) => setRoleModal({ ...roleModal, nivel: e.target.value, error: '' })}>
+                  <option value="">-- Seleccionar nivel --</option>
+                  {nivelesDisponibles.map((nivel) => (
+                    <option key={nivel} value={nivel}>{nivel}</option>
                   ))}
                 </select>
               </div>
