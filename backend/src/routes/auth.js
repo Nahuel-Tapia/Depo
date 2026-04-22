@@ -33,10 +33,15 @@ async function getInstitucionNivelColumn() {
 
 router.post("/register", async (req, res) => {
   try {
-    const { nombre, cue, nivel_educativo, numero, password } = req.body;
+    const { nombre, email, cue, nivel_educativo, numero, password } = req.body;
 
-    if (!nombre || !cue || !nivel_educativo || !password) {
-      return res.status(400).json({ error: "Nombre, CUE, nivel educativo y contraseña son obligatorios" });
+    if (!nombre || !email || !cue || !nivel_educativo || !password) {
+      return res.status(400).json({ error: "Nombre, email, CUE, nivel educativo y contraseña son obligatorios" });
+    }
+
+    const emailNormalized = String(email).trim().toLowerCase();
+    if (!emailNormalized.includes("@")) {
+      return res.status(400).json({ error: "El email no es válido" });
     }
 
     const cueNormalized = String(cue).replace(/\D/g, "");
@@ -74,16 +79,21 @@ router.post("/register", async (req, res) => {
       });
     }
 
+    const existingEmail = await get("SELECT id_usuario FROM usuario WHERE LOWER(email) = ?", [emailNormalized]);
+    if (existingEmail) {
+      return res.status(409).json({ error: "Ya existe un usuario registrado con ese email" });
+    }
+
     const hash = await bcrypt.hash(password, 10);
     const result = await run(
-      "INSERT INTO usuario (nombre, dni, password, telefono, id_institucion, role, activo) VALUES (?, ?, ?, ?, ?, ?, TRUE)",
-      [nombre.trim(), cueNormalized, hash, numero || null, institucion.id_institucion, "directivo"]
+      "INSERT INTO usuario (nombre, email, dni, password, telefono, id_institucion, role, activo) VALUES (?, ?, ?, ?, ?, ?, ?, TRUE)",
+      [nombre.trim(), emailNormalized, cueNormalized, hash, numero || null, institucion.id_institucion, "directivo"]
     );
 
     return res.status(201).json({
       ok: true,
       id: result.lastID,
-      message: "Usuario creado correctamente. Ya puede iniciar sesión con su CUE"
+      message: "Usuario creado correctamente. Ya puede iniciar sesión con su email"
     });
   } catch (err) {
     console.error(err);

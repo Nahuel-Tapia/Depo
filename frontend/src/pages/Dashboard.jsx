@@ -42,7 +42,11 @@ export default function Dashboard() {
     : user?.role === 'area_compras' ? 'AC'
     : 'C'
 
-  const visibleTabs = TABS.filter((tab) => {
+  const userDisplay = user?.role === 'directivo'
+    ? `D - ${user?.institucion?.nombre || 'Sin institución'}`
+    : userInitial
+
+  const visibleTabs = TABS.filter(tab => {
     if (user?.role === 'directivo') {
       return tab.key === 'inicio' || tab.key === 'pedidos'
     }
@@ -95,7 +99,7 @@ export default function Dashboard() {
             <img src="http://prod.eduge.com.ar/assets/logoGobierno-D5M0tUR9.png" alt="San Juan Gobierno" />
           </div>
           <div className="user-info">
-            <span id="currentUser">{userInitial}</span>
+            <span id="currentUser">{userDisplay}</span>
             <button className="secondary" onClick={handleLogout} style={{ fontSize: '0.8rem' }}>Salir</button>
           </div>
         </div>

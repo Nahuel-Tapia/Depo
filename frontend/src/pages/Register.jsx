@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 export default function Register() {
   const { login } = useAuth()
   const [nombre, setNombre] = useState('')
+  const [email, setEmail] = useState('')
   const [cue, setCue] = useState('')
   const [escuela, setEscuela] = useState('')
   const [cueStatus, setCueStatus] = useState({ text: '', color: '' })
@@ -62,7 +63,7 @@ export default function Register() {
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nombre, cue, nivel_educativo: nivelEducativo, numero, password })
+        body: JSON.stringify({ nombre, email, cue, nivel_educativo: nivelEducativo, numero, password })
       })
 
       const data = await res.json().catch(() => ({}))
@@ -82,7 +83,7 @@ export default function Register() {
       const loginRes = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cue, nivel_educativo: nivelEducativo, password })
+        body: JSON.stringify({ email, cue: '', password })
       })
 
       const loginData = await loginRes.json().catch(() => ({}))
@@ -117,6 +118,10 @@ export default function Register() {
             <div>
               <label>Nombre</label>
               <input type="text" value={nombre} onChange={(e) => setNombre(e.target.value)} required placeholder="Ej: María Gómez" />
+            </div>
+            <div>
+              <label>Email</label>
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="Ej: directivo@escuela.edu.ar" />
             </div>
             <div>
               <label>CUE</label>
