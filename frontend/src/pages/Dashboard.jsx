@@ -12,9 +12,11 @@ import SupervisorDashboard from '../components/SupervisorDashboard'
 import DirectorAreaPanel from '../components/DirectorAreaPanel'
 import ComprasPanel from '../components/ComprasPanel'
 import ProductKitsManager from '../components/ProductKitsManager'
+import MiCuenta from '../components/MiCuenta'
 
 const TABS = [
   { key: 'inicio', label: 'Inicio', permission: null },
+  { key: 'mi-cuenta', label: 'Mi cuenta', permission: null },
   { key: 'gestion-escuelas', label: 'Gestión de Escuelas', permission: 'supervision.manage', role: 'director_area' },
   { key: 'gestion-pedidos', label: 'Gestión de Pedidos', permission: 'supervision.manage', role: 'director_area' },
   { key: 'compras', label: 'Área de Compras', permission: 'planilla.view', role: 'area_compras' },
@@ -48,11 +50,11 @@ export default function Dashboard() {
 
   const visibleTabs = TABS.filter(tab => {
     if (user?.role === 'directivo') {
-      return tab.key === 'inicio' || tab.key === 'pedidos'
+      return tab.key === 'inicio' || tab.key === 'pedidos' || tab.key === 'mi-cuenta'
     }
-        if (user?.role === 'area_compras') {
-          return tab.key === 'inicio' || tab.key === 'compras'
-        }
+    if (user?.role === 'area_compras') {
+      return tab.key === 'inicio' || tab.key === 'compras' || tab.key === 'mi-cuenta'
+    }
     // Hide tabs explicitly hidden for this role
     if (tab.hideForRole && tab.hideForRole === user?.role) return false
     if (tab.hideForRoles && tab.hideForRoles.includes(user?.role)) return false
@@ -74,6 +76,7 @@ export default function Dashboard() {
   const renderTab = () => {
     switch (activeTab) {
       case 'inicio': return <Inicio onNavigate={setActiveTab} />
+      case 'mi-cuenta': return <MiCuenta />
       case 'gestion-escuelas':
         return <DirectorAreaPanel initialSection="gestion-escuelas" />
       case 'gestion-pedidos':
