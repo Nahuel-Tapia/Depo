@@ -47,9 +47,7 @@ export default function Dashboard() {
     : user?.role === 'area_compras' ? 'AC'
     : 'C'
 
-  const userDisplay = user?.role === 'directivo'
-    ? `D - ${user?.institucion?.nombre || 'Sin institución'}`
-    : userInitial
+  const userDisplay = userInitial
 
   const visibleTabs = TABS.filter(tab => {
     if (user?.role === 'directivo') {
@@ -111,12 +109,19 @@ export default function Dashboard() {
           </div>
           <div className="user-info">
             <span id="currentUser">{userDisplay}</span>
+            <button
+              className="secondary"
+              onClick={() => setActiveTab('mi-cuenta')}
+              style={{ fontSize: '0.8rem' }}
+            >
+              Mi cuenta
+            </button>
             <button className="secondary" onClick={logout} style={{ fontSize: '0.8rem' }}>Salir</button>
           </div>
         </div>
 
         <div className="tabs">
-          {visibleTabs.map(tab => (
+          {visibleTabs.filter(tab => tab.key !== 'mi-cuenta').map(tab => (
             <button
               key={tab.key}
               className={`tab-btn ${activeTab === tab.key ? 'active' : ''}`}
