@@ -130,6 +130,22 @@ router.post("/login", async (req, res) => {
       });
     }
 
+    // Obtener información de la institución si el usuario es directivo
+    let institucionInfo = null;
+    if (user.role === 'directivo' && user.id_institucion) {
+      const institucion = await get(
+        'SELECT id_institucion, nombre, cue FROM institucion WHERE id_institucion = ?',
+        [user.id_institucion]
+      );
+      if (institucion) {
+        institucionInfo = {
+          id: institucion.id_institucion,
+          nombre: institucion.nombre,
+          cue: institucion.cue
+        };
+      }
+    }
+
     const token = jwt.sign(
       {
         sub: user.id_usuario,
@@ -153,7 +169,8 @@ router.post("/login", async (req, res) => {
         apellido: user.apellido,
         email: user.email,
         dni: user.dni,
-        role: user.role
+        role: user.role,
+        institucion: institucionInfo
       }
     });
   } catch (err) {

@@ -29,8 +29,8 @@ export default function Inicio({ onNavigate }) {
   const printRef = useRef(null)
 
   useEffect(() => {
-    // Supervisor no necesita stats del depósito
-    if (user?.role === 'supervisor') {
+    // Supervisor y Directivo no necesitan stats del depósito
+    if (user?.role === 'supervisor' || user?.role === 'directivo') {
       setLoading(false)
       return
     }
@@ -67,6 +67,22 @@ export default function Inicio({ onNavigate }) {
     )
   }
 
+  // Directivo: mostrar su dashboard
+  if (user?.role === 'directivo') {
+    return (
+      <div>
+        <div className="stock-alert-box">
+          <div className="stock-alert-title">
+            <span className="stock-alert-triangle"></span>
+            Bienvenido, {user?.nombre || 'Usuario'}
+          </div>
+          <p className="stock-alert-role">{ROLE_LABELS[user?.role]}</p>
+        </div>
+        <DirectivoInicio onNavigate={onNavigate} token={token} user={user} />
+      </div>
+    )
+  }
+
   if (error) return <p style={{ color: '#b91c1c', padding: '24px 0' }}>Error: {error}</p>
   if (!stats) return null
 
@@ -91,18 +107,6 @@ export default function Inicio({ onNavigate }) {
         </p>
       </div>
 
-      {/* Rol directivo: solo bienvenida + acceso a pedidos */}
-      {user?.role === 'directivo' ? (
-        <div style={{ textAlign: 'center', padding: '40px 0' }}>
-          <p style={{ color: 'var(--muted)', marginBottom: 16 }}>Desde aquí podés gestionar tus pedidos.</p>
-          <button onClick={() => onNavigate?.('pedidos')} style={{ fontSize: '1rem' }}>
-            Ir a Pedidos
-          </button>
-        </div>
-      ) : user?.role === 'supervisor' ? (
-        <SupervisorInicio onNavigate={onNavigate} token={token} user={user} />
-      ) : (
-      <>
       {/* Cards de resumen */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '24px' }}>
         <StatCard
@@ -211,8 +215,6 @@ export default function Inicio({ onNavigate }) {
             </tbody>
           </table>
         </>
-      )}
-      </>
       )}
 
       {modalType && (
@@ -419,6 +421,224 @@ function SupervisorInicio({ onNavigate, token, user }) {
           ))}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+// ── Vista de Inicio para Directivo ──
+function DirectivoInicio({ onNavigate, token, user }) {
+  const [alertas, setAlertas] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await apiFetch('/api/directivo/alertas', { token })
+        if (res.ok) {
+          const data = await res.json()
+          setAlertas(data)
+        } else {
+          setError('No se pudieron cargar las alertas')
+        }
+      } catch (err) {
+        console.error('Error cargando alertas:', err)
+        setError('Error al cargar alertas')
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [token])
+
+  if (loading) {
+    return <p style={{ color: 'var(--muted)', padding: '24px 0' }}>Cargando información...</p>
+  }
+
+  const institucion = alertas?.institucion
+  const pedidosAprobados = alertas?.alertas?.pedidosAprobados || {}
+  const movimientosPendientes = alertas?.alertas?.movimientosPendientes || {}
+  const ultimasTransacciones = alertas?.ultimasTransacciones || []
+
+  return (
+    <div>
+      {/* Header con institución */}
+      <div style={{
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        color: 'white',
+        padding: '24px',
+        borderRadius: '10px',
+        marginBottom: '24px',
+        boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '12px' }}>
+          <span style={{ fontSize: '3rem' }}>🏫</span>
+          <div>
+            <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700 }}>
+              {institucion?.nombre || 'Tu Institución'}
+            </h2>
+            <p style={{ margin: '4px 0 0 0', opacity: 0.9, fontSize: '0.9rem' }}>
+              CUE: {institucion?.cue || '—'}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Alertas principales */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+        <StatCard
+          label="Pedidos aprobados"
+          value={pedidosAprobados.cantidad || 0}
+          icon="📦"
+          accent={pedidosAprobados.cantidad > 0 ? '#667eea' : '#065f46'}
+        />
+        <StatCard
+          label="Pendiente retirar"
+          value={movimientosPendientes.cantidad || 0}
+          icon="⚠️"
+          accent={movimientosPendientes.cantidad > 0 ? '#E03C31' : '#065f46'}
+        />
+      </div>
+
+      {/* Pedidos Aprobados */}
+      {pedidosAprobados.items && pedidosAprobados.items.length > 0 && (
+        <div style={{ marginBottom: '24px' }}>
+          <h3 style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span>📋</span> Pedidos Aprobados para Retirar
+          </h3>
+          <table>
+            <thead>
+              <tr>
+                <th>ID Pedido</th>
+                <th>Fecha</th>
+                <th>Cantidad de Items</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pedidosAprobados.items.map(pedido => (
+                <tr key={pedido.id}>
+                  <td style={{ fontWeight: 600 }}>#{pedido.id}</td>
+                  <td>{new Date(pedido.created_at).toLocaleDateString('es-AR')}</td>
+                  <td style={{ textAlign: 'center' }}>{pedido.cantidad_items}</td>
+                  <td>
+                    <span className="badge badge-estado-aprobado" style={{ background: '#ecfdf5', color: '#065f46' }}>
+                      Aprobado
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <button 
+            onClick={() => onNavigate?.('pedidos')} 
+            style={{ marginTop: '12px', width: '100%' }}
+          >
+            Ver todos los pedidos
+          </button>
+        </div>
+      )}
+
+      {/* Movimientos Pendientes de Retirar */}
+      {movimientosPendientes.items && movimientosPendientes.items.length > 0 && (
+        <div style={{ marginBottom: '24px' }}>
+          <div style={{
+            background: '#fef2f2',
+            border: '2px solid #fecaca',
+            borderRadius: '8px',
+            padding: '16px',
+            marginBottom: '16px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+              <span style={{ fontSize: '1.5rem' }}>⚠️</span>
+              <h3 style={{ margin: 0, color: '#b91c1c' }}>Productos pendientes de retirar</h3>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Producto</th>
+                  <th>Cantidad</th>
+                  <th>Unidad</th>
+                  <th>Fecha</th>
+                </tr>
+              </thead>
+              <tbody>
+                {movimientosPendientes.items.map(mov => (
+                  <tr key={mov.id}>
+                    <td style={{ fontWeight: 600 }}>{mov.producto_nombre}</td>
+                    <td style={{ textAlign: 'center' }}>{mov.cantidad}</td>
+                    <td>{mov.unidad_medida || '—'}</td>
+                    <td>{new Date(mov.fecha).toLocaleDateString('es-AR')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Últimas Transacciones */}
+      {ultimasTransacciones.length > 0 && (
+        <div style={{ marginBottom: '24px' }}>
+          <h3 style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span>📊</span> Últimos Movimientos
+          </h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Tipo</th>
+                <th>Producto</th>
+                <th>Cantidad</th>
+                <th>Usuario</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ultimasTransacciones.map(trans => {
+                const tipoStyle = TIPO_COLORS[trans.tipo] || {}
+                return (
+                  <tr key={trans.id}>
+                    <td>{new Date(trans.fecha).toLocaleDateString('es-AR')}</td>
+                    <td>
+                      <span className="badge" style={{ background: tipoStyle.bg, color: tipoStyle.color }}>
+                        {trans.tipo}
+                      </span>
+                    </td>
+                    <td style={{ fontWeight: 600 }}>{trans.producto_nombre}</td>
+                    <td style={{ textAlign: 'center' }}>
+                      {trans.cantidad} {trans.unidad_medida || ''}
+                    </td>
+                    <td>{trans.usuario_nombre || '—'}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Mensaje si no hay alertas */}
+      {!pedidosAprobados.items?.length && !movimientosPendientes.items?.length && !ultimasTransacciones.length && (
+        <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--muted)' }}>
+          <p style={{ fontSize: '1rem', marginBottom: '16px' }}>✅ Todo está al día</p>
+          <p style={{ marginBottom: '24px' }}>No hay pedidos pendientes de retirar ni movimientos recientes.</p>
+          <button onClick={() => onNavigate?.('pedidos')} style={{ fontSize: '1rem' }}>
+            Ir a Pedidos
+          </button>
+        </div>
+      )}
+
+      {error && (
+        <div style={{
+          background: '#fef2f2',
+          color: '#b91c1c',
+          padding: '16px',
+          borderRadius: '8px',
+          marginTop: '12px'
+        }}>
+          {error}
+        </div>
+      )}
     </div>
   )
 }
