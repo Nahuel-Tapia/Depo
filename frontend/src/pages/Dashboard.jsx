@@ -12,12 +12,17 @@ import SupervisorDashboard from '../components/SupervisorDashboard'
 import DirectorAreaPanel from '../components/DirectorAreaPanel'
 import ComprasPanel from '../components/ComprasPanel'
 import ProductKitsManager from '../components/ProductKitsManager'
+import MiCuenta from '../components/MiCuenta'
 
 const TABS = [
   { key: 'inicio', label: 'Inicio', permission: null },
+  { key: 'mi-cuenta', label: 'Mi cuenta', permission: null },
   { key: 'gestion-escuelas', label: 'Gestión de Escuelas', permission: 'supervision.manage', role: 'director_area' },
   { key: 'gestion-pedidos', label: 'Gestión de Pedidos', permission: 'supervision.manage', role: 'director_area' },
-  { key: 'compras', label: 'Área de Compras', permission: 'planilla.view', role: 'area_compras' },
+  { key: 'compras-pedidos', label: 'Gestión de Pedidos Anuales', permission: 'planilla.view', role: 'area_compras' },
+  { key: 'compras-licitacion', label: 'Licitación Anual', permission: 'planilla.view', role: 'area_compras' },
+  { key: 'compras-listado-final', label: 'Listado Final a Licitar', permission: 'planilla.view', role: 'area_compras' },
+  { key: 'compras-adjudicacion', label: 'Adjudicación y Cierre', permission: 'planilla.manage', role: 'area_compras' },
   { key: 'supervisor', label: 'Patrimonio Escolar', permission: 'pedidos.manage', role: 'supervisor' },
   { key: 'mis-escuelas', label: 'Mis Escuelas', permission: 'instituciones.view', role: 'supervisor', hideForRoles: ['admin'] },
   { key: 'productos', label: 'Productos', permission: 'productos.view', hideForRoles: ['supervisor', 'director_area'] },
@@ -42,17 +47,27 @@ export default function Dashboard() {
     : user?.role === 'area_compras' ? 'AC'
     : 'C'
 
+  const userDisplay = user?.role === 'directivo'
+    ? `D - ${user?.institucion?.nombre || 'Sin institución'}`
+    : userInitial
+
   const visibleTabs = TABS.filter(tab => {
     if (user?.role === 'directivo') {
-      return tab.key === 'inicio' || tab.key === 'pedidos'
+      return tab.key === 'inicio' || tab.key === 'pedidos' || tab.key === 'mi-cuenta'
     }
-        if (user?.role === 'area_compras') {
-          return tab.key === 'inicio' || tab.key === 'compras'
-        }
+    if (user?.role === 'area_compras') {
+      return [
+        'inicio',
+        'mi-cuenta',
+        'compras-pedidos',
+        'compras-licitacion',
+        'compras-listado-final',
+        'compras-adjudicacion'
+      ].includes(tab.key)
+    }
     // Hide tabs explicitly hidden for this role
     if (tab.hideForRole && tab.hideForRole === user?.role) return false
     if (tab.hideForRoles && tab.hideForRoles.includes(user?.role)) return false
-    // Tabs restricted to a specific role: only show for that role (or admin)
     if (tab.role && tab.role !== user?.role && user?.role !== 'admin') return false
     return !tab.permission || hasPermission(tab.permission)
   })
@@ -63,17 +78,16 @@ export default function Dashboard() {
     }
   }, [activeTab, visibleTabs])
 
-  const handleLogout = () => {
-    logout()
-  }
-
   const renderTab = () => {
     switch (activeTab) {
       case 'inicio': return <Inicio onNavigate={setActiveTab} />
-      case 'gestion-escuelas':
-        return <DirectorAreaPanel initialSection="gestion-escuelas" />
-      case 'gestion-pedidos':
-        return <DirectorAreaPanel initialSection="gestion-pedidos" />
+      case 'mi-cuenta': return <MiCuenta />
+      case 'gestion-escuelas': return <DirectorAreaPanel initialSection="gestion-escuelas" />
+      case 'gestion-pedidos': return <DirectorAreaPanel initialSection="gestion-pedidos" />
+      case 'compras-pedidos': return <ComprasPanel section="pedidos" />
+      case 'compras-licitacion': return <ComprasPanel section="licitacion" />
+      case 'compras-listado-final': return <ComprasPanel section="listado-final" />
+      case 'compras-adjudicacion': return <ComprasPanel section="adjudicacion" />
       case 'productos': return <Productos />
       case 'movimientos': return <Movimientos />
       case 'pedidos': return <Pedidos />
@@ -81,7 +95,6 @@ export default function Dashboard() {
       case 'mis-escuelas': return <Instituciones supervisorMode />
       case 'historial': return <HistorialInstitucion />
       case 'supervisor': return <SupervisorDashboard />
-      case 'compras': return <ComprasPanel />
       case 'proveedores': return <Proveedores />
       case 'usuarios': return <Usuarios />
       case 'kits': return <ProductKitsManager />
@@ -97,8 +110,8 @@ export default function Dashboard() {
             <img src="http://prod.eduge.com.ar/assets/logoGobierno-D5M0tUR9.png" alt="San Juan Gobierno" />
           </div>
           <div className="user-info">
-            <span id="currentUser">{userInitial}</span>
-            <button className="secondary" onClick={handleLogout} style={{ fontSize: '0.8rem' }}>Salir</button>
+            <span id="currentUser">{userDisplay}</span>
+            <button className="secondary" onClick={logout} style={{ fontSize: '0.8rem' }}>Salir</button>
           </div>
         </div>
 
