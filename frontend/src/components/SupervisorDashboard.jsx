@@ -2,17 +2,16 @@ import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../api'
 import PrintButton from './PrintButton'
-import { SCHOOL_TYPE_OPTIONS, getSchoolTypeLabel } from '../constants/schoolTypes'
 
 const CATEGORIAS_PATRIMONIO = [
   'Bancos', 'Sillas', 'Escritorios', 'Pizarrones', 'Estantes',
-  'Mesas', 'Armarios', 'Equipamiento informático', 'Otro'
+  'Mesas', 'Armarios', 'Equipamiento informatico', 'Otro'
 ]
 
 const PRIORIDAD_STYLE = {
   alta: { bg: '#fef2f2', color: '#b91c1c', label: 'Alta' },
   media: { bg: '#fffbeb', color: '#92400e', label: 'Media' },
-  baja: { bg: '#f0fdf4', color: '#065f46', label: 'Baja' },
+  baja: { bg: '#f0fdf4', color: '#065f46', label: 'Baja' }
 }
 
 export default function SupervisorDashboard() {
@@ -23,13 +22,18 @@ export default function SupervisorDashboard() {
   const [tickets, setTickets] = useState([])
   const [procesados, setProcesados] = useState([])
   const [instituciones, setInstituciones] = useState([])
-  const [tipoKitByInstitucion, setTipoKitByInstitucion] = useState({})
+  const [kits, setKits] = useState([])
+  const [kitByInstitucion, setKitByInstitucion] = useState({})
   const [savingTipoId, setSavingTipoId] = useState(null)
   const [msg, setMsg] = useState({ text: '', type: '' })
 
   const [accionandoId, setAccionandoId] = useState(null)
   const [accionTipo, setAccionTipo] = useState('')
   const [motivoAccion, setMotivoAccion] = useState('')
+
+  const [busqueda, setBusqueda] = useState('')
+  const [filtroCategoria, setFiltroCategoria] = useState('')
+  const [filtroPrioridad, setFiltroPrioridad] = useState('')
 
   useEffect(() => {
     const loadTickets = async () => {
@@ -47,30 +51,40 @@ export default function SupervisorDashboard() {
   }, [token])
 
   useEffect(() => {
-    const loadInstituciones = async () => {
+    const loadInstitucionesYKits = async () => {
       try {
-        const res = await apiFetch('/api/supervisor/instituciones', { token })
-        if (!res.ok) return
-        const data = await res.json()
-        const rows = data.instituciones || []
-        setInstituciones(rows)
-        setTipoKitByInstitucion(
-          Object.fromEntries(rows.map((inst) => [String(inst.id), inst.tipo_escuela || 'normal']))
-        )
+        const [institucionesRes, kitsRes] = await Promise.all([
+          apiFetch('/api/supervisor/instituciones', { token }),
+          apiFetch('/api/pedidos/kits', { token })
+        ])
+
+        if (institucionesRes.ok) {
+          const data = await institucionesRes.json()
+          const rows = data.instituciones || []
+          setInstituciones(rows)
+          setKitByInstitucion(
+            Object.fromEntries(rows.map((inst) => [String(inst.id), inst.kit_id ? String(inst.kit_id) : '']))
+          )
+        }
+
+        if (kitsRes.ok) {
+          const data = await kitsRes.json()
+          setKits(data.kits || [])
+        }
       } catch (err) {
         console.error('Error cargando escuelas del supervisor:', err)
       }
     }
-    loadInstituciones()
+    loadInstitucionesYKits()
   }, [token])
-
-  const [busqueda, setBusqueda] = useState('')
-  const [filtroCategoria, setFiltroCategoria] = useState('')
-  const [filtroPrioridad, setFiltroPrioridad] = useState('')
 
   const handleAprobar = async (ticketId) => {
     try {
-      const res = await apiFetch(`/api/patrimonio/tickets/${ticketId}/estado`, { token, method: 'PATCH', body: JSON.stringify({ estado: 'aprobado' }) })
+      const res = await apiFetch(`/api/patrimonio/tickets/${ticketId}/estado`, {
+        token,
+        method: 'PATCH',
+        body: JSON.stringify({ estado: 'aprobado' })
+      })
       if (!res.ok) {
         const err = await res.json()
         setMsg({ text: err.error || 'Error al aprobar ticket', type: 'error' })
@@ -78,13 +92,17 @@ export default function SupervisorDashboard() {
         return
       }
     } catch (err) {
-      setMsg({ text: 'Error de conexión', type: 'error' })
+      setMsg({ text: 'Error de conexion', type: 'error' })
       setTimeout(() => setMsg({ text: '', type: '' }), 3000)
       return
     }
-    const ticket = tickets.find(t => t.id === ticketId)
-    setTickets(prev => prev.filter(t => t.id !== ticketId))
-    setProcesados(prev => [...prev, { ...ticket, estado: 'aprobado', resolucion: 'Reemplazo aprobado', fechaProcesado: new Date().toISOString() }])
+
+    const ticket = tickets.find((t) => t.id === ticketId)
+    setTickets((prev) => prev.filter((t) => t.id !== ticketId))
+    setProcesados((prev) => [
+      ...prev,
+      { ...ticket, estado: 'aprobado', resolucion: 'Reemplazo aprobado', fechaProcesado: new Date().toISOString() }
+    ])
     setMsg({ text: `Ticket #${ticketId} - Reemplazo aprobado`, type: 'success' })
     setTimeout(() => setMsg({ text: '', type: '' }), 3000)
   }
@@ -103,14 +121,18 @@ export default function SupervisorDashboard() {
 
   const confirmarAccion = async (ticketId) => {
     if (!motivoAccion.trim()) {
-      setMsg({ text: `Debe ingresar una observación para ${accionTipo === 'rechazar' ? 'el rechazo' : 'la reparación'}`, type: 'error' })
+      setMsg({ text: `Debe ingresar una observacion para ${accionTipo === 'rechazar' ? 'el rechazo' : 'la reparacion'}`, type: 'error' })
       setTimeout(() => setMsg({ text: '', type: '' }), 3000)
       return
     }
 
     const nuevoEstado = accionTipo === 'rechazar' ? 'rechazado' : 'en_reparacion'
     try {
-      const res = await apiFetch(`/api/patrimonio/tickets/${ticketId}/estado`, { token, method: 'PATCH', body: JSON.stringify({ estado: nuevoEstado, observacion: motivoAccion.trim() }) })
+      const res = await apiFetch(`/api/patrimonio/tickets/${ticketId}/estado`, {
+        token,
+        method: 'PATCH',
+        body: JSON.stringify({ estado: nuevoEstado, observacion: motivoAccion.trim() })
+      })
       if (!res.ok) {
         const err = await res.json()
         setMsg({ text: err.error || 'Error al procesar ticket', type: 'error' })
@@ -118,54 +140,64 @@ export default function SupervisorDashboard() {
         return
       }
     } catch (err) {
-      setMsg({ text: 'Error de conexión', type: 'error' })
+      setMsg({ text: 'Error de conexion', type: 'error' })
       setTimeout(() => setMsg({ text: '', type: '' }), 3000)
       return
     }
-    const ticket = tickets.find(t => t.id === ticketId)
-    const labelEstado = accionTipo === 'rechazar' ? 'Rechazado' : 'Enviado a reparación'
 
-    setTickets(prev => prev.filter(t => t.id !== ticketId))
-    setProcesados(prev => [...prev, {
-      ...ticket,
-      estado: nuevoEstado,
-      resolucion: labelEstado,
-      observacion: motivoAccion.trim(),
-      fechaProcesado: new Date().toISOString()
-    }])
+    const ticket = tickets.find((t) => t.id === ticketId)
+    const labelEstado = accionTipo === 'rechazar' ? 'Rechazado' : 'Enviado a reparacion'
+    setTickets((prev) => prev.filter((t) => t.id !== ticketId))
+    setProcesados((prev) => [
+      ...prev,
+      {
+        ...ticket,
+        estado: nuevoEstado,
+        resolucion: labelEstado,
+        observacion: motivoAccion.trim(),
+        fechaProcesado: new Date().toISOString()
+      }
+    ])
     setMsg({ text: `Ticket #${ticketId} - ${labelEstado}`, type: 'success' })
     cancelarAccion()
     setTimeout(() => setMsg({ text: '', type: '' }), 3000)
   }
 
   const handleGuardarTipoKit = async (institucionId) => {
-    const tipo_escuela = tipoKitByInstitucion[String(institucionId)] || 'normal'
+    const kit_id = Number(kitByInstitucion[String(institucionId)] || 0)
     setSavingTipoId(institucionId)
     try {
       const res = await apiFetch(`/api/supervisor/instituciones/${institucionId}/tipo-kit`, {
         token,
         method: 'PATCH',
-        body: JSON.stringify({ tipo_escuela })
+        body: JSON.stringify({ kit_id })
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        throw new Error(data.error || 'No se pudo asignar el tipo de kit.')
+        throw new Error(data.error || 'No se pudo asignar el kit.')
       }
-      setInstituciones(prev => prev.map((inst) => Number(inst.id) === Number(institucionId) ? { ...inst, tipo_escuela } : inst))
-      setMsg({ text: 'Tipo de kit actualizado correctamente.', type: 'success' })
+
+      setInstituciones((prev) => prev.map((inst) => (
+        Number(inst.id) === Number(institucionId)
+          ? { ...inst, kit_id, kit_nombre: data.kit_nombre || '' }
+          : inst
+      )))
+      setMsg({ text: 'Kit actualizado correctamente.', type: 'success' })
       setTimeout(() => setMsg({ text: '', type: '' }), 3000)
     } catch (err) {
-      setMsg({ text: err.message || 'No se pudo asignar el tipo de kit.', type: 'error' })
+      setMsg({ text: err.message || 'No se pudo asignar el kit.', type: 'error' })
       setTimeout(() => setMsg({ text: '', type: '' }), 3000)
     } finally {
       setSavingTipoId(null)
     }
   }
 
-  const ticketsFiltrados = tickets.filter(t => {
+  const ticketsFiltrados = tickets.filter((t) => {
     if (busqueda.trim()) {
       const q = busqueda.toLowerCase()
-      if (!t.institucion.toLowerCase().includes(q) && !t.descripcion.toLowerCase().includes(q) && !t.categoria.toLowerCase().includes(q)) return false
+      if (!t.institucion.toLowerCase().includes(q) && !t.descripcion.toLowerCase().includes(q) && !t.categoria.toLowerCase().includes(q)) {
+        return false
+      }
     }
     if (filtroCategoria && t.categoria !== filtroCategoria) return false
     if (filtroPrioridad && t.prioridad !== filtroPrioridad) return false
@@ -181,7 +213,7 @@ export default function SupervisorDashboard() {
 
       <div className="sv-jurisdiction-banner">
         <span className="sv-jurisdiction-dot"></span>
-        <span>Jurisdicción: <strong>{user?.jurisdiccion || '-'}</strong></span>
+        <span>Jurisdiccion: <strong>{user?.jurisdiccion || '-'}</strong></span>
         <span className="sv-jurisdiction-count">
           {activeSection === 'asignar-kit' ? `${instituciones.length} escuelas asignadas` : `${tickets.length} tickets pendientes`}
         </span>
@@ -201,12 +233,12 @@ export default function SupervisorDashboard() {
       {activeSection === 'patrimonio' && (
         <>
           <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
-            <input type="text" placeholder="Buscar institución, categoría o descripción..." value={busqueda} onChange={e => setBusqueda(e.target.value)} style={{ flex: '1 1 250px', marginBottom: 0 }} />
-            <select value={filtroCategoria} onChange={e => setFiltroCategoria(e.target.value)} style={{ flex: '0 1 180px' }}>
-              <option value="">Todas las categorías</option>
-              {CATEGORIAS_PATRIMONIO.map(c => <option key={c} value={c}>{c}</option>)}
+            <input type="text" placeholder="Buscar institucion, categoria o descripcion..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} style={{ flex: '1 1 250px', marginBottom: 0 }} />
+            <select value={filtroCategoria} onChange={(e) => setFiltroCategoria(e.target.value)} style={{ flex: '0 1 180px' }}>
+              <option value="">Todas las categorias</option>
+              {CATEGORIAS_PATRIMONIO.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
-            <select value={filtroPrioridad} onChange={e => setFiltroPrioridad(e.target.value)} style={{ flex: '0 1 140px' }}>
+            <select value={filtroPrioridad} onChange={(e) => setFiltroPrioridad(e.target.value)} style={{ flex: '0 1 140px' }}>
               <option value="">Toda prioridad</option>
               <option value="alta">Alta</option>
               <option value="media">Media</option>
@@ -224,17 +256,17 @@ export default function SupervisorDashboard() {
                 <thead>
                   <tr>
                     <th>N°</th>
-                    <th>Institución</th>
+                    <th>Institucion</th>
                     <th>Fecha</th>
-                    <th>Categoría</th>
-                    <th>Descripción</th>
+                    <th>Categoria</th>
+                    <th>Descripcion</th>
                     <th>Cant.</th>
                     <th>Prioridad</th>
                     <th>Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {ticketsFiltrados.map(ticket => {
+                  {ticketsFiltrados.map((ticket) => {
                     const pStyle = PRIORIDAD_STYLE[ticket.prioridad] || {}
                     return (
                       <tr key={ticket.id}>
@@ -249,9 +281,9 @@ export default function SupervisorDashboard() {
                           {accionandoId === ticket.id ? (
                             <div className="sv-rechazo-box">
                               <p style={{ margin: '0 0 4px', fontSize: '0.78rem', fontWeight: 600, color: accionTipo === 'rechazar' ? '#b91c1c' : '#1e40af' }}>
-                                {accionTipo === 'rechazar' ? 'Motivo del rechazo:' : 'Detalle de reparación:'}
+                                {accionTipo === 'rechazar' ? 'Motivo del rechazo:' : 'Detalle de reparacion:'}
                               </p>
-                              <textarea className="sv-rechazo-input" placeholder={accionTipo === 'rechazar' ? 'Motivo del rechazo...' : 'Indicar taller, plazo estimado...'} value={motivoAccion} onChange={e => setMotivoAccion(e.target.value)} rows={2} style={accionTipo === 'reparar' ? { borderColor: '#3b82f6' } : {}} />
+                              <textarea className="sv-rechazo-input" placeholder={accionTipo === 'rechazar' ? 'Motivo del rechazo...' : 'Indicar taller, plazo estimado...'} value={motivoAccion} onChange={(e) => setMotivoAccion(e.target.value)} rows={2} style={accionTipo === 'reparar' ? { borderColor: '#3b82f6' } : {}} />
                               <div className="inline-actions" style={{ marginTop: 6 }}>
                                 <button onClick={() => confirmarAccion(ticket.id)} className={accionTipo === 'rechazar' ? 'sv-btn-confirmar-rechazo' : 'sv-btn-confirmar-reparar'}>Confirmar</button>
                                 <button onClick={cancelarAccion} className="secondary" style={{ margin: 0, minHeight: 'auto', padding: '6px 12px', fontSize: '0.75rem' }}>Cancelar</button>
@@ -260,7 +292,7 @@ export default function SupervisorDashboard() {
                           ) : (
                             <div className="inline-actions">
                               <button onClick={() => handleAprobar(ticket.id)} title="Aprobar reemplazo completo">Aprobar</button>
-                              <button onClick={() => iniciarAccion(ticket.id, 'reparar')} className="sv-btn-reparar" title="Enviar a reparación">Reparar</button>
+                              <button onClick={() => iniciarAccion(ticket.id, 'reparar')} className="sv-btn-reparar" title="Enviar a reparacion">Reparar</button>
                               <button onClick={() => iniciarAccion(ticket.id, 'rechazar')} className="sv-btn-rechazar" title="Rechazar solicitud">Rechazar</button>
                             </div>
                           )}
@@ -279,15 +311,15 @@ export default function SupervisorDashboard() {
                   <thead>
                     <tr>
                       <th>N°</th>
-                      <th>Institución</th>
-                      <th>Categoría</th>
+                      <th>Institucion</th>
+                      <th>Categoria</th>
                       <th>Cant.</th>
-                      <th>Resolución</th>
-                      <th>Observación</th>
+                      <th>Resolucion</th>
+                      <th>Observacion</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {procesados.map(t => (
+                    {procesados.map((t) => (
                       <tr key={t.id}>
                         <td>#{t.id}</td>
                         <td>{t.institucion}</td>
@@ -313,11 +345,13 @@ export default function SupervisorDashboard() {
         <section ref={printRef}>
           <h3>Asignar kit</h3>
           <p style={{ marginTop: 0, color: 'var(--muted)' }}>
-            Acá podés definir qué tipo de kit usa cada escuela asignada a este supervisor.
+            Aca podes asignar a cada escuela uno de los kits que ya fueron creados.
           </p>
 
           {instituciones.length === 0 ? (
             <div className="sv-empty-state">Este supervisor no tiene escuelas asignadas.</div>
+          ) : kits.length === 0 ? (
+            <div className="sv-empty-state">No hay kits creados para asignar todavia.</div>
           ) : (
             <div className="sv-kit-grid">
               {instituciones.map((inst) => (
@@ -327,7 +361,7 @@ export default function SupervisorDashboard() {
                       <div className="sv-inst-nombre">{inst.nombre}</div>
                       <div className="sv-inst-cue">CUE: {inst.cue || '-'}</div>
                     </div>
-                    <span className="badge sv-badge-tipo-escuela">{getSchoolTypeLabel(inst.tipo_escuela || 'normal')}</span>
+                    {inst.kit_nombre && <span className="badge sv-badge-tipo-escuela">{inst.kit_nombre}</span>}
                   </div>
 
                   <div className="sv-kit-meta">
@@ -335,16 +369,17 @@ export default function SupervisorDashboard() {
                     <span>Departamento: <strong>{inst.departamento || '-'}</strong></span>
                   </div>
 
-                  <label>Tipo de kit</label>
+                  <label>Kit asignado</label>
                   <select
-                    value={tipoKitByInstitucion[String(inst.id)] || 'normal'}
-                    onChange={(e) => setTipoKitByInstitucion((prev) => ({
+                    value={kitByInstitucion[String(inst.id)] || ''}
+                    onChange={(e) => setKitByInstitucion((prev) => ({
                       ...prev,
                       [String(inst.id)]: e.target.value
                     }))}
                   >
-                    {SCHOOL_TYPE_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
+                    <option value="">Seleccionar kit...</option>
+                    {kits.map((kit) => (
+                      <option key={kit.id} value={kit.id}>{kit.nombre}</option>
                     ))}
                   </select>
 

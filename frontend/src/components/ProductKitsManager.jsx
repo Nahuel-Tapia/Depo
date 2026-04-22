@@ -1,13 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../api'
-import { SCHOOL_TYPE_OPTIONS } from '../constants/schoolTypes'
 
 function emptyForm() {
   return {
     id: null,
     nombre: '',
-    tipo_escuela: 'normal',
     descripcion: '',
     cantidad_alumnos: '',
     items: [{ producto_id: '', cantidad: '' }]
@@ -74,7 +72,6 @@ export default function ProductKitsManager() {
     setForm({
       id: kit.id,
       nombre: kit.nombre || '',
-      tipo_escuela: kit.tipo_escuela || 'normal',
       descripcion: kit.descripcion || '',
       cantidad_alumnos: kit.cantidad_alumnos || '',
       items: (kit.items || []).length
@@ -121,7 +118,6 @@ export default function ProductKitsManager() {
 
     const payload = {
       nombre: form.nombre.trim(),
-      tipo_escuela: form.tipo_escuela,
       descripcion: form.descripcion.trim(),
       cantidad_alumnos: form.cantidad_alumnos ? Number(form.cantidad_alumnos) : null,
       items: form.items
@@ -181,7 +177,7 @@ export default function ProductKitsManager() {
         <div>
           <h3 style={{ marginBottom: 6 }}>Kits de productos</h3>
           <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.92rem' }}>
-            Configurá kits por tipo de escuela para que luego los directivos pidan por kit y no por producto individual.
+            Creá kits por nombre y después asignalos directamente a cada escuela.
           </p>
         </div>
         <button type="button" onClick={openCreate}>Crear kit</button>
@@ -205,7 +201,6 @@ export default function ProductKitsManager() {
                 <div>
                   <h4 style={{ margin: 0 }}>{kit.nombre}</h4>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
-                    <span className="badge">{kit.tipo_escuela_label}</span>
                     {!kit.activo && <span className="badge" style={{ background: '#fee2e2', color: '#991b1b' }}>Inactivo</span>}
                   </div>
                   {kit.descripcion && (
@@ -259,21 +254,9 @@ export default function ProductKitsManager() {
                   type="text"
                   value={form.nombre}
                   onChange={(e) => setForm({ ...form, nombre: e.target.value })}
-                  placeholder="Ej: Kit Jornada Normal (100 alumnos / mes)"
+                  placeholder="Ej: Kit Primaria Turno Manana"
                   required
                 />
-              </div>
-              <div>
-                <label>Tipo de escuela</label>
-                <select
-                  value={form.tipo_escuela}
-                  onChange={(e) => setForm({ ...form, tipo_escuela: e.target.value })}
-                  required
-                >
-                  {SCHOOL_TYPE_OPTIONS.map((type) => (
-                    <option key={type.value} value={type.value}>{type.label}</option>
-                  ))}
-                </select>
               </div>
               <div>
                 <label>Cantidad de alumnos (referencia)</label>
@@ -281,13 +264,13 @@ export default function ProductKitsManager() {
                   type="number"
                   min="1"
                   value={form.cantidad_alumnos}
-                  onChange={e => setForm({ ...form, cantidad_alumnos: e.target.value })}
+                  onChange={(e) => setForm({ ...form, cantidad_alumnos: e.target.value })}
                   placeholder="Ej: 100"
                   required
                 />
               </div>
               <div style={{ gridColumn: '1 / -1' }}>
-                <label>Descripción</label>
+                <label>Descripcion</label>
                 <input
                   type="text"
                   value={form.descripcion}

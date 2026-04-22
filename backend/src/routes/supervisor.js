@@ -4,20 +4,11 @@
 // Filtra instituciones y pedidos por jurisdicción del usuario.
 // ============================================================
 const express = require("express");
-const { all, get } = require("../db.pg");
+const { all, get, run } = require("../db.pg");
 const { authenticate } = require("../middleware/auth");
 
 const router = express.Router();
 router.use(authenticate);
-
-const ESCUELA_TIPOS = ["normal", "albergue", "jornada_extendida"];
-
-function normalizeTipoEscuela(rawValue) {
-  const value = String(rawValue || "").trim().toLowerCase();
-  if (value.includes("alberg")) return "albergue";
-  if (value.includes("jornada")) return "jornada_extendida";
-  return "normal";
-}
 
 async function hasAsignacionesTable() {
   const row = await get(
@@ -26,9 +17,36 @@ async function hasAsignacionesTable() {
   return Boolean(row?.regclass);
 }
 
+let schemaReady = false;
+let schemaPromise = null;
+
+async function ensureSupervisorSchema() {
+  if (schemaReady) return;
+  if (schemaPromise) {
+    await schemaPromise;
+    return;
+  }
+
+  schemaPromise = (async () => {
+    await run(`
+      ALTER TABLE institucion
+      ADD COLUMN IF NOT EXISTS kit_id INT REFERENCES producto_kit(id)
+    `);
+    schemaReady = true;
+  })();
+
+  try {
+    await schemaPromise;
+  } finally {
+    schemaPromise = null;
+  }
+}
+
 // ── Instituciones de la jurisdicción del supervisor ──
 router.get("/instituciones", async (req, res) => {
   try {
+    await ensureSupervisorSchema();
+
     if (req.user?.role === "supervisor") {
       if (!(await hasAsignacionesTable())) {
         return res.json({ instituciones: [] });
@@ -41,10 +59,13 @@ router.get("/instituciones", async (req, res) => {
                 i.departamento,
                 i.nivel_educativo AS nivel,
                 COALESCE(i.tipo_escuela, 'normal') AS tipo_escuela,
+                i.kit_id,
+                k.nombre AS kit_nombre,
                 i.ambito AS tipo,
                 i.categoria
          FROM supervisor_escuela_asignacion sea
          JOIN institucion i ON i.id_institucion = sea.institucion_id
+         LEFT JOIN producto_kit k ON k.id = i.kit_id
          WHERE sea.supervisor_id = ?
          ORDER BY i.nombre`,
         [req.user.sub]
@@ -78,6 +99,8 @@ router.get("/instituciones", async (req, res) => {
 
 router.patch("/instituciones/:id/tipo-kit", async (req, res) => {
   try {
+    await ensureSupervisorSchema();
+
     if (req.user?.role !== "supervisor") {
       return res.status(403).json({ error: "Solo el supervisor puede asignar kit." });
     }
@@ -87,14 +110,13 @@ router.patch("/instituciones/:id/tipo-kit", async (req, res) => {
     }
 
     const institucionId = Number(req.params.id);
-    const tipoEscuela = normalizeTipoEscuela(req.body?.tipo_escuela);
+    const kitId = Number(req.body?.kit_id);
 
     if (!Number.isInteger(institucionId) || institucionId <= 0) {
       return res.status(400).json({ error: "Institución inválida." });
     }
-
-    if (!ESCUELA_TIPOS.includes(tipoEscuela)) {
-      return res.status(400).json({ error: "Tipo de kit inválido." });
+    if (!Number.isInteger(kitId) || kitId <= 0) {
+      return res.status(400).json({ error: "Kit inválido." });
     }
 
     const asignacion = await get(
@@ -108,19 +130,30 @@ router.patch("/instituciones/:id/tipo-kit", async (req, res) => {
       return res.status(404).json({ error: "La escuela no está asignada a este supervisor." });
     }
 
+    const kit = await get(
+      `SELECT id, nombre
+       FROM producto_kit
+       WHERE id = ? AND activo = TRUE`,
+      [kitId]
+    );
+
+    if (!kit) {
+      return res.status(404).json({ error: "El kit seleccionado no existe o está inactivo." });
+    }
+
     await get(
       `UPDATE institucion
-       SET tipo_escuela = $1,
+       SET kit_id = $1,
            updated_at = NOW()
        WHERE id_institucion = $2
        RETURNING id_institucion`,
-      [tipoEscuela, institucionId]
+      [kitId, institucionId]
     );
 
-    return res.json({ ok: true, tipo_escuela: tipoEscuela });
+    return res.json({ ok: true, kit_id: kitId, kit_nombre: kit.nombre });
   } catch (err) {
-    console.error("Error al actualizar tipo de kit de la institución:", err);
-    return res.status(500).json({ error: "No se pudo actualizar el tipo de kit." });
+    console.error("Error al actualizar kit de la institución:", err);
+    return res.status(500).json({ error: "No se pudo actualizar el kit." });
   }
 });
 

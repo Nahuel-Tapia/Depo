@@ -289,6 +289,13 @@ async function ensurePedidosSchema() {
       )
     `);
 
+    try {
+      await run(`
+        ALTER TABLE institucion
+        ADD COLUMN IF NOT EXISTS kit_id INT REFERENCES producto_kit(id)
+      `);
+    } catch (_) { /* no aplica en alguna base */ }
+
     await run(`
       CREATE TABLE IF NOT EXISTS producto_kit_detalle (
         id SERIAL PRIMARY KEY,
@@ -512,10 +519,29 @@ router.get("/kits", authorizePermissions(PERMISSIONS.PEDIDOS_VIEW), async (req, 
 
     const includeInactive = canManageKits(req) && String(req.query.include_inactive || "") === "1";
     let whereSql = "WHERE 1 = 1";
+    const params = [];
     if (!includeInactive) {
       whereSql += " AND k.activo = TRUE";
     }
-    // Mostrar todos los kits, sin filtrar por tipo_escuela
+
+    if (req.user?.role === "directivo") {
+      const usuario = await get(
+        `SELECT u.id_institucion, i.kit_id
+         FROM usuario u
+         JOIN institucion i ON i.id_institucion = u.id_institucion
+         WHERE u.id_usuario = ?`,
+        [req.user.sub]
+      );
+
+      const kitAsignadoId = Number(usuario?.kit_id || 0);
+      if (!kitAsignadoId) {
+        return res.json({ kits: [] });
+      }
+
+      whereSql += " AND k.id = ?";
+      params.push(kitAsignadoId);
+    }
+
     const rows = await all(
       `SELECT k.id,
               k.nombre,
@@ -533,7 +559,8 @@ router.get("/kits", authorizePermissions(PERMISSIONS.PEDIDOS_VIEW), async (req, 
        LEFT JOIN producto_kit_detalle d ON d.kit_id = k.id
        LEFT JOIN producto p ON p.id_producto = d.id_producto
        ${whereSql}
-       ORDER BY k.nombre ASC, p.nombre ASC`
+       ORDER BY k.nombre ASC, p.nombre ASC`,
+      params
     );
 
     return res.json({ kits: normalizeKitRows(rows) });
@@ -549,7 +576,6 @@ router.post("/kits", authorizePermissions(PERMISSIONS.PEDIDOS_VIEW), requireKitM
     await ensurePedidosSchema();
 
     const nombre = String(req.body?.nombre || "").trim();
-    const tipoEscuela = normalizeTipoEscuela(req.body?.tipo_escuela);
     const descripcion = String(req.body?.descripcion || "").trim() || null;
     const parsedItems = sanitizeKitItems(req.body?.items);
 
@@ -574,7 +600,7 @@ router.post("/kits", authorizePermissions(PERMISSIONS.PEDIDOS_VIEW), requireKitM
       `INSERT INTO producto_kit (nombre, tipo_escuela, descripcion, activo, created_by)
        VALUES ($1, $2, $3, TRUE, $4)
        RETURNING id`,
-      [nombre, tipoEscuela, descripcion, req.user.sub]
+      [nombre, "normal", descripcion, req.user.sub]
     );
     const kitId = Number(insertKit.rows[0].id);
 
@@ -605,7 +631,6 @@ router.put("/kits/:id(\\d+)", authorizePermissions(PERMISSIONS.PEDIDOS_VIEW), re
 
     const id = Number(req.params.id);
     const nombre = String(req.body?.nombre || "").trim();
-    const tipoEscuela = normalizeTipoEscuela(req.body?.tipo_escuela);
     const descripcion = String(req.body?.descripcion || "").trim() || null;
     const activo = req.body?.activo !== false;
     const parsedItems = sanitizeKitItems(req.body?.items);
@@ -632,6 +657,11 @@ router.put("/kits/:id(\\d+)", authorizePermissions(PERMISSIONS.PEDIDOS_VIEW), re
     }
 
     await client.query("BEGIN");
+    const existingKit = await client.query(
+      `SELECT tipo_escuela FROM producto_kit WHERE id = $1`,
+      [id]
+    );
+    const tipoEscuela = existingKit.rows[0]?.tipo_escuela || "normal";
     await client.query(
       `UPDATE producto_kit
        SET nombre = $1,
