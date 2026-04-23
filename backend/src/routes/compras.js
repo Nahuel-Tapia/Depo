@@ -7,6 +7,7 @@ const router = express.Router();
 router.use(authenticate);
 
 let tablesReady = false;
+let tablesInitPromise = null;
 
 async function getInstitucionNivelColumn() {
   const row = await get(`
@@ -44,10 +45,15 @@ function normalizeEstadoPlanilla(estado) {
 
 async function ensureTables() {
   if (tablesReady) return;
+  if (tablesInitPromise) {
+    await tablesInitPromise;
+    return;
+  }
 
-  const client = await pool.connect();
-  try {
-    await client.query(`
+  tablesInitPromise = (async () => {
+    const client = await pool.connect();
+    try {
+      await client.query(`
       CREATE TABLE IF NOT EXISTS supervisor_escuela_asignacion (
         id SERIAL PRIMARY KEY,
         supervisor_id INT NOT NULL REFERENCES usuario(id_usuario) ON DELETE CASCADE,
@@ -82,22 +88,30 @@ async function ensureTables() {
       )
     `);
 
-    await client.query(`
+      await client.query(`
+      ALTER TABLE pedido
+      ADD COLUMN IF NOT EXISTS aprobado_director_area BOOLEAN
+    `);
+
+      await client.query(`
       ALTER TABLE usuario
       ADD COLUMN IF NOT EXISTS nivel_educativo VARCHAR(120)
     `);
+      await client.query(`
+      ALTER TABLE usuario
+      ADD COLUMN IF NOT EXISTS director_area_id INT REFERENCES usuario(id_usuario)
+    `);
 
-    await client.query(`
+      await client.query(`
       ALTER TABLE planilla_pedido_anual
       ADD COLUMN IF NOT EXISTS aceptada_at TIMESTAMP
     `);
-
-    await client.query(`
+      await client.query(`
       ALTER TABLE planilla_pedido_anual
       ADD COLUMN IF NOT EXISTS aceptada_por INT REFERENCES usuario(id_usuario)
     `);
 
-    await client.query(`
+      await client.query(`
       CREATE TABLE IF NOT EXISTS compra_precio_historico (
         id SERIAL PRIMARY KEY,
         anio INT NOT NULL,
@@ -110,15 +124,22 @@ async function ensureTables() {
       )
     `);
 
-    await client.query(`
+      await client.query(`
       UPDATE planilla_pedido_anual
       SET estado = 'aceptada'
       WHERE estado = 'procesada'
     `);
 
-    tablesReady = true;
+      tablesReady = true;
+    } finally {
+      client.release();
+    }
+  })();
+
+  try {
+    await tablesInitPromise;
   } finally {
-    client.release();
+    tablesInitPromise = null;
   }
 }
 
@@ -224,6 +245,9 @@ async function buildPlanillasQuery({ role, userId, directorAreaId, estado, nivel
 
 async function getConsolidado({ anio, directorAreaId, nivel, estado }) {
   const nivelColumn = await getInstitucionNivelColumn();
+  if (!nivelColumn) {
+    throw new Error("No se encontro la columna de nivel educativo en instituciones");
+  }
   const params = [];
   const where = [];
 
@@ -268,7 +292,7 @@ async function getConsolidado({ anio, directorAreaId, nivel, estado }) {
        COUNT(DISTINCT p.id) AS planillas_origen,
        COUNT(DISTINCT d.id_institucion) AS escuelas_origen,
        STRING_AGG(DISTINCT TRIM(CONCAT(u.nombre, ' ', u.apellido)), ', ' ORDER BY TRIM(CONCAT(u.nombre, ' ', u.apellido))) AS directores,
-       STRING_AGG(DISTINCT COALESCE(i.${nivelColumn || "nivel_educativo"}, 'Sin nivel'), ', ' ORDER BY COALESCE(i.${nivelColumn || "nivel_educativo"}, 'Sin nivel')) AS niveles,
+       STRING_AGG(DISTINCT COALESCE(i.${nivelColumn}, 'Sin nivel'), ', ' ORDER BY COALESCE(i.${nivelColumn}, 'Sin nivel')) AS niveles,
        prev.anio AS anio_referencia,
        prev.precio_compra_real AS precio_anterior,
        prev.id_proveedor AS proveedor_anterior_id,
@@ -323,6 +347,7 @@ router.get("/planillas", authorizePermissions(PERMISSIONS.PLANILLA_VIEW), async 
 
     const directorAreaId = Number(req.query.director_area_id || 0) || null;
     const { estado = "", nivel = "" } = req.query;
+
     const { sql, params } = await buildPlanillasQuery({
       role: req.user.role,
       userId: req.user.sub,
@@ -358,29 +383,45 @@ router.get("/planillas/:id", authorizePermissions(PERMISSIONS.PLANILLA_VIEW), as
 
     const id = Number(req.params.id);
     const nivelColumn = await getInstitucionNivelColumn();
-
+    if (!nivelColumn) {
+      return res.status(500).json({ error: "No se encontro la columna de nivel educativo en instituciones" });
+    }
     const planilla = await get(
-      `SELECT p.id, p.anio, p.estado, p.observaciones, p.created_at, p.enviada_at, p.aceptada_at,
-              p.director_area_id, u.nombre AS director_nombre, u.apellido AS director_apellido
+      `SELECT p.id,
+              p.anio,
+              p.estado,
+              p.observaciones,
+              p.created_at,
+              p.enviada_at,
+              p.aceptada_at,
+              p.director_area_id,
+              u.nombre AS director_nombre,
+              u.apellido AS director_apellido
        FROM planilla_pedido_anual p
        JOIN usuario u ON u.id_usuario = p.director_area_id
        WHERE p.id = $1`,
       [id]
     );
 
-    if (!planilla) return res.status(404).json({ error: "Planilla no encontrada" });
+    if (!planilla) {
+      return res.status(404).json({ error: "Planilla no encontrada" });
+    }
+
     if (req.user.role === "area_compras" && !["enviada", "aceptada", "adjudicada", "cerrada"].includes(planilla.estado)) {
       return res.status(403).json({ error: "No tenés acceso a esta planilla" });
     }
+
     if (req.user.role !== "area_compras" && req.user.role !== "admin" && Number(planilla.director_area_id) !== Number(req.user.sub)) {
       return res.status(403).json({ error: "No tenés acceso a esta planilla" });
     }
 
     const detalles = await all(
-      `SELECT d.id, d.cantidad, d.notas,
+      `SELECT d.id,
+              d.cantidad,
+              d.notas,
               i.nombre AS institucion,
               COALESCE(i.cue, '') AS cue,
-              COALESCE(i.${nivelColumn || "nivel_educativo"}, 'Sin nivel') AS nivel,
+              COALESCE(i.${nivelColumn}, 'Sin nivel') AS nivel,
               pr.nombre AS producto,
               pr.unidad_medida,
               ped.id_pedido AS pedido_id
@@ -427,7 +468,9 @@ router.post("/planillas", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), asy
     );
 
     if (existente) {
-      return res.status(409).json({ error: `Ya existe una planilla para ${anio}. Primero terminá o eliminá la actual.` });
+      return res.status(409).json({
+        error: `Ya existe una planilla para ${anio}. Primero terminá o eliminá la actual.`
+      });
     }
 
     const solicitudes = await all(
@@ -435,28 +478,34 @@ router.post("/planillas", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), asy
               p.id_institucion,
               dp.id_producto,
               SUM(dp.cantidad_solicitada) AS cantidad,
-              NULLIF(STRING_AGG(DISTINCT NULLIF(BTRIM(p.observaciones_generales), ''), ' | '), '') AS notas
+              NULLIF(
+                STRING_AGG(DISTINCT NULLIF(BTRIM(p.observaciones_generales), ''), ' | '),
+                ''
+              ) AS notas
        FROM supervisor_escuela_asignacion sea
        JOIN pedido p ON p.id_institucion = sea.institucion_id
        JOIN institucion i ON i.id_institucion = p.id_institucion
        JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido
-       WHERE sea.director_area_id = $1
-         AND LOWER(COALESCE(i.${nivelColumn}, '')) = LOWER($2)
+       WHERE LOWER(COALESCE(i.${nivelColumn}, '')) = LOWER($1)
          AND COALESCE(p.tipo, 'anual') = 'anual'
          AND p.estado = 'aprobado'
          AND p.aprobado_director_area IS TRUE
-         AND EXTRACT(YEAR FROM p.fecha_creacion) = $3
+         AND EXTRACT(YEAR FROM p.fecha_creacion) = $2
+         AND sea.director_area_id = $3
        GROUP BY p.id_institucion, dp.id_producto`,
-      [req.user.sub, directorNivel, anio]
+      [directorNivel, anio, req.user.sub]
     );
 
     if (solicitudes.length === 0) {
-      return res.status(400).json({ error: "No hay solicitudes anuales aceptadas por Dirección de Área para incluir en la planilla." });
+      return res.status(400).json({
+        error: "No hay solicitudes anuales aceptadas por Dirección de Área para incluir en la planilla."
+      });
     }
 
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
+
       const planillaRes = await client.query(
         `INSERT INTO planilla_pedido_anual (director_area_id, anio, estado, observaciones)
          VALUES ($1, $2, 'borrador', $3)
@@ -465,6 +514,7 @@ router.post("/planillas", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), asy
       );
 
       const planillaId = Number(planillaRes.rows[0].id);
+
       for (const item of solicitudes) {
         await client.query(
           `INSERT INTO planilla_pedido_anual_detalle
@@ -491,8 +541,12 @@ router.post("/planillas", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), asy
 router.patch("/planillas/:id/enviar", authorizePermissions(PERMISSIONS.PLANILLA_ENVIAR), async (req, res) => {
   try {
     await ensureTables();
+
     const id = Number(req.params.id);
-    const planilla = await get("SELECT id, estado, director_area_id FROM planilla_pedido_anual WHERE id = $1", [id]);
+    const planilla = await get(
+      "SELECT id, estado, director_area_id FROM planilla_pedido_anual WHERE id = $1",
+      [id]
+    );
 
     if (!planilla) return res.status(404).json({ error: "Planilla no encontrada" });
     if (Number(planilla.director_area_id) !== Number(req.user.sub)) {
@@ -502,7 +556,13 @@ router.patch("/planillas/:id/enviar", authorizePermissions(PERMISSIONS.PLANILLA_
       return res.status(400).json({ error: "Solo se pueden enviar planillas en estado borrador" });
     }
 
-    await run(`UPDATE planilla_pedido_anual SET estado = 'enviada', enviada_at = NOW() WHERE id = $1`, [id]);
+    await run(
+      `UPDATE planilla_pedido_anual
+       SET estado = 'enviada', enviada_at = NOW()
+       WHERE id = $1`,
+      [id]
+    );
+
     res.json({ ok: true, estado: "enviada" });
   } catch (err) {
     console.error("Error al enviar planilla:", err);
@@ -519,7 +579,10 @@ async function aceptarPlanilla(req, res) {
     }
 
     const id = Number(req.params.id);
-    const planilla = await get("SELECT id, estado, director_area_id FROM planilla_pedido_anual WHERE id = $1", [id]);
+    const planilla = await get(
+      "SELECT id, estado, director_area_id FROM planilla_pedido_anual WHERE id = $1",
+      [id]
+    );
 
     if (!planilla) return res.status(404).json({ error: "Planilla no encontrada" });
     if (planilla.estado !== "enviada") {
@@ -556,8 +619,12 @@ router.patch("/planillas/:id/procesar", authorizePermissions(PERMISSIONS.PLANILL
 router.delete("/planillas/:id", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), async (req, res) => {
   try {
     await ensureTables();
+
     const id = Number(req.params.id);
-    const planilla = await get("SELECT id, estado, director_area_id FROM planilla_pedido_anual WHERE id = $1", [id]);
+    const planilla = await get(
+      "SELECT id, estado, director_area_id FROM planilla_pedido_anual WHERE id = $1",
+      [id]
+    );
 
     if (!planilla) return res.status(404).json({ error: "Planilla no encontrada" });
     if (Number(planilla.director_area_id) !== Number(req.user.sub)) {
@@ -578,9 +645,11 @@ router.delete("/planillas/:id", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE
 router.get("/licitacion/consolidado", authorizePermissions(PERMISSIONS.PLANILLA_VIEW), async (req, res) => {
   try {
     await ensureTables();
+
     const anio = Number(req.query.anio || new Date().getFullYear());
     const directorAreaId = Number(req.query.director_area_id || 0) || null;
     const { nivel = "", estado = "" } = req.query;
+
     const items = await getConsolidado({ anio, directorAreaId, nivel, estado });
     res.json({ anio, items });
   } catch (err) {
@@ -592,6 +661,7 @@ router.get("/licitacion/consolidado", authorizePermissions(PERMISSIONS.PLANILLA_
 router.get("/adjudicacion", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), async (req, res) => {
   try {
     await ensureTables();
+
     const anio = Number(req.query.anio || new Date().getFullYear());
     const directorAreaId = Number(req.query.director_area_id || 0) || null;
     const { nivel = "", estado = "" } = req.query;
