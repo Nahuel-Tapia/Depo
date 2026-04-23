@@ -73,9 +73,13 @@ export default function Usuarios() {
     loadRoles()
   }, [])
 
-  const availableRoles = roles.length
+  // Si el usuario es director de área, solo puede crear supervisores de su nivel
+  let availableRoles = roles.length
     ? roles
     : ['consulta', 'operador', 'supervisor', 'director_area', 'directivo', 'admin']
+  if (user?.role === 'director_area') {
+    availableRoles = ['supervisor']
+  }
 
   const formatRoleLabel = (roleName) => {
     const normalized = String(roleName || '').toLowerCase()
@@ -94,6 +98,14 @@ export default function Usuarios() {
     e.preventDefault()
     setMsg('')
 
+    // Restricción para director de área: solo puede crear supervisores de su nivel
+    if (user?.role === 'director_area') {
+      if (form.role !== 'supervisor') {
+        setMsg('Solo puede crear supervisores')
+        return
+      }
+    }
+
     if (form.role === 'directivo') {
       if (!cueInfo || !cueInfo.cue) {
         setMsg('Debe ingresar un CUE valido para un directivo')
@@ -110,6 +122,12 @@ export default function Usuarios() {
       return
     }
 
+    // Forzar nivel educativo del director de área al crear supervisor
+    let nivelFinal = form.nivel
+    if (user?.role === 'director_area') {
+      nivelFinal = user.nivel_educativo || ''
+    }
+
     const payload = {
       nombre: form.nombre.trim(),
       email: form.email.trim(),
@@ -119,7 +137,7 @@ export default function Usuarios() {
         ? cueInfo.modalidades.find((m) => m.nivel_educativo === form.nivel)?.id
         : (form.institucion || null),
       cue: form.role === 'directivo' ? form.cue : undefined,
-      nivel: ['directivo', 'director_area'].includes(form.role) ? form.nivel : undefined
+      nivel: ['directivo', 'director_area', 'supervisor'].includes(form.role) ? nivelFinal : undefined
     }
 
     const res = await apiFetch('/api/users', {
@@ -216,7 +234,8 @@ export default function Usuarios() {
   const canToggleStatus = hasPermission('users.status.update')
   const canDeleteUser = hasPermission('users.delete') && user?.role === 'admin'
 
-  if (user?.role !== 'admin') {
+  // Permitir acceso a directores de área para crear supervisores
+  if (user?.role !== 'admin' && user?.role !== 'director_area') {
     return (
       <div>
         <h2>Gestion de Usuarios</h2>

@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../api'
 import DirectorAreaGestion from './DirectorAreaGestion'
 import DirectorAreaPedidosAnuales from './DirectorAreaPedidosAnuales'
+import DirectorAreaZonas from './DirectorAreaZonas'
 
 export default function DirectorAreaPanel({ initialSection }) {
   const { token } = useAuth()
@@ -66,46 +67,38 @@ export default function DirectorAreaPanel({ initialSection }) {
         const planillasData = await planillasRes.json()
         setPlanillas(planillasData.planillas || [])
       }
-    } catch (err) {
-      setMsg({ text: err.message || 'Error cargando datos', type: 'error' })
-    }
+    } catch (err) {}
   }
 
   useEffect(() => {
     loadAll()
-  }, [token])
+    // eslint-disable-next-line
+  }, [token, activeSection])
 
-  const supervisorMap = useMemo(() => (
-    Object.fromEntries(supervisores.map((s) => [String(s.id), `${s.nombre || ''} ${s.apellido || ''}`.trim()]))
-  ), [supervisores])
-
-  const handleAsignar = async (e) => {
-    e.preventDefault()
-    setMsg({ text: '', type: '' })
-    if (!asigForm.supervisor_id || !asigForm.institucion_id) {
-      setMsg({ text: 'Debes seleccionar un supervisor y una escuela', type: 'error' })
-      return
-    }
-
-    const res = await apiFetch('/api/director-area/asignaciones', {
-      token,
-      method: 'POST',
-      body: JSON.stringify({
-        supervisor_id: Number(asigForm.supervisor_id),
-        institucion_id: Number(asigForm.institucion_id)
-      })
-    })
-
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}))
-      setMsg({ text: data.error || 'No se pudo crear la asignacion', type: 'error' })
-      return
-    }
-
-    setAsigForm({ supervisor_id: '', institucion_id: '' })
-    setMsg({ text: 'Escuela asignada correctamente', type: 'success' })
-    loadAll()
-  }
+  // Renderizado principal
+  return (
+    <>
+      {activeSection === 'gestion-escuelas' && (
+        <DirectorAreaZonas nivelEducativo={nivelEducativo} />
+      )}
+      {activeSection === 'pedidos-anuales' && (
+        <DirectorAreaPedidosAnuales
+          solicitudes={solicitudes}
+          planillas={planillas}
+          planillaDetalle={planillaDetalle}
+          setPlanillaDetalle={setPlanillaDetalle}
+          planillaObs={planillaObs}
+          setPlanillaObs={setPlanillaObs}
+          creandoPlanilla={creandoPlanilla}
+          setCreandoPlanilla={setCreandoPlanilla}
+          updatingId={updatingId}
+          setUpdatingId={setUpdatingId}
+          handleEntregarSolicitud={handleEntregarSolicitud}
+          handleDecisionSolicitud={handleDecisionSolicitud}
+        />
+      )}
+    </>
+  )
 
   const handleEliminarAsignacion = async (id) => {
     const res = await apiFetch(`/api/director-area/asignaciones/${id}`, { token, method: 'DELETE' })

@@ -200,21 +200,9 @@ router.post("/asignaciones", async (req, res) => {
     res.status(500).json({ error: "No se pudo crear asignacion" });
   }
 });
+// Endpoint de asignación directa de escuelas a supervisores deshabilitado por migración a zonas.
 
-router.delete("/asignaciones/:id", async (req, res) => {
-  try {
-    await ensureTables();
-
-    const id = Number(req.params.id);
-    if (!Number.isInteger(id)) return res.status(400).json({ error: "ID invalido" });
-
-    await run("DELETE FROM supervisor_escuela_asignacion WHERE id = ? AND director_area_id = ?", [id, req.user.sub]);
-    res.json({ ok: true });
-  } catch (err) {
-    console.error("Error al eliminar asignacion:", err);
-    res.status(500).json({ error: "No se pudo eliminar asignacion" });
-  }
-});
+// Endpoint de eliminación de asignación directa deshabilitado por migración a zonas.
 
 router.get("/informes", async (req, res) => {
   try {

@@ -23,6 +23,10 @@ const supervisorRoutes = require("./routes/supervisor");
 const directorAreaRoutes = require("./routes/directorArea");
 const comprasRoutes = require("./routes/compras");
 const directivoRoutes = require("./routes/directivo");
+const zonesRoutes = require("./routes/zones");
+const zoneSchoolsRoutes = require("./routes/zoneSchools");
+const zoneSupervisorsRoutes = require("./routes/zoneSupervisors");
+const directorAreaSupervisoresRoutes = require("./routes/directorAreaSupervisores");
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -55,8 +59,12 @@ app.use("/api/proveedores", proveedoresRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/supervisor", supervisorRoutes);
 app.use("/api/director-area", directorAreaRoutes);
+app.use("/api/director-area", directorAreaSupervisoresRoutes);
 app.use("/api/compras", comprasRoutes);
 app.use("/api/directivo", directivoRoutes);
+app.use("/api/zones", zonesRoutes);
+app.use("/api/zones", zoneSchoolsRoutes);
+app.use("/api/zones", zoneSupervisorsRoutes);
 
 // Si una ruta /api no existe, devolver JSON en lugar de index.html
 app.use("/api", (req, res) => {

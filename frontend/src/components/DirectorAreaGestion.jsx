@@ -30,83 +30,7 @@ export default function DirectorAreaGestion({
         <div className={`msg show ${msg.type === 'success' ? 'msg-success' : 'msg-error'}`}>{msg.text}</div>
       )}
 
-      <div className="grid" style={{ alignItems: 'start' }}>
-        <section style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 14, background: '#fff' }}>
-          <h3 style={{ marginTop: 0 }}>Asignar Escuelas a Supervisores</h3>
-          <p style={{ marginTop: 0, color: 'var(--muted)', fontSize: '0.9rem' }}>
-            Solo podés asignar escuelas del nivel {nivelEducativo || 'configurado'}.
-          </p>
-
-          <form onSubmit={handleAsignar}>
-            <label>Supervisor</label>
-            <select value={asigForm.supervisor_id} onChange={(e) => setAsigForm({ ...asigForm, supervisor_id: e.target.value })}>
-              <option value="">Seleccionar supervisor</option>
-              {supervisores.map((s) => (
-                <option key={s.id} value={s.id}>{`${s.nombre || ''} ${s.apellido || ''}`.trim()}</option>
-              ))}
-            </select>
-
-            <label>CUE de la escuela</label>
-            <input
-              type="text"
-              value={asigForm.cue || ''}
-              onChange={(e) => {
-                const cue = e.target.value.replace(/[^0-9]/g, '').slice(0, 9)
-                let institucion_id = ''
-                let nombre = ''
-                let nivel = ''
-                let opciones = []
-
-                if (cue.length >= 5) {
-                  opciones = escuelas.filter((i) => String(i.cue) === cue)
-                  if (opciones.length === 1) {
-                    institucion_id = opciones[0].id
-                    nombre = opciones[0].nombre
-                    nivel = opciones[0].nivel || ''
-                  }
-                }
-
-                setAsigForm({ ...asigForm, cue, institucion_id, nombre, nivel, opciones })
-              }}
-              placeholder="Ej: 540123400"
-              autoComplete="off"
-            />
-
-            {asigForm.cue && (asigForm.nombre || asigForm.nivel) && (
-              <div style={{ margin: '8px 0 10px 0', color: '#333', fontSize: '1em' }}>
-                <div><b>CUE:</b> {asigForm.cue}</div>
-                {asigForm.nombre && <div><b>Escuela:</b> {asigForm.nombre}</div>}
-                {asigForm.nivel && <div><b>Nivel:</b> {asigForm.nivel}</div>}
-              </div>
-            )}
-
-            {asigForm.opciones && asigForm.opciones.length > 1 && (
-              <>
-                <label>Seleccionar escuela</label>
-                <select
-                  value={asigForm.institucion_id || ''}
-                  onChange={(e) => {
-                    const institucion_id = e.target.value
-                    const escuela = asigForm.opciones.find((i) => String(i.id) === institucion_id)
-                    setAsigForm({
-                      ...asigForm,
-                      institucion_id,
-                      nombre: escuela ? escuela.nombre : '',
-                      nivel: escuela ? escuela.nivel : ''
-                    })
-                  }}
-                >
-                  <option value="">Seleccionar escuela</option>
-                  {asigForm.opciones.map((i) => (
-                    <option key={i.id} value={i.id}>{i.nombre} - {i.nivel || 'Sin nivel'}</option>
-                  ))}
-                </select>
-              </>
-            )}
-
-            <button type="submit">Asignar escuela</button>
-          </form>
-        </section>
+      {/* Sección de asignación directa de escuelas a supervisores eliminada por migración a zonas */}
 
         <section style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 14, background: '#fff' }}>
           <h3 style={{ marginTop: 0 }}>Solicitar Informes a Supervisores</h3>
@@ -146,37 +70,8 @@ export default function DirectorAreaGestion({
             <button type="submit">Solicitar informe</button>
           </form>
         </section>
-      </div>
 
-      <h3>Asignaciones actuales</h3>
-      <table>
-        <thead>
-          <tr>
-            <th>Supervisor</th>
-            <th>Escuela</th>
-            <th>CUE</th>
-            <th>Fecha</th>
-            <th>Accion</th>
-          </tr>
-        </thead>
-        <tbody>
-          {asignaciones.length === 0 ? (
-            <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--muted)' }}>Sin asignaciones.</td></tr>
-          ) : asignaciones.map((a) => (
-            <tr key={a.id}>
-              <td>{`${a.supervisor_nombre || ''} ${a.supervisor_apellido || ''}`.trim()}</td>
-              <td>{a.institucion_nombre}</td>
-              <td>{a.cue || '-'}</td>
-              <td>{a.created_at ? new Date(a.created_at).toLocaleDateString('es-AR') : '-'}</td>
-              <td>
-                <button className="secondary" style={{ margin: 0 }} onClick={() => handleEliminarAsignacion(a.id)}>
-                  Quitar
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {/* Tabla de asignaciones actuales eliminada por migración a zonas */}
 
       <h3>Solicitudes de informe</h3>
       <table>
