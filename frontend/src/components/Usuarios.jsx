@@ -153,13 +153,7 @@ export default function Usuarios() {
         ? cueInfo.modalidades.find((m) => m.nivel_educativo === form.nivel)?.id
         : (form.institucion || null),
       cue: form.role === 'directivo' ? form.cue : undefined,
-<<<<<<< HEAD
       nivel: ['directivo', 'director_area', 'supervisor'].includes(form.role) ? nivelFinal : undefined
-=======
-      nivel: ['directivo', 'director_area', 'supervisor'].includes(form.role) ? form.nivel : undefined,
-      director_area_id: form.role === 'supervisor' ? form.director_area_id : undefined,
-      jurisdiccion: form.role === 'supervisor' ? form.jurisdiccion : undefined
->>>>>>> 9d942f5e2931a565304bfb831b926746b49d2580
     }
 
     const res = await apiFetch('/api/users', {
