@@ -31,7 +31,7 @@ const TABS = [
   { key: 'instituciones', label: 'Instituciones', permission: 'instituciones.view', hideForRoles: ['supervisor', 'director_area'] },
   { key: 'historial', label: 'Historial', permission: 'instituciones.view', hideForRoles: ['supervisor', 'director_area'] },
   { key: 'proveedores', label: 'Proveedores', permission: 'proveedores.view', hideForRoles: ['supervisor', 'director_area'] },
-  { key: 'usuarios', label: 'Usuarios', permission: 'users.read', role: 'admin' },
+  { key: 'usuarios', label: 'Usuarios', permission: 'users.read' },
   { key: 'kits', label: 'Kits de Productos', permission: 'supervision.manage', role: 'director_area' }
 ]
 
@@ -66,7 +66,7 @@ export default function Dashboard() {
     // Hide tabs explicitly hidden for this role
     if (tab.hideForRole && tab.hideForRole === user?.role) return false
     if (tab.hideForRoles && tab.hideForRoles.includes(user?.role)) return false
-    if (tab.role && tab.role !== user?.role && user?.role !== 'admin') return false
+    if (tab.role && tab.role !== user?.role) return false
     return !tab.permission || hasPermission(tab.permission)
   })
 

@@ -148,77 +148,7 @@ export default function Usuarios() {
       nombre: form.nombre.trim(),
       email: form.email.trim(),
       password: form.password,
-      role: form.role,
-      institucion: form.role === 'directivo' && cueInfo
-        ? cueInfo.modalidades.find((m) => m.nivel_educativo === form.nivel)?.id
-        : (form.institucion || null),
-      cue: form.role === 'directivo' ? form.cue : undefined,
-      nivel: ['directivo', 'director_area', 'supervisor'].includes(form.role) ? nivelFinal : undefined
-    }
-
-    const res = await apiFetch('/api/users', {
-      token,
-      method: 'POST',
-      body: JSON.stringify(payload)
-    })
-
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok) {
-      setMsg(data.error || 'No se pudo crear usuario')
-      return
-    }
-
-    setForm({ nombre: '', email: '', password: '', role: 'consulta', institucion: '', cue: '', nivel: '', director_area_id: '', jurisdiccion: '' })
-    setFormOpen(false)
-    loadUsers()
-  }
-
-  const handleChangeRole = async (u) => {
-    setRoleModal({
-      id: u.id,
-      nombre: u.nombre,
-      role: u.role || 'consulta',
-      institucion: '',
-      nivel: u.nivel_educativo || '',
-      director_area_id: u.director_area_id ? String(u.director_area_id) : '',
-      jurisdiccion: u.jurisdiccion || '',
-      error: ''
-    })
-  }
-
-  const handleSaveRole = async () => {
-    if (!roleModal) return
-
-    const role = roleModal.role
-    const institucion = roleModal.institucion || null
-    const nivel = roleModal.nivel || null
-
-    if (role === 'directivo' && !institucion) {
-      setRoleModal({ ...roleModal, error: 'La institucion es obligatoria para rol directivo' })
-      return
-    }
-    if (role === 'director_area' && !nivel) {
-      setRoleModal({ ...roleModal, error: 'El nivel educativo es obligatorio para Director de Area' })
-      return
-    }
-    if (role === 'supervisor' && !nivel) {
-      setRoleModal({ ...roleModal, error: 'El nivel educativo es obligatorio para Supervisor' })
-      return
-    }
-    if (role === 'supervisor' && !roleModal.director_area_id) {
-      setRoleModal({ ...roleModal, error: 'Debe vincular el supervisor a un Area de Direccion' })
-      return
-    }
-    if (role === 'supervisor' && !roleModal.jurisdiccion) {
-      setRoleModal({ ...roleModal, error: 'Debe seleccionar una jurisdiccion para Supervisor' })
-      return
-    }
-
-    const res = await apiFetch(`/api/users/${roleModal.id}/role`, {
-      token,
-      method: 'PATCH',
-      body: JSON.stringify({ role, institucion, nivel, director_area_id: roleModal.director_area_id || null, jurisdiccion: roleModal.jurisdiccion || null })
-    })
+    };
 
     const data = await res.json().catch(() => ({}))
     if (!res.ok) {
@@ -413,48 +343,41 @@ export default function Usuarios() {
                 </div>
               ) : form.role === 'supervisor' ? (
                 <>
-                  <div>
-                    <label>Area de Direccion</label>
-                    <select value={form.director_area_id} onChange={(e) => {
-                      const selected = directorAreas.find((area) => String(area.id) === e.target.value)
-                      setForm({ ...form, director_area_id: e.target.value, nivel: selected?.nivel_educativo || form.nivel })
-                    }} required>
-                      <option value="">-- Seleccionar area --</option>
-                      {directorAreas.map((area) => (
-                        <option key={area.id} value={area.id}>{area.nombre} - {area.nivel_educativo || 'Sin nivel'}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label>Jurisdiccion</label>
-                    <select value={form.jurisdiccion} onChange={(e) => setForm({ ...form, jurisdiccion: e.target.value })} required>
-                      <option value="">-- Seleccionar jurisdiccion --</option>
-                      {jurisdiccionesDisponibles.map((jur) => (
-                        <option key={jur} value={jur}>{jur}</option>
-                      ))}
-                    </select>
-                  </div>
+                  {/* Si el usuario es director_area, el area y nivel se asignan automáticamente */}
+                  {user?.role !== 'director_area' && (
+                    <div>
+                      <label>Area de Direccion</label>
+                      <select value={form.director_area_id} onChange={(e) => {
+                        const selected = directorAreas.find((area) => String(area.id) === e.target.value)
+                        setForm({ ...form, director_area_id: e.target.value, nivel: selected?.nivel_educativo || form.nivel })
+                      }} required>
+                        <option value="">-- Seleccionar area --</option>
+                        {directorAreas.map((area) => (
+                          <option key={area.id} value={area.id}>{area.nombre} - {area.nivel_educativo || 'Sin nivel'}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  {/* Nivel educativo siempre visible para supervisor */}
                   <div>
                     <label>Nivel educativo</label>
-                    <select value={form.nivel} onChange={(e) => setForm({ ...form, nivel: e.target.value })} required>
-                      <option value="">-- Seleccionar nivel --</option>
-                      {nivelesDisponibles.map((nivel) => (
-                        <option key={nivel} value={nivel}>{nivel}</option>
-                      ))}
-                    </select>
+                    {user?.role === 'director_area' ? (
+                      <>
+                        <input type="text" value={user.nivel_educativo || ''} disabled />
+                        {/* Campo oculto para enviar el nivel real */}
+                        <input type="hidden" name="nivel" value={user.nivel_educativo || ''} />
+                      </>
+                    ) : (
+                      <select value={form.nivel} onChange={(e) => setForm({ ...form, nivel: e.target.value })} required>
+                        <option value="">-- Seleccionar nivel --</option>
+                        {nivelesDisponibles.map((nivel) => (
+                          <option key={nivel} value={nivel}>{nivel}</option>
+                        ))}
+                      </select>
+                    )}
                   </div>
                 </>
-              ) : (
-                <div>
-                  <label>Institucion</label>
-                  <select value={form.institucion} onChange={(e) => setForm({ ...form, institucion: e.target.value })}>
-                    <option value="">-- Seleccionar --</option>
-                    {instituciones.map((inst) => (
-                      <option key={inst.id} value={inst.id}>{inst.nombre}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
+              ) : null}
 
               <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
                 <button type="button" className="secondary" onClick={() => setFormOpen(false)}>Cancelar</button>
@@ -502,22 +425,10 @@ export default function Usuarios() {
               ))}
             </div>
 
-            {roleModal.role === 'directivo' && (
-              <div style={{ marginTop: 16 }}>
-                <label>Institucion</label>
-                <select value={roleModal.institucion} onChange={(e) => setRoleModal({ ...roleModal, institucion: e.target.value, error: '' })}>
-                  <option value="">-- Seleccionar institucion --</option>
-                  {instituciones.map((inst) => (
-                    <option key={inst.id} value={inst.id}>{inst.nombre}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {roleModal.role === 'director_area' && (
+            {(roleModal.role === 'director_area' || roleModal.role === 'supervisor') && (
               <div style={{ marginTop: 16 }}>
                 <label>Nivel educativo</label>
-                <select value={roleModal.nivel} onChange={(e) => setRoleModal({ ...roleModal, nivel: e.target.value, error: '' })}>
+                <select value={roleModal.nivel || ''} onChange={(e) => setRoleModal({ ...roleModal, nivel: e.target.value, error: '' })}>
                   <option value="">-- Seleccionar nivel --</option>
                   {nivelesDisponibles.map((nivel) => (
                     <option key={nivel} value={nivel}>{nivel}</option>
