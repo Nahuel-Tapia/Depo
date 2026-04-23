@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../api'
 import PrintButton from './PrintButton'
+import RetirarPedidoAnual from './RetirarPedidoAnual'
 
 const ESTADOS_PRODUCTO = ['nuevo', 'usado', 'dañado', 'reparado']
 const CARGOS = ['director/a', 'vicedirector/a', 'secretario/a', 'rector/a', 'maestro/a a cargo']
@@ -15,6 +16,7 @@ export default function Movimientos() {
   const [msg, setMsg] = useState({ text: '', type: '' })
   const [ingresoModalOpen, setIngresoModalOpen] = useState(false)
   const [egresoModalOpen, setEgresoModalOpen] = useState(false)
+  const [retirarPedidoModalOpen, setRetirarPedidoModalOpen] = useState(false)
 
   // Egreso state
   const [egresoInst, setEgresoInst] = useState('')
@@ -284,6 +286,15 @@ export default function Movimientos() {
                 <span aria-hidden="true" style={{ marginRight: 8, fontSize: '1.2rem' }}>📦⬇️</span>
                 Ingreso
               </button>
+              <button
+                type="button"
+                className="mov-action-btn"
+                style={{ width: 'auto', margin: 0, padding: '14px 22px', fontSize: '1rem' }}
+                onClick={() => { setRetirarPedidoModalOpen(true); setMsg({ text: '', type: '' }) }}
+              >
+                <span aria-hidden="true" style={{ marginRight: 8, fontSize: '1.2rem' }}>📋📦</span>
+                Retirar Pedido Anual
+              </button>
             </>
           )}
           <PrintButton targetRef={printRef} title="Historial de Movimientos" />
@@ -543,6 +554,47 @@ export default function Movimientos() {
                     </div>
                   </div>
                 </form>
+              </div>
+            </div>
+          )}
+
+          {/* RETIRAR PEDIDO ANUAL */}
+          {retirarPedidoModalOpen && (
+            <div
+              style={{
+                position: 'fixed',
+                inset: 0,
+                background: 'rgba(0, 0, 0, 0.45)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 1000,
+                padding: 16
+              }}
+              onClick={e => {
+                if (e.target === e.currentTarget) setRetirarPedidoModalOpen(false)
+              }}
+            >
+              <div style={{ background: '#f9fafb', padding: 24, borderRadius: 10, width: 'min(980px, 100%)', maxHeight: '90vh', overflowY: 'auto' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                  <h3>Retirar Pedido Anual</h3>
+                  <button 
+                    type="button" 
+                    className="secondary" 
+                    onClick={() => setRetirarPedidoModalOpen(false)}
+                    style={{ margin: 0, padding: '6px 12px' }}
+                  >
+                    ✕ Cerrar
+                  </button>
+                </div>
+                <RetirarPedidoAnual 
+                  onSuccess={() => {
+                    setRetirarPedidoModalOpen(false)
+                    loadMovimientos()
+                    loadProductos()
+                  }}
+                  onCancel={() => setRetirarPedidoModalOpen(false)}
+                />
               </div>
             </div>
           )}
