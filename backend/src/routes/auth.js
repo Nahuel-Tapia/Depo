@@ -5,6 +5,16 @@ const { get, run } = require("../db.pg");
 
 const router = express.Router();
 
+let authSchemaReady = false;
+
+async function ensureAuthSchema() {
+  if (authSchemaReady) return;
+  await run(`ALTER TABLE usuario ADD COLUMN IF NOT EXISTS nivel_educativo VARCHAR(120)`);
+  await run(`ALTER TABLE usuario ADD COLUMN IF NOT EXISTS director_area_id INT REFERENCES usuario(id_usuario)`);
+  await run(`ALTER TABLE usuario ADD COLUMN IF NOT EXISTS jurisdiccion VARCHAR(120)`);
+  authSchemaReady = true;
+}
+
 function normalizeDni(dni) {
   if (!dni) return "";
   return String(dni).replace(/\D/g, "");
@@ -33,6 +43,7 @@ async function getInstitucionNivelColumn() {
 
 router.post("/register", async (req, res) => {
   try {
+    await ensureAuthSchema();
     const { nombre, email, cue, nivel_educativo, numero, password } = req.body;
 
     if (!nombre || !email || !cue || !nivel_educativo || !password) {
@@ -112,6 +123,7 @@ router.post("/register", async (req, res) => {
 
 router.post("/login", async (req, res) => {
   try {
+    await ensureAuthSchema();
     const { email, dni, cue, password } = req.body;
     // Acepta dni, cue, o un email que sea puramente numérico como identificador por DNI
     const rawNumeric = dni || cue || (/^\d+$/.test(String(email || "").trim()) ? String(email).trim() : "");
@@ -163,7 +175,10 @@ router.post("/login", async (req, res) => {
         apellido: user.apellido,
         email: user.email,
         dni: user.dni,
-        role: user.role
+        role: user.role,
+        nivel_educativo: user.nivel_educativo || null,
+        director_area_id: user.director_area_id || null,
+        jurisdiccion: user.jurisdiccion || null
       },
       process.env.JWT_SECRET || "dev-secret",
       { expiresIn: "8h" }
@@ -180,7 +195,10 @@ router.post("/login", async (req, res) => {
         email: user.email,
         dni: user.dni,
         role: user.role,
-        institucion: institucionInfo
+        institucion: institucionInfo,
+        nivel_educativo: user.nivel_educativo || null,
+        director_area_id: user.director_area_id || null,
+        jurisdiccion: user.jurisdiccion || null
       }
     });
   } catch (err) {

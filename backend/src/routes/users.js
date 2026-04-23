@@ -22,6 +22,14 @@ async function ensureUsersSchema() {
       ALTER TABLE usuario
       ADD COLUMN IF NOT EXISTS nivel_educativo VARCHAR(120)
     `);
+    await run(`
+      ALTER TABLE usuario
+      ADD COLUMN IF NOT EXISTS director_area_id INT REFERENCES usuario(id_usuario)
+    `);
+    await run(`
+      ALTER TABLE usuario
+      ADD COLUMN IF NOT EXISTS jurisdiccion VARCHAR(120)
+    `);
     schemaReady = true;
   })();
 
@@ -52,7 +60,7 @@ router.get("/me", async (req, res) => {
     if (!userId) return res.status(401).json({ error: "No autenticado" });
 
     const user = await get(
-      "SELECT id_usuario as id, nombre, apellido, email, dni, role, telefono, id_institucion FROM usuario WHERE id_usuario = ?",
+      "SELECT id_usuario as id, nombre, apellido, email, dni, role, telefono, id_institucion, nivel_educativo, director_area_id, jurisdiccion FROM usuario WHERE id_usuario = ?",
       [userId]
     );
     if (!user) return res.status(404).json({ error: "Usuario no encontrado" });
@@ -75,7 +83,10 @@ router.get("/me", async (req, res) => {
         dni: user.dni,
         role: user.role,
         telefono: user.telefono,
-        institucion
+        institucion,
+        nivel_educativo: user.nivel_educativo || null,
+        director_area_id: user.director_area_id || null,
+        jurisdiccion: user.jurisdiccion || null
       }
     });
   } catch (err) {
@@ -119,7 +130,7 @@ router.patch("/me", async (req, res) => {
     );
 
     const updated = await get(
-      "SELECT id_usuario as id, nombre, apellido, email, dni, role, telefono, id_institucion FROM usuario WHERE id_usuario = ?",
+      "SELECT id_usuario as id, nombre, apellido, email, dni, role, telefono, id_institucion, nivel_educativo, director_area_id, jurisdiccion FROM usuario WHERE id_usuario = ?",
       [userId]
     );
 
@@ -142,7 +153,10 @@ router.patch("/me", async (req, res) => {
         dni: updated.dni,
         role: updated.role,
         telefono: updated.telefono,
-        institucion
+        institucion,
+        nivel_educativo: updated.nivel_educativo || null,
+        director_area_id: updated.director_area_id || null,
+        jurisdiccion: updated.jurisdiccion || null
       }
     });
   } catch (err) {
@@ -181,7 +195,22 @@ router.get("/", authorizePermissions(PERMISSIONS.USERS_READ), async (req, res) =
   try {
     await ensureUsersSchema();
     const users = await all(
-      "SELECT id_usuario as id, nombre, apellido, email, dni, role, activo, created_at, nivel_educativo FROM usuario ORDER BY id_usuario DESC"
+      `SELECT u.id_usuario as id,
+              u.nombre,
+              u.apellido,
+              u.email,
+              u.dni,
+              u.role,
+              u.activo,
+              u.created_at,
+              u.nivel_educativo,
+              u.director_area_id,
+              u.jurisdiccion,
+              da.nombre AS director_area_nombre,
+              da.apellido AS director_area_apellido
+       FROM usuario u
+       LEFT JOIN usuario da ON da.id_usuario = u.director_area_id
+       ORDER BY u.id_usuario DESC`
     );
     return res.json({ users });
   } catch (err) {
@@ -193,11 +222,13 @@ router.post("/", authorizePermissions(PERMISSIONS.USERS_CREATE), async (req, res
   try {
     await ensureUsersSchema();
 
-    const { nombre, apellido, email, dni, password, role, telefono, institucion, nivel } = req.body;
+    const { nombre, apellido, email, dni, password, role, telefono, institucion, nivel, director_area_id, jurisdiccion } = req.body;
     const normalizedRole = normalizeRoleName(role);
     const dniNormalized = normalizeDni(dni);
     const institucionId = institucion && !isNaN(parseInt(institucion, 10)) ? parseInt(institucion, 10) : null;
     const nivelEducativo = String(nivel || "").trim() || null;
+    const directorAreaId = director_area_id && !isNaN(parseInt(director_area_id, 10)) ? parseInt(director_area_id, 10) : null;
+    const jurisdiccionValue = String(jurisdiccion || "").trim() || null;
 
     if (!nombre || !email || !password || !role) {
       return res.status(400).json({ error: "Faltan campos obligatorios" });
@@ -215,6 +246,33 @@ router.post("/", authorizePermissions(PERMISSIONS.USERS_CREATE), async (req, res
       return res.status(400).json({ error: "El nivel educativo es obligatorio para Director de Area" });
     }
 
+    if (normalizedRole === "supervisor") {
+      if (!nivelEducativo) {
+        return res.status(400).json({ error: "El nivel educativo es obligatorio para Supervisor" });
+      }
+      if (!directorAreaId) {
+        return res.status(400).json({ error: "El Area de Direccion es obligatoria para Supervisor" });
+      }
+      if (!jurisdiccionValue) {
+        return res.status(400).json({ error: "La jurisdiccion es obligatoria para Supervisor" });
+      }
+
+      const directorArea = await get(
+        `SELECT id_usuario, NULLIF(BTRIM(nivel_educativo), '') AS nivel_educativo
+         FROM usuario
+         WHERE id_usuario = ? AND role = 'director_area' AND activo = TRUE`,
+        [directorAreaId]
+      );
+
+      if (!directorArea) {
+        return res.status(400).json({ error: "El Area seleccionada no corresponde a una Direccion de Area activa" });
+      }
+
+      if ((directorArea.nivel_educativo || "").toLowerCase() !== nivelEducativo.toLowerCase()) {
+        return res.status(400).json({ error: "El nivel del supervisor debe coincidir con el nivel de la Direccion de Area seleccionada" });
+      }
+    }
+
     const existing = await get("SELECT id_usuario FROM usuario WHERE email = ?", [email]);
     if (existing) {
       return res.status(409).json({ error: "El email ya existe" });
@@ -229,7 +287,7 @@ router.post("/", authorizePermissions(PERMISSIONS.USERS_CREATE), async (req, res
 
     const hash = await bcrypt.hash(password, 10);
     const result = await run(
-      "INSERT INTO usuario (nombre, apellido, email, dni, password, telefono, id_institucion, role, activo, nivel_educativo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, TRUE, ?)",
+      "INSERT INTO usuario (nombre, apellido, email, dni, password, telefono, id_institucion, role, activo, nivel_educativo, director_area_id, jurisdiccion) VALUES (?, ?, ?, ?, ?, ?, ?, ?, TRUE, ?, ?, ?)",
       [
         nombre,
         apellido || null,
@@ -239,7 +297,10 @@ router.post("/", authorizePermissions(PERMISSIONS.USERS_CREATE), async (req, res
         telefono || null,
         institucionId,
         normalizedRole,
-        normalizedRole === "director_area" ? nivelEducativo : null
+        ["director_area", "supervisor"].includes(normalizedRole) ? nivelEducativo : null,
+        normalizedRole === "supervisor" ? directorAreaId : null
+        ,
+        normalizedRole === "supervisor" ? jurisdiccionValue : null
       ]
     );
 
@@ -258,9 +319,11 @@ router.patch(
       await ensureUsersSchema();
 
       const { id } = req.params;
-      const { role, institucion, nivel } = req.body;
+      const { role, institucion, nivel, director_area_id, jurisdiccion } = req.body;
       const normalizedRole = normalizeRoleName(role);
       const nivelEducativo = String(nivel || "").trim() || null;
+      const directorAreaId = director_area_id && !isNaN(parseInt(director_area_id, 10)) ? parseInt(director_area_id, 10) : null;
+      const jurisdiccionValue = String(jurisdiccion || "").trim() || null;
 
       if (!(await roleExists(normalizedRole))) {
         return res.status(400).json({ error: "Rol invalido" });
@@ -283,9 +346,43 @@ router.patch(
         return res.status(400).json({ error: "El nivel educativo es obligatorio para Director de Area" });
       }
 
+      if (normalizedRole === "supervisor") {
+        if (!nivelEducativo) {
+          return res.status(400).json({ error: "El nivel educativo es obligatorio para Supervisor" });
+        }
+        if (!directorAreaId) {
+          return res.status(400).json({ error: "El Area de Direccion es obligatoria para Supervisor" });
+        }
+        if (!jurisdiccionValue) {
+          return res.status(400).json({ error: "La jurisdiccion es obligatoria para Supervisor" });
+        }
+
+        const directorArea = await get(
+          `SELECT id_usuario, NULLIF(BTRIM(nivel_educativo), '') AS nivel_educativo
+           FROM usuario
+           WHERE id_usuario = ? AND role = 'director_area' AND activo = TRUE`,
+          [directorAreaId]
+        );
+
+        if (!directorArea) {
+          return res.status(400).json({ error: "El Area seleccionada no corresponde a una Direccion de Area activa" });
+        }
+
+        if ((directorArea.nivel_educativo || "").toLowerCase() !== nivelEducativo.toLowerCase()) {
+          return res.status(400).json({ error: "El nivel del supervisor debe coincidir con el nivel de la Direccion de Area seleccionada" });
+        }
+      }
+
       await run(
-        "UPDATE usuario SET role = ?, id_institucion = ?, nivel_educativo = ? WHERE id_usuario = ?",
-        [normalizedRole, finalInstitucion, normalizedRole === "director_area" ? nivelEducativo : null, id]
+        "UPDATE usuario SET role = ?, id_institucion = ?, nivel_educativo = ?, director_area_id = ?, jurisdiccion = ? WHERE id_usuario = ?",
+        [
+          normalizedRole,
+          finalInstitucion,
+          ["director_area", "supervisor"].includes(normalizedRole) ? nivelEducativo : null,
+          normalizedRole === "supervisor" ? directorAreaId : null,
+          normalizedRole === "supervisor" ? jurisdiccionValue : null,
+          id
+        ]
       );
       return res.json({ ok: true });
     } catch (err) {

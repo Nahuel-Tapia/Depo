@@ -7,6 +7,7 @@ const router = express.Router();
 router.use(authenticate);
 
 let tablesReady = false;
+let tablesInitPromise = null;
 
 async function getInstitucionNivelColumn() {
   const row = await get(`
@@ -44,10 +45,15 @@ function normalizeEstadoPlanilla(estado) {
 
 async function ensureTables() {
   if (tablesReady) return;
+  if (tablesInitPromise) {
+    await tablesInitPromise;
+    return;
+  }
 
-  const client = await pool.connect();
-  try {
-    await client.query(`
+  tablesInitPromise = (async () => {
+    const client = await pool.connect();
+    try {
+      await client.query(`
       CREATE TABLE IF NOT EXISTS supervisor_escuela_asignacion (
         id SERIAL PRIMARY KEY,
         supervisor_id INT NOT NULL REFERENCES usuario(id_usuario) ON DELETE CASCADE,
@@ -82,22 +88,30 @@ async function ensureTables() {
       )
     `);
 
-    await client.query(`
+      await client.query(`
+      ALTER TABLE pedido
+      ADD COLUMN IF NOT EXISTS aprobado_director_area BOOLEAN
+    `);
+
+      await client.query(`
       ALTER TABLE usuario
       ADD COLUMN IF NOT EXISTS nivel_educativo VARCHAR(120)
     `);
+      await client.query(`
+      ALTER TABLE usuario
+      ADD COLUMN IF NOT EXISTS director_area_id INT REFERENCES usuario(id_usuario)
+    `);
 
-    await client.query(`
+      await client.query(`
       ALTER TABLE planilla_pedido_anual
       ADD COLUMN IF NOT EXISTS aceptada_at TIMESTAMP
     `);
-
-    await client.query(`
+      await client.query(`
       ALTER TABLE planilla_pedido_anual
       ADD COLUMN IF NOT EXISTS aceptada_por INT REFERENCES usuario(id_usuario)
     `);
 
-    await client.query(`
+      await client.query(`
       CREATE TABLE IF NOT EXISTS compra_precio_historico (
         id SERIAL PRIMARY KEY,
         anio INT NOT NULL,
@@ -110,15 +124,22 @@ async function ensureTables() {
       )
     `);
 
-    await client.query(`
+      await client.query(`
       UPDATE planilla_pedido_anual
       SET estado = 'aceptada'
       WHERE estado = 'procesada'
     `);
 
-    tablesReady = true;
+      tablesReady = true;
+    } finally {
+      client.release();
+    }
+  })();
+
+  try {
+    await tablesInitPromise;
   } finally {
-    client.release();
+    tablesInitPromise = null;
   }
 }
 
@@ -154,6 +175,7 @@ async function getPlanillaCoverage(planillaId, directorAreaId) {
 }
 
 async function buildPlanillasQuery({ role, userId, directorAreaId, estado, nivel }) {
+  const nivelColumn = await getInstitucionNivelColumn();
   const params = [];
   const where = [];
 
@@ -176,6 +198,9 @@ async function buildPlanillasQuery({ role, userId, directorAreaId, estado, nivel
   }
 
   if (nivel) {
+    if (!nivelColumn) {
+      throw new Error("No se encontro la columna de nivel educativo en instituciones");
+    }
     params.push(String(nivel).trim().toLowerCase());
     where.push(`
       EXISTS (
@@ -183,7 +208,7 @@ async function buildPlanillasQuery({ role, userId, directorAreaId, estado, nivel
         FROM planilla_pedido_anual_detalle d
         JOIN institucion i ON i.id_institucion = d.id_institucion
         WHERE d.planilla_id = p.id
-          AND LOWER(COALESCE(i.nivel, 'sin nivel')) = $${params.length}
+          AND LOWER(COALESCE(i.${nivelColumn}, 'sin nivel')) = $${params.length}
       )
     `);
   }
@@ -219,6 +244,10 @@ async function buildPlanillasQuery({ role, userId, directorAreaId, estado, nivel
 }
 
 async function getConsolidado({ anio, directorAreaId, nivel, estado }) {
+  const nivelColumn = await getInstitucionNivelColumn();
+  if (!nivelColumn) {
+    throw new Error("No se encontro la columna de nivel educativo en instituciones");
+  }
   const params = [];
   const where = [];
 
@@ -241,8 +270,11 @@ async function getConsolidado({ anio, directorAreaId, nivel, estado }) {
   }
 
   if (nivel) {
+    if (!nivelColumn) {
+      throw new Error("No se encontro la columna de nivel educativo en instituciones");
+    }
     params.push(String(nivel).trim().toLowerCase());
-    where.push(`LOWER(COALESCE(i.nivel, 'sin nivel')) = $${params.length}`);
+    where.push(`LOWER(COALESCE(i.${nivelColumn}, 'sin nivel')) = $${params.length}`);
   }
 
   params.push(anio || new Date().getFullYear());
@@ -260,7 +292,7 @@ async function getConsolidado({ anio, directorAreaId, nivel, estado }) {
        COUNT(DISTINCT p.id) AS planillas_origen,
        COUNT(DISTINCT d.id_institucion) AS escuelas_origen,
        STRING_AGG(DISTINCT TRIM(CONCAT(u.nombre, ' ', u.apellido)), ', ' ORDER BY TRIM(CONCAT(u.nombre, ' ', u.apellido))) AS directores,
-       STRING_AGG(DISTINCT COALESCE(i.nivel, 'Sin nivel'), ', ' ORDER BY COALESCE(i.nivel, 'Sin nivel')) AS niveles,
+       STRING_AGG(DISTINCT COALESCE(i.${nivelColumn}, 'Sin nivel'), ', ' ORDER BY COALESCE(i.${nivelColumn}, 'Sin nivel')) AS niveles,
        prev.anio AS anio_referencia,
        prev.precio_compra_real AS precio_anterior,
        prev.id_proveedor AS proveedor_anterior_id,
@@ -350,6 +382,10 @@ router.get("/planillas/:id", authorizePermissions(PERMISSIONS.PLANILLA_VIEW), as
     await ensureTables();
 
     const id = Number(req.params.id);
+    const nivelColumn = await getInstitucionNivelColumn();
+    if (!nivelColumn) {
+      return res.status(500).json({ error: "No se encontro la columna de nivel educativo en instituciones" });
+    }
     const planilla = await get(
       `SELECT p.id,
               p.anio,
@@ -385,7 +421,7 @@ router.get("/planillas/:id", authorizePermissions(PERMISSIONS.PLANILLA_VIEW), as
               d.notas,
               i.nombre AS institucion,
               COALESCE(i.cue, '') AS cue,
-              COALESCE(i.nivel, 'Sin nivel') AS nivel,
+              COALESCE(i.${nivelColumn}, 'Sin nivel') AS nivel,
               pr.nombre AS producto,
               pr.unidad_medida,
               ped.id_pedido AS pedido_id
@@ -438,29 +474,27 @@ router.post("/planillas", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), asy
     }
 
     const solicitudes = await all(
-      `SELECT
-         MIN(p.id_pedido) AS id_pedido,
-         p.id_institucion,
-         dp.id_producto,
-         SUM(dp.cantidad_solicitada) AS cantidad,
-         NULLIF(
-           STRING_AGG(
-             DISTINCT NULLIF(BTRIM(p.observaciones_generales), ''),
-             ' | '
-           ),
-           ''
-         ) AS notas
+      `SELECT MIN(p.id_pedido) AS id_pedido,
+              p.id_institucion,
+              dp.id_producto,
+              SUM(dp.cantidad_solicitada) AS cantidad,
+              NULLIF(
+                STRING_AGG(DISTINCT NULLIF(BTRIM(p.observaciones_generales), ''), ' | '),
+                ''
+              ) AS notas
        FROM supervisor_escuela_asignacion sea
        JOIN pedido p ON p.id_institucion = sea.institucion_id
-       JOIN institucion i ON i.id_institucion = sea.institucion_id
+       JOIN institucion i ON i.id_institucion = p.id_institucion
+      
        JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido
        WHERE LOWER(COALESCE(i.${nivelColumn}, '')) = LOWER($1)
          AND COALESCE(p.tipo, 'anual') = 'anual'
          AND p.estado = 'aprobado'
          AND p.aprobado_director_area IS TRUE
          AND EXTRACT(YEAR FROM p.fecha_creacion) = $2
+         AND sea.director_area_id = $3
        GROUP BY p.id_institucion, dp.id_producto`,
-      [directorNivel, anio]
+      [directorNivel, anio, req.user.sub]
     );
 
     if (solicitudes.length === 0) {

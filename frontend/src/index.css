@@ -40,7 +40,7 @@ body {
 .auth-container {
   align-items: center;
   padding-top: 60px;
-  background: var(--dark);
+  background: #FF8200;
 }
 
 .card {

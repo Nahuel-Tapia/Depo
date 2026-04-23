@@ -76,6 +76,10 @@ async function ensureTables() {
       ALTER TABLE usuario
       ADD COLUMN IF NOT EXISTS nivel_educativo VARCHAR(120)
     `);
+    await run(`
+      ALTER TABLE usuario
+      ADD COLUMN IF NOT EXISTS director_area_id INT REFERENCES usuario(id_usuario)
+    `);
 
     tablesReady = true;
   })();
@@ -105,10 +109,15 @@ router.get("/catalogo", async (req, res) => {
     }
 
     const supervisores = await all(
-      `SELECT id_usuario AS id, nombre, apellido, email
+      `SELECT id_usuario AS id, nombre, apellido, email, nivel_educativo, director_area_id, jurisdiccion
        FROM usuario
-       WHERE role = 'supervisor' AND activo = TRUE
+       WHERE role = 'supervisor'
+         AND activo = TRUE
+         AND LOWER(COALESCE(nivel_educativo, '')) = LOWER($2)
+         AND director_area_id = $1
        ORDER BY nombre, apellido`
+      ,
+      [req.user.sub, directorNivel]
     );
 
     const escuelas = await all(
@@ -182,8 +191,22 @@ router.post("/asignaciones", async (req, res) => {
       [institucionId, directorNivel]
     );
 
+    const supervisor = await get(
+      `SELECT id_usuario, director_area_id
+       FROM usuario
+       WHERE id_usuario = $1
+         AND role = 'supervisor'
+         AND activo = TRUE
+         AND LOWER(COALESCE(nivel_educativo, '')) = LOWER($3)
+         AND director_area_id = $2`,
+      [supervisorId, req.user.sub, directorNivel]
+    );
+
     if (!institucion) {
       return res.status(400).json({ error: "La escuela no pertenece al nivel educativo del Director de Area" });
+    }
+    if (!supervisor) {
+      return res.status(400).json({ error: "El supervisor no esta vinculado a esta Direccion de Area o no corresponde al mismo nivel" });
     }
 
     await run(
