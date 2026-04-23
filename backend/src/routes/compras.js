@@ -485,6 +485,7 @@ router.post("/planillas", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), asy
        FROM supervisor_escuela_asignacion sea
        JOIN pedido p ON p.id_institucion = sea.institucion_id
        JOIN institucion i ON i.id_institucion = p.id_institucion
+      
        JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido
        WHERE LOWER(COALESCE(i.${nivelColumn}, '')) = LOWER($1)
          AND COALESCE(p.tipo, 'anual') = 'anual'
