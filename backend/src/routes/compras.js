@@ -8,6 +8,40 @@ router.use(authenticate);
 
 let tablesReady = false;
 
+async function getInstitucionNivelColumn() {
+  const row = await get(`
+    SELECT CASE
+      WHEN EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'institucion' AND column_name = 'nivel_educativo'
+      ) THEN 'nivel_educativo'
+      WHEN EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'institucion' AND column_name = 'nivel'
+      ) THEN 'nivel'
+      ELSE NULL
+    END AS col
+  `);
+  return row?.col || null;
+}
+
+async function getDirectorAreaNivel(userId) {
+  const row = await get(
+    `SELECT NULLIF(BTRIM(nivel_educativo), '') AS nivel_educativo
+     FROM usuario
+     WHERE id_usuario = ?`,
+    [userId]
+  );
+  return row?.nivel_educativo || null;
+}
+
+function normalizeEstadoPlanilla(estado) {
+  const value = String(estado || "").trim().toLowerCase();
+  if (!value) return null;
+  if (value === "procesada") return "aceptada";
+  return value;
+}
+
 async function ensureTables() {
   if (tablesReady) return;
 
@@ -46,6 +80,40 @@ async function ensureTables() {
         cantidad INT NOT NULL,
         notas TEXT
       )
+    `);
+
+    await client.query(`
+      ALTER TABLE usuario
+      ADD COLUMN IF NOT EXISTS nivel_educativo VARCHAR(120)
+    `);
+
+    await client.query(`
+      ALTER TABLE planilla_pedido_anual
+      ADD COLUMN IF NOT EXISTS aceptada_at TIMESTAMP
+    `);
+
+    await client.query(`
+      ALTER TABLE planilla_pedido_anual
+      ADD COLUMN IF NOT EXISTS aceptada_por INT REFERENCES usuario(id_usuario)
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS compra_precio_historico (
+        id SERIAL PRIMARY KEY,
+        anio INT NOT NULL,
+        id_producto INT NOT NULL REFERENCES producto(id_producto) ON DELETE CASCADE,
+        id_proveedor INT NOT NULL REFERENCES proveedor(id_proveedor),
+        precio_compra_real NUMERIC(14,2) NOT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        UNIQUE (anio, id_producto)
+      )
+    `);
+
+    await client.query(`
+      UPDATE planilla_pedido_anual
+      SET estado = 'aceptada'
+      WHERE estado = 'procesada'
     `);
 
     tablesReady = true;
@@ -384,6 +452,7 @@ router.post("/planillas", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), asy
          ) AS notas
        FROM supervisor_escuela_asignacion sea
        JOIN pedido p ON p.id_institucion = sea.institucion_id
+       JOIN institucion i ON i.id_institucion = sea.institucion_id
        JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido
        WHERE LOWER(COALESCE(i.${nivelColumn}, '')) = LOWER($1)
          AND COALESCE(p.tipo, 'anual') = 'anual'
