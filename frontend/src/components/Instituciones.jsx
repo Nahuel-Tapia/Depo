@@ -70,8 +70,8 @@ export default function Instituciones({ supervisorMode = false }) {
 
   // Filtrar instituciones
   const filteredInstituciones = instituciones.filter(inst =>
-    inst.nombre.toLowerCase().includes(searchNombre.toLowerCase()) &&
-    inst.cue.toLowerCase().includes(searchCUE.toLowerCase()) &&
+    String(inst.nombre || '').toLowerCase().includes(searchNombre.toLowerCase()) &&
+    String(inst.cue || '').toLowerCase().includes(searchCUE.toLowerCase()) &&
     (inst.cui || '').toLowerCase().includes(searchCUI.toLowerCase()) &&
     (!filterDepartamento || String(inst.departamento || '').trim() === filterDepartamento) &&
     (!filterNivel || String(inst.nivel || '').trim() === filterNivel)
@@ -204,6 +204,12 @@ export default function Instituciones({ supervisorMode = false }) {
   return (
     <div>
       <h2>{supervisorMode ? 'Mis Escuelas' : 'Mapa de Instituciones - San Juan'}</h2>
+
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+        <span className="badge">Instituciones cargadas: {filteredInstituciones.length}</span>
+        <span className="badge">Con coordenadas: {validInstituciones.length}</span>
+        <span className="badge">Edificios en mapa: {Object.keys(groupedByEdificio).length}</span>
+      </div>
       
       {/* Filtros */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px', marginBottom: '20px' }}>
@@ -253,41 +259,47 @@ export default function Instituciones({ supervisorMode = false }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.5fr) minmax(320px, 1fr)', gap: 16, alignItems: 'start' }}>
         {/* Mapa */}
         <div style={{ height: '540px', border: '1px solid #ccc', borderRadius: 8, overflow: 'hidden' }}>
-          <MapContainer
-            center={[-31.5375, -68.5364]}
-            zoom={10}
-            minZoom={9}
-            maxZoom={15}
-            style={{ height: '100%', width: '100%' }}
-          >
-            <TileLayer
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            />
-            {Object.entries(groupedByEdificio).map(([buildingKey, insts]) => {
-              const firstInst = insts[0]
-              const lat = Number(firstInst.latitud)
-              const lng = Number(firstInst.longitud)
-              const cueCount = new Set(insts.map(i => i.cue)).size
+          {validInstituciones.length === 0 ? (
+            <div style={{ padding: 20, color: 'var(--muted)' }}>
+              No hay instituciones georreferenciadas para mostrar en el mapa con los filtros actuales.
+            </div>
+          ) : (
+            <MapContainer
+              center={[-31.5375, -68.5364]}
+              zoom={10}
+              minZoom={9}
+              maxZoom={15}
+              style={{ height: '100%', width: '100%' }}
+            >
+              <TileLayer
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              />
+              {Object.entries(groupedByEdificio).map(([buildingKey, insts]) => {
+                const firstInst = insts[0]
+                const lat = Number(firstInst.latitud)
+                const lng = Number(firstInst.longitud)
+                const cueCount = new Set(insts.map(i => i.cue)).size
 
-              return (
-                <Marker
-                  key={buildingKey}
-                  position={[lat, lng]}
-                  icon={createIcon(firstInst.status)}
-                  eventHandlers={{ click: () => handleSelectEdificio(buildingKey) }}
-                >
-                  <Popup>
-                    <div>
-                      <strong>Edificio: {firstInst.cui || 'Sin CUI'}</strong>
-                      <div>{cueCount} CUE(s) - {insts.length} escuela(s)</div>
-                      <div style={{ marginTop: 6, color: '#6b7280', fontSize: '0.85rem' }}>Hace click en el pin para ver las CUE del edificio.</div>
-                    </div>
-                  </Popup>
-                </Marker>
-              )
-            })}
-          </MapContainer>
+                return (
+                  <Marker
+                    key={buildingKey}
+                    position={[lat, lng]}
+                    icon={createIcon(firstInst.status)}
+                    eventHandlers={{ click: () => handleSelectEdificio(buildingKey) }}
+                  >
+                    <Popup>
+                      <div>
+                        <strong>Edificio: {firstInst.cui || 'Sin CUI'}</strong>
+                        <div>{cueCount} CUE(s) - {insts.length} escuela(s)</div>
+                        <div style={{ marginTop: 6, color: '#6b7280', fontSize: '0.85rem' }}>Hace click en el pin para ver las CUE del edificio.</div>
+                      </div>
+                    </Popup>
+                  </Marker>
+                )
+              })}
+            </MapContainer>
+          )}
         </div>
 
         {/* Panel derecho */}

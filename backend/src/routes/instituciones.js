@@ -98,9 +98,15 @@ router.get("/public/list", async (req, res) => {
     }
 
     const instituciones = await all(`
-      SELECT id_institucion as id, cue, nombre, ${nivelColumn} as nivel_educativo
-      FROM institucion
-      ORDER BY nombre ASC
+      SELECT i.id_institucion as id,
+             i.cue,
+             i.nombre,
+             i.${nivelColumn} as nivel_educativo,
+             NULLIF(TRIM(d.departamento), '') AS departamento
+      FROM institucion i
+      LEFT JOIN edificio e ON i.id_edificio = e.id_edificio
+      LEFT JOIN direccion d ON e.id_direccion = d.id_direccion
+      ORDER BY i.nombre ASC
     `);
     return res.json({ instituciones });
   } catch (err) {
@@ -122,11 +128,12 @@ router.get("/", async (req, res) => {
     const instituciones = await all(`
       SELECT
         i.id_institucion AS id,
+        i.id_edificio AS edificio_id,
         i.nombre,
         i.cue,
         i.${nivelColumn} AS nivel,
         e.cui,
-        COALESCE(NULLIF(TRIM(i.departamento), ''), NULLIF(TRIM(d.departamento), '')) AS departamento,
+        NULLIF(TRIM(d.departamento), '') AS departamento,
         d.latitud,
         d.longitud,
         CASE WHEN EXISTS (
@@ -135,7 +142,6 @@ router.get("/", async (req, res) => {
       FROM institucion i
       LEFT JOIN edificio e ON i.id_edificio = e.id_edificio
       LEFT JOIN direccion d ON e.id_direccion = d.id_direccion
-      WHERE d.latitud IS NOT NULL AND d.longitud IS NOT NULL
       ORDER BY i.nombre ASC
     `);
     return res.json({ instituciones });
