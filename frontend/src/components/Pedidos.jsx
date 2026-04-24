@@ -269,6 +269,7 @@ function SupervisorPedidos() {
 function DepositoPedidos() {
   const { token, user, hasPermission } = useAuth()
   const [pedidos, setPedidos] = useState([])
+  const [productos, setProductos] = useState([])
   const [kits, setKits] = useState([])
   const [msg, setMsg] = useState({ text: '', type: '' })
   const [form, setForm] = useState({ producto_id: '', cantidad: '', notas: '' })
