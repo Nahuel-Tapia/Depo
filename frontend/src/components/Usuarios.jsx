@@ -155,16 +155,34 @@ export default function Usuarios() {
       nombre: form.nombre.trim(),
       email: form.email.trim(),
       password: form.password,
-    };
+    }
+
+    if (user?.role === 'director_area') {
+      payload.nivel = nivelFinal
+      payload.director_area_id = directorAreaIdFinal
+      payload.jurisdiccion = jurisdiccionFinal
+    } else {
+      if (nivelFinal) payload.nivel = nivelFinal
+      if (directorAreaIdFinal) payload.director_area_id = directorAreaIdFinal
+      if (jurisdiccionFinal) payload.jurisdiccion = jurisdiccionFinal
+    }
+
+    const res = await apiFetch('/api/users', {
+      token,
+      method: 'POST',
+      body: JSON.stringify(payload)
+    })
 
     const data = await res.json().catch(() => ({}))
     if (!res.ok) {
-      setRoleModal({ ...roleModal, error: data.error || 'No se pudo actualizar rol' })
+      setMsg({ text: data.error || 'No se pudo crear usuario', type: 'error' })
       return
     }
 
-    setRoleModal(null)
-    setMsg('Rol actualizado correctamente')
+    setMsg({ text: 'Usuario creado correctamente', type: 'success' })
+    setFormOpen(false)
+    setForm({ nombre: '', email: '', password: '', role: 'consulta', institucion: '', cue: '', nivel: '', director_area_id: '', jurisdiccion: '' })
+    setCueInfo(null)
     loadUsers()
   }
 
@@ -194,42 +212,6 @@ export default function Usuarios() {
     }
 
     setMsg({ text: 'Usuario eliminado correctamente', type: 'success' })
-    loadUsers()
-  }
-
-  const handleChangeRole = (u) => {
-    setRoleModal({
-      id: u.id,
-      nombre: u.nombre,
-      role: u.role,
-      nivel: u.nivel_educativo || '',
-      director_area_id: u.director_area_id || '',
-      jurisdiccion: u.jurisdiccion || ''
-    })
-  }
-
-  const handleSaveRole = async () => {
-    if (!roleModal?.role) return
-
-    const res = await apiFetch(`/api/users/${roleModal.id}/role`, {
-      token,
-      method: 'PATCH',
-      body: JSON.stringify({
-        role: roleModal.role,
-        nivel: roleModal.nivel || null,
-        director_area_id: roleModal.director_area_id || null,
-        jurisdiccion: roleModal.jurisdiccion || null
-      })
-    })
-
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok) {
-      setRoleModal({ ...roleModal, error: data.error || 'No se pudo actualizar rol' })
-      return
-    }
-
-    setRoleModal(null)
-    setMsg('Rol actualizado correctamente')
     loadUsers()
   }
 
