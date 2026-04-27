@@ -79,7 +79,10 @@ router.post("/register", async (req, res) => {
     }
 
     // Verificar que no exista ya un usuario para esa institución+nivel
-    const existing = await get("SELECT id_usuario FROM usuario WHERE id_institucion = ?", [institucion.id_institucion]);
+    const existing = await get(
+      "SELECT id_usuario FROM usuario WHERE id_institucion = ? AND role = 'directivo' AND LOWER(COALESCE(nivel_educativo, '')) = LOWER(COALESCE(?, ''))",
+      [institucion.id_institucion, nivel_educativo]
+    );
     if (existing) {
       const code = helpCode();
       return res.status(409).json({
@@ -97,8 +100,8 @@ router.post("/register", async (req, res) => {
 
     const hash = await bcrypt.hash(password, 10);
     const result = await run(
-      "INSERT INTO usuario (nombre, email, dni, password, telefono, id_institucion, role, activo) VALUES (?, ?, ?, ?, ?, ?, ?, TRUE)",
-      [nombre.trim(), emailNormalized, cueNormalized, hash, numero || null, institucion.id_institucion, "directivo"]
+      "INSERT INTO usuario (nombre, email, dni, password, telefono, id_institucion, role, activo, nivel_educativo) VALUES (?, ?, ?, ?, ?, ?, ?, TRUE, ?)",
+      [nombre.trim(), emailNormalized, cueNormalized, hash, numero || null, institucion.id_institucion, "directivo", nivel_educativo]
     );
 
     return res.status(201).json({

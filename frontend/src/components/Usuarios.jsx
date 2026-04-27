@@ -7,7 +7,7 @@ export default function Usuarios() {
   const [users, setUsers] = useState([])
   const [roles, setRoles] = useState([])
   const [instituciones, setInstituciones] = useState([])
-  const [msg, setMsg] = useState('')
+  const [msg, setMsg] = useState({ text: '', type: '' })
   const [formOpen, setFormOpen] = useState(false)
   const [roleModal, setRoleModal] = useState(null)
   const [form, setForm] = useState({ nombre: '', email: '', password: '', role: 'consulta', institucion: '', cue: '', nivel: '', director_area_id: '', jurisdiccion: '' })
@@ -25,7 +25,7 @@ export default function Usuarios() {
         const data = await res.json()
         setUsers(data.users || [])
       } else if (res.status === 403) {
-        setMsg('No tenes permiso para ver usuarios')
+        setMsg({ text: 'No tenes permiso para ver usuarios', type: 'error' })
       }
     } catch { /* ignore */ }
   }
@@ -95,7 +95,7 @@ export default function Usuarios() {
 
   const handleCreate = async (e) => {
     e.preventDefault()
-    setMsg('')
+    setMsg({ text: '', type: '' })
 
     if (user?.role === 'director_area') {
       if ((user.nivel_educativo || '').trim() === '') {
@@ -103,33 +103,37 @@ export default function Usuarios() {
         return
       }
       if (form.role !== 'supervisor') {
-        setMsg('Solo puede crear supervisores de su nivel educativo')
+        setMsg({ text: 'Solo puede crear supervisores', type: 'error' })
         return
       }
     }
 
     if (form.role === 'directivo') {
       if (!cueInfo || !cueInfo.cue) {
-        setMsg('Debe ingresar un CUE valido para un directivo')
+        setMsg({ text: 'Debe ingresar un CUE valido para un directivo', type: 'error' })
         return
       }
       if (!form.nivel) {
-        setMsg('Debe seleccionar un nivel educativo para el CUE')
+        setMsg({ text: 'Debe seleccionar un nivel educativo para el CUE', type: 'error' })
         return
       }
     }
 
     if (form.role === 'director_area' && !form.nivel) {
-      setMsg('Debe seleccionar un nivel educativo para Director de Area')
+      setMsg({ text: 'Debe seleccionar un nivel educativo para Director de Area', type: 'error' })
       return
     }
     if (form.role === 'supervisor') {
-      if (!form.jurisdiccion) {
-        setMsg('Debe seleccionar una jurisdiccion para Supervisor')
+      if (!form.nivel) {
+        setMsg('Debe seleccionar un nivel educativo para Supervisor')
         return
       }
       if (!form.director_area_id) {
-        setMsg('Debe vincular el supervisor a un Area de Direccion')
+        setMsg({ text: 'Debe vincular el supervisor a un Area de Direccion', type: 'error' })
+        return
+      }
+      if (!form.jurisdiccion) {
+        setMsg('Debe seleccionar una jurisdiccion para Supervisor')
         return
       }
     }
@@ -151,37 +155,17 @@ export default function Usuarios() {
       nombre: form.nombre.trim(),
       email: form.email.trim(),
       password: form.password,
-      role: form.role,
-      nivel: nivelFinal || null,
-      director_area_id: directorAreaIdFinal || null,
-      jurisdiccion: jurisdiccionFinal || null
+    };
+
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      setRoleModal({ ...roleModal, error: data.error || 'No se pudo actualizar rol' })
+      return
     }
 
-    if (form.role === 'directivo' && cueInfo) {
-      payload.institucion = cueInfo.id
-    }
-
-    try {
-      const res = await apiFetch('/api/users', {
-        token,
-        method: 'POST',
-        body: JSON.stringify(payload)
-      })
-      const data = await res.json().catch(() => ({}))
-
-      if (!res.ok) {
-        setMsg(data.error || 'No se pudo crear el usuario')
-        return
-      }
-
-      setForm({ nombre: '', email: '', password: '', role: 'consulta', institucion: '', cue: '', nivel: '', director_area_id: '', jurisdiccion: '' })
-      setCueInfo(null)
-      setFormOpen(false)
-      setMsg('Usuario creado correctamente')
-      loadUsers()
-    } catch {
-      setMsg('Error de conexión')
-    }
+    setRoleModal(null)
+    setMsg('Rol actualizado correctamente')
+    loadUsers()
   }
 
   const handleToggleActive = async (id, current) => {
@@ -192,7 +176,7 @@ export default function Usuarios() {
     })
 
     if (!res.ok) {
-      setMsg('No se pudo actualizar estado')
+      setMsg({ text: 'No se pudo actualizar estado', type: 'error' })
       return
     }
 
@@ -205,11 +189,11 @@ export default function Usuarios() {
     const res = await apiFetch(`/api/users/${id}`, { token, method: 'DELETE' })
     const data = await res.json().catch(() => ({}))
     if (!res.ok) {
-      setMsg(data.error || 'No se pudo eliminar usuario')
+      setMsg({ text: data.error || 'No se pudo eliminar usuario', type: 'error' })
       return
     }
 
-    setMsg('Usuario eliminado correctamente')
+    setMsg({ text: 'Usuario eliminado correctamente', type: 'success' })
     loadUsers()
   }
 
@@ -253,6 +237,75 @@ export default function Usuarios() {
   const canToggleStatus = hasPermission('users.status.update')
   const canDeleteUser = hasPermission('users.delete') && user?.role === 'admin'
 
+  const handleChangeRole = (u) => {
+    if (!u) return
+    setMsg({ text: '', type: '' })
+    setRoleModal({
+      id: u.id,
+      nombre: u.nombre,
+      role: u.role,
+      institucion: u.id_institucion || '',
+      nivel: u.nivel_educativo || '',
+      director_area_id: u.director_area_id || '',
+      jurisdiccion: u.jurisdiccion || '',
+      error: ''
+    })
+  }
+
+  const handleSaveRole = async () => {
+    if (!roleModal) return
+
+    const nextRole = String(roleModal.role || '').trim()
+    if (!nextRole) {
+      setRoleModal({ ...roleModal, error: 'Debe seleccionar un rol' })
+      return
+    }
+
+    if ((nextRole === 'director_area' || nextRole === 'supervisor') && !String(roleModal.nivel || '').trim()) {
+      setRoleModal({ ...roleModal, error: 'Debe seleccionar un nivel educativo' })
+      return
+    }
+
+    if (nextRole === 'supervisor') {
+      if (!roleModal.director_area_id) {
+        setRoleModal({ ...roleModal, error: 'Debe seleccionar un Area de Direccion' })
+        return
+      }
+      if (!String(roleModal.jurisdiccion || '').trim()) {
+        setRoleModal({ ...roleModal, error: 'Debe seleccionar una jurisdiccion' })
+        return
+      }
+    }
+
+    const payload = {
+      role: nextRole,
+      institucion: roleModal.institucion || null,
+      nivel: roleModal.nivel || null,
+      director_area_id: roleModal.director_area_id || null,
+      jurisdiccion: roleModal.jurisdiccion || null,
+    }
+
+    try {
+      const res = await apiFetch(`/api/users/${roleModal.id}/role`, {
+        token,
+        method: 'PATCH',
+        body: JSON.stringify(payload)
+      })
+
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setRoleModal({ ...roleModal, error: data.error || 'No se pudo actualizar rol' })
+        return
+      }
+
+      setRoleModal(null)
+      setMsg({ text: 'Rol actualizado correctamente', type: 'success' })
+      loadUsers()
+    } catch {
+      setRoleModal({ ...roleModal, error: 'Error de conexión' })
+    }
+  }
+
   if (user?.role !== 'admin' && user?.role !== 'director_area') {
     return (
       <div>
@@ -278,7 +331,11 @@ export default function Usuarios() {
         </div>
       )}
 
-      {msg && <div className="msg show msg-error">{msg}</div>}
+      {msg.text && (
+        <div className={`msg show ${msg.type === 'success' ? 'msg-success' : 'msg-error'}`}>
+          {msg.text}
+        </div>
+      )}
 
       <h3>Usuarios Registrados</h3>
       <table>
