@@ -120,3 +120,18 @@
 **Archivos:**
 - `ROLES_Y_PERMISOS.md` - describe los 8 roles del sistema, permisos y restricciones
 - `CHANGELOG.md` - este registro de cambios
+
+### 6. Flujo Completo de Zonas (Director de Área)
+
+- Backend:
+  - POST /api/director-area/zonas ahora admite la creación de zonas asociadas a departamentos específicos, valida que el nivel educativo del Director coincida con el de la zona y verifica las instituciones enviadas para asegurarse de que pertenecen al departamento y al nivel del Director. Devuelve el id de la zona creada.
+  - GET /api/director-area/zonas-edificio devuelve departamentos, instituciones (con nivel_educativo) y zonas, con filtrado estricto por nivel educativo y departamento.
+  - Endpoints para /informes y /solicitudes añadidos como placeholders para evitar 404s y dejar espacio para futuras consultas reales.
+  - Mejora de mensajes de error para que sean claros y útiles, con logs para debugging en desarrollo.
+- Frontend:
+  - DirectorAreaZonas.jsx implementa un flujo paso a paso: seleccionar departamento, seleccionar instituciones filtradas por departamento y nivel educativo del Director, crear zona y abrir un modal para asignar Supervisores a la zona recién creada.
+  - Filtrado estricto de instituciones por nivel y departamento; muestra el nivel educativo junto a cada institución para diferenciar duplicados de nombre/cu con distintos niveles.
+  - Implementación de la asignación de Supervisores tras la creación de la Zona mediante un modal, con verificación de selección y guardado de asignaciones.
+- Notas:
+  - Las instituciones que comparten nombre y cue pero tienen niveles educativos diferentes ya no causan ambigüedad, ya que el ID es el identificador único y se muestra el nivel para distinguirlas en la UI.
+  - Se mantiene una ruta de soporte para informes/solicitudes para evitar errores 404, con posibilidad de implementarlas con datos reales cuando se definan las estructuras en BD.
