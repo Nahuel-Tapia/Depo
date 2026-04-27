@@ -75,10 +75,7 @@ export default function Usuarios() {
     loadRoles()
   }, [])
 
-  // Si el usuario es director de área, solo puede crear supervisores de su nivel
-  let availableRoles = roles.length
-    ? roles
-    : ['consulta', 'operador', 'supervisor', 'director_area', 'directivo', 'admin']
+  let availableRoles = roles.length ? roles : ['consulta', 'operador', 'supervisor', 'director_area', 'directivo', 'admin']
   if (user?.role === 'director_area') {
     availableRoles = ['supervisor']
   }
@@ -100,10 +97,13 @@ export default function Usuarios() {
     e.preventDefault()
     setMsg('')
 
-    // Restricción para director de área: solo puede crear supervisores de su nivel
     if (user?.role === 'director_area') {
+      if ((user.nivel_educativo || '').trim() === '') {
+        setMsg('Su usuario no tiene nivel educativo configurado. Contacte al administrador.')
+        return
+      }
       if (form.role !== 'supervisor') {
-        setMsg('Solo puede crear supervisores')
+        setMsg('Solo puede crear supervisores de su nivel educativo')
         return
       }
     }
@@ -124,41 +124,64 @@ export default function Usuarios() {
       return
     }
     if (form.role === 'supervisor') {
-      if (!form.nivel) {
-        setMsg('Debe seleccionar un nivel educativo para Supervisor')
+      if (!form.jurisdiccion) {
+        setMsg('Debe seleccionar una jurisdiccion para Supervisor')
         return
       }
       if (!form.director_area_id) {
         setMsg('Debe vincular el supervisor a un Area de Direccion')
         return
       }
-      if (!form.jurisdiccion) {
-        setMsg('Debe seleccionar una jurisdiccion para Supervisor')
-        return
-      }
     }
 
-    // Forzar nivel educativo del director de área al crear supervisor
     let nivelFinal = form.nivel
+    let directorAreaIdFinal = form.director_area_id
+    let jurisdiccionFinal = form.jurisdiccion
+
     if (user?.role === 'director_area') {
       nivelFinal = user.nivel_educativo || ''
+      directorAreaIdFinal = user.id
+      const miJurisdiccion = user.jurisdiccion || ''
+      if (!jurisdiccionFinal && miJurisdiccion) {
+        jurisdiccionFinal = miJurisdiccion
+      }
     }
 
     const payload = {
       nombre: form.nombre.trim(),
       email: form.email.trim(),
       password: form.password,
-    };
-
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok) {
-      setRoleModal({ ...roleModal, error: data.error || 'No se pudo actualizar rol' })
-      return
+      role: form.role,
+      nivel: nivelFinal || null,
+      director_area_id: directorAreaIdFinal || null,
+      jurisdiccion: jurisdiccionFinal || null
     }
 
-    setRoleModal(null)
-    setMsg('Rol actualizado correctamente')
-    loadUsers()
+    if (form.role === 'directivo' && cueInfo) {
+      payload.institucion = cueInfo.id
+    }
+
+    try {
+      const res = await apiFetch('/api/users', {
+        token,
+        method: 'POST',
+        body: JSON.stringify(payload)
+      })
+      const data = await res.json().catch(() => ({}))
+
+      if (!res.ok) {
+        setMsg(data.error || 'No se pudo crear el usuario')
+        return
+      }
+
+      setForm({ nombre: '', email: '', password: '', role: 'consulta', institucion: '', cue: '', nivel: '', director_area_id: '', jurisdiccion: '' })
+      setCueInfo(null)
+      setFormOpen(false)
+      setMsg('Usuario creado correctamente')
+      loadUsers()
+    } catch {
+      setMsg('Error de conexión')
+    }
   }
 
   const handleToggleActive = async (id, current) => {
@@ -190,11 +213,46 @@ export default function Usuarios() {
     loadUsers()
   }
 
+  const handleChangeRole = (u) => {
+    setRoleModal({
+      id: u.id,
+      nombre: u.nombre,
+      role: u.role,
+      nivel: u.nivel_educativo || '',
+      director_area_id: u.director_area_id || '',
+      jurisdiccion: u.jurisdiccion || ''
+    })
+  }
+
+  const handleSaveRole = async () => {
+    if (!roleModal?.role) return
+
+    const res = await apiFetch(`/api/users/${roleModal.id}/role`, {
+      token,
+      method: 'PATCH',
+      body: JSON.stringify({
+        role: roleModal.role,
+        nivel: roleModal.nivel || null,
+        director_area_id: roleModal.director_area_id || null,
+        jurisdiccion: roleModal.jurisdiccion || null
+      })
+    })
+
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      setRoleModal({ ...roleModal, error: data.error || 'No se pudo actualizar rol' })
+      return
+    }
+
+    setRoleModal(null)
+    setMsg('Rol actualizado correctamente')
+    loadUsers()
+  }
+
   const canChangeRole = hasPermission('users.role.update')
   const canToggleStatus = hasPermission('users.status.update')
   const canDeleteUser = hasPermission('users.delete') && user?.role === 'admin'
 
-  // Permitir acceso a directores de área para crear supervisores
   if (user?.role !== 'admin' && user?.role !== 'director_area') {
     return (
       <div>
@@ -304,7 +362,7 @@ export default function Usuarios() {
                 </select>
               </div>
 
-              {form.role === 'directivo' ? (
+              {form.role === 'directivo' && (
                 <>
                   <div>
                     <label>CUE</label>
@@ -331,7 +389,9 @@ export default function Usuarios() {
                   )}
                   {cueInfo && !cueInfo.nombre && <div style={{ color: 'red', fontSize: 13 }}>CUE no encontrado</div>}
                 </>
-              ) : form.role === 'director_area' ? (
+              )}
+
+              {form.role === 'director_area' && (
                 <div>
                   <label>Nivel educativo</label>
                   <select value={form.nivel} onChange={(e) => setForm({ ...form, nivel: e.target.value })} required>
@@ -341,9 +401,10 @@ export default function Usuarios() {
                     ))}
                   </select>
                 </div>
-              ) : form.role === 'supervisor' ? (
+              )}
+
+              {form.role === 'supervisor' && (
                 <>
-                  {/* Si el usuario es director_area, el area y nivel se asignan automáticamente */}
                   {user?.role !== 'director_area' && (
                     <div>
                       <label>Area de Direccion</label>
@@ -358,26 +419,41 @@ export default function Usuarios() {
                       </select>
                     </div>
                   )}
-                  {/* Nivel educativo siempre visible para supervisor */}
-                  <div>
-                    <label>Nivel educativo</label>
-                    {user?.role === 'director_area' ? (
-                      <>
-                        <input type="text" value={user.nivel_educativo || ''} disabled />
-                        {/* Campo oculto para enviar el nivel real */}
-                        <input type="hidden" name="nivel" value={user.nivel_educativo || ''} />
-                      </>
-                    ) : (
+                  {user?.role === 'director_area' && (
+                    <input type="hidden" name="director_area_id" value={user.id} />
+                  )}
+                  {user?.role === 'director_area' ? (
+                    <div>
+                      <label>Nivel educativo</label>
+                      <input type="text" value={user.nivel_educativo || ''} disabled />
+                      <input type="hidden" name="nivel" value={user.nivel_educativo || ''} />
+                    </div>
+                  ) : (
+                    <div>
+                      <label>Nivel educativo</label>
                       <select value={form.nivel} onChange={(e) => setForm({ ...form, nivel: e.target.value })} required>
                         <option value="">-- Seleccionar nivel --</option>
                         {nivelesDisponibles.map((nivel) => (
                           <option key={nivel} value={nivel}>{nivel}</option>
                         ))}
                       </select>
-                    )}
-                  </div>
+                    </div>
+                  )}
+                  {user?.role !== 'director_area' ? (
+                    <div>
+                      <label>Jurisdiccion</label>
+                      <select value={form.jurisdiccion} onChange={(e) => setForm({ ...form, jurisdiccion: e.target.value })} required>
+                        <option value="">-- Seleccionar jurisdiccion --</option>
+                        {jurisdiccionesDisponibles.map((jur) => (
+                          <option key={jur} value={jur}>{jur}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
+                    <input type="hidden" name="jurisdiccion" value={user.jurisdiccion || ''} />
+                  )}
                 </>
-              ) : null}
+              )}
 
               <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
                 <button type="button" className="secondary" onClick={() => setFormOpen(false)}>Cancelar</button>
@@ -457,15 +533,6 @@ export default function Usuarios() {
                     <option value="">-- Seleccionar jurisdiccion --</option>
                     {jurisdiccionesDisponibles.map((jur) => (
                       <option key={jur} value={jur}>{jur}</option>
-                    ))}
-                  </select>
-                </div>
-                <div style={{ marginTop: 16 }}>
-                  <label>Nivel educativo</label>
-                  <select value={roleModal.nivel} onChange={(e) => setRoleModal({ ...roleModal, nivel: e.target.value, error: '' })}>
-                    <option value="">-- Seleccionar nivel --</option>
-                    {nivelesDisponibles.map((nivel) => (
-                      <option key={nivel} value={nivel}>{nivel}</option>
                     ))}
                   </select>
                 </div>

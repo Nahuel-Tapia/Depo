@@ -39,28 +39,25 @@ export default function DirectorAreaPanel({ initialSection }) {
 
   const loadAll = async () => {
     try {
-      const [catalogoRes, asigRes, informesRes, solicitudesRes] = await Promise.all([
+      const [catalogoRes, asigRes] = await Promise.all([
         apiFetch('/api/director-area/catalogo', { token }),
-        apiFetch('/api/director-area/asignaciones', { token }),
-        apiFetch('/api/director-area/informes', { token }),
-        apiFetch('/api/director-area/solicitudes', { token })
+        apiFetch('/api/director-area/asignaciones', { token })
       ])
 
-      if (!catalogoRes.ok || !asigRes.ok || !informesRes.ok) {
-        throw new Error('No se pudo cargar la informacion de Direccion de Area')
+      if (!catalogoRes.ok) {
+        throw new Error('No se pudo cargar el catalogo')
       }
 
       const catalogo = await catalogoRes.json()
       const asignacionesData = await asigRes.json()
-      const informesData = await informesRes.json()
-      const solicitudesData = solicitudesRes.ok ? await solicitudesRes.json() : { solicitudes: [] }
 
       setSupervisores(catalogo.supervisores || [])
       setEscuelas(catalogo.escuelas || [])
       setNivelEducativo(catalogo.nivel_educativo || '')
       setAsignaciones(asignacionesData.asignaciones || [])
-      setInformes(informesData.informes || [])
-      setSolicitudes(solicitudesData.solicitudes || [])
+      // Do not load informes/solicitudes here to avoid 404s in this view
+      setInformes([])
+      setSolicitudes([])
 
       const planillasRes = await apiFetch('/api/compras/planillas', { token })
       if (planillasRes.ok) {

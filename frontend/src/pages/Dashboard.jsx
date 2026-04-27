@@ -17,7 +17,7 @@ import MiCuenta from '../components/MiCuenta'
 const TABS = [
   { key: 'inicio', label: 'Inicio', permission: null },
   { key: 'mi-cuenta', label: 'Mi cuenta', permission: null },
-  { key: 'gestion-escuelas', label: 'Gestión de Escuelas', permission: 'supervision.manage', role: 'director_area' },
+  { key: 'gestion-escuelas', label: 'Gestión de Zonas', permission: 'supervision.manage', role: 'director_area' },
   { key: 'gestion-pedidos', label: 'Gestión de Pedidos', permission: 'supervision.manage', role: 'director_area' },
   { key: 'compras-pedidos', label: 'Gestión de Pedidos Anuales', permission: 'planilla.view', role: 'area_compras' },
   { key: 'compras-licitacion', label: 'Licitación Anual', permission: 'planilla.view', role: 'area_compras' },
