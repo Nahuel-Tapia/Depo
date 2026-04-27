@@ -290,12 +290,20 @@ async function ensurePedidosSchema() {
         nombre VARCHAR(180) NOT NULL,
         tipo_escuela VARCHAR(40) NOT NULL,
         descripcion TEXT,
+        cantidad_alumnos INT,
         activo BOOLEAN NOT NULL DEFAULT TRUE,
         created_by INT REFERENCES usuario(id_usuario),
         created_at TIMESTAMP NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMP NOT NULL DEFAULT NOW()
       )
     `);
+
+    try {
+      await run(`
+        ALTER TABLE producto_kit
+        ADD COLUMN IF NOT EXISTS cantidad_alumnos INT
+      `);
+    } catch (_) { /* ya existe o no aplica */ }
 
     try {
       await run(`
