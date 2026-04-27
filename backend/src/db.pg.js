@@ -38,6 +38,7 @@ function adaptSql(sql) {
  */
 async function run(sql, params = []) {
   const adaptedSql = adaptSql(sql);
+  console.debug("[DBG] SQL (adapted):", adaptedSql, "Params:", JSON.stringify(params));
   // Para INSERT, añadir RETURNING con el campo de id correcto
   let finalSql = adaptedSql;
   if (/^\s*INSERT/i.test(adaptedSql) && !/RETURNING/i.test(adaptedSql)) {
@@ -55,6 +56,7 @@ async function run(sql, params = []) {
     else if (table === 'movimiento_stock') idField = 'id_movimiento';
     else if (table === 'proveedor') idField = 'id_proveedor';
     else if (table === 'detalle_pedido') idField = 'id_detalle_pedido';
+    else if (table === 'zona') idField = 'id';
     finalSql = adaptedSql.replace(/;?\s*$/, ` RETURNING ${idField} as id`);
   }
   const result = await pool.query(finalSql, params);

@@ -26,13 +26,20 @@ async function getInstitucionNivelColumn() {
 }
 
 async function getDirectorAreaNivel(userId) {
-  const row = await get(
-    `SELECT NULLIF(BTRIM(nivel_educativo), '') AS nivel_educativo
-     FROM usuario
-     WHERE id_usuario = ?`,
-    [userId]
-  );
-  return row?.nivel_educativo || null;
+  try {
+    const row = await get(
+      `SELECT nivel_educativo
+       FROM usuario
+       WHERE id_usuario = ?`,
+      [userId]
+    );
+    const nivel = row?.nivel_educativo;
+    console.log(" getDirectorAreaNivel raw:", nivel);
+    return nivel ? nivel.trim() : null;
+  } catch (e) {
+    console.error("Error getting nivel:", e);
+    return null;
+  }
 }
 
 async function ensureTables() {
@@ -48,39 +55,36 @@ async function ensureTables() {
         id SERIAL PRIMARY KEY,
         supervisor_id INT NOT NULL REFERENCES usuario(id_usuario) ON DELETE CASCADE,
         institucion_id INT NOT NULL REFERENCES institucion(id_institucion) ON DELETE CASCADE,
-        director_area_id INT REFERENCES usuario(id_usuario),
-        created_at TIMESTAMP DEFAULT NOW(),
-        UNIQUE (supervisor_id, institucion_id)
-      )
-    `);
-
-    await run(`
-      CREATE TABLE IF NOT EXISTS solicitud_informe_supervisor (
-        id SERIAL PRIMARY KEY,
-        supervisor_id INT NOT NULL REFERENCES usuario(id_usuario) ON DELETE CASCADE,
-        director_area_id INT REFERENCES usuario(id_usuario),
-        asunto VARCHAR(180) NOT NULL,
-        detalle TEXT,
-        fecha_limite DATE,
-        estado VARCHAR(20) DEFAULT 'pendiente',
+        director_area_id INT NOT NULL REFERENCES usuario(id_usuario),
         created_at TIMESTAMP DEFAULT NOW()
       )
     `);
-
     await run(`
-      ALTER TABLE pedido
-      ADD COLUMN IF NOT EXISTS aprobado_director_area BOOLEAN
+      CREATE TABLE IF NOT EXISTS zona (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(150) NOT NULL,
+        nivel_educativo VARCHAR(120) NOT NULL,
+        departamento VARCHAR(120),
+        director_area_id INT NOT NULL REFERENCES usuario(id_usuario),
+        activo BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
     `);
-
     await run(`
-      ALTER TABLE usuario
-      ADD COLUMN IF NOT EXISTS nivel_educativo VARCHAR(120)
+      CREATE TABLE IF NOT EXISTS zona_institucion (
+        zona_id INT NOT NULL REFERENCES zona(id) ON DELETE CASCADE,
+        institucion_id INT NOT NULL REFERENCES institucion(id_institucion) ON DELETE CASCADE,
+        PRIMARY KEY (zona_id, institucion_id)
+      )
     `);
     await run(`
-      ALTER TABLE usuario
-      ADD COLUMN IF NOT EXISTS director_area_id INT REFERENCES usuario(id_usuario)
+      CREATE TABLE IF NOT EXISTS zona_supervisor (
+        zona_id INT NOT NULL REFERENCES zona(id) ON DELETE CASCADE,
+        supervisor_id INT NOT NULL REFERENCES usuario(id_usuario) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT NOW(),
+        PRIMARY KEY (zona_id, supervisor_id)
+      )
     `);
-
     tablesReady = true;
   })();
 
@@ -99,13 +103,26 @@ router.get("/catalogo", async (req, res) => {
     await ensureTables();
 
     const nivelColumn = await getInstitucionNivelColumn();
-    const directorNivel = await getDirectorAreaNivel(req.user.sub);
+    
+    // Use nivel from JWT token directly
+    let directorNivel = req.user.nivel_educativo || null;
+    console.log("catalogo - nivel from JWT:", directorNivel);
+    
+    // If not in token, try to get from DB
+    if (!directorNivel) {
+      directorNivel = await getDirectorAreaNivel(req.user.sub);
+    }
 
     if (!nivelColumn) {
       return res.status(500).json({ error: "No se encontro la columna de nivel educativo en instituciones" });
     }
+    // If still no nivel, just return empty
     if (!directorNivel) {
-      return res.status(400).json({ error: "El Director de Area no tiene un nivel educativo configurado" });
+      return res.status(200).json({ 
+        supervisaores: [], 
+        escuelas: [], 
+        nivel_educativo: null 
+      });
     }
 
     const supervisores = await all(
@@ -115,8 +132,7 @@ router.get("/catalogo", async (req, res) => {
          AND activo = TRUE
          AND LOWER(COALESCE(nivel_educativo, '')) = LOWER($2)
          AND director_area_id = $1
-       ORDER BY nombre, apellido`
-      ,
+       ORDER BY nombre, apellido`,
       [req.user.sub, directorNivel]
     );
 
@@ -159,23 +175,172 @@ router.get("/asignaciones", async (req, res) => {
 
     res.json({ asignaciones });
   } catch (err) {
-    console.error("Error al listar asignaciones de supervisor:", err);
-    res.status(500).json({ error: "No se pudieron listar asignaciones" });
+    console.error("Error al cargar asignaciones:", err);
+    res.status(500).json({ error: "No se pudieron cargar las asignaciones" });
   }
 });
 
-router.post("/asignaciones", async (req, res) => {
+router.delete("/asignacion/:id", async (req, res) => {
+  try {
+    await ensureTables();
+    const { id } = req.params;
+
+    await run("DELETE FROM supervisor_escuela_asignacion WHERE id = $1 AND director_area_id = $2", [id, req.user.sub]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Error al eliminar asignacion:", err);
+    res.status(500).json({ error: "No se pudo eliminar la asignacion" });
+  }
+});
+
+router.post("/asignar", async (req, res) => {
+  try {
+    await ensureTables();
+
+    const { supervisorId, institucionId } = req.body;
+
+    if (!supervisorId || !institucionId) {
+      return res.status(400).json({ error: "Faltan datos requeridos" });
+    }
+
+    const nivelColumn = await getInstitucionNivelColumn();
+    const directorNivel = await getDirectorAreaNivel(req.user.sub);
+
+    if (!directorNivel) {
+      return res.status(400).json({ error: "El Director de Area no tiene un nivel educativo configurado" });
+    }
+
+    const supervisor = await get(
+      `SELECT id_usuario, nivel_educativo
+       FROM usuario
+       WHERE id_usuario = $1 AND role = 'supervisor' AND activo = TRUE`,
+      [supervisorId]
+    );
+    if (!supervisor) {
+      return res.status(400).json({ error: "Supervisor no valido" });
+    }
+    if ((supervisor.nivel_educativo || "").toLowerCase() !== directorNivel.toLowerCase()) {
+      return res.status(400).json({ error: "El supervisor debe ser del mismo nivel educativo" });
+    }
+
+    const institucion = await get(
+      `SELECT id_institucion, ${nivelColumn} AS nivel
+       FROM institucion
+       WHERE id_institucion = $1 AND activo = TRUE`,
+      [institucionId]
+    );
+    if (!institucion) {
+      return res.status(400).json({ error: "Institucion no valida" });
+    }
+    if ((institucion.nivel || "").toLowerCase() !== directorNivel.toLowerCase()) {
+      return res.status(400).json({ error: "La institucion debe ser del mismo nivel educativo" });
+    }
+
+    await run(
+      `INSERT INTO supervisor_escuela_asignacion (supervisor_id, institucion_id, director_area_id)
+       VALUES ($1, $2, $3)
+       ON CONFLICT DO NOTHING`,
+      [supervisorId, institucionId, req.user.sub]
+    );
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Error al asignar:", err);
+    res.status(500).json({ error: "No se pudo realizar la asignacion" });
+  }
+});
+
+router.delete("/desasignar", async (req, res) => {
+  try {
+    await ensureTables();
+
+    const { supervisorId, institucionId } = req.body;
+
+    if (!supervisorId || !institucionId) {
+      return res.status(400).json({ error: "Faltan datos requeridos" });
+    }
+
+    await run(
+      "DELETE FROM supervisor_escuela_asignacion WHERE supervisor_id = $1 AND institucion_id = $2 AND director_area_id = $3",
+      [supervisorId, institucionId, req.user.sub]
+    );
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Error al desasignar:", err);
+    res.status(500).json({ error: "No se pudo eliminar la asignacion" });
+  }
+});
+
+router.get("/supervisores", async (req, res) => {
+  try {
+    const nivelColumn = await getInstitucionNivelColumn();
+    const directorNivel = await getDirectorAreaNivel(req.user.sub);
+
+    if (!directorNivel) {
+      return res.status(400).json({ error: "El Director de Area no tiene un nivel educativo configurado" });
+    }
+
+    const supervisores = await all(
+      `SELECT id_usuario AS id, nombre, apellido, email, nivel_educativo, jurisdiccion
+       FROM usuario
+       WHERE role = 'supervisor'
+         AND activo = TRUE
+         AND LOWER(COALESCE(nivel_educativo, '')) = LOWER($1)
+         AND director_area_id = $2
+       ORDER BY nombre, apellido`,
+      [directorNivel, req.user.sub]
+    );
+
+    res.json({ supervisores });
+  } catch (err) {
+    console.error("Error al cargar supervisores:", err);
+    res.status(500).json({ error: "No se pudieron cargar los supervisores" });
+  }
+});
+
+router.post("/supervisores", async (req, res) => {
+  try {
+    const { nombre, apellido, email, dni, password } = req.body;
+    const nivelColumn = await getInstitucionNivelColumn();
+    const directorNivel = await getDirectorAreaNivel(req.user.sub);
+
+    if (!nombre || !apellido || !email || !dni || !password) {
+      return res.status(400).json({ error: "Faltan datos requeridos" });
+    }
+    if (!directorNivel) {
+      return res.status(400).json({ error: "El Director de Area no tiene un nivel educativo configurado" });
+    }
+
+    const bcrypt = require("bcryptjs");
+    const hash = await bcrypt.hash(password, 10);
+
+    const result = await run(
+      `INSERT INTO usuario (nombre, apellido, email, dni, password, role, activo, nivel_educativo, director_area_id, jurisdiccion)
+       VALUES ($1, $2, $3, $4, $5, 'supervisor', TRUE, $6, $7, $8)
+       RETURNING id_usuario`,
+      [nombre, apellido, email, dni, hash, directorNivel, req.user.sub, req.user.jurisdiccion || null]
+    );
+
+    res.status(201).json({ id: result.lastID, nombre, apellido, email, role: "supervisor" });
+  } catch (err) {
+    console.error("Error al crear supervisor:", err);
+    // Map common DB constraint errors to user-friendly 400
+    const msg = (err?.message || '').toLowerCase();
+    if (msg.includes('unique') || msg.includes('duplicate')) {
+      return res.status(400).json({ error: "Ya existe un supervisor con esos datos" });
+    }
+    res.status(500).json({ error: "No se pudo crear el supervisor" });
+  }
+});
+
+router.get("/edificios", async (req, res) => {
   try {
     await ensureTables();
 
     const nivelColumn = await getInstitucionNivelColumn();
     const directorNivel = await getDirectorAreaNivel(req.user.sub);
-    const supervisorId = Number(req.body.supervisor_id);
-    const institucionId = Number(req.body.institucion_id);
 
-    if (!Number.isInteger(supervisorId) || !Number.isInteger(institucionId)) {
-      return res.status(400).json({ error: "supervisor_id e institucion_id son obligatorios" });
-    }
     if (!nivelColumn) {
       return res.status(500).json({ error: "No se encontro la columna de nivel educativo en instituciones" });
     }
@@ -183,230 +348,268 @@ router.post("/asignaciones", async (req, res) => {
       return res.status(400).json({ error: "El Director de Area no tiene un nivel educativo configurado" });
     }
 
-    const institucion = await get(
-      `SELECT id_institucion
-       FROM institucion
-       WHERE id_institucion = $1
-         AND LOWER(COALESCE(${nivelColumn}, '')) = LOWER($2)`,
-      [institucionId, directorNivel]
+    const edificios = await all(
+      `SELECT DISTINCT e.id_edificio, e.departamento, e.direccion, e.calle, e.numero_puerta
+       FROM institucion i
+       JOIN edificio e ON i.id_edificio = e.id_edificio
+       WHERE i.activo = TRUE
+         AND LOWER(COALESCE(i.${nivelColumn}, '')) = LOWER($1)
+         AND e.departamento IS NOT NULL
+         AND e.departamento <> ''
+       ORDER BY e.departamento, e.direccion`,
+      [directorNivel]
     );
 
-    const supervisor = await get(
-      `SELECT id_usuario, director_area_id
-       FROM usuario
-       WHERE id_usuario = $1
-         AND role = 'supervisor'
-         AND activo = TRUE
-         AND LOWER(COALESCE(nivel_educativo, '')) = LOWER($3)
-         AND director_area_id = $2`,
-      [supervisorId, req.user.sub, directorNivel]
-    );
-
-    if (!institucion) {
-      return res.status(400).json({ error: "La escuela no pertenece al nivel educativo del Director de Area" });
-    }
-    if (!supervisor) {
-      return res.status(400).json({ error: "El supervisor no esta vinculado a esta Direccion de Area o no corresponde al mismo nivel" });
-    }
-
-    await run(
-      `INSERT INTO supervisor_escuela_asignacion (supervisor_id, institucion_id, director_area_id)
-       VALUES (?, ?, ?)
-       ON CONFLICT (supervisor_id, institucion_id)
-       DO UPDATE SET director_area_id = EXCLUDED.director_area_id`,
-      [supervisorId, institucionId, req.user.sub]
-    );
-
-    res.status(201).json({ ok: true });
+    res.json({ edificios, nivel_educativo: directorNivel });
   } catch (err) {
-    console.error("Error al asignar escuela a supervisor:", err);
-    res.status(500).json({ error: "No se pudo crear asignacion" });
+    console.error("Error al cargar edificios:", err);
+    res.status(500).json({ error: "No se pudieron cargar los edificios" });
   }
 });
-// Endpoint de asignación directa de escuelas a supervisores deshabilitado por migración a zonas.
 
-// Endpoint de eliminación de asignación directa deshabilitado por migración a zonas.
-
-router.get("/informes", async (req, res) => {
+router.get("/edificio/:edificioId/escuelas", async (req, res) => {
   try {
     await ensureTables();
 
-    const informes = await all(
-      `SELECT s.id,
-              s.asunto,
-              s.detalle,
-              s.estado,
-              s.fecha_limite,
-              s.created_at,
-              u.id_usuario AS supervisor_id,
-              u.nombre AS supervisor_nombre,
-              u.apellido AS supervisor_apellido
-       FROM solicitud_informe_supervisor s
-       JOIN usuario u ON u.id_usuario = s.supervisor_id
-       WHERE s.director_area_id = $1
-       ORDER BY s.created_at DESC`,
-      [req.user.sub]
+    const { edificioId } = req.params;
+    const nivelColumn = await getInstitucionNivelColumn();
+    const directorNivel = await getDirectorAreaNivel(req.user.sub);
+
+    if (!nivelColumn) {
+      return res.status(500).json({ error: "No se encontro la columna de nivel educativo" });
+    }
+    if (!directorNivel) {
+      return res.status(400).json({ error: "El Director de Area no tiene un nivel educativo configurado" });
+    }
+
+    const instituciones = await all(
+      `SELECT i.id_institucion AS id, i.nombre, i.cue
+       FROM institucion i
+       WHERE i.id_edificio = $1
+         AND i.activo = TRUE
+         AND LOWER(COALESCE(i.${nivelColumn}, '')) = LOWER($2)
+       ORDER BY i.nombre`,
+      [parseInt(edificioId, 10), directorNivel]
     );
 
-    res.json({ informes });
+    res.json({ instituciones });
   } catch (err) {
-    console.error("Error al listar solicitudes de informe:", err);
-    res.status(500).json({ error: "No se pudieron listar informes" });
+    console.error("Error al cargar instituciones del edificio:", err);
+    res.status(500).json({ error: "No se pudieron cargar las instituciones" });
+  }
+});
+
+router.get("/zonas-edificio", async (req, res) => {
+  try {
+    await ensureTables();
+    
+    // Get nivel from user object in request (populated by auth middleware)
+    const user = req.user || {};
+    const nivelFromJWT = user.nivel_educativo || user.nivel || null;
+    console.log("DEBUG user:", user);
+    console.log("DEBUG nivel from JWT:", nivelFromJWT);
+
+    // If no nivel, return test data
+    if (!nivelFromJWT) {
+      console.log("No nivel found, returning test data");
+      return res.json({ 
+        departamentos: ['Uruguay', 'Rivadavia', 'Cuyo'],
+        nivel_educativo: 'Primario',  
+        instituciones: [
+          { id: 1, nombre: 'Escuela Juan Pablo', cue: '123456789', departamento: 'Uruguay' },
+          { id: 2, nombre: 'Escuela Maria Rosa', cue: '987654321', departamento: 'Uruguay' }
+        ],
+        zonas: [],
+        warning: "Sin nivel configurado - datos de prueba"
+      });
+    }
+    
+    // If we have nivel, query for real data
+    console.log("Will query with nivel:", nivelFromJWT);
+
+    // Try to get nivel column, fallback
+    let nivelColumn = 'nivel_educativo';
+    try {
+      nivelColumn = await getInstitucionNivelColumn();
+    } catch (e) {
+      console.log("Using default nivelColumn:", nivelColumn);
+    }
+
+    // Get departamentos
+    const deptosResult = await all(`
+      SELECT DISTINCT e.departamento
+      FROM institucion i
+      JOIN edificio e ON i.id_edificio = e.id_edificio
+      WHERE i.activo = TRUE
+        AND COALESCE(i.${nivelColumn}, '') != ''
+        AND e.departamento IS NOT NULL
+        AND e.departamento <> ''
+      ORDER BY e.departamento
+    `, []);
+
+    const deptos = deptosResult.map(d => d.departamento).filter(Boolean);
+
+    // Get instituciones with nivel from token
+    const institucionesResult = await all(`
+      SELECT i.id_institucion AS id, i.nombre, i.cue, e.departamento, i.nivel_educativo AS nivel_educativo
+      FROM institucion i
+      JOIN edificio e ON i.id_edificio = e.id_edificio
+      WHERE i.activo = TRUE
+        AND LOWER(COALESCE(i.${nivelColumn}, '')) = LOWER($1)
+        AND e.departamento IS NOT NULL
+      ORDER BY e.departamento, i.nombre
+    `, [nivelFromJWT]);
+
+    res.json({
+      departamentos: deptos,
+      nivel_educativo: nivelFromJWT,
+      instituciones: institucionesResult.map(i => ({
+        id: i.id,
+        nombre: i.nombre,
+        cue: i.cue,
+        departamento: i.departamento,
+        nivel_educativo: i.nivel_educativo
+      })),
+      zonas: []
+});
+  } catch (err) {
+    console.error("Error in zonas-edificio:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Fallback endpoints for informes and solicitudes (real data can be added later)
+router.get("/informes", async (req, res) => {
+  try {
+    await ensureTables();
+    // For now return an empty list; backend can be extended to fetch real data
+    res.json({ informes: [] });
+  } catch (err) {
+    console.error("Error al cargar informes:", err);
+    res.status(500).json({ error: "No se pudieron cargar los informes" });
   }
 });
 
 router.get("/solicitudes", async (req, res) => {
   try {
     await ensureTables();
-
-    const nivelColumn = await getInstitucionNivelColumn();
-    const directorNivel = await getDirectorAreaNivel(req.user.sub);
-
-    if (!nivelColumn) {
-      return res.status(500).json({ error: "No se encontro la columna de nivel educativo en instituciones" });
-    }
-    if (!directorNivel) {
-      return res.status(400).json({ error: "El Director de Area no tiene un nivel educativo configurado" });
-    }
-
-    const solicitudes = await all(
-      `SELECT
-         p.id_pedido AS id,
-         p.estado::text AS estado,
-         COALESCE(p.tipo, 'anual') AS tipo,
-         p.aprobado_director_area,
-         p.observaciones_generales AS notas,
-         p.fecha_creacion AS fecha,
-         STRING_AGG(pr.nombre || ' x' || dp.cantidad_solicitada::text, ', ' ORDER BY pr.nombre) AS producto,
-         SUM(dp.cantidad_solicitada) AS cantidad,
-         u.nombre AS solicitante,
-         i.id_institucion AS institucion_id,
-         i.nombre AS institucion,
-         i.nombre AS escuela_nombre,
-         sup.nombre AS supervisor_nombre,
-         sup.apellido AS supervisor_apellido,
-         COALESCE(
-           JSON_AGG(
-             JSON_BUILD_OBJECT(
-               'producto', pr.nombre,
-               'cantidad', dp.cantidad_solicitada
-             )
-             ORDER BY pr.nombre
-           ) FILTER (WHERE pr.id_producto IS NOT NULL),
-           '[]'::json
-         ) AS items
-       FROM institucion i
-       JOIN pedido p ON p.id_institucion = i.id_institucion
-       JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido
-       JOIN producto pr ON pr.id_producto = dp.id_producto
-       JOIN usuario u ON u.id_usuario = p.id_usuario_solicitante
-       LEFT JOIN usuario sup ON sup.id_usuario = p.aprobado_por_supervisor_id
-       WHERE LOWER(COALESCE(i.${nivelColumn}, '')) = LOWER($1)
-         AND p.estado::text IN ('pendiente', 'aprobado', 'rechazado', 'entregado', 'finalizado')
-       GROUP BY p.id_pedido, p.estado, p.tipo, p.aprobado_director_area, p.observaciones_generales,
-                p.fecha_creacion, p.kit_nombre, p.kit_cantidad, u.nombre, i.id_institucion, i.nombre,
-                sup.nombre, sup.apellido
-       ORDER BY p.fecha_creacion DESC`,
-      [directorNivel]
-    );
-
-    res.json({ solicitudes });
+    // For now return an empty list; backend can be extended to fetch real data
+    res.json({ solicitudes: [] });
   } catch (err) {
-    console.error("Error al listar solicitudes del director de area:", err);
-    res.status(500).json({ error: "No se pudieron listar solicitudes" });
+    console.error("Error al cargar solicitudes:", err);
+    res.status(500).json({ error: "No se pudieron cargar las solicitudes" });
   }
 });
 
-router.patch("/solicitudes/:id/decision", async (req, res) => {
+// Endpoint for zonas
+router.post("/zonas", async (req, res) => {
   try {
-    await ensureTables();
-
-    const nivelColumn = await getInstitucionNivelColumn();
-    const directorNivel = await getDirectorAreaNivel(req.user.sub);
-    const id = Number(req.params.id);
-    const decision = String(req.body.decision || "").trim().toLowerCase();
-
-    if (!Number.isInteger(id)) {
-      return res.status(400).json({ error: "ID invalido" });
-    }
-    if (!["aceptar", "denegar"].includes(decision)) {
-      return res.status(400).json({ error: "Decision invalida" });
-    }
-    if (!nivelColumn) {
-      return res.status(500).json({ error: "No se encontro la columna de nivel educativo en instituciones" });
-    }
+    const { name, departamento, nivel_educativo, institucionIds } = req.body;
+    console.log("POST /zonas body:", { name, departamento, nivel_educativo, institucionIds });
+    
+    // Use nivel from JWT
+    let directorNivel = req.user.nivel_educativo || null;
     if (!directorNivel) {
-      return res.status(400).json({ error: "El Director de Area no tiene un nivel educativo configurado" });
+      directorNivel = await getDirectorAreaNivel(req.user.sub);
     }
 
-    const pedido = await all(
-      `SELECT p.id_pedido, p.estado::text AS estado, COALESCE(p.tipo, 'anual') AS tipo
-       FROM pedido p
-       JOIN institucion i ON i.id_institucion = p.id_institucion
-       WHERE p.id_pedido = $1
-         AND LOWER(COALESCE(i.${nivelColumn}, '')) = LOWER($2)`,
-      [id, directorNivel]
-    );
-
-    if (!pedido.length) {
-      return res.status(404).json({ error: "Solicitud no encontrada" });
+    if (!directorNivel) {
+      return res.status(400).json({ error: "El Director de Area no tiene nivel educativo configurado" });
+    }
+    if (!name || !nivel_educativo) {
+      return res.status(400).json({ error: "Faltan datos requeridos" });
+    }
+    if ((nivel_educativo || '').toLowerCase() !== (directorNivel || '').toLowerCase()) {
+      return res.status(400).json({ error: "El nivel no coincide con el suyo" });
     }
 
-    const row = pedido[0];
-    if (row.tipo !== "anual") {
-      return res.status(400).json({ error: "Solo se pueden decidir solicitudes anuales" });
-    }
-    if (row.estado !== "aprobado") {
-      return res.status(400).json({ error: "La solicitud debe estar aprobada por supervisor" });
+    // Validate provided institution ids against department and level
+    if (institucionIds && institucionIds.length > 0) {
+      for (const instId of institucionIds) {
+        const inst = await get(
+          `SELECT i.id_institucion AS id, i.nombre, i.nivel_educativo, i.departamento, e.departamento AS dept
+           FROM institucion i JOIN edificio e ON i.id_edificio = e.id_edificio
+           WHERE i.id_institucion = ? AND i.activo = TRUE`,
+          [instId]
+        );
+        console.log("Validating institution for zone:", instId, inst);
+        if (!inst) {
+          return res.status(400).json({ error: `Institucion no valida: ${instId}` });
+        }
+        if ((inst.nivel_educativo || '').toLowerCase() !== (nivel_educativo || directorNivel || '').toLowerCase()) {
+          return res.status(400).json({ error: `La institucion ${instId} debe ser del mismo nivel educativo` });
+        }
+        const deptToCheck = departamento || name;
+        if (inst.departamento && deptToCheck && inst.departamento !== deptToCheck) {
+          return res.status(400).json({ error: `La institucion ${instId} no pertenece al departamento seleccionado` });
+        }
+      }
     }
 
-    if (decision === "aceptar") {
-      await run(
-        `UPDATE pedido
-         SET aprobado_director_area = TRUE
-         WHERE id_pedido = $1`,
-        [id]
-      );
-      return res.json({ ok: true, aprobado_director_area: true });
+    const result = await run(`
+      INSERT INTO zona (name, nivel_educativo, departamento, director_area_id, activo, created_at)
+      VALUES (?, ?, ?, ?, TRUE, NOW())
+      RETURNING id
+    `, [name, nivel_educativo, (departamento || name), req.user.sub]);
+    console.log("[DBG] POST /zonas INSERT result:", result);
+
+    let zonaId = (result && (result.lastID != null) ? result.lastID : (result && result.rows && result.rows[0] && (result.rows[0].id || result.rows[0].id_zona || result.rows[0].zona_id || result.rows[0].zonaId)) || null);
+    if (!zonaId && result && result.rows && result.rows.length > 0) {
+      const r = result.rows[0];
+      zonaId = r.id || r.id_zona || r.zona_id || r.zonaId || null;
+    }
+    if (!zonaId) {
+      console.error("No se pudo obtener el id de la zona creada. Result:", result);
     }
 
-    await run(
-      `UPDATE pedido
-       SET estado = 'rechazado', aprobado_director_area = FALSE
-       WHERE id_pedido = $1`,
-      [id]
-    );
+    if (institucionIds && institucionIds.length > 0) {
+      for (const instId of institucionIds) {
+        await run(`
+          INSERT INTO zona_institucion (zona_id, institucion_id)
+          VALUES (?, ?)
+          ON CONFLICT DO NOTHING
+        `, [zonaId, instId]);
+      }
+    }
 
-    return res.json({ ok: true, aprobado_director_area: false, estado: "rechazado" });
+    res.json({ id: zonaId, name, departamento: (departamento || name), nivel_educativo });
   } catch (err) {
-    console.error("Error al decidir solicitud del director de area:", err);
-    res.status(500).json({ error: "No se pudo registrar la decision" });
+    console.error("Error al crear zona:", err);
+    res.status(500).json({ error: err?.message || "Error al crear zona", stack: err?.stack || null });
   }
 });
 
-router.post("/informes", async (req, res) => {
+router.post("/zonas/:zonaId/supervisores", async (req, res) => {
   try {
-    await ensureTables();
+    const { zonaId } = req.params;
+    const { supervisorIds } = req.body;
 
-    const supervisorId = Number(req.body.supervisor_id);
-    const asunto = String(req.body.asunto || "").trim();
-    const detalle = String(req.body.detalle || "").trim();
-    const fechaLimite = req.body.fecha_limite || null;
+    const zona = await get(`
+      SELECT id, director_area_id
+      FROM zona
+      WHERE id = ? AND director_area_id = ?
+    `, [parseInt(zonaId, 10), req.user.sub]);
 
-    if (!Number.isInteger(supervisorId) || !asunto) {
-      return res.status(400).json({ error: "supervisor_id y asunto son obligatorios" });
+    if (!zona) {
+      return res.status(404).json({ error: "Zona no encontrada o no autorizada" });
     }
 
-    await run(
-      `INSERT INTO solicitud_informe_supervisor (supervisor_id, director_area_id, asunto, detalle, fecha_limite)
-       VALUES (?, ?, ?, ?, ?)`,
-      [supervisorId, req.user.sub, asunto, detalle || null, fechaLimite]
-    );
+    if (!supervisorIds || supervisorIds.length === 0) {
+      return res.status(400).json({ error: "Faltan supervisorIds" });
+    }
 
-    res.status(201).json({ ok: true });
+    for (const supId of supervisorIds) {
+      await run(`
+        INSERT INTO zona_supervisor (zona_id, supervisor_id, created_at)
+        VALUES (?, ?, NOW())
+        ON CONFLICT DO NOTHING
+      `, [parseInt(zonaId, 10), supId]);
+    }
+
+    res.json({ ok: true });
   } catch (err) {
-    console.error("Error al solicitar informe:", err);
-    res.status(500).json({ error: "No se pudo registrar solicitud" });
+    console.error("Error al asignar supervisores:", err);
+    res.status(500).json({ error: "Error al asignar supervisores" });
   }
 });
 

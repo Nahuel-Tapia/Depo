@@ -4,171 +4,272 @@ import { useAuth } from '../context/AuthContext'
 
 export default function DirectorAreaZonas({ nivelEducativo }) {
   const { token } = useAuth()
+  const [departamentos, setDepartamentos] = useState([])
   const [zonas, setZonas] = useState([])
-  const [nombreZona, setNombreZona] = useState('')
-  const [escuelas, setEscuelas] = useState([])
   const [supervisores, setSupervisores] = useState([])
-  const [msg, setMsg] = useState({ text: '', type: '' })
-  const [zonaSeleccionada, setZonaSeleccionada] = useState(null)
-  const [escuelasSeleccionadas, setEscuelasSeleccionadas] = useState([])
-  const [supervisoresSeleccionados, setSupervisoresSeleccionados] = useState([])
-  // Formulario de nuevo supervisor
-  const [nuevoSupervisor, setNuevoSupervisor] = useState({ nombre: '', apellido: '', email: '', dni: '', password: '' })
-  // Crear supervisor
-  const handleCrearSupervisor = async (e) => {
-    e.preventDefault()
-    setMsg({ text: '', type: '' })
-    const { nombre, apellido, email, dni, password } = nuevoSupervisor
-    if (!nombre || !apellido || !email || !dni || !password) {
-      setMsg({ text: 'Todos los campos son obligatorios', type: 'error' })
-      return
-    }
-    const res = await apiFetch('/api/director-area/supervisores', {
-      token,
-      method: 'POST',
-      body: JSON.stringify({ nombre, apellido, email, dni, password })
-    })
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}))
-      setMsg({ text: data.error || 'No se pudo crear el supervisor', type: 'error' })
-      return
-    }
-    setNuevoSupervisor({ nombre: '', apellido: '', email: '', dni: '', password: '' })
-    setMsg({ text: 'Supervisor creado correctamente', type: 'success' })
-    loadData()
-  }
+  const [institucionesDisponibles, setInstitucionesDisponibles] = useState([])
+  const [institucionesSeleccionadas, setInstitucionesSeleccionadas] = useState([])
+  const [modalOpen, setModalOpen] = useState(false)
+  const [zonaIdCreada, setZonaIdCreada] = useState(null)
+  const [modalSupervisores, setModalSupervisores] = useState([])
+  const [selectedSupervisores, setSelectedSupervisores] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  
+  const [departamentoSeleccionado, setDepartamentoSeleccionado] = useState('')
+  const [zonaCreada, setZonaCreada] = useState(false)
+  const [creando, setCreando] = useState(false)
 
-  // Cargar zonas, escuelas y supervisores
-  const loadData = async () => {
-    setMsg({ text: '', type: '' })
+  const miNivel = nivelEducativo ? nivelEducativo.toUpperCase() : 'PRIMARIO'
+
+  useEffect(() => {
+    loadData()
+  }, [])
+
+  // When modal opens, fetch available supervisors for assignment
+  useEffect(() => {
+    if (modalOpen) {
+      fetchModalSupervisores()
+      setSelectedSupervisores([])
+    }
+  }, [modalOpen])
+
+  const fetchModalSupervisores = async () => {
     try {
-      const zonasRes = await apiFetch('/api/zones', { token })
-      const escuelasRes = await apiFetch('/api/director-area/catalogo', { token })
-      if (!zonasRes.ok || !escuelasRes.ok) throw new Error('Error cargando datos')
-      setZonas(await zonasRes.json())
-      setEscuelas((await escuelasRes.json()).escuelas || [])
-      setSupervisores((await escuelasRes.json()).supervisores || [])
+      const res = await apiFetch('/api/director-area/catalogo', { token })
+      const data = await res.json().catch(() => ({}))
+      setModalSupervisores(data.supervisores || [])
+    } catch {
+      setModalSupervisores([])
+    }
+  }
+
+  const loadData = async () => {
+    if (!token) return
+    setLoading(true)
+    setError('')
+    try {
+      const res = await apiFetch('/api/director-area/zonas-edificio', { token })
+      const data = await res.json().catch(() => ({}))
+      
+      if (res.ok) {
+        setDepartamentos(data.departamentos || [])
+        setZonas(data.zonas || [])
+        // include nivel_educativo in instituciones for frontend filtering
+        setInstitucionesDisponibles((data.instituciones || []) )
+      } else {
+        setError(data.error || 'Error al cargar')
+      }
     } catch (err) {
-      setMsg({ text: err.message || 'Error cargando datos', type: 'error' })
+      setError('Error de conexión')
+    } finally {
+      setLoading(false)
     }
   }
 
-  useEffect(() => { loadData() }, [token])
+  const toggleInstitucion = (id) => {
+    setInstitucionesSeleccionadas(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    )
+  }
 
-  // Crear zona
-  const handleCrearZona = async (e) => {
-    e.preventDefault()
-    setMsg({ text: '', type: '' })
-    if (!nombreZona.trim()) {
-      setMsg({ text: 'El nombre es obligatorio', type: 'error' })
+  const handleCrear = async () => {
+    if (!departamentoSeleccionado) {
+      setError('Seleccioná un departamento')
       return
     }
-    const res = await apiFetch('/api/zones', {
-      token,
-      method: 'POST',
-      body: JSON.stringify({ name: nombreZona.trim(), nivel_educativo: nivelEducativo })
-    })
-    if (!res.ok) {
+    if (institucionesSeleccionadas.length === 0) {
+      setError('Seleccioná al menos una institución')
+      return
+    }
+    
+    setError('')
+    setCreando(true)
+    
+    try {
+      const res = await apiFetch('/api/director-area/zonas', {
+        token,
+        method: 'POST',
+        body: JSON.stringify({
+          name: departamentoSeleccionado,
+          departamento: departamentoSeleccionado,
+          nivel_educativo: miNivel,
+          institucionIds: institucionesSeleccionadas
+        })
+      })
+      
       const data = await res.json().catch(() => ({}))
-      setMsg({ text: data.error || 'No se pudo crear la zona', type: 'error' })
-      return
+      
+      if (res.ok) {
+        // Zone created, open modal to assign supervisor
+        const createdId = data.id || data.zoneId || null
+        setZonaIdCreada(createdId)
+        setModalOpen(true)
+        setZonaCreada(true)
+        setError('')
+      } else {
+        setError(data.error || 'Error al crear zona')
+      }
+    } catch (err) {
+      setError('Error de conexión')
+    } finally {
+      setCreando(false)
     }
-    setNombreZona('')
-    setMsg({ text: 'Zona creada correctamente', type: 'success' })
-    loadData()
   }
 
-  // Seleccionar zona
-  const handleSeleccionarZona = (zona) => {
-    setZonaSeleccionada(zona)
-    setEscuelasSeleccionadas([])
-    setSupervisoresSeleccionados([])
-    setMsg({ text: '', type: '' })
-  }
-
-  // Añadir escuelas a zona
-  const handleAgregarEscuelas = async (e) => {
-    e.preventDefault()
-    if (!zonaSeleccionada || escuelasSeleccionadas.length === 0) {
-      setMsg({ text: 'Selecciona una zona y al menos una escuela', type: 'error' })
-      return
-    }
-    const res = await apiFetch(`/api/zones/${zonaSeleccionada.id}/escuelas`, {
-      token,
-      method: 'POST',
-      body: JSON.stringify({ escuelaIds: escuelasSeleccionadas })
-    })
-    if (!res.ok) {
+  const handleAssignSupervisores = async () => {
+    if (!zonaIdCreada) return
+    try {
+      const res = await apiFetch(`/api/director-area/zonas/${zonaIdCreada}/supervisores`, {
+        token,
+        method: 'POST',
+        body: JSON.stringify({ supervisorIds: selectedSupervisores })
+      })
       const data = await res.json().catch(() => ({}))
-      setMsg({ text: data.error || 'No se pudieron agregar escuelas', type: 'error' })
-      return
+      if (!res.ok) {
+        setError(data.error || 'Error al asignar supervisores')
+        return
+      }
+      // Success: close modal and refresh data
+      setModalOpen(false)
+      setSelectedSupervisores([])
+      setZonaIdCreada(null)
+      loadData()
+    } catch (err) {
+      setError('Error de conexión')
     }
-    setMsg({ text: 'Escuelas agregadas a la zona', type: 'success' })
-    loadData()
   }
 
-  // Añadir supervisores a zona
-  const handleAgregarSupervisores = async (e) => {
-    e.preventDefault()
-    if (!zonaSeleccionada || supervisoresSeleccionados.length === 0) {
-      setMsg({ text: 'Selecciona una zona y al menos un supervisor', type: 'error' })
-      return
-    }
-    const res = await apiFetch(`/api/zones/${zonaSeleccionada.id}/supervisores`, {
-      token,
-      method: 'POST',
-      body: JSON.stringify({ supervisorIds: supervisoresSeleccionados })
-    })
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}))
-      setMsg({ text: data.error || 'No se pudieron agregar supervisores', type: 'error' })
-      return
-    }
-    setMsg({ text: 'Supervisores agregados a la zona', type: 'success' })
-    loadData()
+  const institucionesDelDepto = institucionesDisponibles.filter(i => 
+    i.departamento === departamentoSeleccionado && (i.nivel_educativo || '').toUpperCase() === miNivel
+  )
+
+  if (loading) {
+    return (
+      <div style={{ padding: 16 }}>
+        <h3>Gestión de Zonas</h3>
+        <p>Cargando...</p>
+      </div>
+    )
+  }
+
+  // If director's level is not defined, warn the user
+  if (!nivelEducativo) {
+    return (
+      <div style={{ padding: 16 }}>
+        <h3>Gestión de Zonas</h3>
+        <p style={{ color: '#a00' }}>Advertencia: no tienes definido un nivel educativo en tu perfil.</p>
+      </div>
+    )
   }
 
   return (
-    <section style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 16, background: '#fff', marginBottom: 18 }}>
-      <h3>Zonas de Escuelas</h3>
-      {msg.text && <div className={`msg show ${msg.type === 'success' ? 'msg-success' : 'msg-error'}`}>{msg.text}</div>}
-      {/* Gestión de supervisores ahora solo desde la sección Usuarios. */}
-      <form onSubmit={handleCrearZona} style={{ marginBottom: 18 }}>
-        <label>Nombre de la zona</label>
-        <input value={nombreZona} onChange={e => setNombreZona(e.target.value)} placeholder="Ej: Zona Norte" />
-        <button type="submit">Crear zona</button>
-      </form>
-      <div style={{ marginBottom: 18 }}>
-        <label>Zonas existentes</label>
-        <ul style={{ listStyle: 'none', padding: 0 }}>
-          {zonas.length === 0 ? <li>No hay zonas creadas.</li> : zonas.map(z => (
-            <li key={z.id} style={{ marginBottom: 6 }}>
-              <button className={zonaSeleccionada && zonaSeleccionada.id === z.id ? 'selected' : ''} onClick={() => handleSeleccionarZona(z)}>
-                {z.name} ({z.nivel_educativo})
-              </button>
-            </li>
+    <>
+      <section style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 16, background: '#fff' }}>
+      <h3>Gestión de Zonas</h3>
+      <p>Nivel Educativo activo: <strong>{miNivel}</strong></p>
+
+      {error && <div className="msg show msg-error">{error}</div>}
+
+      <div style={{ marginBottom: 16 }}>
+        <label>Departamento</label>
+        <select 
+          value={departamentoSeleccionado}
+          onChange={(e) => { 
+            setDepartamentoSeleccionado(e.target.value) 
+            setInstitucionesSeleccionadas([])
+          }}
+        >
+          <option value="">-- Seleccionar --</option>
+          {departamentos.map(d => (
+            <option key={d} value={d}>{d}</option>
           ))}
-        </ul>
+        </select>
       </div>
-      {zonaSeleccionada && (
-        <div style={{ border: '1px solid #eee', borderRadius: 6, padding: 12, marginBottom: 18 }}>
-          <h4>Zona: {zonaSeleccionada.name}</h4>
-          <form onSubmit={handleAgregarEscuelas} style={{ marginBottom: 12 }}>
-            <label>Escuelas para agregar</label>
-            <select multiple value={escuelasSeleccionadas} onChange={e => setEscuelasSeleccionadas(Array.from(e.target.selectedOptions, o => o.value))}>
-              {escuelas.map(e => <option key={e.id} value={e.id}>{e.nombre} ({e.cue})</option>)}
-            </select>
-            <button type="submit">Agregar escuelas</button>
-          </form>
-          <form onSubmit={handleAgregarSupervisores}>
-            <label>Supervisores para agregar</label>
-            <select multiple value={supervisoresSeleccionados} onChange={e => setSupervisoresSeleccionados(Array.from(e.target.selectedOptions, o => o.value))}>
-              {supervisores.map(s => <option key={s.id} value={s.id}>{s.nombre} {s.apellido}</option>)}
-            </select>
-            <button type="submit">Agregar supervisores</button>
-          </form>
+
+      {departamentoSeleccionado && (
+        <div style={{ marginBottom: 16 }}>
+          <label>Instituciones ({institucionesDelDepto.length})</label>
+          {institucionesDelDepto.length === 0 ? (
+            <p style={{ color: '#888' }}>No hay instituciones en este departamento</p>
+          ) : (
+            <div style={{ maxHeight: 200, overflowY: 'auto', border: '1px solid #ddd', padding: 8 }}>
+                  {institucionesDelDepto.map(inst => (
+                <label key={inst.id} style={{ display: 'flex', gap: 8, margin: '4px 0' }}>
+                  <input
+                    type="checkbox"
+                    checked={institucionesSeleccionadas.includes(inst.id)}
+                    onChange={() => toggleInstitucion(inst.id)}
+                  />
+                  {inst.nombre} ({inst.cue}) - {inst.nivel_educativo || ''}
+                </label>
+              ))}
+            </div>
+          )}
         </div>
       )}
-    </section>
+
+      {institucionesSeleccionadas.length > 0 && (
+        <button type="button" onClick={handleCrear} disabled={creando}>
+          {creando ? 'Creando...' : `Crear Zona (${institucionesSeleccionadas.length})`}
+        </button>
+      )}
+
+      {zonas.length > 0 && (
+        <div style={{ marginTop: 24 }}>
+          <h4>Zonas ({zonas.length})</h4>
+          {zonas.map(z => (
+            <div key={z.id} style={{ padding: '8px 0', borderBottom: '1px solid #eee' }}>
+              <strong>{z.name}</strong>
+              <div style={{ fontSize: '0.85rem', color: '#666' }}>
+                {(z.instituciones || []).map(i => i.nombre).join(', ')}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {departamentos.length === 0 && !error && (
+        <p style={{ color: '#888' }}>No hay departamentos disponibles</p>
+      )}
+
+      {zonaCreada && (
+        <div className="msg show msg-success" style={{ marginTop: 16 }}>
+          ✅ Zona creada correctamente
+        </div>
+      )}
+      </section>
+      {modalOpen && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: '#fff', padding: 20, borderRadius: 6, minWidth: 320, maxWidth: '90%' }}>
+            <h4>Asignar Supervisor a la Zona</h4>
+            {modalSupervisores.length === 0 ? (
+              <p>Cargando supervisores...</p>
+            ) : (
+              <div style={{ maxHeight: 260, overflowY: 'auto', marginBottom: 12 }}>
+                {modalSupervisores.map((s) => (
+                  <label key={s.id} style={{ display: 'block', padding: '4px 0' }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedSupervisores.includes(s.id)}
+                      onChange={() => {
+                        setSelectedSupervisores((prev) =>
+                          prev.includes(s.id) ? prev.filter((id) => id !== s.id) : [...prev, s.id]
+                        )
+                      }}
+                    />
+                    {s.nombre} - {s.nivel_educativo}
+                  </label>
+                ))}
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button onClick={() => setModalOpen(false)}>Cancelar</button>
+              <button onClick={handleAssignSupervisores} disabled={selectedSupervisores.length === 0}>Asignar</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   )
 }
