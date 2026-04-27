@@ -222,6 +222,75 @@ export default function Usuarios() {
   const canToggleStatus = hasPermission('users.status.update')
   const canDeleteUser = hasPermission('users.delete') && user?.role === 'admin'
 
+  const handleChangeRole = (u) => {
+    if (!u) return
+    setMsg({ text: '', type: '' })
+    setRoleModal({
+      id: u.id,
+      nombre: u.nombre,
+      role: u.role,
+      institucion: u.id_institucion || '',
+      nivel: u.nivel_educativo || '',
+      director_area_id: u.director_area_id || '',
+      jurisdiccion: u.jurisdiccion || '',
+      error: ''
+    })
+  }
+
+  const handleSaveRole = async () => {
+    if (!roleModal) return
+
+    const nextRole = String(roleModal.role || '').trim()
+    if (!nextRole) {
+      setRoleModal({ ...roleModal, error: 'Debe seleccionar un rol' })
+      return
+    }
+
+    if ((nextRole === 'director_area' || nextRole === 'supervisor') && !String(roleModal.nivel || '').trim()) {
+      setRoleModal({ ...roleModal, error: 'Debe seleccionar un nivel educativo' })
+      return
+    }
+
+    if (nextRole === 'supervisor') {
+      if (!roleModal.director_area_id) {
+        setRoleModal({ ...roleModal, error: 'Debe seleccionar un Area de Direccion' })
+        return
+      }
+      if (!String(roleModal.jurisdiccion || '').trim()) {
+        setRoleModal({ ...roleModal, error: 'Debe seleccionar una jurisdiccion' })
+        return
+      }
+    }
+
+    const payload = {
+      role: nextRole,
+      institucion: roleModal.institucion || null,
+      nivel: roleModal.nivel || null,
+      director_area_id: roleModal.director_area_id || null,
+      jurisdiccion: roleModal.jurisdiccion || null,
+    }
+
+    try {
+      const res = await apiFetch(`/api/users/${roleModal.id}/role`, {
+        token,
+        method: 'PATCH',
+        body: JSON.stringify(payload)
+      })
+
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setRoleModal({ ...roleModal, error: data.error || 'No se pudo actualizar rol' })
+        return
+      }
+
+      setRoleModal(null)
+      setMsg({ text: 'Rol actualizado correctamente', type: 'success' })
+      loadUsers()
+    } catch {
+      setRoleModal({ ...roleModal, error: 'Error de conexión' })
+    }
+  }
+
   // Permitir acceso a directores de área para crear supervisores
   if (user?.role !== 'admin' && user?.role !== 'director_area') {
     return (
