@@ -703,7 +703,7 @@ tbody tr:hover td {
 }
 
 .dashboard-nav-item:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 132, 0, 0.31);
   color: #ffffff;
   transform: none;
   filter: none;
