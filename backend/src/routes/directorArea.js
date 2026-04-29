@@ -163,9 +163,10 @@ async function validateZonePayload({ req, name, departamento, nivel_educativo, i
     `SELECT i.id_institucion AS id,
             i.nombre,
             i.${nivelColumn} AS nivel_educativo,
-            e.departamento
+            COALESCE(NULLIF(TRIM(i.departamento), ''), NULLIF(TRIM(d.departamento), '')) AS departamento
      FROM institucion i
      JOIN edificio e ON i.id_edificio = e.id_edificio
+     LEFT JOIN direccion d ON e.id_direccion = d.id_direccion
      WHERE i.id_institucion = ANY($1::int[])
        AND i.activo = TRUE`,
     [institutionIds]
@@ -548,14 +549,19 @@ router.get("/edificios", async (req, res) => {
     }
 
     const edificios = await all(
-      `SELECT DISTINCT e.id_edificio, e.departamento, e.direccion, e.calle, e.numero_puerta
+      `SELECT DISTINCT
+              e.id_edificio,
+              COALESCE(NULLIF(TRIM(i.departamento), ''), NULLIF(TRIM(d.departamento), '')) AS departamento,
+              e.direccion,
+              e.calle,
+              e.numero_puerta
        FROM institucion i
        JOIN edificio e ON i.id_edificio = e.id_edificio
+       LEFT JOIN direccion d ON e.id_direccion = d.id_direccion
        WHERE i.activo = TRUE
          AND LOWER(COALESCE(i.${nivelColumn}, '')) = LOWER($1)
-         AND e.departamento IS NOT NULL
-         AND e.departamento <> ''
-       ORDER BY e.departamento, e.direccion`,
+         AND COALESCE(NULLIF(TRIM(i.departamento), ''), NULLIF(TRIM(d.departamento), '')) IS NOT NULL
+       ORDER BY departamento, e.direccion`,
       [directorNivel]
     );
 
@@ -617,32 +623,31 @@ router.get("/zonas-edificio", async (req, res) => {
         warning: "El Director de Area no tiene nivel educativo configurado"
       });
     }
-
-    const deptosResult = await all(`
-      SELECT DISTINCT e.departamento
-      FROM institucion i
-      JOIN edificio e ON i.id_edificio = e.id_edificio
-      WHERE i.activo = TRUE
-        AND LOWER(COALESCE(i.${nivelColumn}, '')) = LOWER($1)
-        AND e.departamento IS NOT NULL
-        AND e.departamento <> ''
-      ORDER BY e.departamento
-    `, [directorNivel]);
-
-    const deptos = deptosResult.map((item) => item.departamento).filter(Boolean);
-
     const institucionesResult = await all(`
-      SELECT i.id_institucion AS id, i.nombre, i.cue, e.departamento, i.${nivelColumn} AS nivel_educativo
+      SELECT
+        i.id_institucion AS id,
+        i.nombre,
+        i.cue,
+        COALESCE(NULLIF(TRIM(i.departamento), ''), NULLIF(TRIM(d.departamento), '')) AS departamento,
+        i.${nivelColumn} AS nivel_educativo
       FROM institucion i
       JOIN edificio e ON i.id_edificio = e.id_edificio
+      LEFT JOIN direccion d ON e.id_direccion = d.id_direccion
       WHERE i.activo = TRUE
         AND LOWER(COALESCE(i.${nivelColumn}, '')) = LOWER($1)
-        AND e.departamento IS NOT NULL
-        AND e.departamento <> ''
-      ORDER BY e.departamento, i.nombre
+        AND COALESCE(NULLIF(TRIM(i.departamento), ''), NULLIF(TRIM(d.departamento), '')) IS NOT NULL
+      ORDER BY departamento, i.nombre
     `, [directorNivel]);
 
     const zonas = await getDirectorAreaZones(req.user.sub, nivelColumn);
+
+    const deptos = Array.from(
+      new Set(
+        institucionesResult
+          .map((row) => String(row.departamento || '').trim())
+          .filter(Boolean)
+      )
+    ).sort((a, b) => a.localeCompare(b, 'es'));
 
     res.json({
       departamentos: deptos,
@@ -696,7 +701,6 @@ router.post("/zonas", async (req, res) => {
     }
 
     const { nivelColumn, zoneName, departamentoFinal, requestedLevel, institutionIds } = validation;
-
     const result = await run(
       `INSERT INTO zona (name, nivel_educativo, departamento, director_area_id, activo, created_at)
        VALUES (?, ?, ?, ?, TRUE, NOW())
