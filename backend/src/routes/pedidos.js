@@ -958,37 +958,30 @@ router.get("/institucion/:institucion", authorizePermissions(PERMISSIONS.PEDIDOS
     const pedidos = await all(
       `
       SELECT
-        p.id_pedido as id,
-        CASE WHEN p.estado::text = 'finalizado' THEN 'entregado' ELSE p.estado::text END as estado,
-        p.observaciones_generales as notas,
-        COALESCE(p.tipo, 'anual') as tipo,
-        p.fecha_creacion as created_at,
-        p.id_institucion,
-        p.kit_id,
-        p.kit_nombre,
-        p.kit_cantidad,
-        dp.id_producto as detalle_producto_id,
-        pr.nombre as detalle_producto_nombre,
-        pr.unidad_medida as detalle_unidad_medida,
-        pr.stock_actual as detalle_stock_actual,
-        dp.cantidad_solicitada as detalle_cantidad,
-        u.nombre as usuario_nombre,
-        NULL::text as institucion,
-        NULL::int as aprobado_por_supervisor_id,
-        NULL::timestamp as fecha_aprobacion_supervisor,
-        NULL::text as motivo_supervisor,
-        NULL::text as respuesta_supervisor_tipo
-      FROM pedido p
-      JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido
-      JOIN producto pr ON dp.id_producto = pr.id_producto
-      JOIN usuario u ON p.id_usuario_solicitante = u.id_usuario
-      WHERE p.id_institucion = ?
-      ORDER BY p.fecha_creacion DESC, pr.nombre ASC
+        ms.id_movimiento as id,
+        ms.tipo,
+        ms.cantidad,
+        ms.fecha_movimiento as created_at,
+        ms.id_institucion,
+        ms.id_producto as producto_id,
+        pr.nombre as producto_nombre,
+        pr.unidad_medida,
+        ms.estado_producto,
+        ms.cargo_retira,
+        ms.motivo,
+        u.nombre as usuario_nombre
+      FROM movimiento_stock ms
+      LEFT JOIN producto pr ON ms.id_producto = pr.id_producto
+      LEFT JOIN usuario u ON ms.id_usuario = u.id_usuario
+      WHERE ms.id_institucion = ?
+        AND ms.tipo = 'egreso'
+      ORDER BY ms.fecha_movimiento DESC, ms.id_movimiento DESC
+      LIMIT 5
       `,
       [institucion]
     );
 
-    return res.json({ pedidos: groupPedidos(pedidos) });
+    return res.json({ pedidos });
   } catch (err) {
     console.error("Error al obtener historial:", err);
     return res.status(500).json({ error: "No se pudo obtener historial" });
