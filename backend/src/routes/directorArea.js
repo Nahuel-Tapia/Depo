@@ -349,14 +349,19 @@ router.get("/edificios", async (req, res) => {
     }
 
     const edificios = await all(
-      `SELECT DISTINCT e.id_edificio, e.departamento, e.direccion, e.calle, e.numero_puerta
+      `SELECT DISTINCT
+              e.id_edificio,
+              COALESCE(NULLIF(TRIM(i.departamento), ''), NULLIF(TRIM(d.departamento), '')) AS departamento,
+              e.direccion,
+              e.calle,
+              e.numero_puerta
        FROM institucion i
        JOIN edificio e ON i.id_edificio = e.id_edificio
+       LEFT JOIN direccion d ON e.id_direccion = d.id_direccion
        WHERE i.activo = TRUE
          AND LOWER(COALESCE(i.${nivelColumn}, '')) = LOWER($1)
-         AND e.departamento IS NOT NULL
-         AND e.departamento <> ''
-       ORDER BY e.departamento, e.direccion`,
+         AND COALESCE(NULLIF(TRIM(i.departamento), ''), NULLIF(TRIM(d.departamento), '')) IS NOT NULL
+       ORDER BY departamento, e.direccion`,
       [directorNivel]
     );
 
@@ -406,59 +411,42 @@ router.get("/zonas-edificio", async (req, res) => {
     // Get nivel from user object in request (populated by auth middleware)
     const user = req.user || {};
     const nivelFromJWT = user.nivel_educativo || user.nivel || null;
-    console.log("DEBUG user:", user);
-    console.log("DEBUG nivel from JWT:", nivelFromJWT);
-
-    // If no nivel, return test data
     if (!nivelFromJWT) {
-      console.log("No nivel found, returning test data");
-      return res.json({ 
-        departamentos: ['Uruguay', 'Rivadavia', 'Cuyo'],
-        nivel_educativo: 'Primario',  
-        instituciones: [
-          { id: 1, nombre: 'Escuela Juan Pablo', cue: '123456789', departamento: 'Uruguay' },
-          { id: 2, nombre: 'Escuela Maria Rosa', cue: '987654321', departamento: 'Uruguay' }
-        ],
-        zonas: [],
-        warning: "Sin nivel configurado - datos de prueba"
-      });
+      return res.status(400).json({ error: "El Director de Area no tiene un nivel educativo configurado" });
     }
-    
-    // If we have nivel, query for real data
-    console.log("Will query with nivel:", nivelFromJWT);
 
     // Try to get nivel column, fallback
     let nivelColumn = 'nivel_educativo';
     try {
       nivelColumn = await getInstitucionNivelColumn();
     } catch (e) {
-      console.log("Using default nivelColumn:", nivelColumn);
+      // ignore
     }
-
-    // Get departamentos
-    const deptosResult = await all(`
-      SELECT DISTINCT e.departamento
-      FROM institucion i
-      JOIN edificio e ON i.id_edificio = e.id_edificio
-      WHERE i.activo = TRUE
-        AND COALESCE(i.${nivelColumn}, '') != ''
-        AND e.departamento IS NOT NULL
-        AND e.departamento <> ''
-      ORDER BY e.departamento
-    `, []);
-
-    const deptos = deptosResult.map(d => d.departamento).filter(Boolean);
 
     // Get instituciones with nivel from token
     const institucionesResult = await all(`
-      SELECT i.id_institucion AS id, i.nombre, i.cue, e.departamento, i.nivel_educativo AS nivel_educativo
+      SELECT
+        i.id_institucion AS id,
+        i.nombre,
+        i.cue,
+        COALESCE(NULLIF(TRIM(i.departamento), ''), NULLIF(TRIM(d.departamento), '')) AS departamento,
+        i.nivel_educativo AS nivel_educativo
       FROM institucion i
       JOIN edificio e ON i.id_edificio = e.id_edificio
+      LEFT JOIN direccion d ON e.id_direccion = d.id_direccion
       WHERE i.activo = TRUE
         AND LOWER(COALESCE(i.${nivelColumn}, '')) = LOWER($1)
-        AND e.departamento IS NOT NULL
-      ORDER BY e.departamento, i.nombre
+        AND COALESCE(NULLIF(TRIM(i.departamento), ''), NULLIF(TRIM(d.departamento), '')) IS NOT NULL
+      ORDER BY departamento, i.nombre
     `, [nivelFromJWT]);
+
+    const deptos = Array.from(
+      new Set(
+        institucionesResult
+          .map((row) => String(row.departamento || '').trim())
+          .filter(Boolean)
+      )
+    ).sort((a, b) => a.localeCompare(b, 'es'));
 
     res.json({
       departamentos: deptos,
@@ -527,8 +515,14 @@ router.post("/zonas", async (req, res) => {
     if (institucionIds && institucionIds.length > 0) {
       for (const instId of institucionIds) {
         const inst = await get(
-          `SELECT i.id_institucion AS id, i.nombre, i.nivel_educativo, i.departamento, e.departamento AS dept
-           FROM institucion i JOIN edificio e ON i.id_edificio = e.id_edificio
+          `SELECT
+              i.id_institucion AS id,
+              i.nombre,
+              i.nivel_educativo,
+              COALESCE(NULLIF(TRIM(i.departamento), ''), NULLIF(TRIM(d.departamento), '')) AS departamento
+           FROM institucion i
+           JOIN edificio e ON i.id_edificio = e.id_edificio
+           LEFT JOIN direccion d ON e.id_direccion = d.id_direccion
            WHERE i.id_institucion = ? AND i.activo = TRUE`,
           [instId]
         );
@@ -540,7 +534,7 @@ router.post("/zonas", async (req, res) => {
           return res.status(400).json({ error: `La institucion ${instId} debe ser del mismo nivel educativo` });
         }
         const deptToCheck = departamento || name;
-        if (inst.departamento && deptToCheck && inst.departamento !== deptToCheck) {
+        if (inst.departamento && deptToCheck && String(inst.departamento) !== String(deptToCheck)) {
           return res.status(400).json({ error: `La institucion ${instId} no pertenece al departamento seleccionado` });
         }
       }
