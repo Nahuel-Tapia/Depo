@@ -25,6 +25,63 @@ async function getInstitucionNivelColumn() {
   return row?.col || null;
 }
 
+const columnExistsCache = new Map();
+
+async function columnExists(tableName, columnName) {
+  const cacheKey = `${tableName}.${columnName}`;
+  if (columnExistsCache.has(cacheKey)) {
+    return columnExistsCache.get(cacheKey);
+  }
+
+  const row = await get(
+    `SELECT EXISTS (
+       SELECT 1
+       FROM information_schema.columns
+       WHERE table_schema = 'public'
+         AND table_name = $1
+         AND column_name = $2
+     ) AS column_exists`,
+    [tableName, columnName]
+  );
+  const exists = Boolean(row?.column_exists);
+  columnExistsCache.set(cacheKey, exists);
+  return exists;
+}
+
+async function getDepartamentoSql() {
+  const [
+    institucionDepartamento,
+    edificioDepartamento,
+    edificioDireccionId,
+    direccionDepartamento
+  ] = await Promise.all([
+    columnExists("institucion", "departamento"),
+    columnExists("edificio", "departamento"),
+    columnExists("edificio", "id_direccion"),
+    columnExists("direccion", "departamento")
+  ]);
+
+  const sources = [];
+  const joins = [];
+
+  if (institucionDepartamento) {
+    sources.push("NULLIF(TRIM(i.departamento), '')");
+  }
+  if (edificioDireccionId && direccionDepartamento) {
+    joins.push("LEFT JOIN direccion d ON e.id_direccion = d.id_direccion");
+    sources.push("NULLIF(TRIM(d.departamento), '')");
+  }
+  if (edificioDepartamento) {
+    sources.push("NULLIF(TRIM(e.departamento), '')");
+  }
+
+  return {
+    expression: sources.length > 0 ? `COALESCE(${sources.join(", ")})` : "NULL::text",
+    joins: joins.join("\n"),
+    hasDepartamento: sources.length > 0
+  };
+}
+
 async function getDirectorAreaNivel(userId) {
   try {
     const row = await get(
@@ -159,14 +216,15 @@ async function validateZonePayload({ req, name, departamento, nivel_educativo, i
     return { error: "Debe seleccionar al menos una institucion", status: 400 };
   }
 
+  const departamentoSql = await getDepartamentoSql();
   const instituciones = await all(
     `SELECT i.id_institucion AS id,
             i.nombre,
             i.${nivelColumn} AS nivel_educativo,
-            COALESCE(NULLIF(TRIM(i.departamento), ''), NULLIF(TRIM(d.departamento), '')) AS departamento
+            ${departamentoSql.expression} AS departamento
      FROM institucion i
      JOIN edificio e ON i.id_edificio = e.id_edificio
-     LEFT JOIN direccion d ON e.id_direccion = d.id_direccion
+     ${departamentoSql.joins}
      WHERE i.id_institucion = ANY($1::int[])
        AND i.activo = TRUE`,
     [institutionIds]
@@ -548,19 +606,24 @@ router.get("/edificios", async (req, res) => {
       return res.status(400).json({ error: "El Director de Area no tiene un nivel educativo configurado" });
     }
 
+    const departamentoSql = await getDepartamentoSql();
+    if (!departamentoSql.hasDepartamento) {
+      return res.json({ edificios: [], nivel_educativo: directorNivel });
+    }
+
     const edificios = await all(
       `SELECT DISTINCT
               e.id_edificio,
-              COALESCE(NULLIF(TRIM(i.departamento), ''), NULLIF(TRIM(d.departamento), '')) AS departamento,
+              ${departamentoSql.expression} AS departamento,
               e.direccion,
               e.calle,
               e.numero_puerta
        FROM institucion i
        JOIN edificio e ON i.id_edificio = e.id_edificio
-       LEFT JOIN direccion d ON e.id_direccion = d.id_direccion
+       ${departamentoSql.joins}
        WHERE i.activo = TRUE
          AND LOWER(COALESCE(i.${nivelColumn}, '')) = LOWER($1)
-         AND COALESCE(NULLIF(TRIM(i.departamento), ''), NULLIF(TRIM(d.departamento), '')) IS NOT NULL
+         AND ${departamentoSql.expression} IS NOT NULL
        ORDER BY departamento, e.direccion`,
       [directorNivel]
     );
@@ -623,19 +686,30 @@ router.get("/zonas-edificio", async (req, res) => {
         warning: "El Director de Area no tiene nivel educativo configurado"
       });
     }
+    const departamentoSql = await getDepartamentoSql();
+    if (!departamentoSql.hasDepartamento) {
+      const zonas = await getDirectorAreaZones(req.user.sub, nivelColumn);
+      return res.json({
+        departamentos: [],
+        nivel_educativo: directorNivel,
+        instituciones: [],
+        zonas
+      });
+    }
+
     const institucionesResult = await all(`
       SELECT
         i.id_institucion AS id,
         i.nombre,
         i.cue,
-        COALESCE(NULLIF(TRIM(i.departamento), ''), NULLIF(TRIM(d.departamento), '')) AS departamento,
+        ${departamentoSql.expression} AS departamento,
         i.${nivelColumn} AS nivel_educativo
       FROM institucion i
       JOIN edificio e ON i.id_edificio = e.id_edificio
-      LEFT JOIN direccion d ON e.id_direccion = d.id_direccion
+      ${departamentoSql.joins}
       WHERE i.activo = TRUE
         AND LOWER(COALESCE(i.${nivelColumn}, '')) = LOWER($1)
-        AND COALESCE(NULLIF(TRIM(i.departamento), ''), NULLIF(TRIM(d.departamento), '')) IS NOT NULL
+        AND ${departamentoSql.expression} IS NOT NULL
       ORDER BY departamento, i.nombre
     `, [directorNivel]);
 
