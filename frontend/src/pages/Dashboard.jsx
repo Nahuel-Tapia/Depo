@@ -13,6 +13,7 @@ import DirectorAreaPanel from '../components/DirectorAreaPanel'
 import ComprasPanel from '../components/ComprasPanel'
 import ProductKitsManager from '../components/ProductKitsManager'
 import MiCuenta from '../components/MiCuenta'
+import Depositos from '../components/Depositos'
 
 const TABS = [
   { key: 'inicio', label: 'Inicio', permission: null },
@@ -32,7 +33,8 @@ const TABS = [
   { key: 'historial', label: 'Historial', permission: 'instituciones.view', hideForRoles: ['supervisor', 'director_area'] },
   { key: 'proveedores', label: 'Proveedores', permission: 'proveedores.view', hideForRoles: ['supervisor', 'director_area'] },
   { key: 'usuarios', label: 'Usuarios', permission: 'users.read' },
-  { key: 'kits', label: 'Kits de Productos', permission: 'supervision.manage', role: 'director_area' }
+  { key: 'kits', label: 'Kits de Productos', permission: 'supervision.manage', role: 'director_area' },
+  { key: 'depositos', label: 'Depósitos', permission: 'stock.view' },
 ]
 
 export default function Dashboard() {
@@ -96,6 +98,7 @@ export default function Dashboard() {
       case 'proveedores': return <Proveedores />
       case 'usuarios': return <Usuarios />
       case 'kits': return <ProductKitsManager />
+      case 'depositos': return <Depositos />
       default: return <Inicio />
     }
   }

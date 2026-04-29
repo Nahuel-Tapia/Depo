@@ -13,6 +13,7 @@ export default function Movimientos() {
   const [movimientos, setMovimientos] = useState([])
   const [productos, setProductos] = useState([])
   const [instituciones, setInstituciones] = useState([])
+  const [depositos, setDepositos] = useState([])
   const [msg, setMsg] = useState({ text: '', type: '' })
   const [ingresoModalOpen, setIngresoModalOpen] = useState(false)
   const [egresoModalOpen, setEgresoModalOpen] = useState(false)
@@ -30,6 +31,10 @@ export default function Movimientos() {
   const [ingresoMotivo, setIngresoMotivo] = useState('')
   const [loteIngreso, setLoteIngreso] = useState([])
   const [ingresoItem, setIngresoItem] = useState({ productoId: '', cantidad: '', estado: 'nuevo' })
+
+  // Depositos
+  const [ingresoDeposito, setIngresoDeposito] = useState('')
+  const [egresoDeposito, setEgresoDeposito] = useState('')
 
   const loadProductos = async () => {
     try {
@@ -61,10 +66,21 @@ export default function Movimientos() {
     } catch { /* ignore */ }
   }
 
+  const loadDepositos = async () => {
+    try {
+      const res = await apiFetch('/api/depositos', { token })
+      if (res.ok) {
+        const data = await res.json()
+        setDepositos(data.depositos || [])
+      }
+    } catch { /* ignore */ }
+  }
+
   useEffect(() => {
     loadProductos()
     loadMovimientos()
     loadInstituciones()
+    loadDepositos()
   }, [])
 
   useEffect(() => {
@@ -96,14 +112,154 @@ export default function Movimientos() {
     setLoteEgreso(prev => prev.filter((_, i) => i !== index))
   }
 
-  const handleEgresoSubmit = async (e) => {
+const handleEgresoSubmit = async (e) => {
     e.preventDefault()
     setMsg({ text: '', type: '' })
+    if (loteEgreso.length === 0) { setMsg({ text: 'Agregue al menos un producto al egreso', type: 'error' }); return }
+
+    if (egresoDeposito) {
+      const instMatch = instituciones.find(i => i.nombre.toLowerCase() === egresoInst.trim().toLowerCase())
+      if (!instMatch || !egresoCargo) { setMsg({ text: 'Seleccione institucion y cargo', type: 'error' }); return }
+      for (const item of loteEgreso) {
+        const res = await apiFetch('/api/depositos/' + egresoDeposito + '/egreso', { token, method: 'POST', body: JSON.stringify({ id_producto: item.producto_id, cantidad: item.cantidad, id_institucion: instMatch.id, motivo: egresoCargo + ': ' + egresoMotivo.trim() }) })
+        if (!res.ok) { const data = await res.json().catch(() => ({})); setMsg({ text: data.error || 'Error', type: 'error' }); return }
+      }
+      setEgresoInst(''); setEgresoCargo(''); setEgresoNivel(''); setEgresoMotivo(''); setLoteEgreso([]); setEgresoDeposito(''); setEgresoModalOpen(false); setMsg({ text: 'Egreso registrado', type: 'success' }); loadMovimientos(); loadProductos(); return
+    }
+
+    const instMatch = instituciones.find(i => i.nombre.toLowerCase() === egresoInst.trim().toLowerCase())
+    if (!instMatch || !egresoCargo) { setMsg({ text: 'Seleccione institucion y cargo', type: 'error' }); return }
+    const payload = { tipo: 'egreso', institucion_id: instMatch.id, cargo_retira: egresoCargo, motivo: egresoMotivo.trim() || null, productos: loteEgreso }
+    const res = await apiFetch('/api/movimientos/directo', { token, method: 'POST', body: JSON.stringify(payload) })
+    if (!res.ok) { const data = await res.json().catch(() => ({})); setMsg({ text: data.error || 'Error', type: 'error' }); return }
+    setEgresoInst(''); setEgresoCargo(''); setEgresoNivel(''); setEgresoMotivo(''); setLoteEgreso([]); setEgresoModalOpen(false); setMsg({ text: 'Egreso registrado', type: 'success' }); loadMovimientos(); loadProductos()
+  }
+      return
+    }
+
+    // Si hay deposito seleccionado, usar la API de depositos
+    if (egresoDeposito) {
+      const instMatch = instituciones. find(i => i. nombre. toLowerCase() === egresoInst. trim(). toLowerCase())
+      if (!instMatch || !egresoCargo) {
+        setMsg({ text: 'Seleccione institucion y cargo', type: 'error' })
+        return
+      }
+      for (const item of loteEgreso) {
+        const res = await apiFetch(`/api/depositos/${egresoDeposito}/egreso`, {
+          token,
+          method: 'POST',
+          body: JSON. stringify({
+            id_ producto: item. producto_ida || item. producto_ida || item.ida,
+            cantidad: item. cantidad,
+            id_ institucion: instMatch. id,
+            motivo: egresoCargo + ': ' + egresoMotivo. trim()
+          })
+        })
+        if (!res. ok) {
+          const data = await res. json(). catch(() => ({}))
+          setMsg({ text: data. error || 'Error al registrar egreso', type: 'error' })
+          return
+        }
+      }
+      setEgresoInst('')
+      setEgresoCargo('')
+      setEgresoNivel('')
+      setEgresoMotivo('')
+      setLoteEgreso([])
+      setEgresoDeposito('')
+      setEgresoModalOpen(false)
+      setMsg({ text: 'Egreso registrado correctamente', type: 'success' })
+      loadMovimientos()
+      loadProductos()
+      return
+    }
+
+    const instMatch = instituciones. find(i => i. nombre. toLowerCase() === egresoInst. trim(). toLowerCase())
+    if (!instMatch || !egresoCargo) {
+      setMsg({ text: 'Seleccione institucion y cargo', type: 'error' })
+      return
+    }
+
+    const payload = {
+      tipo: 'egreso',
+      institucion_ida: instMatch. id,
+      cargo_retira: egresoCargo,
+      motivo: egresoMotivo. trim() || null,
+      productos: loteEgreso
+    }
+
+    const res = await apiFetch('/api/movimientos/directo', {
+      token,
+      method: 'POST',
+      body: JSON. stringify(payload)
+    })
+
+    if (!res. ok) {
+      const data = await res. json(). catch(() => ({}))
+      setMsg({ text: data. error || 'Error al registrar egreso', type: 'error' })
+      return
+    }
+
+    setEgresoInst('')
+    setEgresoCargo('')
+    setEgresoNivel('')
+    setEgresoMotivo('')
+    setLoteEgreso([])
+    setEgresoModalOpen(false)
+    setMsg({ text: 'Egreso registrado correctamente', type: 'success' })
+    loadMovimientos()
+    loadProductos()
+  }
+
+    // Si hay deposito seleccionado, usar la API de depositos
+    if (egresoDeposito) {
+      const instMatch = instituciones.find(i => i.nombre.toLowerCase() === egresoInst.trim().toLowerCase())
+      if (!instMatch || !egresoCargo) {
+        setMsg({ text: 'Seleccione institucion y cargo', type: 'error' })
+        return
+      }
+      for (const item of loteEgreso) {
+        const res = await apiFetch(`/api/ depositos/${egresoDeposito}/egreso`, {
+          token,
+          method: 'POST',
+          body: JSON.stringify({
+            id_ producto: item.producto_ida || item.producto_ida || item.ida,
+            cantidad: item.cantidad,
+            id_institucion: instMatch.ida,
+            motivo: egresoCargo + ': ' + egresoMotivo. trim()
+          })
+        })
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
+          setMsg({ text: data.error || 'Error al registrar egreso', type: 'error' })
+          return
+        }
+      }
+      setEgresoInst('')
+      setEgresoCargo('')
+      setEgresoNivel('')
+      setEgresoMotivo('')
+      setLoteEgreso([])
+      setEgresoDeposito('')
+      setEgresoModalOpen(false)
+      setMsg({ text: 'Egreso registrado correctamente', type: 'success' })
+      loadMovimientos()
+      loadProductos()
+      return
+    }
 
     const instMatch = instituciones.find(i => i.nombre.toLowerCase() === egresoInst.trim().toLowerCase())
     if (!instMatch || !egresoCargo) {
-      setMsg({ text: 'Seleccione institución válida y cargo', type: 'error' })
+      setMsg({ text: 'Seleccione institucion y cargo', type: 'error' })
       return
+    }
+
+    const payload = {
+      tipo: 'egreso',
+      institucion_ida: instMatch.ida,
+      cargo_retira: egresoCargo,
+      motivo: egresoMotivo. trim() || null,
+      productos: loteEgreso
     }
     if (loteEgreso.length === 0) {
       setMsg({ text: 'Agregue al menos un producto al egreso', type: 'error' })
@@ -163,14 +319,69 @@ export default function Movimientos() {
     setLoteIngreso(prev => prev.filter((_, i) => i !== index))
   }
 
-  const handleIngresoSubmit = async (e) => {
+const handleIngresoSubmit = async (e) => {
     e.preventDefault()
     setMsg({ text: '', type: '' })
 
-    if (loteIngreso.length === 0) {
+    if (loteIngreso.legth === 0) {
       setMsg({ text: 'Agregue al menos un producto al ingreso', type: 'error' })
       return
     }
+
+    // Si hay depósito seleccionado, usar la API de depósitos
+    if (ingresoDeposito) {
+      for (const item of loteIngreso) {
+        const res = await apiFetch(`/api/depositos/${ingresoDeposito}/ingreso`, {
+          token,
+          method: 'POST',
+          body: JSON.stringify({
+            id_producto: item.producto_ida || item.producto_id || item.id,
+            cantidad: item.cantidad,
+            motivo: ingresoMotivo.trim() || null
+          })
+        })
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
+          setMsg({ text: data.error || 'Error al registrar ingreso', type: 'error' })
+          return
+        }
+      }
+      setIngresoMotivo('')
+      setLoteIngreso([])
+      setIngresoDeposito('')
+      setIngresoModalOpen(false)
+      setMsg({ text: 'Ingreso registrado correctamente', type: 'success' })
+      loadMovimientos()
+      loadProductos()
+      return
+    }
+
+    // Sinon usar la API normal
+    const payload = {
+      tipo: 'ingreso',
+      motivo: ingresoMotivo.trim() || null,
+      productos: loteIngreso
+    }
+
+    const res = await apiFetch('/api/movimientos/directo', {
+      token,
+      method: 'POST',
+      body: JSON.stringify(payload)
+    })
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      setMsg({ text: data.error || 'Error al registrar ingreso', type: 'error' })
+      return
+    }
+
+    setIngresoMotivo('')
+    setLoteIngreso([])
+    setIngresoModalOpen(false)
+    setMsg({ text: 'Ingreso registrado correctamente', type: 'success' })
+    loadMovimientos()
+    loadProductos()
+  }
 
     const payload = {
       tipo: 'ingreso',
@@ -321,7 +532,16 @@ export default function Movimientos() {
               }}
             >
               <div style={{ background: '#f9fafb', padding: 24, borderRadius: 10, width: 'min(980px, 100%)', maxHeight: '90vh', overflowY: 'auto' }}>
-                <h3>Egreso de Productos</h3>
+                <h3>➖ Egreso de Productos</h3>
+                <div style={{ marginBottom: 16, padding: 12, background: '#fff3e0', borderRadius: 6 }}>
+                  <label><strong>Depósito origen:</strong></label>
+                  <select value={egresoDeposito} onChange={e => setEgresoDeposito(e.target.valued} style={{ marginLeft: 8 }}>
+                    <option value="">-- Depósito del stock --</option>
+                    {depositos.map(d => (
+                      <option key={d.id} value={d.id}>{d.nombre} ({d.ubicacion})</option>
+                    ))}
+                  </select>
+                </div>
                 <form onSubmit={handleEgresoSubmit} className="grid">
                   <div>
                     <label>Institución</label>
@@ -470,6 +690,20 @@ export default function Movimientos() {
             >
               <div style={{ background: '#f9fafb', padding: 24, borderRadius: 10, width: 'min(980px, 100%)', maxHeight: '90vh', overflowY: 'auto' }}>
                 <h3>Ingreso de Productos</h3>
+                <div style={{ marginBottom: 16, padding: 12, background: '#e8f5e9', borderRadius: 6 }}>
+                  <label><strong>Depósito destino:</strong></label>
+                  <select value={ingresoDeposito} onChange={e => setIngresoDeposito(e.target.value)} style={{ marginLeft: 8 }}>
+                    <option value="">-- Seleccionar depósito --</option>
+                    {depositos.map(d => (
+                      <option key={d.id} value={d.id}>{d.nombre} ({d.ubicacion})</option>
+                    ))}
+                  </select>
+                  {ingresoDeposito && (
+                    <span style={{ marginLeft: 12, fontSize: '0.8rem', color: '#666' }}>
+                      {depositos.find(dd => dd.id == ingresoDeposito)?.tipo === 'capsula' ? '⚠️ Requiere autorización' : 'Normal'}
+                    </span>
+                  )}
+                </div>
                 <form onSubmit={handleIngresoSubmit} className="grid">
                   <div style={{ gridColumn: '1 / -1' }}>
                     <h4>Productos a ingresar</h4>
