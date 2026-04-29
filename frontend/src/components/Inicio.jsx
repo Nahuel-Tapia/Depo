@@ -334,30 +334,44 @@ function MiniCard({ label, value, color }) {
 // ── Vista de Inicio para Supervisor ──
 function SupervisorInicio({ onNavigate, token, user }) {
   const [instituciones, setInstituciones] = useState([])
+  const [supervisorMeta, setSupervisorMeta] = useState({
+    zona_label: '',
+    zona_count: 0,
+    nivel_educativo: user?.nivel_educativo || ''
+  })
 
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await apiFetch(`/api/supervisor/instituciones?jurisdiccion=${encodeURIComponent(user?.jurisdiccion || '')}`, { token })
+        const res = await apiFetch('/api/supervisor/instituciones', { token })
         if (res.ok) {
           const data = await res.json()
           setInstituciones(data.instituciones || [])
+          setSupervisorMeta({
+            zona_label: data?.meta?.zona_label || '',
+            zona_count: Number(data?.meta?.zona_count) || 0,
+            nivel_educativo: data?.meta?.nivel_educativo || user?.nivel_educativo || ''
+          })
         }
       } catch (err) {
         console.error('Error cargando instituciones del supervisor:', err)
       }
     }
     load()
-  }, [token])
+  }, [token, user?.nivel_educativo])
 
   const totalPendientes = instituciones.reduce((sum, i) => sum + (i.pedidos_pendientes || 0), 0)
   const totalTickets = instituciones.reduce((sum, i) => sum + (i.tickets_patrimonio || 0), 0)
+  const zonaLabel = supervisorMeta.zona_label || 'Sin zona asignada'
+  const nivelLabel = supervisorMeta.nivel_educativo || '-'
+  const zonaTitle = supervisorMeta.zona_count > 1 ? 'Zonas' : 'Zona'
 
   return (
     <div>
       <div className="sv-jurisdiction-banner">
         <span className="sv-jurisdiction-dot"></span>
-        <span>Jurisdicción: <strong>{user?.jurisdiccion || '-'}</strong></span>
+        <span>{zonaTitle}: <strong>{zonaLabel}</strong></span>
+        <span>Nivel: <strong>{nivelLabel}</strong></span>
         <span className="sv-jurisdiction-count">{instituciones.length} escuelas asignadas</span>
       </div>
 

@@ -517,6 +517,51 @@ async function hasAsignacionesTable() {
   return Boolean(row?.regclass);
 }
 
+async function hasZoneAssignmentTables() {
+  const rows = await all(
+    `SELECT to_regclass(name) AS regclass
+     FROM unnest($1::text[]) AS name`,
+    [["public.zona", "public.zona_institucion", "public.zona_supervisor"]]
+  );
+
+  return rows.length === 3 && rows.every((row) => Boolean(row?.regclass));
+}
+
+async function supervisorHasAssignedInstitution(supervisorId, institucionId) {
+  if (await hasZoneAssignmentTables()) {
+    const zoneAssignment = await get(
+      `SELECT 1
+       FROM zona_supervisor zs
+       JOIN zona z ON z.id = zs.zona_id
+       JOIN zona_institucion zi ON zi.zona_id = z.id
+       WHERE zs.supervisor_id = $1
+         AND zi.institucion_id = $2
+         AND z.activo = TRUE
+       LIMIT 1`,
+      [supervisorId, institucionId]
+    );
+
+    if (zoneAssignment) {
+      return true;
+    }
+  }
+
+  if (!(await hasAsignacionesTable())) {
+    return false;
+  }
+
+  const legacyAssignment = await get(
+    `SELECT 1
+     FROM supervisor_escuela_asignacion
+     WHERE supervisor_id = $1
+       AND institucion_id = $2
+     LIMIT 1`,
+    [supervisorId, institucionId]
+  );
+
+  return Boolean(legacyAssignment);
+}
+
 async function getKitById(kitId, { includeInactive = false } = {}) {
   const rows = await all(
     `SELECT k.id,
@@ -1147,18 +1192,7 @@ router.patch("/:id/estado", authorizePermissions(PERMISSIONS.PEDIDOS_MANAGE), as
         return res.status(403).json({ error: "Solo un supervisor puede aprobar o rechazar pedidos" });
       }
 
-      if (!(await hasAsignacionesTable())) {
-        return res.status(400).json({ error: "No existe configuración de asignaciones de supervisor" });
-      }
-
-      const asignacion = await get(
-        `SELECT 1
-         FROM supervisor_escuela_asignacion
-         WHERE supervisor_id = ? AND institucion_id = ?`,
-        [req.user.sub, pedido.id_institucion]
-      );
-
-      if (!asignacion) {
+      if (!(await supervisorHasAssignedInstitution(req.user.sub, pedido.id_institucion))) {
         return res.status(403).json({ error: "El pedido no pertenece a una escuela asignada a este supervisor" });
       }
 
