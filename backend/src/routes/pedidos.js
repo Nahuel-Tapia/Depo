@@ -1062,12 +1062,18 @@ router.post("/", authorizePermissions(PERMISSIONS.PEDIDOS_CREATE), async (req, r
   try {
     await ensurePedidosSchema();
 
-    const { producto_id, kit_id, cantidad, notas, tipo } = req.body;
+    const { producto_id, kit_id, cantidad, notas, tipo, items } = req.body;
     const tipoValido = ['anual', 'refuerzo'].includes(tipo) ? tipo : 'anual';
     const cantidadSolicitada = Number(cantidad);
 
-    if ((!producto_id && !kit_id) || !cantidadSolicitada || cantidadSolicitada <= 0) {
-      return res.status(400).json({ error: "Debés seleccionar un kit o producto y una cantidad válida" });
+    const hasItemsArray = Array.isArray(items) && items.length > 0;
+
+    if (!hasItemsArray) {
+      if ((!producto_id && !kit_id) || !cantidadSolicitada || cantidadSolicitada <= 0) {
+        return res.status(400).json({ error: "Debés seleccionar un kit o producto y una cantidad válida" });
+      }
+    } else if (tipoValido !== 'refuerzo') {
+      return res.status(400).json({ error: "Los items múltiples solo están disponibles para solicitudes de refuerzo" });
     }
 
     const usuario = await get(
@@ -1109,7 +1115,38 @@ router.post("/", authorizePermissions(PERMISSIONS.PEDIDOS_CREATE), async (req, r
     let kit = null;
     let detalleItems = [];
 
-    if (kit_id) {
+    if (hasItemsArray) {
+      const parsedItems = items
+        .map((item) => ({
+          producto_id: Number(item?.producto_id),
+          cantidad: Number(item?.cantidad)
+        }))
+        .filter((item) => Number.isInteger(item.producto_id) && item.producto_id > 0 && item.cantidad > 0);
+
+      if (parsedItems.length === 0) {
+        return res.status(400).json({ error: "Debés seleccionar al menos un producto con cantidad válida" });
+      }
+
+      const productoIds = [...new Set(parsedItems.map((item) => item.producto_id))];
+      const productos = await all(
+        `SELECT id_producto AS id FROM producto WHERE id_producto = ANY($1::int[])`,
+        [productoIds]
+      );
+      if (productos.length !== productoIds.length) {
+        return res.status(404).json({ error: "Uno o más productos no existen" });
+      }
+
+      for (const item of parsedItems) {
+        const reglaKit = await getReglaKit(perfilInstitucion.tipo_escuela, item.producto_id);
+        if (!reglaKit) {
+          return res.status(400).json({
+            error: "Hay productos seleccionados que no forman parte del kit asignado a tu escuela."
+          });
+        }
+      }
+
+      detalleItems = parsedItems;
+    } else if (kit_id) {
       kit = await getKitById(Number(kit_id));
       if (!kit) {
         return res.status(404).json({ error: "Kit no encontrado o inactivo." });
@@ -1141,7 +1178,15 @@ router.post("/", authorizePermissions(PERMISSIONS.PEDIDOS_CREATE), async (req, r
     const pedidoResult = await run(
       `INSERT INTO pedido (id_usuario_solicitante, id_institucion, observaciones_generales, tipo, kit_id, kit_nombre, kit_cantidad)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [req.user.sub, usuario.id_institucion, notas || null, tipoValido, kit?.id || null, kit?.nombre || null, kit ? cantidadSolicitada : null]
+      [
+        req.user.sub,
+        usuario.id_institucion,
+        notas || null,
+        tipoValido,
+        kit?.id || null,
+        kit?.nombre || null,
+        kit ? cantidadSolicitada : null
+      ]
     );
 
     for (const item of detalleItems) {
