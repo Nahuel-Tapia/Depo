@@ -17,34 +17,10 @@ async function hasTable(tableName) {
 }
 
 async function hasAsignacionesTable() {
-  return hasTable("public.supervisor_escuela_asignacion");
-}
-
-async function hasZoneAssignmentTables() {
-  const rows = await all(
-    `SELECT to_regclass(name) AS regclass
-     FROM unnest($1::text[]) AS name`,
-    [["public.zona", "public.zona_institucion", "public.zona_supervisor"]]
+  const row = await get(
+    `SELECT to_regclass('public.supervisor_escuela_asignacion') AS regclass`
   );
-
-  return rows.length === 3 && rows.every((row) => Boolean(row?.regclass));
-}
-
-async function getInstitucionNivelColumn() {
-  const row = await get(`
-    SELECT CASE
-      WHEN EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'institucion' AND column_name = 'nivel_educativo'
-      ) THEN 'nivel_educativo'
-      WHEN EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'institucion' AND column_name = 'nivel'
-      ) THEN 'nivel'
-      ELSE NULL
-    END AS col
-  `);
-  return row?.col || null;
+  return Boolean(row?.regclass);
 }
 
 const columnExistsCache = new Map();
@@ -65,10 +41,20 @@ async function columnExists(tableName, columnName) {
      ) AS column_exists`,
     [tableName, columnName]
   );
-
   const exists = Boolean(row?.column_exists);
   columnExistsCache.set(cacheKey, exists);
   return exists;
+}
+
+async function tableExists(tableName) {
+  const row = await get("SELECT to_regclass($1) AS regclass", [`public.${tableName}`]);
+  return Boolean(row?.regclass);
+}
+
+async function getInstitucionNivelExpr(alias = "i") {
+  if (await columnExists("institucion", "nivel_educativo")) return `${alias}.nivel_educativo`;
+  if (await columnExists("institucion", "nivel")) return `${alias}.nivel`;
+  return "NULL::text";
 }
 
 async function getDepartamentoSql() {
@@ -87,6 +73,7 @@ async function getDepartamentoSql() {
   const sources = [];
   const joins = [];
 
+  joins.push("LEFT JOIN edificio e ON i.id_edificio = e.id_edificio");
   if (institucionDepartamento) {
     sources.push("NULLIF(TRIM(i.departamento), '')");
   }
@@ -100,26 +87,44 @@ async function getDepartamentoSql() {
 
   return {
     expression: sources.length > 0 ? `COALESCE(${sources.join(", ")})` : "NULL::text",
-    joins: joins.join("\n")
+    joins: joins.join("\n"),
+    hasDepartamento: sources.length > 0
   };
 }
 
-function normalizeText(value) {
-  if (value === undefined || value === null) return null;
-  const normalized = String(value).trim();
-  return normalized || null;
-}
+async function getInstitucionSelectSql() {
+  const [
+    hasTipoEscuela,
+    hasKitId,
+    hasAmbito,
+    hasTipo,
+    hasCategoria,
+    hasMatriculados,
+    hasProductoKit
+  ] = await Promise.all([
+    columnExists("institucion", "tipo_escuela"),
+    columnExists("institucion", "kit_id"),
+    columnExists("institucion", "ambito"),
+    columnExists("institucion", "tipo"),
+    columnExists("institucion", "categoria"),
+    columnExists("institucion", "matriculados"),
+    tableExists("producto_kit")
+  ]);
+  const departamentoSql = await getDepartamentoSql();
+  const nivelExpr = await getInstitucionNivelExpr();
 
-function uniqueTexts(values = []) {
-  return [...new Set(values.map(normalizeText).filter(Boolean))];
-}
-
-function getZoneDisplayLabel(zone) {
-  const zoneName = normalizeText(zone?.name || zone?.zona_nombre);
-  if (zoneName) return zoneName;
-
-  const zoneId = Number.parseInt(zone?.id ?? zone?.zona_id, 10);
-  return Number.isInteger(zoneId) && zoneId > 0 ? `Zona ${zoneId}` : null;
+  return {
+    departamentoSql,
+    nivelExpr,
+    tipoEscuelaExpr: hasTipoEscuela ? "COALESCE(i.tipo_escuela, 'normal')" : "'normal'::text",
+    kitIdExpr: hasKitId ? "i.kit_id" : "NULL::int",
+    kitJoin: hasKitId && hasProductoKit ? "LEFT JOIN producto_kit k ON k.id = i.kit_id" : "",
+    kitNombreExpr: hasKitId && hasProductoKit ? "k.nombre" : "NULL::text",
+    tipoExpr: hasAmbito ? "i.ambito" : hasTipo ? "i.tipo" : "NULL::text",
+    categoriaExpr: hasCategoria ? "i.categoria" : "NULL::text",
+    matriculaExpr: hasMatriculados ? "COALESCE(i.matriculados, 0)" : "0",
+    matriculaGroupBy: hasMatriculados ? "i.matriculados" : ""
+  };
 }
 
 let schemaReady = false;
@@ -133,9 +138,10 @@ async function ensureSupervisorSchema() {
   }
 
   schemaPromise = (async () => {
+    const productoKitExists = await tableExists("producto_kit");
     await run(`
       ALTER TABLE institucion
-      ADD COLUMN IF NOT EXISTS kit_id INT REFERENCES producto_kit(id)
+      ADD COLUMN IF NOT EXISTS kit_id INT${productoKitExists ? " REFERENCES producto_kit(id)" : ""}
     `);
     await run(`
       ALTER TABLE pedido
@@ -155,243 +161,38 @@ async function ensureSupervisorSchema() {
   }
 }
 
-async function getSupervisorZoneContext(supervisorId) {
-  if (!(await hasZoneAssignmentTables())) {
-    return { zonas: [], departamentos: [], jurisdiccion: null };
-  }
-
-  const departamentoSql = await getDepartamentoSql();
-  const zoneRows = await all(
-    `SELECT z.id,
-            z.name,
-            ${departamentoSql.expression} AS departamento
-     FROM zona_supervisor zs
-     JOIN zona z ON z.id = zs.zona_id
-     LEFT JOIN zona_institucion zi ON zi.zona_id = z.id
-     LEFT JOIN institucion i ON i.id_institucion = zi.institucion_id
-     LEFT JOIN edificio e ON i.id_edificio = e.id_edificio
-     ${departamentoSql.joins}
-     WHERE zs.supervisor_id = $1
-       AND z.activo = TRUE
-     ORDER BY z.created_at DESC, z.id DESC`,
-    [supervisorId]
-  );
-
-  const zonesById = new Map();
-  for (const row of zoneRows) {
-    const zoneId = Number(row.id);
-    if (!zonesById.has(zoneId)) {
-      zonesById.set(zoneId, {
-        id: zoneId,
-        name: row.name,
-        departamentos: new Set()
-      });
-    }
-
-    const departamento = normalizeText(row.departamento);
-    if (departamento) {
-      zonesById.get(zoneId).departamentos.add(departamento);
-    }
-  }
-
-  const zonas = [...zonesById.values()].map((zona) => {
-    const departamentos = [...zona.departamentos].sort((a, b) => a.localeCompare(b, "es"));
-    return {
-      id: zona.id,
-      name: zona.name,
-      departamento: departamentos[0] || null,
-      departamentos
-    };
-  });
-
-  const departamentos = uniqueTexts(zonas.flatMap((zona) => zona.departamentos || []))
-    .sort((a, b) => a.localeCompare(b, "es"));
-
-  return {
-    zonas,
-    departamentos,
-    jurisdiccion: departamentos.join(", ") || null
-  };
-}
-
-async function getSupervisorInstitucionesFromZones(supervisorId) {
-  if (!(await hasZoneAssignmentTables())) return [];
-
-  const nivelColumn = await getInstitucionNivelColumn();
-  const levelSelect = nivelColumn ? `i.${nivelColumn} AS nivel` : "NULL::text AS nivel";
-  const departamentoSql = await getDepartamentoSql();
-
-  return all(
-    `SELECT DISTINCT ON (i.id_institucion)
-            i.id_institucion AS id,
-            i.nombre,
-            i.cue,
-            ${departamentoSql.expression} AS departamento,
-            ${levelSelect},
-            COALESCE(i.tipo_escuela, 'normal') AS tipo_escuela,
-            i.kit_id,
-            k.nombre AS kit_nombre,
-            i.ambito AS tipo,
-            i.categoria,
-            z.id AS zona_id,
-            z.name AS zona_nombre
-     FROM zona_supervisor zs
-     JOIN zona z ON z.id = zs.zona_id
-     JOIN zona_institucion zi ON zi.zona_id = z.id
-     JOIN institucion i ON i.id_institucion = zi.institucion_id
-     LEFT JOIN edificio e ON i.id_edificio = e.id_edificio
-     ${departamentoSql.joins}
-     LEFT JOIN producto_kit k ON k.id = i.kit_id
-     WHERE zs.supervisor_id = $1
-       AND z.activo = TRUE
-     ORDER BY i.id_institucion, z.created_at DESC, z.id DESC, i.nombre`,
-    [supervisorId]
-  );
-}
-
-async function getSupervisorLegacyInstituciones(supervisorId) {
-  if (!(await hasAsignacionesTable())) return [];
-
-  const nivelColumn = await getInstitucionNivelColumn();
-  const levelSelect = nivelColumn ? `i.${nivelColumn} AS nivel` : "NULL::text AS nivel";
-  const departamentoSql = await getDepartamentoSql();
-
-  return all(
-    `SELECT DISTINCT
-            i.id_institucion AS id,
-            i.nombre,
-            i.cue,
-            ${departamentoSql.expression} AS departamento,
-            ${levelSelect},
-            COALESCE(i.tipo_escuela, 'normal') AS tipo_escuela,
-            i.kit_id,
-            k.nombre AS kit_nombre,
-            i.ambito AS tipo,
-            i.categoria
-     FROM supervisor_escuela_asignacion sea
-     JOIN institucion i ON i.id_institucion = sea.institucion_id
-     LEFT JOIN edificio e ON i.id_edificio = e.id_edificio
-     ${departamentoSql.joins}
-     LEFT JOIN producto_kit k ON k.id = i.kit_id
-     WHERE sea.supervisor_id = $1
-     ORDER BY i.nombre`,
-    [supervisorId]
-  );
-}
-
-function buildSupervisorMeta({ zoneContext, instituciones, fallbackJurisdiction = null, supervisorLevel = null }) {
-  const departamentos = zoneContext.departamentos.length > 0
-    ? zoneContext.departamentos
-    : uniqueTexts(instituciones.map((institucion) => institucion.departamento));
-
-  const zoneNames = uniqueTexts([
-    ...zoneContext.zonas.map((zona) => getZoneDisplayLabel(zona)),
-    ...instituciones.map((institucion) => getZoneDisplayLabel(institucion))
-  ]);
-  const jurisdiccion = departamentos.join(", ") || normalizeText(fallbackJurisdiction);
-  const inferredLevel = normalizeText(supervisorLevel) || uniqueTexts(instituciones.map((institucion) => institucion.nivel))[0] || null;
-
-  return {
-    jurisdiccion: jurisdiccion || null,
-    jurisdicciones: departamentos,
-    departamento_label: jurisdiccion || null,
-    departamentos,
-    zonas: zoneContext.zonas,
-    zona_label: zoneNames.join(", ") || null,
-    zona_count: zoneContext.zonas.length,
-    nivel_educativo: inferredLevel,
-    totalEscuelas: instituciones.length
-  };
-}
-
-async function getSupervisorAssignmentSnapshot(supervisorId, { fallbackJurisdiction = null, supervisorLevel = null } = {}) {
-  const zoneContext = await getSupervisorZoneContext(supervisorId);
-  const zoneInstituciones = await getSupervisorInstitucionesFromZones(supervisorId);
-
-  if (zoneInstituciones.length > 0 || zoneContext.zonas.length > 0) {
-    return {
-      instituciones: zoneInstituciones,
-      meta: buildSupervisorMeta({ zoneContext, instituciones: zoneInstituciones, fallbackJurisdiction, supervisorLevel }),
-      source: "zona"
-    };
-  }
-
-  const legacyInstituciones = await getSupervisorLegacyInstituciones(supervisorId);
-  return {
-    instituciones: legacyInstituciones,
-    meta: buildSupervisorMeta({ zoneContext, instituciones: legacyInstituciones, fallbackJurisdiction, supervisorLevel }),
-    source: "legacy"
-  };
-}
-
-async function getSupervisorAssignedInstitutionIds(supervisorId, fallbackJurisdiction = null, supervisorLevel = null) {
-  const snapshot = await getSupervisorAssignmentSnapshot(supervisorId, { fallbackJurisdiction, supervisorLevel });
-  return [...new Set(
-    snapshot.instituciones
-      .map((institucion) => Number.parseInt(institucion.id, 10))
-      .filter((institucionId) => Number.isInteger(institucionId) && institucionId > 0)
-  )];
-}
-
-async function supervisorHasAssignedInstitution(supervisorId, institucionId) {
-  const parsedInstitucionId = Number.parseInt(institucionId, 10);
-  if (!Number.isInteger(parsedInstitucionId) || parsedInstitucionId <= 0) {
-    return false;
-  }
-
-  if (await hasZoneAssignmentTables()) {
-    const zoneAssignment = await get(
-      `SELECT 1
-       FROM zona_supervisor zs
-       JOIN zona z ON z.id = zs.zona_id
-       JOIN zona_institucion zi ON zi.zona_id = z.id
-       WHERE zs.supervisor_id = $1
-         AND zi.institucion_id = $2
-         AND z.activo = TRUE
-       LIMIT 1`,
-      [supervisorId, parsedInstitucionId]
-    );
-
-    if (zoneAssignment) {
-      return true;
-    }
-  }
-
-  if (!(await hasAsignacionesTable())) {
-    return false;
-  }
-
-  const legacyAssignment = await get(
-    `SELECT 1
-     FROM supervisor_escuela_asignacion
-     WHERE supervisor_id = $1
-       AND institucion_id = $2
-     LIMIT 1`,
-    [supervisorId, parsedInstitucionId]
-  );
-
-  return Boolean(legacyAssignment);
-}
-
-// ── Instituciones asignadas al supervisor ──
+// ── Instituciones de la jurisdicción del supervisor ──
 router.get("/instituciones", async (req, res) => {
   try {
     await ensureSupervisorSchema();
 
     if (req.user?.role === "supervisor") {
-      const snapshot = await getSupervisorAssignmentSnapshot(req.user.sub, {
-        fallbackJurisdiction: req.user.jurisdiccion,
-        supervisorLevel: req.user.nivel_educativo
-      });
-      if (snapshot.meta?.jurisdiccion !== normalizeText(req.user.jurisdiccion)) {
-        await run(
-          `UPDATE usuario
-           SET jurisdiccion = ?
-           WHERE id_usuario = ?`,
-          [snapshot.meta?.jurisdiccion || null, req.user.sub]
-        );
+      if (!(await hasAsignacionesTable())) {
+        return res.json({ instituciones: [] });
       }
-      return res.json({ instituciones: snapshot.instituciones, meta: snapshot.meta });
+
+      const selectSql = await getInstitucionSelectSql();
+      const institucionesAsignadas = await all(
+        `SELECT i.id_institucion AS id,
+                i.nombre,
+                i.cue,
+                ${selectSql.departamentoSql.expression} AS departamento,
+                ${selectSql.nivelExpr} AS nivel,
+                ${selectSql.tipoEscuelaExpr} AS tipo_escuela,
+                ${selectSql.kitIdExpr} AS kit_id,
+                ${selectSql.kitNombreExpr} AS kit_nombre,
+                ${selectSql.tipoExpr} AS tipo,
+                ${selectSql.categoriaExpr} AS categoria
+         FROM supervisor_escuela_asignacion sea
+         JOIN institucion i ON i.id_institucion = sea.institucion_id
+         ${selectSql.departamentoSql.joins}
+         ${selectSql.kitJoin}
+         WHERE sea.supervisor_id = ?
+         ORDER BY i.nombre`,
+        [req.user.sub]
+      );
+
+      return res.json({ instituciones: institucionesAsignadas });
     }
 
     const jurisdiccion = req.query.jurisdiccion || req.user.jurisdiccion;
@@ -400,10 +201,22 @@ router.get("/instituciones", async (req, res) => {
       return res.status(400).json({ error: "Jurisdicción no especificada" });
     }
 
+    // TODO: Ajustar el nombre de columna si en tu tabla 'institucion'
+    // el campo de jurisdicción se llama diferente (ej: departamento, zona, etc.)
+    const selectSql = await getInstitucionSelectSql();
+    const hasJurisdiccion = await columnExists("institucion", "jurisdiccion");
+    const jurisdiccionExpr = hasJurisdiccion ? "i.jurisdiccion" : selectSql.departamentoSql.expression;
+
     const instituciones = await all(
-      `SELECT id_institucion AS id, nombre, cue, tipo, jurisdiccion
-       FROM institucion
-       WHERE LOWER(jurisdiccion) = LOWER(?)
+      `SELECT i.id_institucion AS id,
+              i.nombre,
+              i.cue,
+              ${selectSql.tipoExpr} AS tipo,
+              ${jurisdiccionExpr} AS jurisdiccion,
+              ${selectSql.departamentoSql.expression} AS departamento
+       FROM institucion i
+       ${selectSql.departamentoSql.joins}
+       WHERE LOWER(${jurisdiccionExpr}) = LOWER(?)
        ORDER BY nombre`,
       [jurisdiccion]
     );
@@ -525,6 +338,11 @@ router.get("/pedidos-pendientes", async (req, res) => {
       return res.status(400).json({ error: "Jurisdicción no especificada" });
     }
 
+    const selectSql = await getInstitucionSelectSql();
+    const hasJurisdiccion = await columnExists("institucion", "jurisdiccion");
+    const jurisdiccionExpr = hasJurisdiccion ? "i.jurisdiccion" : selectSql.departamentoSql.expression;
+    const matriculaGroupBy = selectSql.matriculaGroupBy ? `, ${selectSql.matriculaGroupBy}` : "";
+
     const pedidos = await all(
       `SELECT p.id_pedido AS id,
               COALESCE(p.kit_cantidad, SUM(dp.cantidad_solicitada)) AS cantidad,
@@ -539,7 +357,7 @@ router.get("/pedidos-pendientes", async (req, res) => {
               ) AS producto,
               i.nombre AS institucion,
               i.id_institucion AS institucion_id,
-              COALESCE(i.matriculados, 0) AS matricula,
+              ${selectSql.matriculaExpr} AS matricula,
               u.nombre AS solicitante,
               COALESCE(
                 JSON_AGG(
@@ -553,12 +371,13 @@ router.get("/pedidos-pendientes", async (req, res) => {
        JOIN producto pr ON pr.id_producto = dp.id_producto
        JOIN usuario u ON u.id_usuario = p.id_usuario_solicitante
        JOIN institucion i ON i.id_institucion = p.id_institucion
+       ${selectSql.departamentoSql.joins}
        WHERE p.estado = 'pendiente'
          AND COALESCE(p.respuesta_supervisor_tipo, '') <> 'aclaracion'
-         AND LOWER(i.jurisdiccion) = LOWER(?)
+         AND LOWER(${jurisdiccionExpr}) = LOWER(?)
        GROUP BY p.id_pedido, p.kit_nombre, p.kit_cantidad, p.observaciones_generales, p.motivo_supervisor,
                 p.respuesta_supervisor_tipo, p.estado, p.fecha_creacion, i.nombre, i.id_institucion,
-                i.matriculados, u.nombre
+                u.nombre${matriculaGroupBy}
        ORDER BY p.fecha_creacion DESC`,
       [jurisdiccion]
     );
@@ -630,6 +449,11 @@ router.get("/solicitudes", async (req, res) => {
       return res.status(400).json({ error: "Jurisdicción no especificada" });
     }
 
+    const selectSql = await getInstitucionSelectSql();
+    const hasJurisdiccion = await columnExists("institucion", "jurisdiccion");
+    const jurisdiccionExpr = hasJurisdiccion ? "i.jurisdiccion" : selectSql.departamentoSql.expression;
+    const matriculaGroupBy = selectSql.matriculaGroupBy ? `, ${selectSql.matriculaGroupBy}` : "";
+
     const solicitudes = await all(
       `SELECT p.id_pedido AS id,
               COALESCE(p.kit_cantidad, SUM(dp.cantidad_solicitada)) AS cantidad,
@@ -644,7 +468,7 @@ router.get("/solicitudes", async (req, res) => {
               ) AS producto,
               i.nombre AS institucion,
               i.id_institucion AS institucion_id,
-              COALESCE(i.matriculados, 0) AS matricula,
+              ${selectSql.matriculaExpr} AS matricula,
               u.nombre AS solicitante,
               COALESCE(
                 JSON_AGG(
@@ -658,11 +482,12 @@ router.get("/solicitudes", async (req, res) => {
        JOIN producto pr ON pr.id_producto = dp.id_producto
        JOIN usuario u ON u.id_usuario = p.id_usuario_solicitante
        JOIN institucion i ON i.id_institucion = p.id_institucion
+       ${selectSql.departamentoSql.joins}
        WHERE p.estado::text IN ('pendiente', 'aprobado', 'rechazado', 'cancelado', 'entregado', 'finalizado')
-         AND LOWER(i.jurisdiccion) = LOWER(?)
+         AND LOWER(${jurisdiccionExpr}) = LOWER(?)
        GROUP BY p.id_pedido, p.kit_nombre, p.kit_cantidad, p.observaciones_generales, p.motivo_supervisor,
                 p.respuesta_supervisor_tipo, p.estado, p.fecha_creacion, i.nombre, i.id_institucion,
-                i.matriculados, u.nombre
+                u.nombre${matriculaGroupBy}
        ORDER BY p.fecha_creacion DESC`,
       [jurisdiccion]
     );
