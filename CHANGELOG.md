@@ -1,5 +1,30 @@
 # Registro de Cambios - Depo
 
+## 29 de Abril 2026
+
+### 1. Continuacion de gestion de zonas para Director de Area
+
+**Frontend (`frontend/src/components/DirectorAreaZonas.jsx`)**
+
+- Se completo la edicion de zonas existentes reutilizando el formulario de alta.
+- Se agrego eliminacion de zonas desde la misma grilla.
+- Se agrego administracion de supervisores por zona para poder reasignarlos luego de crearla.
+- El listado ahora muestra departamento, instituciones y supervisores asignados por cada zona.
+- Las instituciones ya usadas en otras zonas del mismo Director no se ofrecen para nuevas asignaciones, salvo cuando se edita la zona actual.
+
+**Backend (`backend/src/routes/directorArea.js`)**
+
+- `PATCH /api/director-area/zonas/:zonaId` queda integrado con la UI para actualizar nombre, departamento e instituciones.
+- `DELETE /api/director-area/zonas/:zonaId` queda integrado con la UI para baja de zonas.
+- Se agrego validacion para impedir que una misma institucion quede vinculada a multiples zonas activas del mismo Director de Area.
+- La respuesta de zonas incluye supervisores asociados para que el frontend pueda precargar y editar asignaciones.
+
+### 2. Verificacion
+
+- `npm run build` en la raiz: OK
+- `npm run build` en `frontend/`: OK
+- El build del frontend regenero `frontend/dist/index.html` y los assets compilados correspondientes.
+
 ## 27 de Abril 2026
 
 ### 1. Corrección del flujo de creación de usuarios

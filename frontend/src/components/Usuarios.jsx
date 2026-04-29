@@ -2,6 +2,18 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../api'
 
+const INITIAL_FORM = {
+  nombre: '',
+  email: '',
+  password: '',
+  role: 'consulta',
+  institucion: '',
+  cue: '',
+  nivel: '',
+  director_area_id: '',
+  jurisdiccion: ''
+}
+
 export default function Usuarios() {
   const { token, user, hasPermission } = useAuth()
   const [users, setUsers] = useState([])
@@ -10,7 +22,7 @@ export default function Usuarios() {
   const [msg, setMsg] = useState({ text: '', type: '' })
   const [formOpen, setFormOpen] = useState(false)
   const [roleModal, setRoleModal] = useState(null)
-  const [form, setForm] = useState({ nombre: '', email: '', password: '', role: 'consulta', institucion: '', cue: '', nivel: '', director_area_id: '', jurisdiccion: '' })
+  const [form, setForm] = useState(INITIAL_FORM)
   const [cueInfo, setCueInfo] = useState(null)
   const [cueLoading, setCueLoading] = useState(false)
 
@@ -80,6 +92,13 @@ export default function Usuarios() {
     availableRoles = ['supervisor']
   }
 
+  const selectedCueModalidad = cueInfo?.modalidades?.find((modalidad) => modalidad.nivel_educativo === form.nivel) || null
+
+  const resetCreateForm = () => {
+    setForm(INITIAL_FORM)
+    setCueInfo(null)
+  }
+
   const formatRoleLabel = (roleName) => {
     const normalized = String(roleName || '').toLowerCase()
     const labels = {
@@ -99,7 +118,7 @@ export default function Usuarios() {
 
     if (user?.role === 'director_area') {
       if ((user.nivel_educativo || '').trim() === '') {
-        setMsg('Su usuario no tiene nivel educativo configurado. Contacte al administrador.')
+        setMsg({ text: 'Su usuario no tiene nivel educativo configurado. Contacte al administrador.', type: 'error' })
         return
       }
       if (form.role !== 'supervisor') {
@@ -109,12 +128,8 @@ export default function Usuarios() {
     }
 
     if (form.role === 'directivo') {
-      if (!cueInfo || !cueInfo.cue) {
-        setMsg({ text: 'Debe ingresar un CUE valido para un directivo', type: 'error' })
-        return
-      }
-      if (!form.nivel) {
-        setMsg({ text: 'Debe seleccionar un nivel educativo para el CUE', type: 'error' })
+      if (!cueInfo || !selectedCueModalidad) {
+        setMsg({ text: 'Debe seleccionar un CUE y nivel validos para Directivo', type: 'error' })
         return
       }
     }
@@ -125,7 +140,7 @@ export default function Usuarios() {
     }
     if (form.role === 'supervisor') {
       if (!form.nivel) {
-        setMsg('Debe seleccionar un nivel educativo para Supervisor')
+        setMsg({ text: 'Debe seleccionar un nivel educativo para Supervisor', type: 'error' })
         return
       }
       if (!form.director_area_id) {
@@ -133,7 +148,7 @@ export default function Usuarios() {
         return
       }
       if (!form.jurisdiccion) {
-        setMsg('Debe seleccionar una jurisdiccion para Supervisor')
+        setMsg({ text: 'Debe seleccionar una jurisdiccion para Supervisor', type: 'error' })
         return
       }
     }
@@ -155,9 +170,13 @@ export default function Usuarios() {
       nombre: form.nombre.trim(),
       email: form.email.trim(),
       password: form.password,
+      role: form.role
     }
 
-    if (user?.role === 'director_area') {
+    if (form.role === 'directivo') {
+      payload.institucion = selectedCueModalidad.id
+      payload.nivel = form.nivel
+    } else if (user?.role === 'director_area') {
       payload.nivel = nivelFinal
       payload.director_area_id = directorAreaIdFinal
       payload.jurisdiccion = jurisdiccionFinal
@@ -167,23 +186,26 @@ export default function Usuarios() {
       if (jurisdiccionFinal) payload.jurisdiccion = jurisdiccionFinal
     }
 
-    const res = await apiFetch('/api/users', {
-      token,
-      method: 'POST',
-      body: JSON.stringify(payload)
-    })
+    try {
+      const res = await apiFetch('/api/users', {
+        token,
+        method: 'POST',
+        body: JSON.stringify(payload)
+      })
 
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok) {
-      setMsg({ text: data.error || 'No se pudo crear usuario', type: 'error' })
-      return
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setMsg({ text: data.error || 'No se pudo crear usuario', type: 'error' })
+        return
+      }
+
+      setMsg({ text: 'Usuario creado correctamente', type: 'success' })
+      setFormOpen(false)
+      resetCreateForm()
+      loadUsers()
+    } catch {
+      setMsg({ text: 'Error de conexion al crear usuario', type: 'error' })
     }
-
-    setMsg({ text: 'Usuario creado correctamente', type: 'success' })
-    setFormOpen(false)
-    setForm({ nombre: '', email: '', password: '', role: 'consulta', institucion: '', cue: '', nivel: '', director_area_id: '', jurisdiccion: '' })
-    setCueInfo(null)
-    loadUsers()
   }
 
   const handleToggleActive = async (id, current) => {
@@ -394,7 +416,7 @@ export default function Usuarios() {
               </div>
               <div>
                 <label>Rol</label>
-                <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value, nivel: '', institucion: '', cue: '', director_area_id: '', jurisdiccion: '' })} required>
+                <select value={form.role} onChange={(e) => setForm({ ...INITIAL_FORM, nombre: form.nombre, email: form.email, password: form.password, role: e.target.value })} required>
                   {availableRoles.map((roleName) => (
                     <option key={roleName} value={roleName}>{formatRoleLabel(roleName)}</option>
                   ))}
@@ -449,7 +471,12 @@ export default function Usuarios() {
                       <label>Area de Direccion</label>
                       <select value={form.director_area_id} onChange={(e) => {
                         const selected = directorAreas.find((area) => String(area.id) === e.target.value)
-                        setForm({ ...form, director_area_id: e.target.value, nivel: selected?.nivel_educativo || form.nivel })
+                        setForm({
+                          ...form,
+                          director_area_id: e.target.value,
+                          nivel: selected?.nivel_educativo || form.nivel,
+                          jurisdiccion: selected?.jurisdiccion || form.jurisdiccion
+                        })
                       }} required>
                         <option value="">-- Seleccionar area --</option>
                         {directorAreas.map((area) => (
@@ -495,7 +522,10 @@ export default function Usuarios() {
               )}
 
               <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-                <button type="button" className="secondary" onClick={() => setFormOpen(false)}>Cancelar</button>
+                <button type="button" className="secondary" onClick={() => {
+                  setFormOpen(false)
+                  resetCreateForm()
+                }}>Cancelar</button>
                 <button type="submit" style={{ width: 'auto', margin: 0, padding: '10px 18px' }}>Guardar usuario</button>
               </div>
             </form>
@@ -558,7 +588,13 @@ export default function Usuarios() {
                   <label>Area de Direccion</label>
                   <select value={roleModal.director_area_id || ''} onChange={(e) => {
                     const selected = directorAreas.find((area) => String(area.id) === e.target.value)
-                    setRoleModal({ ...roleModal, director_area_id: e.target.value, nivel: selected?.nivel_educativo || roleModal.nivel, error: '' })
+                    setRoleModal({
+                      ...roleModal,
+                      director_area_id: e.target.value,
+                      nivel: selected?.nivel_educativo || roleModal.nivel,
+                      jurisdiccion: selected?.jurisdiccion || roleModal.jurisdiccion,
+                      error: ''
+                    })
                   }}>
                     <option value="">-- Seleccionar area --</option>
                     {directorAreas.map((area) => (

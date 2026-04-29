@@ -36,7 +36,6 @@ try {
   zoneSchoolsRoutes = null;
   zoneSupervisorsRoutes = null;
 }
-const directorAreaSupervisoresRoutes = require("./routes/directorAreaSupervisores");
 const entregasRoutes = require("./routes/entregas");
 
 const app = express();
@@ -70,7 +69,6 @@ app.use("/api/proveedores", proveedoresRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/supervisor", supervisorRoutes);
 app.use("/api/director-area", directorAreaRoutes);
-app.use("/api/director-area", directorAreaSupervisoresRoutes);
 app.use("/api/compras", comprasRoutes);
 app.use("/api/directivo", directivoRoutes);
 if (zonesRoutes) app.use("/api/zones", zonesRoutes);

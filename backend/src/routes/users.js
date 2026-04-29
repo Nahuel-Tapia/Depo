@@ -52,6 +52,83 @@ function normalizeDni(dni) {
   return value || null;
 }
 
+function normalizeText(value) {
+  if (value === undefined || value === null) return null;
+  const normalized = String(value).trim();
+  return normalized || null;
+}
+
+function parseOptionalId(value) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function validationError(message, status = 400) {
+  const error = new Error(message);
+  error.status = status;
+  return error;
+}
+
+async function validateRoleAssignment({
+  normalizedRole,
+  institucion,
+  nivel,
+  director_area_id,
+  jurisdiccion,
+  fallbackInstitucion = null
+}) {
+  const institucionId = parseOptionalId(institucion);
+  const nivelEducativo = normalizeText(nivel);
+  const directorAreaId = parseOptionalId(director_area_id);
+  const jurisdiccionValue = normalizeText(jurisdiccion);
+
+  const finalInstitucion = normalizedRole === "directivo"
+    ? (institucionId || fallbackInstitucion || null)
+    : null;
+
+  if (normalizedRole === "directivo" && !finalInstitucion) {
+    throw validationError("La institucion es obligatoria para rol directivo");
+  }
+
+  if (normalizedRole === "director_area" && !nivelEducativo) {
+    throw validationError("El nivel educativo es obligatorio para Director de Area");
+  }
+
+  if (normalizedRole === "supervisor") {
+    if (!nivelEducativo) {
+      throw validationError("El nivel educativo es obligatorio para Supervisor");
+    }
+    if (!directorAreaId) {
+      throw validationError("El Area de Direccion es obligatoria para Supervisor");
+    }
+    if (!jurisdiccionValue) {
+      throw validationError("La jurisdiccion es obligatoria para Supervisor");
+    }
+
+    const directorArea = await get(
+      `SELECT id_usuario, NULLIF(BTRIM(nivel_educativo), '') AS nivel_educativo
+       FROM usuario
+       WHERE id_usuario = ? AND role = 'director_area' AND activo = TRUE`,
+      [directorAreaId]
+    );
+
+    if (!directorArea) {
+      throw validationError("El Area seleccionada no corresponde a una Direccion de Area activa");
+    }
+
+    if ((directorArea.nivel_educativo || "").toLowerCase() !== nivelEducativo.toLowerCase()) {
+      throw validationError("El nivel del supervisor debe coincidir con el nivel de la Direccion de Area seleccionada");
+    }
+  }
+
+  return {
+    institucionId: finalInstitucion,
+    nivelEducativo: ["director_area", "supervisor"].includes(normalizedRole) ? nivelEducativo : null,
+    directorAreaId: normalizedRole === "supervisor" ? directorAreaId : null,
+    jurisdiccionValue: normalizedRole === "supervisor" ? jurisdiccionValue : null
+  };
+}
+
 router.use(authenticate);
 
 router.get("/me", async (req, res) => {
@@ -225,10 +302,7 @@ router.post("/", authorizePermissions(PERMISSIONS.USERS_CREATE), async (req, res
     const { nombre, apellido, email, dni, password, role, telefono, institucion, nivel, director_area_id, jurisdiccion } = req.body;
     const normalizedRole = normalizeRoleName(role);
     const dniNormalized = normalizeDni(dni);
-    const institucionId = institucion && !isNaN(parseInt(institucion, 10)) ? parseInt(institucion, 10) : null;
-    const nivelEducativo = String(nivel || "").trim() || null;
-    const directorAreaId = director_area_id && !isNaN(parseInt(director_area_id, 10)) ? parseInt(director_area_id, 10) : null;
-    const jurisdiccionValue = String(jurisdiccion || "").trim() || null;
+    const emailNormalized = normalizeText(email)?.toLowerCase() || "";
 
     if (!nombre || !email || !password || !role) {
       return res.status(400).json({ error: "Faltan campos obligatorios" });
@@ -238,42 +312,15 @@ router.post("/", authorizePermissions(PERMISSIONS.USERS_CREATE), async (req, res
       return res.status(400).json({ error: "Rol invalido" });
     }
 
-    if (normalizedRole === "directivo" && !institucionId) {
-      return res.status(400).json({ error: "La institucion es obligatoria para rol directivo" });
-    }
+    const assignment = await validateRoleAssignment({
+      normalizedRole,
+      institucion,
+      nivel,
+      director_area_id,
+      jurisdiccion
+    });
 
-    if (normalizedRole === "director_area" && !nivelEducativo) {
-      return res.status(400).json({ error: "El nivel educativo es obligatorio para Director de Area" });
-    }
-
-    if (normalizedRole === "supervisor") {
-      if (!nivelEducativo) {
-        return res.status(400).json({ error: "El nivel educativo es obligatorio para Supervisor" });
-      }
-      if (!directorAreaId) {
-        return res.status(400).json({ error: "El Area de Direccion es obligatoria para Supervisor" });
-      }
-      if (!jurisdiccionValue) {
-        return res.status(400).json({ error: "La jurisdiccion es obligatoria para Supervisor" });
-      }
-
-      const directorArea = await get(
-        `SELECT id_usuario, NULLIF(BTRIM(nivel_educativo), '') AS nivel_educativo
-         FROM usuario
-         WHERE id_usuario = ? AND role = 'director_area' AND activo = TRUE`,
-        [directorAreaId]
-      );
-
-      if (!directorArea) {
-        return res.status(400).json({ error: "El Area seleccionada no corresponde a una Direccion de Area activa" });
-      }
-
-      if ((directorArea.nivel_educativo || "").toLowerCase() !== nivelEducativo.toLowerCase()) {
-        return res.status(400).json({ error: "El nivel del supervisor debe coincidir con el nivel de la Direccion de Area seleccionada" });
-      }
-    }
-
-    const existing = await get("SELECT id_usuario FROM usuario WHERE email = ?", [email]);
+    const existing = await get("SELECT id_usuario FROM usuario WHERE LOWER(email) = ?", [emailNormalized]);
     if (existing) {
       return res.status(409).json({ error: "El email ya existe" });
     }
@@ -291,21 +338,23 @@ router.post("/", authorizePermissions(PERMISSIONS.USERS_CREATE), async (req, res
       [
         nombre,
         apellido || null,
-        email,
+        emailNormalized,
         dniNormalized,
         hash,
         telefono || null,
-        institucionId,
+        assignment.institucionId,
         normalizedRole,
-        ["director_area", "supervisor"].includes(normalizedRole) ? nivelEducativo : null,
-        normalizedRole === "supervisor" ? directorAreaId : null
-        ,
-        normalizedRole === "supervisor" ? jurisdiccionValue : null
+        assignment.nivelEducativo,
+        assignment.directorAreaId,
+        assignment.jurisdiccionValue
       ]
     );
 
     return res.status(201).json({ id: result.lastID });
   } catch (err) {
+    if (err?.status) {
+      return res.status(err.status).json({ error: err.message });
+    }
     console.error("Error creando usuario:", err);
     return res.status(500).json({ error: "No se pudo crear el usuario" });
   }
@@ -321,9 +370,6 @@ router.patch(
       const { id } = req.params;
       const { role, institucion, nivel, director_area_id, jurisdiccion } = req.body;
       const normalizedRole = normalizeRoleName(role);
-      const nivelEducativo = String(nivel || "").trim() || null;
-      const directorAreaId = director_area_id && !isNaN(parseInt(director_area_id, 10)) ? parseInt(director_area_id, 10) : null;
-      const jurisdiccionValue = String(jurisdiccion || "").trim() || null;
 
       if (!(await roleExists(normalizedRole))) {
         return res.status(400).json({ error: "Rol invalido" });
@@ -334,58 +380,31 @@ router.patch(
         return res.status(404).json({ error: "Usuario no encontrado" });
       }
 
-      const finalInstitucion = normalizedRole === "directivo"
-        ? (institucion || user.id_institucion || null)
-        : null;
-
-      if (normalizedRole === "directivo" && !finalInstitucion) {
-        return res.status(400).json({ error: "La institucion es obligatoria para rol directivo" });
-      }
-
-      if (normalizedRole === "director_area" && !nivelEducativo) {
-        return res.status(400).json({ error: "El nivel educativo es obligatorio para Director de Area" });
-      }
-
-      if (normalizedRole === "supervisor") {
-        if (!nivelEducativo) {
-          return res.status(400).json({ error: "El nivel educativo es obligatorio para Supervisor" });
-        }
-        if (!directorAreaId) {
-          return res.status(400).json({ error: "El Area de Direccion es obligatoria para Supervisor" });
-        }
-        if (!jurisdiccionValue) {
-          return res.status(400).json({ error: "La jurisdiccion es obligatoria para Supervisor" });
-        }
-
-        const directorArea = await get(
-          `SELECT id_usuario, NULLIF(BTRIM(nivel_educativo), '') AS nivel_educativo
-           FROM usuario
-           WHERE id_usuario = ? AND role = 'director_area' AND activo = TRUE`,
-          [directorAreaId]
-        );
-
-        if (!directorArea) {
-          return res.status(400).json({ error: "El Area seleccionada no corresponde a una Direccion de Area activa" });
-        }
-
-        if ((directorArea.nivel_educativo || "").toLowerCase() !== nivelEducativo.toLowerCase()) {
-          return res.status(400).json({ error: "El nivel del supervisor debe coincidir con el nivel de la Direccion de Area seleccionada" });
-        }
-      }
+      const assignment = await validateRoleAssignment({
+        normalizedRole,
+        institucion,
+        nivel,
+        director_area_id,
+        jurisdiccion,
+        fallbackInstitucion: user.id_institucion || null
+      });
 
       await run(
         "UPDATE usuario SET role = ?, id_institucion = ?, nivel_educativo = ?, director_area_id = ?, jurisdiccion = ? WHERE id_usuario = ?",
         [
           normalizedRole,
-          finalInstitucion,
-          ["director_area", "supervisor"].includes(normalizedRole) ? nivelEducativo : null,
-          normalizedRole === "supervisor" ? directorAreaId : null,
-          normalizedRole === "supervisor" ? jurisdiccionValue : null,
+          assignment.institucionId,
+          assignment.nivelEducativo,
+          assignment.directorAreaId,
+          assignment.jurisdiccionValue,
           id
         ]
       );
       return res.json({ ok: true });
     } catch (err) {
+      if (err?.status) {
+        return res.status(err.status).json({ error: err.message });
+      }
       return res.status(500).json({ error: "No se pudo actualizar el rol" });
     }
   }
