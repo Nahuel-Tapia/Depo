@@ -28,6 +28,12 @@ function getZoneSupervisorLabel(zone) {
     .join(', ')
 }
 
+function getInstitutionOptionLabel(institucion) {
+  return [institucion.nombre, institucion.cue ? `CUE ${institucion.cue}` : '', institucion.nivel_educativo || '']
+    .filter(Boolean)
+    .join(' - ')
+}
+
 export default function DirectorAreaZonas({ nivelEducativo }) {
   const { token } = useAuth()
   const [departamentos, setDepartamentos] = useState([])
@@ -282,6 +288,119 @@ export default function DirectorAreaZonas({ nivelEducativo }) {
     !institucionesAsignadas.has(institucion.id)
   ))
 
+  const renderInstitucionesSelector = () => {
+    if (!departamentoSeleccionado) return null
+
+    return (
+      <div style={{ marginBottom: 16 }}>
+        <label>Escuelas ({institucionesDelDepto.length})</label>
+        {institucionesDelDepto.length === 0 ? (
+          <p style={{ color: '#888' }}>
+            {editingZoneId
+              ? 'No hay otras instituciones disponibles de tu nivel en este departamento'
+              : 'No hay instituciones disponibles de tu nivel en este departamento'}
+          </p>
+        ) : (
+          <div
+            style={{
+              border: '1px solid #ddd',
+              borderRadius: 8,
+              padding: 12,
+              display: 'grid',
+              gap: 8
+            }}
+          >
+            {institucionesDelDepto.map((institucion) => (
+              <label
+                key={institucion.id}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '20px minmax(0, 1fr)',
+                  alignItems: 'start',
+                  gap: 10,
+                  padding: '2px 0'
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={institucionesSeleccionadas.includes(institucion.id)}
+                  onChange={() => toggleInstitucion(institucion.id)}
+                  style={{ marginTop: 2 }}
+                />
+                <span style={{ lineHeight: 1.35 }}>
+                  {getInstitutionOptionLabel(institucion)}
+                </span>
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  const renderZoneForm = ({ inline = false } = {}) => (
+    <div
+      style={{
+        marginTop: inline ? 16 : 0,
+        padding: inline ? 16 : 0,
+        border: inline ? '1px solid #e6e6e6' : 'none',
+        borderRadius: inline ? 8 : 0,
+        background: inline ? '#fafafa' : 'transparent'
+      }}
+    >
+      {inline && <h5 style={{ margin: '0 0 12px 0' }}>Editar zona</h5>}
+
+      <div style={{ marginBottom: 16 }}>
+        <label>Nombre de la zona</label>
+        <input
+          type="text"
+          value={nombreZona}
+          onChange={(e) => {
+            setNombreZona(e.target.value)
+            setSuccess('')
+          }}
+          placeholder="Ej: Zona Centro Norte"
+        />
+      </div>
+
+      <div style={{ marginBottom: 16 }}>
+        <label>Departamento</label>
+        <select
+          value={departamentoSeleccionado}
+          onChange={(e) => {
+            setDepartamentoSeleccionado(e.target.value)
+            setInstitucionesSeleccionadas([])
+            setSuccess('')
+          }}
+        >
+          <option value="">-- Seleccionar --</option>
+          {departamentos.map((departamento) => (
+            <option key={departamento} value={departamento}>{departamento}</option>
+          ))}
+        </select>
+      </div>
+
+      {renderInstitucionesSelector()}
+
+      {(institucionesSeleccionadas.length > 0 || editingZoneId) && (
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button type="button" onClick={handleGuardarZona} disabled={creando || institucionesSeleccionadas.length === 0}>
+            {creando
+              ? 'Guardando...'
+              : editingZoneId
+                ? `Guardar cambios (${institucionesSeleccionadas.length})`
+                : `Crear Zona (${institucionesSeleccionadas.length})`}
+          </button>
+          {editingZoneId && (
+            <button type="button" className="secondary" onClick={resetForm} disabled={creando}>
+              Cancelar edicion
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+
   if (loading) {
     return (
       <div style={{ padding: 16 }}>
@@ -313,78 +432,7 @@ export default function DirectorAreaZonas({ nivelEducativo }) {
           </div>
         )}
 
-        <div style={{ marginBottom: 16 }}>
-          <label>Nombre de la zona</label>
-          <input
-            type="text"
-            value={nombreZona}
-            onChange={(e) => {
-              setNombreZona(e.target.value)
-              setSuccess('')
-            }}
-            placeholder="Ej: Zona Centro Norte"
-          />
-        </div>
-
-        <div style={{ marginBottom: 16 }}>
-          <label>Departamento</label>
-          <select
-            value={departamentoSeleccionado}
-            onChange={(e) => {
-              setDepartamentoSeleccionado(e.target.value)
-              setInstitucionesSeleccionadas([])
-              setSuccess('')
-            }}
-          >
-            <option value="">-- Seleccionar --</option>
-            {departamentos.map((departamento) => (
-              <option key={departamento} value={departamento}>{departamento}</option>
-            ))}
-          </select>
-        </div>
-
-        {departamentoSeleccionado && (
-          <div style={{ marginBottom: 16 }}>
-            <label>Instituciones ({institucionesDelDepto.length})</label>
-            {institucionesDelDepto.length === 0 ? (
-              <p style={{ color: '#888' }}>
-                {editingZoneId
-                  ? 'No hay otras instituciones disponibles de tu nivel en este departamento'
-                  : 'No hay instituciones disponibles de tu nivel en este departamento'}
-              </p>
-            ) : (
-              <div style={{ maxHeight: 200, overflowY: 'auto', border: '1px solid #ddd', padding: 8 }}>
-                {institucionesDelDepto.map((institucion) => (
-                  <label key={institucion.id} style={{ display: 'flex', gap: 8, margin: '4px 0' }}>
-                    <input
-                      type="checkbox"
-                      checked={institucionesSeleccionadas.includes(institucion.id)}
-                      onChange={() => toggleInstitucion(institucion.id)}
-                    />
-                    {institucion.nombre} ({institucion.cue}) - {institucion.nivel_educativo || ''}
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {institucionesSeleccionadas.length > 0 && (
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button type="button" onClick={handleGuardarZona} disabled={creando}>
-              {creando
-                ? 'Guardando...'
-                : editingZoneId
-                  ? `Guardar cambios (${institucionesSeleccionadas.length})`
-                  : `Crear Zona (${institucionesSeleccionadas.length})`}
-            </button>
-            {editingZoneId && (
-              <button type="button" className="secondary" onClick={resetForm} disabled={creando}>
-                Cancelar edicion
-              </button>
-            )}
-          </div>
-        )}
+        {!editingZoneId && renderZoneForm()}
 
         {zonas.length > 0 && (
           <div style={{ marginTop: 24 }}>
@@ -395,8 +443,10 @@ export default function DirectorAreaZonas({ nivelEducativo }) {
                 <div style={{ fontSize: '0.85rem', color: '#666' }}>
                   Departamento: {zona.departamento || '-'}
                 </div>
-                <div style={{ fontSize: '0.85rem', color: '#666' }}>
-                  {(zona.instituciones || []).map((institucion) => institucion.nombre).join(', ')}
+                <div style={{ fontSize: '0.85rem', color: '#666', display: 'grid', gap: 2, marginTop: 6 }}>
+                  {(zona.instituciones || []).map((institucion) => (
+                    <span key={institucion.id}>{getInstitutionOptionLabel(institucion)}</span>
+                  ))}
                 </div>
                 <div style={{ fontSize: '0.85rem', color: '#666' }}>
                   Supervisores: {getZoneSupervisorLabel(zona)}
@@ -417,6 +467,7 @@ export default function DirectorAreaZonas({ nivelEducativo }) {
                     {deletingZoneId === zona.id ? 'Eliminando...' : 'Eliminar'}
                   </button>
                 </div>
+                {editingZoneId === zona.id && renderZoneForm({ inline: true })}
               </div>
             ))}
           </div>
