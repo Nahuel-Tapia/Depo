@@ -199,27 +199,132 @@ const TEST_USERS = [
 /**
  * Instituciones de prueba asociadas a los usuarios
  */
+// CUE (Código Único de Establecimiento) - Formato válido argentino
+// Los CUE válidos tienen 8 dígitos: AA###EEE donde:
+// - AA: Código de provincia/jurisdicción (07 = San Juan)
+// - ###: Número de establecimiento
+// - EEE: Dígito verificador/escuela
 const TEST_INSTITUTIONS = [
+  // Instituciones de San Juan (código de provincia 07)
   {
     id: 1,
-    nombre: 'Escuela Primaria N°1',
-    cue: 'CUE001',
+    nombre: 'Escuela Primaria N°1 "Domingo Faustino Sarmiento"',
+    cue: '07001011',
     nivel_educativo: 'Primario',
-    descripcion: 'Escuela primaria de referencia para testing'
+    jurisdiccion: 'Región Centro',
+    localidad: 'San Juan',
+    provincia: 'San Juan',
+    descripcion: 'Escuela primaria en honor a Sarmiento, sanjuanino ilustre'
   },
   {
     id: 2,
-    nombre: 'Escuela Secundaria N°2',
-    cue: 'CUE002',
+    nombre: 'Escuela Secundaria N°1 "Juan Martín de Pueyrredón"',
+    cue: '07002021',
     nivel_educativo: 'Secundario',
-    descripcion: 'Escuela secundaria de referencia for testing'
+    jurisdiccion: 'Región Centro',
+    localidad: 'San Juan',
+    provincia: 'San Juan',
+    descripcion: 'Escuela secundaria con orientación en ciencias sociales'
   },
   {
     id: 3,
-    nombre: 'Jardin de Infantes N°3',
-    cue: 'CUE003',
+    nombre: 'Jardín de Infantes N°1 "Mis Primeros Pasos"',
+    cue: '07003031',
     nivel_educativo: 'Inicial',
-    descripcion: 'Jardín de infantes de referencia for testing'
+    jurisdiccion: 'Región Centro',
+    localidad: 'San Juan',
+    provincia: 'San Juan',
+    descripcion: 'Jardín de infantes de gestión estatal'
+  },
+  {
+    id: 4,
+    nombre: 'Escuela Primaria N°2 "José de San Martín"',
+    cue: '07004041',
+    nivel_educativo: 'Primario',
+    jurisdiccion: 'Región Valle Fértil',
+    localidad: 'Valle Fértil',
+    provincia: 'San Juan',
+    descripcion: 'Escuela primaria rural con enfoque en ciencias naturales'
+  },
+  {
+    id: 5,
+    nombre: 'Escuela Secundaria N°2 "Guillermo Rawson"',
+    cue: '07005051',
+    nivel_educativo: 'Secundario',
+    jurisdiccion: 'Región Centro',
+    localidad: 'Rawson',
+    provincia: 'San Juan',
+    descripcion: 'Escuela secundaria con orientación en economía'
+  },
+  {
+    id: 6,
+    nombre: 'Escuela Especial N°1 "Manos Amigas"',
+    cue: '07006061',
+    nivel_educativo: 'Especial',
+    jurisdiccion: 'Región Centro',
+    localidad: 'San Juan',
+    provincia: 'San Juan',
+    descripcion: 'Escuela de educación especial para personas con discapacidad'
+  },
+  {
+    id: 7,
+    nombre: 'Escuela Primaria N°3 "Bernardino Rivadavia"',
+    cue: '07007071',
+    nivel_educativo: 'Primario',
+    jurisdiccion: 'Región Ullum',
+    localidad: 'Ullum',
+    provincia: 'San Juan',
+    descripcion: 'Escuela primaria de jornada completa'
+  },
+  {
+    id: 8,
+    nombre: 'Escuela Secundaria N°3 "Hipólito Yrigoyen"',
+    cue: '07008081',
+    nivel_educativo: 'Secundario',
+    jurisdiccion: 'Región Zonda',
+    localidad: 'Villa Basilio Nievas',
+    provincia: 'San Juan',
+    descripcion: 'Escuela secundaria con orientación en humanidades'
+  },
+  {
+    id: 9,
+    nombre: 'Jardín de Infantes N°2 "Rayito de Sol"',
+    cue: '07009091',
+    nivel_educativo: 'Inicial',
+    jurisdiccion: 'Región Chimbas',
+    localidad: 'Chimbas',
+    provincia: 'San Juan',
+    descripcion: 'Jardín de infantes de gestión estatal'
+  },
+  {
+    id: 10,
+    nombre: 'Escuela Primaria N°4 "Mariano Moreno"',
+    cue: '07010101',
+    nivel_educativo: 'Primario',
+    jurisdiccion: 'Región Pocito',
+    localidad: 'Pocito',
+    provincia: 'San Juan',
+    descripcion: 'Escuela primaria bilingüe (inglés-español)'
+  },
+  {
+    id: 11,
+    nombre: 'Escuela Técnica N°1 "Ing. Ignacio Rodríguez"',
+    cue: '07011111',
+    nivel_educativo: 'Secundario',
+    jurisdiccion: 'Región Centro',
+    localidad: 'San Juan',
+    provincia: 'San Juan',
+    descripcion: 'Escuela técnica con especialidad en electrónica y mecánica'
+  },
+  {
+    id: 12,
+    nombre: 'Centro de Educación Física N°1 "José María Cullen"',
+    cue: '07012121',
+    nivel_educativo: 'Inicial',
+    jurisdiccion: 'Región Rivadavia',
+    localidad: 'Rivadavia',
+    provincia: 'San Juan',
+    descripcion: 'Centro de educación física para nivel inicial y primario'
   }
 ];
 

@@ -38,7 +38,7 @@ function adaptSql(sql) {
  */
 async function run(sql, params = []) {
   const adaptedSql = adaptSql(sql);
-  console.debug("[DBG] SQL (adapted):", adaptedSql, "Params:", JSON.stringify(params));
+  // console.debug("[DBG] SQL (adapted):", adaptedSql, "Params:", JSON.stringify(params));
   // Para INSERT, añadir RETURNING con el campo de id correcto
   let finalSql = adaptedSql;
   if (/^\s*INSERT/i.test(adaptedSql) && !/RETURNING/i.test(adaptedSql)) {

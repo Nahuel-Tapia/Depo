@@ -17,6 +17,25 @@ Este directorio contiene datos de prueba para desarrollo y testing sin necesidad
 | 9 | director_area | director.area@secondary.test | directorarea123 | Director de Área Secundario |
 | 10 | supervisor | supervisor@zone2.test | supervisor123 | Supervisor Zona Sur (Nivel Secundario) |
 
+## 🏫 Instituciones de Prueba (San Juan)
+
+| ID | Nombre | CUE | Nivel | Localidad |
+|----|--------|-----|-------|-----------|
+| 1 | Escuela Primaria N°1 "Domingo Faustino Sarmiento" | 07001011 | Primario | San Juan |
+| 2 | Escuela Secundaria N°1 "Juan Martín de Pueyrredón" | 07002021 | Secundario | San Juan |
+| 3 | Jardín de Infantes N°1 "Mis Primeros Pasos" | 07003031 | Inicial | San Juan |
+| 4 | Escuela Primaria N°2 "José de San Martín" | 07004041 | Primario | Valle Fértil |
+| 5 | Escuela Secundaria N°2 "Guillermo Rawson" | 07005051 | Secundario | Rawson |
+| 6 | Escuela Especial N°1 "Manos Amigas" | 07006061 | Especial | San Juan |
+| 7 | Escuela Primaria N°3 "Bernardino Rivadavia" | 07007071 | Primario | Ullum |
+| 8 | Escuela Secundaria N°3 "Hipólito Yrigoyen" | 07008081 | Secundario | Villa Basilio Nievas |
+| 9 | Jardín de Infantes N°2 "Rayito de Sol" | 07009091 | Inicial | Chimbas |
+| 10 | Escuela Primaria N°4 "Mariano Moreno" | 07010101 | Primario | Pocito |
+| 11 | Escuela Técnica N°1 "Ing. Ignacio Rodríguez" | 07011111 | Secundario | San Juan |
+| 12 | Centro de Educación Física N°1 "José María Cullen" | 07012121 | Inicial | Rivadavia |
+
+> **Nota sobre CUE válido:** Los CUE siguen el formato argentino de 8 dígitos donde los primeros 2 dígitos (**07**) representan la provincia de **San Juan**. El formato es: `AA###EEE` donde AA es la provincia, ### es el número de establecimiento y EEE es el dígito verificador.
+
 ## 🚀 Cómo Usar
 
 ### Importar el módulo
