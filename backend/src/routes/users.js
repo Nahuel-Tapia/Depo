@@ -69,6 +69,83 @@ function validationError(message, status = 400) {
   return error;
 }
 
+async function getDirectorAreaCreatorContext(req) {
+  const authUserId = getAuthUserId(req);
+  if (!authUserId || String(req?.user?.role || "").toLowerCase() !== "director_area") {
+    return null;
+  }
+
+  const creator = await get(
+    `SELECT id_usuario, role, activo, NULLIF(BTRIM(nivel_educativo), '') AS nivel_educativo, NULLIF(BTRIM(jurisdiccion), '') AS jurisdiccion
+     FROM usuario
+     WHERE id_usuario = ?`,
+    [authUserId]
+  );
+
+  if (!creator || creator.role !== "director_area" || creator.activo !== true) {
+    throw validationError("El Director de Area creador no es valido o no esta activo", 403);
+  }
+
+  return {
+    id: authUserId,
+    nivelEducativo: normalizeText(creator.nivel_educativo),
+    jurisdiccion: normalizeText(creator.jurisdiccion)
+  };
+}
+
+function normalizeLevel(value) {
+  return normalizeText(value)?.toLowerCase() || null;
+}
+
+async function getManagedSupervisorForDirector(req, targetUserId) {
+  const directorContext = await getDirectorAreaCreatorContext(req);
+  if (!directorContext) return null;
+
+  return get(
+    `SELECT id_usuario, role, nivel_educativo, director_area_id, activo
+     FROM usuario
+     WHERE id_usuario = ?
+       AND role = 'supervisor'
+       AND director_area_id = ?
+       AND LOWER(COALESCE(nivel_educativo, '')) = LOWER(COALESCE(?, ''))`,
+    [targetUserId, directorContext.id, directorContext.nivelEducativo]
+  );
+}
+
+async function ensureUserAccessForUpdate(req, targetUserId) {
+  const authRole = String(req?.user?.role || "").toLowerCase();
+
+  if (authRole === "admin") {
+    const existing = await get(
+      "SELECT id_usuario, role, id_institucion, nivel_educativo, director_area_id, jurisdiccion FROM usuario WHERE id_usuario = ?",
+      [targetUserId]
+    );
+    if (!existing) {
+      throw validationError("Usuario no encontrado", 404);
+    }
+    return existing;
+  }
+
+  if (authRole === "director_area") {
+    const managedSupervisor = await getManagedSupervisorForDirector(req, targetUserId);
+    if (!managedSupervisor) {
+      const existing = await get("SELECT id_usuario FROM usuario WHERE id_usuario = ?", [targetUserId]);
+      throw validationError(existing ? "No autorizado para editar este usuario" : "Usuario no encontrado", existing ? 403 : 404);
+    }
+
+    return {
+      id_usuario: managedSupervisor.id_usuario,
+      role: managedSupervisor.role,
+      id_institucion: null,
+      nivel_educativo: managedSupervisor.nivel_educativo,
+      director_area_id: managedSupervisor.director_area_id,
+      jurisdiccion: null
+    };
+  }
+
+  throw validationError("No autorizado para editar usuarios", 403);
+}
+
 async function validateRoleAssignment({
   normalizedRole,
   institucion,
@@ -100,9 +177,6 @@ async function validateRoleAssignment({
     }
     if (!directorAreaId) {
       throw validationError("El Area de Direccion es obligatoria para Supervisor");
-    }
-    if (!jurisdiccionValue) {
-      throw validationError("La jurisdiccion es obligatoria para Supervisor");
     }
 
     const directorArea = await get(
@@ -271,26 +345,65 @@ router.patch("/me/password", async (req, res) => {
 router.get("/", authorizePermissions(PERMISSIONS.USERS_READ), async (req, res) => {
   try {
     await ensureUsersSchema();
-    const users = await all(
-      `SELECT u.id_usuario as id,
-              u.nombre,
-              u.apellido,
-              u.email,
-              u.dni,
-              u.role,
-              u.activo,
-              u.created_at,
-              u.nivel_educativo,
-              u.director_area_id,
-              u.jurisdiccion,
-              da.nombre AS director_area_nombre,
-              da.apellido AS director_area_apellido
-       FROM usuario u
-       LEFT JOIN usuario da ON da.id_usuario = u.director_area_id
-       ORDER BY u.id_usuario DESC`
-    );
+    const authRole = String(req?.user?.role || "").toLowerCase();
+    let users = [];
+
+    if (authRole === "director_area") {
+      const directorContext = await getDirectorAreaCreatorContext(req);
+      if (!directorContext?.nivelEducativo) {
+        return res.json({ users: [] });
+      }
+
+      users = await all(
+        `SELECT u.id_usuario as id,
+                u.nombre,
+                u.apellido,
+                u.email,
+                u.dni,
+                u.telefono,
+                u.role,
+                u.activo,
+                u.created_at,
+                u.nivel_educativo,
+                u.director_area_id,
+                u.jurisdiccion,
+                da.nombre AS director_area_nombre,
+                da.apellido AS director_area_apellido
+         FROM usuario u
+         LEFT JOIN usuario da ON da.id_usuario = u.director_area_id
+         WHERE u.role = 'supervisor'
+           AND u.director_area_id = ?
+           AND LOWER(COALESCE(u.nivel_educativo, '')) = LOWER(COALESCE(?, ''))
+         ORDER BY u.id_usuario DESC`,
+        [directorContext.id, directorContext.nivelEducativo]
+      );
+    } else {
+      users = await all(
+        `SELECT u.id_usuario as id,
+                u.nombre,
+                u.apellido,
+                u.email,
+                u.dni,
+                u.telefono,
+                u.role,
+                u.activo,
+                u.created_at,
+                u.nivel_educativo,
+                u.director_area_id,
+                u.jurisdiccion,
+                da.nombre AS director_area_nombre,
+                da.apellido AS director_area_apellido
+         FROM usuario u
+         LEFT JOIN usuario da ON da.id_usuario = u.director_area_id
+         ORDER BY u.id_usuario DESC`
+      );
+    }
+
     return res.json({ users });
   } catch (err) {
+    if (err?.status) {
+      return res.status(err.status).json({ error: err.message });
+    }
     return res.status(500).json({ error: "No se pudo listar usuarios" });
   }
 });
@@ -299,10 +412,14 @@ router.post("/", authorizePermissions(PERMISSIONS.USERS_CREATE), async (req, res
   try {
     await ensureUsersSchema();
 
-    const { nombre, apellido, email, dni, password, role, telefono, institucion, nivel, director_area_id, jurisdiccion } = req.body;
+    const { nombre, apellido, email, dni, password, role, telefono, institucion } = req.body;
+    const creatorContext = await getDirectorAreaCreatorContext(req);
     const normalizedRole = normalizeRoleName(role);
     const dniNormalized = normalizeDni(dni);
     const emailNormalized = normalizeText(email)?.toLowerCase() || "";
+    let nivel = req.body?.nivel;
+    let director_area_id = req.body?.director_area_id;
+    let jurisdiccion = req.body?.jurisdiccion;
 
     if (!nombre || !email || !password || !role) {
       return res.status(400).json({ error: "Faltan campos obligatorios" });
@@ -310,6 +427,24 @@ router.post("/", authorizePermissions(PERMISSIONS.USERS_CREATE), async (req, res
 
     if (!(await roleExists(normalizedRole))) {
       return res.status(400).json({ error: "Rol invalido" });
+    }
+
+    if (creatorContext) {
+      if (normalizedRole !== "supervisor") {
+        return res.status(403).json({ error: "El Director de Area solo puede crear usuarios con rol Supervisor" });
+      }
+      if (!creatorContext.nivelEducativo) {
+        return res.status(400).json({ error: "El Director de Area no tiene nivel educativo configurado" });
+      }
+      if (normalizeLevel(nivel) && normalizeLevel(nivel) !== normalizeLevel(creatorContext.nivelEducativo)) {
+        return res.status(400).json({ error: "El nivel del supervisor debe coincidir con el nivel del Director de Area" });
+      }
+      if (parseOptionalId(director_area_id) && parseOptionalId(director_area_id) !== creatorContext.id) {
+        return res.status(400).json({ error: "El supervisor debe quedar vinculado al Director de Area que lo crea" });
+      }
+
+      nivel = creatorContext.nivelEducativo;
+      director_area_id = creatorContext.id;
     }
 
     const assignment = await validateRoleAssignment({
@@ -367,6 +502,10 @@ router.patch(
     try {
       await ensureUsersSchema();
 
+      if (String(req?.user?.role || "").toLowerCase() === "director_area") {
+        return res.status(403).json({ error: "El Director de Area no puede cambiar roles de usuarios" });
+      }
+
       const { id } = req.params;
       const { role, institucion, nivel, director_area_id, jurisdiccion } = req.body;
       const normalizedRole = normalizeRoleName(role);
@@ -411,6 +550,128 @@ router.patch(
 );
 
 router.patch(
+  "/:id",
+  authorizePermissions(PERMISSIONS.USERS_CREATE),
+  async (req, res) => {
+    try {
+      await ensureUsersSchema();
+
+      const targetUserId = Number.parseInt(req.params.id, 10);
+      if (!Number.isInteger(targetUserId) || targetUserId <= 0) {
+        return res.status(400).json({ error: "ID invalido" });
+      }
+
+      const accessibleUser = await ensureUserAccessForUpdate(req, targetUserId);
+      const authRole = String(req?.user?.role || "").toLowerCase();
+      const directorContext = authRole === "director_area" ? await getDirectorAreaCreatorContext(req) : null;
+
+      let {
+        nombre,
+        apellido,
+        email,
+        dni,
+        telefono,
+        nivel,
+        director_area_id,
+        jurisdiccion,
+        password
+      } = req.body || {};
+
+      const finalNombre = normalizeText(nombre);
+      const finalApellido = normalizeText(apellido);
+      const finalTelefono = normalizeText(telefono);
+      const finalEmail = normalizeText(email)?.toLowerCase() || null;
+      const finalDni = normalizeDni(dni);
+
+      if (!finalNombre || !finalEmail) {
+        return res.status(400).json({ error: "Nombre y email son obligatorios" });
+      }
+      if (!finalEmail.includes("@")) {
+        return res.status(400).json({ error: "El email no es valido" });
+      }
+
+      if (authRole === "director_area") {
+        nivel = directorContext?.nivelEducativo || null;
+        director_area_id = directorContext?.id || null;
+        if (!nivel) {
+          return res.status(400).json({ error: "El Director de Area no tiene nivel educativo configurado" });
+        }
+      }
+
+      const finalPassword = normalizeText(password);
+      if (finalPassword && finalPassword.length < 6) {
+        return res.status(400).json({ error: "La contrasena debe tener al menos 6 caracteres" });
+      }
+
+      const assignment = await validateRoleAssignment({
+        normalizedRole: accessibleUser.role,
+        institucion: accessibleUser.id_institucion || null,
+        nivel,
+        director_area_id,
+        jurisdiccion
+      });
+
+      const existingEmail = await get(
+        "SELECT id_usuario FROM usuario WHERE LOWER(email) = ? AND id_usuario <> ?",
+        [finalEmail, targetUserId]
+      );
+      if (existingEmail) {
+        return res.status(409).json({ error: "El email ya existe" });
+      }
+
+      if (finalDni) {
+        const existingDni = await get(
+          "SELECT id_usuario FROM usuario WHERE dni = ? AND id_usuario <> ?",
+          [finalDni, targetUserId]
+        );
+        if (existingDni) {
+          return res.status(409).json({ error: "El DNI ya existe" });
+        }
+      }
+
+      let passwordHash = null;
+      if (finalPassword) {
+        passwordHash = await bcrypt.hash(finalPassword, 10);
+      }
+
+      await run(
+        `UPDATE usuario
+         SET nombre = ?,
+             apellido = ?,
+             email = ?,
+             dni = ?,
+             telefono = ?,
+             nivel_educativo = ?,
+             director_area_id = ?,
+             jurisdiccion = ?,
+             password = COALESCE(?, password)
+         WHERE id_usuario = ?`,
+        [
+          finalNombre,
+          finalApellido,
+          finalEmail,
+          finalDni,
+          finalTelefono,
+          assignment.nivelEducativo,
+          assignment.directorAreaId,
+          assignment.jurisdiccionValue,
+          passwordHash,
+          targetUserId
+        ]
+      );
+
+      return res.json({ ok: true });
+    } catch (err) {
+      if (err?.status) {
+        return res.status(err.status).json({ error: err.message });
+      }
+      console.error("Error actualizando usuario:", err);
+      return res.status(500).json({ error: "No se pudo actualizar el usuario" });
+    }
+  }
+);
+
+router.patch(
   "/:id/active",
   authorizePermissions(PERMISSIONS.USERS_STATUS_UPDATE),
   async (req, res) => {
@@ -418,9 +679,16 @@ router.patch(
       const { id } = req.params;
       const { activo } = req.body;
 
+      if (String(req?.user?.role || "").toLowerCase() === "director_area") {
+        await ensureUserAccessForUpdate(req, Number.parseInt(id, 10));
+      }
+
       await run("UPDATE usuario SET activo = ? WHERE id_usuario = ?", [activo ? true : false, id]);
       return res.json({ ok: true });
     } catch (err) {
+      if (err?.status) {
+        return res.status(err.status).json({ error: err.message });
+      }
       return res.status(500).json({ error: "No se pudo actualizar estado" });
     }
   }
