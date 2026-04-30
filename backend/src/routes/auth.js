@@ -110,17 +110,18 @@ router.post("/register", async (req, res) => {
       message: "Usuario creado correctamente. Ya puede iniciar sesión con su email"
     });
   } catch (err) {
-    console.error(err);
-    if (String(err.message || "").includes("UNIQUE")) {
+    console.error("Error en registro:", err);
+    const errMsg = String(err.message || "").toUpperCase();
+    if (errMsg.includes("UNIQUE") || errMsg.includes("DUPLICATE")) {
       const code = helpCode();
       return res.status(409).json({
         ok: false,
-        error: "Ya existe un usuario registrado con ese CUE",
+        error: "Ya existe un usuario registrado con esos datos (Email o CUE)",
         helpCode: code,
-        message: `Ya existe un usuario registrado con ese CUE. Número de ayuda: ${code}`
+        message: `Ya existe un usuario registrado con ese email o CUE. Número de ayuda: ${code}`
       });
     }
-    return res.status(500).json({ ok: false, error: "Error al registrar usuario" });
+    return res.status(500).json({ ok: false, error: "Error al registrar usuario", details: err.message });
   }
 });
 

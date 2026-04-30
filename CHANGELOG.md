@@ -2,13 +2,46 @@
 
 ## 29 de Abril 2026
 
-### 1. Continuacion de gestion de zonas para Director de Area
+### 1. Módulo de Patrimonio (Nuevo)
+
+**Backend (`backend/src/routes/patrimonio.js` y `backend/src/server.js`)**
+
+- Se implementó el nuevo sistema de gestión de patrimonio para el registro de activos institucionales.
+- Endpoints creados para: listado de patrimonio, creación de registros, actualización de estado y baja de bienes.
+- Registro de la nueva ruta en el servidor principal.
+
+### 2. Mejoras Críticas para el Rol Supervisor
+
+**Frontend (`frontend/src/components/Inicio.jsx` y `frontend/src/components/SupervisorDashboard.jsx`)**
+
+- El panel de inicio y el dashboard ahora muestran explícitamente la **Zona** asignada y el **Nivel Educativo** del supervisor.
+- Mejora en la visualización de datos contextuales para una navegación más clara.
+
+**Backend (`backend/src/routes/supervisor.js`)**
+
+- Refactorización profunda para garantizar que el supervisor solo acceda a datos de su jurisdicción y nivel.
+- Mejora en la lógica de asignación de instituciones y validación de permisos por zona.
+
+### 3. Gestión de Pedidos y Solicitudes
+
+**Frontend (`frontend/src/components/supervisor/SupervisorSolicitudes.jsx`)**
+
+- Simplificación de las peticiones a la API para agilizar la carga de solicitudes.
+- Se eliminaron redundancias en el manejo del estado local.
+
+**Backend (`backend/src/routes/pedidos.js`)**
+
+- Se agregó validación estricta: un supervisor solo puede gestionar pedidos de instituciones vinculadas a su zona.
+- Se implementó la funcionalidad de **Solicitud de Aclaración**, permitiendo una comunicación bidireccional antes de aprobar o rechazar un pedido.
+- Sincronización automática de stock al marcar pedidos como "entregados".
+
+### 4. Continuación de gestión de zonas para Director de Area
 
 **Frontend (`frontend/src/components/DirectorAreaZonas.jsx`)**
 
-- Se completo la edicion de zonas existentes reutilizando el formulario de alta.
-- Se agrego eliminacion de zonas desde la misma grilla.
-- Se agrego administracion de supervisores por zona para poder reasignarlos luego de crearla.
+- Se completó la edición de zonas existentes reutilizando el formulario de alta.
+- Se agregó eliminación de zonas desde la misma grilla.
+- Se agregó administración de supervisores por zona para poder reasignarlos luego de crearla.
 - El listado ahora muestra departamento, instituciones y supervisores asignados por cada zona.
 - Las instituciones ya usadas en otras zonas del mismo Director no se ofrecen para nuevas asignaciones, salvo cuando se edita la zona actual.
 
@@ -16,33 +49,33 @@
 
 - `PATCH /api/director-area/zonas/:zonaId` queda integrado con la UI para actualizar nombre, departamento e instituciones.
 - `DELETE /api/director-area/zonas/:zonaId` queda integrado con la UI para baja de zonas.
-- Se agrego validacion para impedir que una misma institucion quede vinculada a multiples zonas activas del mismo Director de Area.
+- Se agregó validación para impedir que una misma institución quede vinculada a múltiples zonas activas del mismo Director de Área.
 - La respuesta de zonas incluye supervisores asociados para que el frontend pueda precargar y editar asignaciones.
 
-### 2. Verificacion
+### 5. Verificación y Build
 
-- `npm run build` en la raiz: OK
-- `npm run build` en `frontend/`: OK
-- El build del frontend regenero `frontend/dist/index.html` y los assets compilados correspondientes.
+- `npm run build` ejecutado con éxito.
+- El build del frontend regeneró `frontend/dist/index.html` y los assets compilados correspondientes (`index-DXA1AaLw.js`).
 
-### 3. Gestion de Usuarios para Director de Area
+### 6. Gestión de Usuarios para Director de Area
 
 **Frontend (`frontend/src/components/Usuarios.jsx`)**
 
-- Se habilito la apertura del formulario de creacion de usuarios para el rol `director_area`.
+- Se habilitó la apertura del formulario de creación de usuarios para el rol `director_area`.
 - El campo `Rol` queda fijo en `Supervisor` cuando crea un usuario un Director de Area.
 - El campo `Nivel educativo` se presenta como lista desplegable bloqueada con el nivel del Director de Area logueado.
 - La lista de usuarios visible para Director de Area ahora muestra solo sus supervisores asociados y del mismo nivel educativo.
-- Se agrego un modal de edicion completa para supervisores permitiendo actualizar nombre, apellido, email, DNI, telefono, jurisdiccion y contrasena.
-- Se removio para Director de Area la accion de cambio de rol sobre usuarios.
+- Se agregó un modal de edición completa para supervisores permitiendo actualizar nombre, apellido, email, DNI, teléfono, jurisdicción y contraseña.
+- Se removió para Director de Area la acción de cambio de rol sobre usuarios.
 
 **Backend (`backend/src/routes/users.js`)**
 
 - `GET /api/users` ahora filtra por contexto del usuario logueado cuando el rol es `director_area`, devolviendo solo supervisores del mismo nivel y vinculados por `director_area_id`.
-- `POST /api/users` refuerza la validacion para que un Director de Area solo pueda crear supervisores de su mismo nivel y asociados a su propia direccion de area.
-- `PATCH /api/users/:id` se agrego para permitir la edicion completa de supervisores con validacion de pertenencia.
+- `POST /api/users` refuerza la validación para que un Director de Area solo pueda crear supervisores de su mismo nivel y asociados a su propia dirección de area.
+- `PATCH /api/users/:id` se agregó para permitir la edición completa de supervisores con validación de pertenencia.
 - `PATCH /api/users/:id/role` ahora rechaza con `403` cualquier intento de cambio de rol realizado por un Director de Area.
 - `PATCH /api/users/:id/active` valida que el Director de Area solo pueda activar o desactivar supervisores que le pertenecen.
+
 
 ## 27 de Abril 2026
 
