@@ -7,6 +7,7 @@ export default function Depositos() {
   const [depositos, setDepositos] = useState([])
   const [depositoSeleccionado, setDepositoSeleccionado] = useState(null)
   const [stock, setStock] = useState([])
+  const [perDeposit, setPerDeposit] = useState({})
   const [msg, setMsg] = useState({ text: '', type: '' })
   const [loading, setLoading] = useState(false)
   
@@ -60,6 +61,16 @@ export default function Depositos() {
     setLoading(false)
   }
 
+  const loadDepositosProductos = async (depositoId) => {
+    try {
+      const res = await apiFetch(`/api/depositos/${depositoId}/productos`, { token })
+      if (res.ok) {
+        const data = await res.json()
+        setPerDeposit(prev => ({ ...prev, [depositoId]: data.productos || [] }))
+      }
+    } catch {}
+  }
+
   useEffect(() => {
     loadDepositos()
     loadProductos()
@@ -68,6 +79,7 @@ export default function Depositos() {
   useEffect(() => {
     if (depositoSeleccionado?.id) {
       loadStock(depositoSeleccionado.id)
+      loadDepositosProductos(depositoSeleccionado.id)
     }
   }, [depositoSeleccionado])
 
@@ -196,16 +208,44 @@ export default function Depositos() {
                     </td>
                   </tr>
                 ))}
-                {stock.filter(s => s.cantidad > 0).length === 0 && (
-                  <tr>
-                    <td colSpan={3} style={{ textAlign: 'center', color: 'var(--muted)' }}>
-                      Sin stock
-                    </td>
-                  </tr>
-                )}
+          {stock.filter(s => s.cantidad > 0).length === 0 && (
+            <tr>
+              <td colSpan={3} style={{ textAlign: 'center', color: 'var(--muted)' }}>
+                Sin stock
+              </td>
+            </tr>
+          )}
               </tbody>
             </table>
           )}
+        </div>
+      )}
+
+      {/* Productos por depósito (ver desde Depositos) */}
+      {depositoSeleccionado && (
+        <div className="card" style={{ marginTop: 20 }}>
+          <h4>Productos en {depositoSeleccionado.nombre}</h4>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th>Producto</th>
+                <th>Cantidad</th>
+                <th>Unidad</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(perDeposit[depositoSeleccionado.id] || []).map((p) => (
+                <tr key={p.id}>
+                  <td>{p.nombre}</td>
+                  <td>{p.cantidad}</td>
+                  <td>{p.unidad_medida}</td>
+                </tr>
+              ))}
+              {(perDeposit[depositoSeleccionado.id] || []).length === 0 && (
+                <tr><td colSpan={3} style={{ textAlign:'center' }}>Sin productos</td></tr>
+              )}
+            </tbody>
+          </table>
         </div>
       )}
 
