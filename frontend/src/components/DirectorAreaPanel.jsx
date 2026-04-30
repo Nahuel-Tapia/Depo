@@ -4,6 +4,7 @@ import { apiFetch } from '../api'
 import DirectorAreaGestion from './DirectorAreaGestion'
 import DirectorAreaPedidosAnuales from './DirectorAreaPedidosAnuales'
 import DirectorAreaZonas from './DirectorAreaZonas'
+import DirectorAreaResumenAnual from './DirectorAreaResumenAnual'
 
 export default function DirectorAreaPanel({ initialSection }) {
   const { token } = useAuth()
@@ -28,6 +29,16 @@ export default function DirectorAreaPanel({ initialSection }) {
       setActiveSection(initialSection)
     }
   }, [initialSection, activeSection])
+
+  const loadSolicitudes = async () => {
+    try {
+      const res = await apiFetch('/api/supervisor/solicitudes', { token })
+      if (res.ok) {
+        const data = await res.json()
+        setSolicitudes(data.solicitudes || [])
+      }
+    } catch (err) {}
+  }
 
   useEffect(() => {
     setAsigForm({ supervisor_id: '', institucion_id: '' })
@@ -55,9 +66,8 @@ export default function DirectorAreaPanel({ initialSection }) {
       setEscuelas(catalogo.escuelas || [])
       setNivelEducativo(catalogo.nivel_educativo || '')
       setAsignaciones(asignacionesData.asignaciones || [])
-      // Do not load informes/solicitudes here to avoid 404s in this view
-      setInformes([])
-      setSolicitudes([])
+      
+      await loadSolicitudes()
 
       const planillasRes = await apiFetch('/api/compras/planillas', { token })
       if (planillasRes.ok) {
@@ -73,29 +83,8 @@ export default function DirectorAreaPanel({ initialSection }) {
   }, [token, activeSection])
 
   // Renderizado principal
-  return (
-    <>
-      {activeSection === 'gestion-escuelas' && (
-        <DirectorAreaZonas nivelEducativo={nivelEducativo} />
-      )}
-      {activeSection === 'pedidos-anuales' && (
-        <DirectorAreaPedidosAnuales
-          solicitudes={solicitudes}
-          planillas={planillas}
-          planillaDetalle={planillaDetalle}
-          setPlanillaDetalle={setPlanillaDetalle}
-          planillaObs={planillaObs}
-          setPlanillaObs={setPlanillaObs}
-          creandoPlanilla={creandoPlanilla}
-          setCreandoPlanilla={setCreandoPlanilla}
-          updatingId={updatingId}
-          setUpdatingId={setUpdatingId}
-          handleEntregarSolicitud={handleEntregarSolicitud}
-          handleDecisionSolicitud={handleDecisionSolicitud}
-        />
-      )}
-    </>
-  )
+  // El componente continuará hacia abajo para el return principal
+
 
   const handleEliminarAsignacion = async (id) => {
     const res = await apiFetch(`/api/director-area/asignaciones/${id}`, { token, method: 'DELETE' })
@@ -161,7 +150,7 @@ export default function DirectorAreaPanel({ initialSection }) {
   const handleDecisionSolicitud = async (id, decision) => {
     setUpdatingId(id)
     try {
-      const res = await apiFetch(`/api/director-area/solicitudes/${id}/decision`, {
+      const res = await apiFetch(`/api/pedidos/${id}/aprobar-director`, {
         token,
         method: 'PATCH',
         body: JSON.stringify({ decision })
@@ -172,17 +161,18 @@ export default function DirectorAreaPanel({ initialSection }) {
       setSolicitudes((prev) => prev.map((s) => {
         if (s.id !== id) return s
         if (decision === 'aceptar') {
-          return { ...s, aprobado_director_area: true }
+          return { ...s, aprobado_director_area: true, estado: 'aprobado' }
         }
         return { ...s, aprobado_director_area: false, estado: 'rechazado' }
       }))
 
       setMsg({
         text: decision === 'aceptar'
-          ? `Solicitud #${id} aceptada para pedido anual.`
-          : `Solicitud #${id} denegada.`,
+          ? `Solicitud #${id} aprobada definitivamente.`
+          : `Solicitud #${id} rechazada.`,
         type: 'success'
       })
+      await loadSolicitudes()
     } catch (err) {
       setMsg({ text: err.message || 'Error al decidir solicitud', type: 'error' })
     } finally {
@@ -253,46 +243,45 @@ export default function DirectorAreaPanel({ initialSection }) {
 
   return (
     <div>
-      <h2>Supervisores del Nivel</h2>
-      <p style={{ marginTop: 0, color: 'var(--muted)' }}>
-        Organiza los supervisores de tu nivel educativo, distribui escuelas y pedi informes de seguimiento.
-      </p>
-
       {activeSection === 'gestion-escuelas' && (
-        <DirectorAreaGestion
-          nivelEducativo={nivelEducativo}
-          supervisores={supervisores}
-          escuelas={escuelas}
-          asignaciones={asignaciones}
-          asigForm={asigForm}
-          setAsigForm={setAsigForm}
-          handleAsignar={handleAsignar}
-          handleEliminarAsignacion={handleEliminarAsignacion}
-          msg={msg}
-          informes={informes}
-          informeForm={informeForm}
-          setInformeForm={setInformeForm}
-          handleSolicitarInforme={handleSolicitarInforme}
-          supervisorMap={supervisorMap}
-        />
+        <>
+          <h2>Supervisores del Nivel</h2>
+          <p style={{ marginTop: 0, color: 'var(--muted)' }}>
+            Organiza los supervisores de tu nivel educativo, distribui escuelas y pedi informes de seguimiento.
+          </p>
+          <DirectorAreaZonas nivelEducativo={nivelEducativo} />
+          
+          <div style={{ marginTop: 40 }}>
+            <DirectorAreaGestion
+              nivelEducativo={nivelEducativo}
+              supervisores={supervisores}
+              escuelas={escuelas}
+              asignaciones={asignaciones}
+              asigForm={asigForm}
+              setAsigForm={setAsigForm}
+              handleAsignar={handleAsignar}
+              handleEliminarAsignacion={handleEliminarAsignacion}
+              msg={msg}
+              informes={informes}
+              informeForm={informeForm}
+              setInformeForm={setInformeForm}
+              handleSolicitarInforme={handleSolicitarInforme}
+              supervisorMap={supervisorMap}
+            />
+          </div>
+        </>
       )}
-
-      {activeSection === 'gestion-pedidos' && (
+      {activeSection === 'solicitud-anual' && (
         <DirectorAreaPedidosAnuales
           solicitudes={solicitudes}
           updatingId={updatingId}
           handleDecisionSolicitud={handleDecisionSolicitud}
           handleEntregarSolicitud={handleEntregarSolicitud}
-          planillas={planillas}
-          planillaDetalle={planillaDetalle}
-          planillaObs={planillaObs}
-          setPlanillaObs={setPlanillaObs}
-          creandoPlanilla={creandoPlanilla}
-          handleCrearPlanilla={handleCrearPlanilla}
-          handleVerDetalle={handleVerDetalle}
-          handleEnviarPlanilla={handleEnviarPlanilla}
-          handleEliminarPlanilla={handleEliminarPlanilla}
         />
+      )}
+
+      {activeSection === 'resumen-anual' && (
+        <DirectorAreaResumenAnual solicitudes={solicitudes} />
       )}
     </div>
   )

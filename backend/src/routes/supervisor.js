@@ -508,14 +508,19 @@ router.get("/solicitudes", async (req, res) => {
                 p.respuesta_supervisor_tipo,
                 CASE WHEN p.estado::text = 'finalizado' THEN 'entregado' ELSE p.estado::text END AS estado,
                 p.fecha_creacion AS fecha,
+                COALESCE(p.tipo, 'anual') AS tipo,
                 COALESCE(
                   p.kit_nombre,
                   STRING_AGG(pr.nombre || ' x' || dp.cantidad_solicitada::text, ', ' ORDER BY pr.nombre)
                 ) AS producto,
                 i.nombre AS institucion,
                 i.id_institucion AS institucion_id,
-                0 AS matricula,
                 u.nombre AS solicitante,
+                usup.nombre AS supervisor_nombre,
+                p.fecha_aprobacion_supervisor,
+                p.aprobado_director_area,
+                p.fecha_aprobacion_director,
+                udir.nombre AS director_nombre,
                 COALESCE(
                   JSON_AGG(
                     JSON_BUILD_OBJECT('producto', pr.nombre, 'cantidad', dp.cantidad_solicitada)
@@ -528,10 +533,13 @@ router.get("/solicitudes", async (req, res) => {
          JOIN producto pr ON pr.id_producto = dp.id_producto
          JOIN usuario u ON u.id_usuario = p.id_usuario_solicitante
          JOIN institucion i ON i.id_institucion = p.id_institucion
+         LEFT JOIN usuario usup ON usup.id_usuario = p.aprobado_por_supervisor_id
+         LEFT JOIN usuario udir ON udir.id_usuario = p.aprobado_por_director_id
          WHERE p.id_institucion = ANY($1::int[])
-           AND p.estado::text IN ('pendiente', 'aprobado', 'rechazado', 'cancelado', 'entregado', 'finalizado')
+           AND p.estado::text IN ('pendiente', 'pendiente_director', 'aprobado', 'rechazado', 'cancelado', 'entregado', 'finalizado')
          GROUP BY p.id_pedido, p.kit_nombre, p.kit_cantidad, p.observaciones_generales, p.motivo_supervisor,
-                  p.respuesta_supervisor_tipo, p.estado, p.fecha_creacion, i.nombre, i.id_institucion, u.nombre
+                  p.respuesta_supervisor_tipo, p.estado, p.fecha_creacion, i.nombre, i.id_institucion, u.nombre, 
+                  usup.nombre, p.fecha_aprobacion_supervisor, p.aprobado_director_area, p.fecha_aprobacion_director, udir.nombre, p.tipo
          ORDER BY p.fecha_creacion DESC`,
         [institutionIds]
       );
@@ -617,20 +625,6 @@ router.get("/instituciones/:id/historial", async (req, res) => {
   }
 });
 
-async function getSupervisorAssignedInstitutionIds(supervisorId) {
-  const rows = await all(
-    "SELECT institucion_id FROM supervisor_escuela_asignacion WHERE supervisor_id = ?",
-    [supervisorId]
-  );
-  return rows.map((r) => r.institucion_id);
-}
-
-async function supervisorHasAssignedInstitution(supervisorId, institucionId) {
-  const row = await get(
-    "SELECT 1 FROM supervisor_escuela_asignacion WHERE supervisor_id = ? AND institucion_id = ?",
-    [supervisorId, institucionId]
-  );
-  return !!row;
-}
+// Eliminadas funciones duplicadas para evitar conflictos con las definiciones al inicio del archivo.
 
 module.exports = router;

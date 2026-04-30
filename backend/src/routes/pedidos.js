@@ -1239,6 +1239,7 @@ router.patch("/:id/estado", authorizePermissions(PERMISSIONS.PEDIDOS_MANAGE), as
       }
 
       const motivoSupervisor = String(motivo || "").trim() || null;
+      const esPedidoAnual = (pedido.tipo || "anual") === "anual";
 
       if (solicitaAclaracion) {
         if (!motivoSupervisor) {
@@ -1258,6 +1259,9 @@ router.patch("/:id/estado", authorizePermissions(PERMISSIONS.PEDIDOS_MANAGE), as
         return res.json({ ok: true, estado: "pendiente", respuesta_supervisor_tipo: "aclaracion" });
       }
 
+      // Nuevo flujo: Si es anual, pasa a pendiente_director. Si es refuerzo, pasa a aprobado directamente.
+      const nuevoEstado = (estadoObjetivoDb === "aprobado" && esPedidoAnual) ? "pendiente_director" : estadoObjetivoDb;
+
       await run(
         `UPDATE pedido
          SET estado = ?,
@@ -1267,7 +1271,7 @@ router.patch("/:id/estado", authorizePermissions(PERMISSIONS.PEDIDOS_MANAGE), as
              respuesta_supervisor_tipo = ?
          WHERE id_pedido = ?`,
         [
-          estadoObjetivoDb,
+          nuevoEstado,
           req.user.sub,
           estadoObjetivoDb === "rechazado" ? motivoSupervisor : null,
           estadoObjetivoDb === "rechazado" ? "rechazo" : "aprobacion",
@@ -1275,7 +1279,7 @@ router.patch("/:id/estado", authorizePermissions(PERMISSIONS.PEDIDOS_MANAGE), as
         ]
       );
 
-      return res.json({ ok: true });
+      return res.json({ ok: true, estado: nuevoEstado });
     }
 
     if (pedido.estado_db === estadoObjetivoDb) {
@@ -1389,6 +1393,59 @@ router.patch("/:id/cancelar", authorizePermissions(PERMISSIONS.PEDIDOS_CREATE), 
   } catch (err) {
     console.error("Error al cancelar pedido:", err);
     return res.status(500).json({ error: "No se pudo cancelar pedido" });
+  }
+});
+
+// Aprobación final del Director de Área
+router.patch("/:id/aprobar-director", authorizePermissions(PERMISSIONS.SUPERVISION_MANAGE), async (req, res) => {
+  try {
+    if (req.user.role !== "director_area") {
+      return res.status(403).json({ error: "Solo el Director de Área puede realizar esta aprobación." });
+    }
+
+    const { id } = req.params;
+    const { decision } = req.body; // 'aceptar' o 'rechazar'
+
+    const pedido = await get(
+      `SELECT id_pedido, estado::text, id_institucion FROM pedido WHERE id_pedido = ?`,
+      [id]
+    );
+
+    if (!pedido) {
+      return res.status(404).json({ error: "Pedido no encontrado" });
+    }
+
+    if (pedido.estado !== "pendiente_director") {
+      return res.status(400).json({ error: "Solo se pueden aprobar pedidos pendientes de aprobación del Director." });
+    }
+
+    if (decision === 'rechazar') {
+      await run(
+        `UPDATE pedido 
+         SET estado = 'rechazado',
+             aprobado_director_area = FALSE,
+             aprobado_por_director_id = ?,
+             fecha_aprobacion_director = NOW()
+         WHERE id_pedido = ?`,
+        [req.user.sub, id]
+      );
+      return res.json({ ok: true, estado: 'rechazado' });
+    }
+
+    await run(
+      `UPDATE pedido 
+       SET estado = 'aprobado',
+           aprobado_director_area = TRUE,
+           aprobado_por_director_id = ?,
+           fecha_aprobacion_director = NOW()
+       WHERE id_pedido = ?`,
+      [req.user.sub, id]
+    );
+
+    return res.json({ ok: true, estado: 'aprobado' });
+  } catch (err) {
+    console.error("Error al aprobar director:", err);
+    return res.status(500).json({ error: "No se pudo procesar la aprobación del director." });
   }
 });
 

@@ -17,9 +17,9 @@ import Depositos from '../components/Depositos'
 
 const TABS = [
   { key: 'inicio', label: 'Inicio', permission: null },
-  { key: 'mi-cuenta', label: 'Mi cuenta', permission: null },
   { key: 'gestion-escuelas', label: 'Gestión de Zonas', permission: 'supervision.manage', role: 'director_area' },
-  { key: 'gestion-pedidos', label: 'Gestión de Pedidos', permission: 'supervision.manage', role: 'director_area' },
+  { key: 'solicitud-anual', label: 'Solicitud Anual', permission: 'supervision.manage', role: 'director_area' },
+  { key: 'resumen-anual', label: 'Resumen Solicitud Anual', permission: 'supervision.manage', role: 'director_area' },
   { key: 'compras-pedidos', label: 'Gestión de Pedidos Anuales', permission: 'planilla.view', role: 'area_compras' },
   { key: 'compras-licitacion', label: 'Licitación Anual', permission: 'planilla.view', role: 'area_compras' },
   { key: 'compras-listado-final', label: 'Listado Final a Licitar', permission: 'planilla.view', role: 'area_compras' },
@@ -28,13 +28,14 @@ const TABS = [
   { key: 'mis-escuelas', label: 'Mis Escuelas', permission: 'instituciones.view', role: 'supervisor', hideForRoles: ['admin'] },
   { key: 'productos', label: 'Productos', permission: 'productos.view', hideForRoles: ['supervisor', 'director_area'] },
   { key: 'movimientos', label: 'Movimientos', permission: 'movimientos.view', hideForRoles: ['supervisor', 'director_area'] },
-  { key: 'pedidos', label: 'Pedidos', permission: 'pedidos.view', hideForRoles: ['director_area', 'admin'] },
+  { key: 'pedidos', label: 'Pedidos', permission: 'pedidos.view', hideForRoles: ['admin'] },
   { key: 'instituciones', label: 'Instituciones', permission: 'instituciones.view', hideForRoles: ['supervisor', 'director_area'] },
   { key: 'historial', label: 'Historial', permission: 'instituciones.view', hideForRoles: ['supervisor', 'director_area'] },
   { key: 'proveedores', label: 'Proveedores', permission: 'proveedores.view', hideForRoles: ['supervisor', 'director_area'] },
   { key: 'usuarios', label: 'Usuarios', permission: 'users.read' },
   { key: 'kits', label: 'Kits de Productos', permission: 'supervision.manage', role: 'director_area' },
   { key: 'depositos', label: 'Depósitos', permission: 'stock.view' },
+  { key: 'mi-cuenta', label: 'Mi cuenta', permission: null },
 ]
 
 export default function Dashboard() {
@@ -84,6 +85,8 @@ export default function Dashboard() {
       case 'mi-cuenta': return <MiCuenta />
       case 'gestion-escuelas': return <DirectorAreaPanel initialSection="gestion-escuelas" />
       case 'gestion-pedidos': return <DirectorAreaPanel initialSection="gestion-pedidos" />
+      case 'solicitud-anual': return <DirectorAreaPanel initialSection="solicitud-anual" />
+      case 'resumen-anual': return <DirectorAreaPanel initialSection="resumen-anual" />
       case 'compras-pedidos': return <ComprasPanel section="pedidos" />
       case 'compras-licitacion': return <ComprasPanel section="licitacion" />
       case 'compras-listado-final': return <ComprasPanel section="listado-final" />
