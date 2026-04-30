@@ -31,12 +31,13 @@ export default function Register() {
       if (res.ok && data.nombre) {
         setEscuela(data.nombre)
         setCueStatus({ text: '✓ Escuela encontrada', color: '#10b981' })
-        if (data.modalidades && data.modalidades.length > 1) {
+        if (data.modalidades && data.modalidades.length > 0) {
           setModalidades(data.modalidades)
-          setNivelEducativo('')
-        } else if (data.modalidades && data.modalidades.length === 1) {
-          setModalidades([])
-          setNivelEducativo(data.modalidades[0].nivel_educativo)
+          if (data.modalidades.length === 1) {
+            setNivelEducativo(data.modalidades[0].nivel_educativo)
+          } else {
+            setNivelEducativo('')
+          }
         } else {
           setModalidades([])
           setNivelEducativo('')
@@ -147,17 +148,31 @@ export default function Register() {
                 </small>
               )}
             </div>
-            {modalidades.length > 1 && (
+            {modalidades.length > 0 || nivelEducativo ? (
               <div>
                 <label>Nivel Educativo</label>
-                <select value={nivelEducativo} onChange={(e) => setNivelEducativo(e.target.value)} required>
-                  <option value="">Seleccione su modalidad</option>
-                  {modalidades.map((m) => (
-                    <option key={m.id} value={m.nivel_educativo}>{m.nivel_educativo}</option>
-                  ))}
-                </select>
+                {modalidades.length > 1 ? (
+                  <select 
+                    value={nivelEducativo} 
+                    onChange={(e) => setNivelEducativo(e.target.value)} 
+                    required
+                  >
+                    <option value="">Seleccione su modalidad</option>
+                    {modalidades.map((m) => (
+                      <option key={m.id} value={m.nivel_educativo}>{m.nivel_educativo}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input 
+                    type="text" 
+                    value={nivelEducativo} 
+                    readOnly 
+                    disabled 
+                    style={{ background: '#f9fafb' }}
+                  />
+                )}
               </div>
-            )}
+            ) : null}
             <div>
               <label>Número</label>
               <input type="text" value={numero} onChange={(e) => setNumero(e.target.value)} required placeholder="Ej: 3511234567" />
