@@ -618,12 +618,13 @@ function DirectivoPedidos() {
   }
 
   const formatEstadoPedido = (estado) => {
-    if (estado === 'aclaracion') return 'Aclaracion solicitada'
-    if (estado === 'aprobado') return 'Aprobado'
+    if (estado === 'aclaracion') return 'Aclaración solicitada'
+    if (estado === 'pendiente_director') return 'Aprobado por Supervisor'
+    if (estado === 'aprobado') return 'Aprobado - Listo para retirar'
     if (estado === 'rechazado') return 'Rechazado'
     if (estado === 'cancelado') return 'Cancelado'
     if (estado === 'entregado') return 'Entregado'
-    return 'Pendiente'
+    return 'Pendiente de Supervisor'
   }
 
   const pedidosFiltrados = pedidos.filter(p => (p.tipo || 'anual') === tab)
@@ -761,6 +762,27 @@ function DirectivoPedidos() {
 
       {msg.text && (
         <div className={`msg show ${msg.type === 'success' ? 'msg-success' : 'msg-error'}`}>{msg.text}</div>
+      )}
+
+      {/* Sección de Pedidos Listos para Retirar */}
+      {tab === 'anual' && pedidos.some(p => p.estado === 'aprobado' && (p.tipo || 'anual') === 'anual') && (
+        <div style={{ marginTop: 24, padding: 20, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 12 }}>
+          <h3 style={{ marginTop: 0, color: '#166534', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: '1.4rem' }}>✅</span> ¡Tu solicitud anual fue aprobada!
+          </h3>
+          <p style={{ color: '#166534', fontWeight: 500 }}>Ya podés acercarte al depósito para retirar los siguientes productos pendientes:</p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: 12, marginTop: 16 }}>
+            {pedidos
+              .filter(p => p.estado === 'aprobado' && (p.tipo || 'anual') === 'anual')
+              .flatMap(p => p.items || [])
+              .map((item, idx) => (
+                <div key={idx} style={{ background: '#fff', padding: '12px 16px', borderRadius: 8, border: '1px solid #dcfce7', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                  <div style={{ fontWeight: 600, color: '#111827' }}>{item.producto_nombre}</div>
+                  <div style={{ color: '#166534', fontSize: '1.1rem', fontWeight: 700 }}>{item.cantidad} {item.unidad_medida || 'unidades'}</div>
+                </div>
+              ))}
+          </div>
+        </div>
       )}
 
       {/* Modal nuevo pedido */}
