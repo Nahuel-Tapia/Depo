@@ -522,29 +522,9 @@ function DirectivoPedidos() {
   const { token } = useAuth()
   const [tab, setTab] = useState('anual')
   const [pedidos, setPedidos] = useState([])
-  const [productos, setProductos] = useState([])
   const [kits, setKits] = useState([])
   const [msg, setMsg] = useState({ text: '', type: '' })
-  const [form, setForm] = useState({ kit_id: '', cantidad: '1', notas: '', adicionales: [{ producto_id: '', cantidad: '' }] })
-    // Productos adicionales seleccionados
-    const handleAddAdicional = () => {
-      setForm((prev) => ({
-        ...prev,
-        adicionales: [...prev.adicionales, { producto_id: '', cantidad: '' }]
-      }))
-    }
-    const handleRemoveAdicional = (idx) => {
-      setForm((prev) => ({
-        ...prev,
-        adicionales: prev.adicionales.filter((_, i) => i !== idx)
-      }))
-    }
-    const handleAdicionalChange = (idx, field, value) => {
-      setForm((prev) => ({
-        ...prev,
-        adicionales: prev.adicionales.map((item, i) => i === idx ? { ...item, [field]: value } : item)
-      }))
-    }
+  const [form, setForm] = useState({ kit_id: '', cantidad: '1', notas: '', items: {} })
   const [modalOpen, setModalOpen] = useState(false)
   const printRef = useRef(null)
 
@@ -576,23 +556,44 @@ function DirectivoPedidos() {
   const handleCreate = async (e) => {
     e.preventDefault()
     setMsg({ text: '', type: '' })
-    const payload = {
-      kit_id: parseInt(form.kit_id, 10),
-      cantidad: parseInt(form.cantidad, 10),
+
+    let payload = {
       notas: form.notas.trim() || null,
       tipo: tab,
-      adicionales: form.adicionales.filter(a => a.producto_id && a.cantidad).map(a => ({
-        producto_id: parseInt(a.producto_id, 10),
-        cantidad: parseFloat(a.cantidad)
-      }))
     }
+
+    if (tab === 'refuerzo') {
+      const items = Object.entries(form.items || {})
+        .map(([productoId, cantidad]) => ({
+          producto_id: parseInt(productoId, 10),
+          cantidad: Number(cantidad)
+        }))
+        .filter((item) => Number.isInteger(item.producto_id) && item.producto_id > 0 && item.cantidad > 0)
+
+      if (items.length === 0) {
+        setMsg({ text: 'Debés indicar cantidad para al menos un producto', type: 'error' })
+        return
+      }
+
+      payload = {
+        ...payload,
+        items
+      }
+    } else {
+      payload = {
+        ...payload,
+        kit_id: parseInt(form.kit_id, 10),
+        cantidad: parseInt(form.cantidad, 10),
+      }
+    }
+
     const res = await apiFetch('/api/pedidos', { token, method: 'POST', body: JSON.stringify(payload) })
     const data = await res.json().catch(() => ({}))
     if (!res.ok) {
       setMsg({ text: data.error || 'No se pudo crear el pedido', type: 'error' })
       return
     }
-    setForm({ kit_id: '', cantidad: '1', notas: '', adicionales: [{ producto_id: '', cantidad: '' }] })
+    setForm({ kit_id: '', cantidad: '1', notas: '', items: {} })
     setModalOpen(false)
     setMsg({ text: 'Pedido creado correctamente', type: 'success' })
     loadPedidos()
@@ -645,6 +646,7 @@ function DirectivoPedidos() {
   ) || null
   const puedeCrearAnual = tieneKits && !pedidoAnualBloqueante
   const puedeCrearRefuerzo = tieneKits
+  const kitAsignado = kits.length === 1 ? kits[0] : kitSeleccionado
   const productosKitOrdenados = kits.map((kit) => ({
     id: kit.id,
     nombre: kit.nombre,
@@ -772,62 +774,102 @@ function DirectivoPedidos() {
               Nueva {tab === 'anual' ? 'Solicitud Anual' : 'Solicitud de Refuerzos'}
             </h3>
             <form onSubmit={handleCreate} className="grid">
-              <div>
-                <label>Kit</label>
-                <select value={form.kit_id} onChange={e => setForm({ ...form, kit_id: e.target.value })} required>
-                  <option value="">Seleccionar kit...</option>
-                  {kits.map(k => (
-                    <option key={k.id} value={k.id}>{k.nombre}</option>
-                  ))}
-                </select>
-              </div>
-              {kitSeleccionado && (
-                <div className="msg show" style={{ gridColumn: '1 / -1', marginBottom: 0, background: '#eff6ff', color: '#1e3a8a', border: '1px solid #93c5fd' }}>
-                  <strong>{kitSeleccionado.nombre}</strong>
-                  <div style={{ marginTop: 8 }}>
-                    <b>Detalle de productos del kit:</b>
-                    <ul style={{ margin: 0, paddingLeft: 18 }}>
-                      {(kitSeleccionado.items || []).map((item) => (
-                        <li key={`${kitSeleccionado.id}-${item.producto_id}`}>
-                          {item.producto_nombre}: {Number(item.cantidad) * cantidadKits} {item.unidad_medida || 'unidad'}
-                        </li>
-                      ))}
-                    </ul>
-                    {kitSeleccionado.cantidad_alumnos && (
-                      <div style={{ marginTop: 6 }}>
-                        <b>Cantidad de alumnos para este kit:</b> {kitSeleccionado.cantidad_alumnos}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-              <div>
-                <label>Cantidad de kits</label>
-                <input type="number" value={form.cantidad} onChange={e => setForm({ ...form, cantidad: e.target.value })} placeholder="0" min="1" required />
-              </div>
-              {/* Productos adicionales */}
-              <div style={{ gridColumn: '1 / -1', marginTop: 12 }}>
-                <label>Agregar productos adicionales al kit</label>
-                {form.adicionales.map((item, idx) => (
-                  <div key={idx} style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
-                    <select value={item.producto_id} onChange={e => handleAdicionalChange(idx, 'producto_id', e.target.value)}>
-                      <option value="">Producto...</option>
-                      {productos.map(p => (
-                        <option key={p.id_producto} value={p.id_producto}>{p.nombre}</option>
+              {tab === 'anual' ? (
+                <>
+                  <div>
+                    <label>Kit</label>
+                    <select value={form.kit_id} onChange={e => setForm({ ...form, kit_id: e.target.value })} required>
+                      <option value="">Seleccionar kit...</option>
+                      {kits.map(k => (
+                        <option key={k.id} value={k.id}>{k.nombre}</option>
                       ))}
                     </select>
-                    <input type="number" min="1" placeholder="Cantidad" value={item.cantidad} onChange={e => handleAdicionalChange(idx, 'cantidad', e.target.value)} />
-                    <button type="button" onClick={() => handleRemoveAdicional(idx)} style={{ color: 'red' }}>Quitar</button>
                   </div>
-                ))}
-                <button type="button" onClick={handleAddAdicional}>+ Agregar producto</button>
-              </div>
+                  {kitSeleccionado && (
+                    <div className="msg show" style={{ gridColumn: '1 / -1', marginBottom: 0, background: '#eff6ff', color: '#1e3a8a', border: '1px solid #93c5fd' }}>
+                      <strong>{kitSeleccionado.nombre}</strong>
+                      <div style={{ marginTop: 8 }}>
+                        <b>Detalle de productos del kit:</b>
+                        <ul style={{ margin: 0, paddingLeft: 18 }}>
+                          {(kitSeleccionado.items || []).map((item) => (
+                            <li key={`${kitSeleccionado.id}-${item.producto_id}`}>
+                              {item.producto_nombre}: {Number(item.cantidad) * cantidadKits} {item.unidad_medida || 'unidad'}
+                            </li>
+                          ))}
+                        </ul>
+                        {kitSeleccionado.cantidad_alumnos && (
+                          <div style={{ marginTop: 6 }}>
+                            <b>Cantidad de alumnos para este kit:</b> {kitSeleccionado.cantidad_alumnos}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  <div>
+                    <label>Cantidad de kits</label>
+                    <input type="number" value={form.cantidad} onChange={e => setForm({ ...form, cantidad: e.target.value })} placeholder="0" min="1" required />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="msg show" style={{ gridColumn: '1 / -1', marginBottom: 0, background: '#ecfeff', color: '#155e75', border: '1px solid #67e8f9' }}>
+                    Vas a solicitar <b>productos individuales</b> del kit asignado a tu escuela.
+                  </div>
+
+                  {!kitAsignado ? (
+                    <div className="msg show msg-error" style={{ gridColumn: '1 / -1' }}>
+                      Tu escuela no tiene kit asignado. Contactá al director de área.
+                    </div>
+                  ) : (
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <div style={{ fontWeight: 700, marginBottom: 8 }}>{kitAsignado.nombre}</div>
+                      {(kitAsignado.items || []).length === 0 ? (
+                        <div className="msg show msg-error">
+                          El kit asignado no tiene productos configurados.
+                        </div>
+                      ) : (
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px', gap: 10 }}>
+                          {(kitAsignado.items || []).map((item) => (
+                            <div key={`${kitAsignado.id}-${item.producto_id}`} style={{ display: 'contents' }}>
+                              <div style={{ padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 8, background: '#fff' }}>
+                                <div style={{ fontWeight: 600 }}>{item.producto_nombre}</div>
+                                <div style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>
+                                  Unidad: {item.unidad_medida || 'unidad'}
+                                </div>
+                              </div>
+                              <div>
+                                <label style={{ display: 'block' }}>Cantidad</label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  placeholder="0"
+                                  value={form.items?.[String(item.producto_id)] ?? ''}
+                                  onChange={(e) => {
+                                    const value = e.target.value
+                                    setForm((prev) => ({
+                                      ...prev,
+                                      items: {
+                                        ...(prev.items || {}),
+                                        [String(item.producto_id)]: value
+                                      }
+                                    }))
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
               <div style={{ gridColumn: '1 / -1' }}>
                 <label>Notas</label>
                 <input type="text" value={form.notas} onChange={e => setForm({ ...form, notas: e.target.value })} placeholder="Observaciones del pedido" />
               </div>
               <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-                <button type="button" className="secondary" onClick={() => { setModalOpen(false); setForm({ kit_id: '', cantidad: '1', notas: '', adicionales: [{ producto_id: '', cantidad: '' }] }) }}>
+                <button type="button" className="secondary" onClick={() => { setModalOpen(false); setForm({ kit_id: '', cantidad: '1', notas: '', items: {} }) }}>
                   Cancelar
                 </button>
                 <button type="submit">Crear solicitud</button>

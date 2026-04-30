@@ -92,6 +92,69 @@ async function getDepartamentoSql() {
   };
 }
 
+async function getSupervisorAssignedInstitutionIds(supervisorId, jurisdiccion, nivelEducativo) {
+  const parsedId = Number.parseInt(supervisorId, 10);
+  if (!Number.isInteger(parsedId) || parsedId <= 0) return [];
+
+  const hasZonesTables =
+    (await tableExists("zona_supervisor")) && (await tableExists("zona_institucion")) && (await tableExists("zona"));
+
+  if (hasZonesTables) {
+    const nivelExpr = await getInstitucionNivelExpr("i");
+    const departamentoSql = await getDepartamentoSql();
+    const filterNivel = nivelEducativo ? ` AND LOWER(COALESCE(${nivelExpr}, '')) = LOWER($2)` : "";
+    const params = [parsedId];
+    if (nivelEducativo) params.push(nivelEducativo);
+
+    const rows = await all(
+      `SELECT DISTINCT zi.institucion_id AS id
+       FROM zona_supervisor zs
+       JOIN zona z ON z.id = zs.zona_id
+       JOIN zona_institucion zi ON zi.zona_id = z.id
+       JOIN institucion i ON i.id_institucion = zi.institucion_id
+       ${departamentoSql.joins}
+       WHERE zs.supervisor_id = $1
+         AND z.activo = TRUE
+         AND i.activo = TRUE${filterNivel}`,
+      params
+    );
+
+    let ids = rows.map((r) => r.id).filter((v) => Number.isInteger(v) && v > 0);
+
+    if (jurisdiccion && departamentoSql.hasDepartamento) {
+      const allowed = await all(
+        `SELECT DISTINCT i.id_institucion AS id
+         FROM institucion i
+         ${departamentoSql.joins}
+         WHERE i.id_institucion = ANY($1::int[])
+           AND LOWER(${departamentoSql.expression}) = LOWER($2)`,
+        [ids, jurisdiccion]
+      );
+      ids = allowed.map((r) => r.id).filter((v) => Number.isInteger(v) && v > 0);
+    }
+
+    return [...new Set(ids)];
+  }
+
+  if (await hasAsignacionesTable()) {
+    const rows = await all(
+      `SELECT DISTINCT institucion_id AS id
+       FROM supervisor_escuela_asignacion
+       WHERE supervisor_id = $1`,
+      [parsedId]
+    );
+    return [...new Set(rows.map((r) => r.id).filter((v) => Number.isInteger(v) && v > 0))];
+  }
+
+  return [];
+}
+
+async function supervisorHasAssignedInstitution(supervisorId, institucionId) {
+  const ids = await getSupervisorAssignedInstitutionIds(supervisorId);
+  const parsedInst = Number.parseInt(institucionId, 10);
+  return ids.includes(parsedInst);
+}
+
 async function getInstitucionSelectSql() {
   const [
     hasTipoEscuela,
@@ -168,7 +231,14 @@ router.get("/instituciones", async (req, res) => {
 
     if (req.user?.role === "supervisor") {
       if (!(await hasAsignacionesTable())) {
-        return res.json({ instituciones: [] });
+        return res.json({
+          instituciones: [],
+          meta: {
+            zona_label: "",
+            zona_count: 0,
+            nivel_educativo: req.user?.nivel_educativo || null
+          }
+        });
       }
 
       const selectSql = await getInstitucionSelectSql();
@@ -192,7 +262,33 @@ router.get("/instituciones", async (req, res) => {
         [req.user.sub]
       );
 
-      return res.json({ instituciones: institucionesAsignadas });
+      let zonaLabel = "";
+      let zonaCount = 0;
+      const hasZonesTables =
+        (await tableExists("zona_supervisor")) && (await tableExists("zona"));
+
+      if (hasZonesTables) {
+        const zonas = await all(
+          `SELECT DISTINCT z.id, z.name
+           FROM zona_supervisor zs
+           JOIN zona z ON z.id = zs.zona_id
+           WHERE zs.supervisor_id = $1
+             AND z.activo = TRUE
+           ORDER BY z.name ASC`,
+          [req.user.sub]
+        );
+        zonaCount = zonas.length;
+        zonaLabel = zonas.map((z) => z.name).filter(Boolean).join(", ");
+      }
+
+      return res.json({
+        instituciones: institucionesAsignadas,
+        meta: {
+          zona_label: zonaLabel,
+          zona_count: zonaCount,
+          nivel_educativo: req.user?.nivel_educativo || null
+        }
+      });
     }
 
     const jurisdiccion = req.query.jurisdiccion || req.user.jurisdiccion;

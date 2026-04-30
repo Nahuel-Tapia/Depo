@@ -184,7 +184,7 @@ router.post("/lote", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), async
 router.post("/directo", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), async (req, res) => {
   const client = await pool.connect();
   try {
-    const { tipo, institucion_id, cargo_retira, proveedor_id, motivo, productos } = req.body;
+    const { tipo, institucion_id, cargo_retira, proveedor_id, motivo, productos, id_deposito } = req.body;
 
     if (!tipo || !productos || !Array.isArray(productos) || productos.length === 0) {
       return res.status(400).json({ error: "Faltan campos obligatorios (tipo, productos array)" });

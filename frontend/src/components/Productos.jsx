@@ -29,7 +29,20 @@ export default function Productos() {
       const res = await apiFetch('/api/productos', { token })
       if (res.ok) {
         const data = await res.json()
+        // Nuevamente, esperamos que data.productos incluya deposito en cada item
         setProductos(data.productos || [])
+      }
+    } catch { /* ignore */ }
+  }
+
+  const [stockPorDeposito, setStockPorDeposito] = useState([])
+
+  const loadStockPorDeposito = async () => {
+    try {
+      const res = await apiFetch('/api/depositos/stock-por-producto', { token })
+      if (res.ok) {
+        const data = await res.json()
+        setStockPorDeposito(data.productos || [])
       }
     } catch { /* ignore */ }
   }
@@ -37,6 +50,7 @@ export default function Productos() {
   useEffect(() => {
     loadCategorias()
     loadProductos()
+    loadStockPorDeposito()
   }, [])
 
   const handleCreate = async (e) => {
@@ -167,17 +181,18 @@ export default function Productos() {
       <div ref={printRef}>
       <h3>Inventario de Productos</h3>
       <table className="productos-table">
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Nombre</th>
-            <th>Unidad</th>
-            <th>Stock Actual</th>
-            <th>Categoría</th>
-            <th>Estado</th>
-            <th>Acciones</th>
-          </tr>
-        </thead>
+<thead>
+            <tr>
+              <th>ID</th>
+              <th>Nombre</th>
+              <th>Unidad</th>
+        <th>Stock Total</th>
+        <th>Depósito</th>
+              <th>Categoría</th>
+              <th>Estado</th>
+              <th style={{ background: '#f0f9ff', width: '120px' }}>Acciones</th>
+            </tr>
+          </thead>
         <tbody>
           {productos.map(p => (
             <tr key={p.id}>
@@ -185,6 +200,7 @@ export default function Productos() {
               <td>{p.nombre}</td>
               <td>{p.unidad_medida || 'unidad'}</td>
               <td>{p.stock_actual ?? 0}</td>
+              <td>{p.deposito || '-'}</td>
               <td>{p.categoria_nombre || '-'}</td>
               <td>
                 {(p.stock_actual ?? 0) <= 0
@@ -192,6 +208,7 @@ export default function Productos() {
                   : <span style={{ color: '#10b981' }}>OK</span>
                 }
               </td>
+              
               <td>
                 <div className="inline-actions">
                   {hasPermission('productos.edit') && (

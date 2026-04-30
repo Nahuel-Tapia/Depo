@@ -23,6 +23,7 @@ const supervisorRoutes = require("./routes/supervisor");
 const directorAreaRoutes = require("./routes/directorArea");
 const comprasRoutes = require("./routes/compras");
 const directivoRoutes = require("./routes/directivo");
+const depositosRoutes = require("./routes/depositos");
 const patrimonioRoutes = require("./routes/patrimonio");
 let zonesRoutes = null;
 let zoneSchoolsRoutes = null;
@@ -77,6 +78,7 @@ if (zonesRoutes) app.use("/api/zones", zonesRoutes);
 if (zoneSchoolsRoutes) app.use("/api/zones", zoneSchoolsRoutes);
 if (zoneSupervisorsRoutes) app.use("/api/zones", zoneSupervisorsRoutes);
 app.use("/api/entregas", entregasRoutes);
+app.use("/api/depositos", depositosRoutes);
 
 // Si una ruta /api no existe, devolver JSON en lugar de index.html
 app.use("/api", (req, res) => {

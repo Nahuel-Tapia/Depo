@@ -958,37 +958,30 @@ router.get("/institucion/:institucion", authorizePermissions(PERMISSIONS.PEDIDOS
     const pedidos = await all(
       `
       SELECT
-        p.id_pedido as id,
-        CASE WHEN p.estado::text = 'finalizado' THEN 'entregado' ELSE p.estado::text END as estado,
-        p.observaciones_generales as notas,
-        COALESCE(p.tipo, 'anual') as tipo,
-        p.fecha_creacion as created_at,
-        p.id_institucion,
-        p.kit_id,
-        p.kit_nombre,
-        p.kit_cantidad,
-        dp.id_producto as detalle_producto_id,
-        pr.nombre as detalle_producto_nombre,
-        pr.unidad_medida as detalle_unidad_medida,
-        pr.stock_actual as detalle_stock_actual,
-        dp.cantidad_solicitada as detalle_cantidad,
-        u.nombre as usuario_nombre,
-        NULL::text as institucion,
-        NULL::int as aprobado_por_supervisor_id,
-        NULL::timestamp as fecha_aprobacion_supervisor,
-        NULL::text as motivo_supervisor,
-        NULL::text as respuesta_supervisor_tipo
-      FROM pedido p
-      JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido
-      JOIN producto pr ON dp.id_producto = pr.id_producto
-      JOIN usuario u ON p.id_usuario_solicitante = u.id_usuario
-      WHERE p.id_institucion = ?
-      ORDER BY p.fecha_creacion DESC, pr.nombre ASC
+        ms.id_movimiento as id,
+        ms.tipo,
+        ms.cantidad,
+        ms.fecha_movimiento as created_at,
+        ms.id_institucion,
+        ms.id_producto as producto_id,
+        pr.nombre as producto_nombre,
+        pr.unidad_medida,
+        ms.estado_producto,
+        ms.cargo_retira,
+        ms.motivo,
+        u.nombre as usuario_nombre
+      FROM movimiento_stock ms
+      LEFT JOIN producto pr ON ms.id_producto = pr.id_producto
+      LEFT JOIN usuario u ON ms.id_usuario = u.id_usuario
+      WHERE ms.id_institucion = ?
+        AND ms.tipo = 'egreso'
+      ORDER BY ms.fecha_movimiento DESC, ms.id_movimiento DESC
+      LIMIT 5
       `,
       [institucion]
     );
 
-    return res.json({ pedidos: groupPedidos(pedidos) });
+    return res.json({ pedidos });
   } catch (err) {
     console.error("Error al obtener historial:", err);
     return res.status(500).json({ error: "No se pudo obtener historial" });
@@ -1062,12 +1055,18 @@ router.post("/", authorizePermissions(PERMISSIONS.PEDIDOS_CREATE), async (req, r
   try {
     await ensurePedidosSchema();
 
-    const { producto_id, kit_id, cantidad, notas, tipo } = req.body;
+    const { producto_id, kit_id, cantidad, notas, tipo, items } = req.body;
     const tipoValido = ['anual', 'refuerzo'].includes(tipo) ? tipo : 'anual';
     const cantidadSolicitada = Number(cantidad);
 
-    if ((!producto_id && !kit_id) || !cantidadSolicitada || cantidadSolicitada <= 0) {
-      return res.status(400).json({ error: "Debés seleccionar un kit o producto y una cantidad válida" });
+    const hasItemsArray = Array.isArray(items) && items.length > 0;
+
+    if (!hasItemsArray) {
+      if ((!producto_id && !kit_id) || !cantidadSolicitada || cantidadSolicitada <= 0) {
+        return res.status(400).json({ error: "Debés seleccionar un kit o producto y una cantidad válida" });
+      }
+    } else if (tipoValido !== 'refuerzo') {
+      return res.status(400).json({ error: "Los items múltiples solo están disponibles para solicitudes de refuerzo" });
     }
 
     const usuario = await get(
@@ -1109,7 +1108,38 @@ router.post("/", authorizePermissions(PERMISSIONS.PEDIDOS_CREATE), async (req, r
     let kit = null;
     let detalleItems = [];
 
-    if (kit_id) {
+    if (hasItemsArray) {
+      const parsedItems = items
+        .map((item) => ({
+          producto_id: Number(item?.producto_id),
+          cantidad: Number(item?.cantidad)
+        }))
+        .filter((item) => Number.isInteger(item.producto_id) && item.producto_id > 0 && item.cantidad > 0);
+
+      if (parsedItems.length === 0) {
+        return res.status(400).json({ error: "Debés seleccionar al menos un producto con cantidad válida" });
+      }
+
+      const productoIds = [...new Set(parsedItems.map((item) => item.producto_id))];
+      const productos = await all(
+        `SELECT id_producto AS id FROM producto WHERE id_producto = ANY($1::int[])`,
+        [productoIds]
+      );
+      if (productos.length !== productoIds.length) {
+        return res.status(404).json({ error: "Uno o más productos no existen" });
+      }
+
+      for (const item of parsedItems) {
+        const reglaKit = await getReglaKit(perfilInstitucion.tipo_escuela, item.producto_id);
+        if (!reglaKit) {
+          return res.status(400).json({
+            error: "Hay productos seleccionados que no forman parte del kit asignado a tu escuela."
+          });
+        }
+      }
+
+      detalleItems = parsedItems;
+    } else if (kit_id) {
       kit = await getKitById(Number(kit_id));
       if (!kit) {
         return res.status(404).json({ error: "Kit no encontrado o inactivo." });
@@ -1141,7 +1171,15 @@ router.post("/", authorizePermissions(PERMISSIONS.PEDIDOS_CREATE), async (req, r
     const pedidoResult = await run(
       `INSERT INTO pedido (id_usuario_solicitante, id_institucion, observaciones_generales, tipo, kit_id, kit_nombre, kit_cantidad)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [req.user.sub, usuario.id_institucion, notas || null, tipoValido, kit?.id || null, kit?.nombre || null, kit ? cantidadSolicitada : null]
+      [
+        req.user.sub,
+        usuario.id_institucion,
+        notas || null,
+        tipoValido,
+        kit?.id || null,
+        kit?.nombre || null,
+        kit ? cantidadSolicitada : null
+      ]
     );
 
     for (const item of detalleItems) {

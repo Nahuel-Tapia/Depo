@@ -7,8 +7,8 @@ const router = express.Router();
 
 router.use(authenticate);
 
-// Listar productos
-router.get("/", authorizePermissions(PERMISSIONS.PRODUCTOS_VIEW), async (req, res) => {
+  // Listar productos (con ubicación de depósito)
+  router.get("/", authorizePermissions(PERMISSIONS.PRODUCTOS_VIEW), async (req, res) => {
   try {
     const productos = await all(`
       SELECT 
@@ -18,9 +18,21 @@ router.get("/", authorizePermissions(PERMISSIONS.PRODUCTOS_VIEW), async (req, re
         p.stock_actual,
         p.stock_minimo,
         p.id_categoria,
-        c.nombre as categoria_nombre
+        c.nombre as categoria_nombre,
+        COALESCE(SUM(CASE WHEN d.tipo = 'central' THEN sd.cantidad ELSE 0 END), 0) as stock_central,
+        COALESCE(SUM(CASE WHEN d.tipo = 'centro_civico' THEN sd.cantidad ELSE 0 END), 0) as stock_centro_civico,
+        COALESCE(SUM(CASE WHEN d.tipo = 'capsula' THEN sd.cantidad ELSE 0 END), 0) as stock_capsula,
+        CASE
+          WHEN COALESCE(SUM(CASE WHEN d.tipo = 'central' THEN sd.cantidad ELSE 0 END), 0) > 0 THEN 'Depósito Central'
+          WHEN COALESCE(SUM(CASE WHEN d.tipo = 'centro_civico' THEN sd.cantidad ELSE 0 END), 0) > 0 THEN 'Centro Cívico'
+          WHEN COALESCE(SUM(CASE WHEN d.tipo = 'capsula' THEN sd.cantidad ELSE 0 END), 0) > 0 THEN 'Cápsula'
+          ELSE 'Depósito Central'
+        END as deposito
       FROM producto p
+      LEFT JOIN stock_deposito sd ON sd.id_producto = p.id_producto
+      LEFT JOIN deposito d ON d.id_deposito = sd.id_deposito
       LEFT JOIN categoria c ON p.id_categoria = c.id_categoria
+      GROUP BY p.id_producto, p.nombre, p.unidad_medida, p.stock_actual, p.stock_minimo, p.id_categoria, c.nombre
       ORDER BY p.id_producto DESC
     `);
     return res.json({ productos });
