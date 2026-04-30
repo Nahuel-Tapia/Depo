@@ -8,7 +8,7 @@ router.use(authenticate);
 // GET /api/directivo/alertas - Obtener alertas para el directivo
 router.get("/alertas", async (req, res) => {
   try {
-    const userId = req.user?.id;
+    const userId = req.user?.sub;
     
     if (!userId) {
       return res.status(401).json({ error: "Usuario no autenticado" });
@@ -33,16 +33,16 @@ router.get("/alertas", async (req, res) => {
 
     // Obtener pedidos aprobados pendientes de retirar
     const pedidosAprobados = await all(
-      `SELECT 
-        p.id,
+      `SELECT
+        p.id_pedido AS id,
         p.estado,
-        p.created_at,
-        COUNT(pi.id) as cantidad_items
+        p.fecha_creacion AS created_at,
+        COUNT(dp.id_detalle_pedido) AS cantidad_items
       FROM pedido p
-      LEFT JOIN pedido_item pi ON p.id = pi.id_pedido
+      LEFT JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido
       WHERE p.id_institucion = ? AND p.estado = 'aprobado'
-      GROUP BY p.id, p.estado, p.created_at
-      ORDER BY p.created_at DESC`,
+      GROUP BY p.id_pedido, p.estado, p.fecha_creacion
+      ORDER BY p.fecha_creacion DESC`,
       [institucionId]
     );
 

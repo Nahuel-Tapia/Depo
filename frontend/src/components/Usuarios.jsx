@@ -417,7 +417,7 @@ export default function Usuarios() {
   if (user?.role !== 'admin' && user?.role !== 'director_area') {
     return (
       <div>
-        <h2>Gestion de Usuarios</h2>
+        <h2>{isDirectorArea ? 'Gestion de Supervisores' : 'Gestion de Usuarios'}</h2>
         <div className="msg show msg-error">No tenes permiso para acceder a esta seccion.</div>
       </div>
     )
@@ -425,7 +425,7 @@ export default function Usuarios() {
 
   return (
     <div>
-      <h2>Gestion de Usuarios</h2>
+      <h2>{isDirectorArea ? 'Gestion de Supervisores' : 'Gestion de Usuarios'}</h2>
 
       {canCreateUsers && (
         <div style={{ marginBottom: 24 }}>
@@ -434,7 +434,7 @@ export default function Usuarios() {
             style={{ width: 'auto', margin: 0, padding: '10px 18px' }}
             onClick={openCreateForm}
           >
-            Crear usuario
+            {isDirectorArea ? 'Agregar Supervisor' : 'Crear usuario'}
           </button>
         </div>
       )}
@@ -445,7 +445,7 @@ export default function Usuarios() {
         </div>
       )}
 
-      <h3>Usuarios Registrados</h3>
+      <h3>{isDirectorArea ? 'Supervisores Registrados' : 'Usuarios Registrados'}</h3>
       <table>
         <thead>
           <tr>

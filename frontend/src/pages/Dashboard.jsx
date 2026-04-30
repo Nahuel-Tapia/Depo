@@ -133,7 +133,7 @@ export default function Dashboard() {
               className={`tab-btn ${activeTab === tab.key ? 'active' : ''}`}
               onClick={() => setActiveTab(tab.key)}
             >
-              <span className="tab-label">{tab.label}</span>
+              <span className="tab-label">{tab.key === 'usuarios' && user?.role === 'director_area' ? 'Supervisores' : tab.label}</span>
             </button>
           ))}
         </div>
