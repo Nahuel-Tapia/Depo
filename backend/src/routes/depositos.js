@@ -8,7 +8,7 @@ const router = express.Router();
 router.use(authenticate);
 
 // Listar todos los depósitos
-router.get("/", authorizePermissions(PERMISSIONS.STOCK_VIEW), async (req, res) => {
+ router.get("/", authorizePermissions(PERMISSIONS.STOCK_VIEW), async (req, res) => {
   try {
     const depositos = await all(`
       SELECT 
@@ -29,6 +29,23 @@ router.get("/", authorizePermissions(PERMISSIONS.STOCK_VIEW), async (req, res) =
   } catch (err) {
     console.error("Error listando depósitos:", err);
     return res.status(500).json({ error: "No se pudo listar depósitos" });
+  }
+});
+
+// 1) Ver productos en un depósito específico
+router.get("/:id/productos", authorizePermissions(PERMISSIONS.STOCK_VIEW), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const productos = await all(
+      `SELECT p.id_producto as id, p.nombre, p.unidad_medida, COALESCE(sd.cantidad, 0) as cantidad
+       FROM producto p
+       LEFT JOIN stock_deposito sd ON sd.id_producto = p.id_producto AND sd.id_deposito = ?`,
+      [id]
+    );
+    return res.json({ productos });
+  } catch (err) {
+    console.error("Error listando productos en deposito:", err);
+    return res.status(500).json({ error: "No se pudo listar productos en el deposito" });
   }
 });
 
@@ -110,6 +127,55 @@ router.get("/:id/stock", authorizePermissions(PERMISSIONS.STOCK_VIEW), async (re
     return res.status(500).json({ error: "No se pudo obtener stock" });
   }
 });
+
+// Traslado de stock entre depósitos
+router.post("/mover", authorizePermissions(PERMISSIONS.STOCK_MOVEMENT_CREATE), async (req, res) => {
+  const { id_producto, cantidad, origen_id, destino_id, motivo } = req.body
+  if (!id_producto || !cantidad || !origen_id || !destino_id) {
+    return res.status(400).json({ error: "Faltan campos obligatorios" })
+  }
+  const client = await pool.connect()
+  try {
+    await client.query("BEGIN")
+    const src = await client.query(
+      `SELECT cantidad FROM stock_deposito WHERE id_deposito = $1 AND id_producto = $2 FOR UPDATE`,
+      [origen_id, id_producto]
+    )
+    const available = src.rows[0]?.cantidad || 0
+    if (available < cantidad) {
+      await client.query("ROLLBACK")
+      return res.status(400).json({ error: "Stock insuficiente en origen" })
+    }
+    await client.query(
+      `UPDATE stock_deposito SET cantidad = cantidad - $1 WHERE id_deposito = $2 AND id_producto = $3`,
+      [cantidad, origen_id, id_producto]
+    )
+    await client.query(
+      `INSERT INTO stock_deposito (id_deposito, id_producto, cantidad) VALUES ($1, $2, $3)
+       ON CONFLICT (id_deposito, id_producto) DO UPDATE SET cantidad = stock_deposito.cantidad + EXCLUDED.cantidad`,
+      [destino_id, id_producto, cantidad]
+    )
+    const mot = (motivo || `Traslado ${id_producto} ${origen_id}→${destino_id}`)
+    // Log egreso de origen
+    await client.query(
+      `INSERT INTO movimiento_stock (id_producto, tipo, cantidad, motivo, id_usuario, id_deposito) VALUES ($1, 'egreso', $2, $3, NULL, $4)`,
+      [id_producto, cantidad, mot, origen_id]
+    )
+    // Log ingreso a destino
+    await client.query(
+      `INSERT INTO movimiento_stock (id_producto, tipo, cantidad, motivo, id_usuario, id_deposito) VALUES ($1, 'ingreso', $2, $3, NULL, $4)`,
+      [id_producto, cantidad, mot, destino_id]
+    )
+    await client.query("COMMIT")
+    res.json({ ok: true, moved: true })
+  } catch (err) {
+    await client.query("ROLLBACK")
+    console.error("Error moviendo entre depósitos:", err)
+    res.status(500).json({ error: "Error moviendo entre depósitos" })
+  } finally {
+    client.release()
+  }
+})
 
 // Crear movimiento de ingreso a depósito
 router.post("/:id/ingreso", authorizePermissions(PERMISSIONS.STOCK_MOVEMENT_CREATE), async (req, res) => {
