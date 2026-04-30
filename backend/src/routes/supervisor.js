@@ -102,9 +102,10 @@ async function getSupervisorAssignedInstitutionIds(supervisorId, jurisdiccion, n
   if (hasZonesTables) {
     const nivelExpr = await getInstitucionNivelExpr("i");
     const departamentoSql = await getDepartamentoSql();
-    const filterNivel = nivelEducativo ? ` AND LOWER(COALESCE(${nivelExpr}, '')) = LOWER($2)` : "";
+    const niveles = nivelEducativo ? nivelEducativo.split(',').map(n => n.trim().toLowerCase()).filter(Boolean) : [];
+    const filterNivel = niveles.length > 0 ? ` AND LOWER(COALESCE(${nivelExpr}, '')) = ANY($2::text[])` : "";
     const params = [parsedId];
-    if (nivelEducativo) params.push(nivelEducativo);
+    if (niveles.length > 0) params.push(niveles);
 
     const rows = await all(
       `SELECT DISTINCT zi.institucion_id AS id
@@ -122,13 +123,14 @@ async function getSupervisorAssignedInstitutionIds(supervisorId, jurisdiccion, n
     let ids = rows.map((r) => r.id).filter((v) => Number.isInteger(v) && v > 0);
 
     if (jurisdiccion && departamentoSql.hasDepartamento) {
+      const departamentos = jurisdiccion.split(',').map(d => d.trim().toLowerCase()).filter(Boolean);
       const allowed = await all(
         `SELECT DISTINCT i.id_institucion AS id
          FROM institucion i
          ${departamentoSql.joins}
          WHERE i.id_institucion = ANY($1::int[])
-           AND LOWER(${departamentoSql.expression}) = LOWER($2)`,
-        [ids, jurisdiccion]
+           AND LOWER(${departamentoSql.expression}) = ANY($2::text[])`,
+        [ids, departamentos]
       );
       ids = allowed.map((r) => r.id).filter((v) => Number.isInteger(v) && v > 0);
     }

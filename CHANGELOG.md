@@ -23,6 +23,7 @@
 - Se solucionó un error 500 en la ruta de solicitudes mediante la implementación de funciones auxiliares faltantes.
 - Se reemplazó la implementación de prueba en la ruta del Director de Área por consultas reales a la base de datos.
 - La consulta de solicitudes ahora incluye historial de aprobación completo (Supervisor y Director).
+- Se corrigió un error de visibilidad donde supervisores con múltiples jurisdicciones (departamentos) o niveles educativos no veían las solicitudes de sus escuelas.
 
 ---
 

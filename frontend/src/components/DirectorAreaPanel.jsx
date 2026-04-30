@@ -82,6 +82,14 @@ export default function DirectorAreaPanel({ initialSection }) {
     // eslint-disable-next-line
   }, [token, activeSection])
 
+  const supervisorMap = useMemo(() => {
+    const map = {}
+    supervisores.forEach((s) => {
+      map[String(s.id)] = `${s.nombre || ''} ${s.apellido || ''}`.trim()
+    })
+    return map
+  }, [supervisores])
+
   // Renderizado principal
   // El componente continuará hacia abajo para el return principal
 
@@ -255,17 +263,11 @@ export default function DirectorAreaPanel({ initialSection }) {
             <DirectorAreaGestion
               nivelEducativo={nivelEducativo}
               supervisores={supervisores}
-              escuelas={escuelas}
-              asignaciones={asignaciones}
-              asigForm={asigForm}
-              setAsigForm={setAsigForm}
-              handleAsignar={handleAsignar}
-              handleEliminarAsignacion={handleEliminarAsignacion}
-              msg={msg}
               informes={informes}
               informeForm={informeForm}
               setInformeForm={setInformeForm}
               handleSolicitarInforme={handleSolicitarInforme}
+              msg={msg}
               supervisorMap={supervisorMap}
             />
           </div>
