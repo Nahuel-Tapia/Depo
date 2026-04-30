@@ -1,5 +1,28 @@
 # Registro de Cambios - Depo
 
+## 30 de Abril 2026
+
+### 1. Autenticación y Registro
+**Backend (`backend/src/routes/auth.js`)**
+- Se corrigió un error 500 en el registro provocado por la detección de errores de PostgreSQL. Ahora los errores de duplicados (Email/CUE) se detectan correctamente sin importar mayúsculas/minúsculas y devuelven un código `409 Conflict` en lugar de un `500 Internal Server Error`.
+- Se agregaron logs detallados en el servidor para facilitar el diagnóstico de errores en el proceso de registro.
+
+### 2. Base de Datos y Flexibilidad de CUE
+**Base de Datos (`usuario` table)**
+- Se eliminó la restricción `UNIQUE` de la columna `dni` (que almacena el CUE para directivos). Esto permite que escuelas que comparten el mismo CUE pero tienen **distinto nivel educativo** puedan registrar sus propios usuarios directivos de forma independiente.
+- La integridad se mantiene mediante validación lógica que impide duplicados para la misma combinación de institución y nivel.
+
+### 3. Solicitudes y Pedidos (Roles Supervisor y Director de Área)
+**Backend (`backend/src/routes/supervisor.js`)**
+- Se solucionó un error 500 en la ruta `/api/supervisor/solicitudes` mediante la implementación de las funciones auxiliares `getSupervisorAssignedInstitutionIds` y `supervisorHasAssignedInstitution` que estaban faltando.
+- Ahora los pedidos realizados por las escuelas aparecen correctamente en el panel del supervisor asignado.
+
+**Backend (`backend/src/routes/directorArea.js`)**
+- Se reemplazó la implementación de prueba que devolvía una lista vacía en la ruta `/api/director-area/solicitudes` por una consulta real a la base de datos.
+- Los Directores de Área ahora pueden visualizar todas las solicitudes de las instituciones que pertenecen a las zonas bajo su coordinación, incluyendo detalles de productos y cantidades.
+
+---
+
 ## 29 de Abril 2026
 
 ### 1. Módulo de Patrimonio (Nuevo)
