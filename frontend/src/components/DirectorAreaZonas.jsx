@@ -70,6 +70,11 @@ export default function DirectorAreaZonas({ nivelEducativo }) {
   const [editingZoneId, setEditingZoneId] = useState(null)
   const [creando, setCreando] = useState(false)
   const [deletingZoneId, setDeletingZoneId] = useState(null)
+  const [expandedZonas, setExpandedZonas] = useState({})
+
+  const toggleEscuelas = (zonaId) => {
+    setExpandedZonas((prev) => ({ ...prev, [zonaId]: !prev[zonaId] }))
+  }
 
   const miNivel = normalizeKey(nivelEducativo || nivelActivo)
 
@@ -486,11 +491,38 @@ export default function DirectorAreaZonas({ nivelEducativo }) {
                 <div style={{ fontSize: '0.85rem', color: '#666' }}>
                   Departamentos: {getZoneDepartmentsLabel(zona)}
                 </div>
-                <div style={{ fontSize: '0.85rem', color: '#666', display: 'grid', gap: 2, marginTop: 6 }}>
-                  {(zona.instituciones || []).map((institucion) => (
-                    <span key={institucion.id}>{getInstitutionOptionLabel(institucion)}</span>
-                  ))}
-                </div>
+                {(zona.instituciones || []).length > 0 && (
+                  <div style={{ marginTop: 6 }}>
+                    <button
+                      type="button"
+                      onClick={() => toggleEscuelas(zona.id)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        padding: '2px 0',
+                        cursor: 'pointer',
+                        fontSize: '0.85rem',
+                        color: '#2a4d8f',
+                        fontWeight: 600,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 4
+                      }}
+                    >
+                      <span style={{ transition: 'transform 0.2s', display: 'inline-block', transform: expandedZonas[zona.id] ? 'rotate(90deg)' : 'rotate(0deg)' }}>▶</span>
+                      {expandedZonas[zona.id] ? 'Ocultar' : 'Ver'} escuelas ({zona.instituciones.length})
+                    </button>
+                    {expandedZonas[zona.id] && (
+                      <div style={{ display: 'grid', gap: 3, marginTop: 6, paddingLeft: 16, borderLeft: '3px solid #e0e7ef' }}>
+                        {zona.instituciones.map((institucion) => (
+                          <span key={institucion.id} style={{ fontSize: '0.85rem', color: '#444' }}>
+                            {getInstitutionOptionLabel(institucion)}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div style={{ fontSize: '0.85rem', color: '#666' }}>
                   Supervisores: {getZoneSupervisorLabel(zona)}
                 </div>
