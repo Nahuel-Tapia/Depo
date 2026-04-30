@@ -822,7 +822,39 @@ router.get("/solicitudes", async (req, res) => {
   try {
     await ensureTables();
     // For now return an empty list; backend can be extended to fetch real data
-    res.json({ solicitudes: [] });
+    const directorAreaId = req.user.sub;
+    const solicitudes = await all(`
+      SELECT p.id_pedido AS id,
+             p.fecha_creacion AS fecha,
+             p.estado,
+             p.observaciones_generales AS notas,
+             i.nombre AS institucion,
+             i.id_institucion AS institucion_id,
+             u.nombre AS solicitante,
+             COALESCE(
+               p.kit_nombre,
+               STRING_AGG(pr.nombre || ' x' || dp.cantidad_solicitada::text, ', ' ORDER BY pr.nombre)
+             ) AS producto,
+             COALESCE(
+               JSON_AGG(
+                 JSON_BUILD_OBJECT('producto', pr.nombre, 'cantidad', dp.cantidad_solicitada)
+                 ORDER BY pr.nombre
+               ) FILTER (WHERE pr.id_producto IS NOT NULL),
+               '[]'::json
+             ) AS items
+      FROM pedido p
+      JOIN institucion i ON i.id_institucion = p.id_institucion
+      JOIN zona_institucion zi ON zi.institucion_id = i.id_institucion
+      JOIN zona z ON z.id = zi.zona_id
+      LEFT JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido
+      LEFT JOIN producto pr ON pr.id_producto = dp.id_producto
+      LEFT JOIN usuario u ON u.id_usuario = p.id_usuario_solicitante
+      WHERE z.director_area_id = ? AND z.activo = TRUE
+      GROUP BY p.id_pedido, i.nombre, i.id_institucion, u.nombre
+      ORDER BY p.fecha_creacion DESC
+    `, [directorAreaId]);
+
+    res.json({ solicitudes });
   } catch (err) {
     console.error("Error al cargar solicitudes:", err);
     res.status(500).json({ error: "No se pudieron cargar las solicitudes" });

@@ -617,4 +617,20 @@ router.get("/instituciones/:id/historial", async (req, res) => {
   }
 });
 
+async function getSupervisorAssignedInstitutionIds(supervisorId) {
+  const rows = await all(
+    "SELECT institucion_id FROM supervisor_escuela_asignacion WHERE supervisor_id = ?",
+    [supervisorId]
+  );
+  return rows.map((r) => r.institucion_id);
+}
+
+async function supervisorHasAssignedInstitution(supervisorId, institucionId) {
+  const row = await get(
+    "SELECT 1 FROM supervisor_escuela_asignacion WHERE supervisor_id = ? AND institucion_id = ?",
+    [supervisorId, institucionId]
+  );
+  return !!row;
+}
+
 module.exports = router;
