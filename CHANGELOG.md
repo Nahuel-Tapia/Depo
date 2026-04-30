@@ -21,8 +21,9 @@
 ### 4. Solicitudes y Pedidos (Roles Supervisor y Director de Área)
 **Backend (`backend/src/routes/supervisor.js` y `directorArea.js`)**
 - Se restauró la función `ensureSupervisorSchema` en el backend, solucionando errores 500 al listar solicitudes.
-- Se habilitó la visibilidad de solicitudes para el Director de Área en el endpoint consolidado de supervisión.
-- Se corrigió un error de visibilidad donde supervisores con múltiples jurisdicciones (departamentos) o niveles educativos no veían las solicitudes de sus escuelas.
+- Se habilitó la visibilidad de solicitudes para el Director de Área en el endpoint consolidado de supervisión, vinculando instituciones a través de sus zonas coordinadas.
+- Se corrigió un error crítico de visibilidad para supervisores con múltiples departamentos en su jurisdicción o múltiples niveles educativos (ahora se procesan como listas separadas por coma).
+- Se optimizó el filtrado en la vista de "Solicitud Anual" del Director de Área para distinguir entre pedidos pendientes de supervisor, pendientes de director e historial aprobado.
 
 ---
 
