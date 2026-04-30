@@ -51,6 +51,30 @@ async function tableExists(tableName) {
   return Boolean(row?.regclass);
 }
 
+async function ensureSupervisorSchema() {
+  try {
+    await run(`ALTER TABLE pedido ADD COLUMN IF NOT EXISTS aprobado_por_supervisor_id INT REFERENCES usuario(id_usuario)`);
+  } catch (err) {}
+  try {
+    await run(`ALTER TABLE pedido ADD COLUMN IF NOT EXISTS fecha_aprobacion_supervisor TIMESTAMP`);
+  } catch (err) {}
+  try {
+    await run(`ALTER TABLE pedido ADD COLUMN IF NOT EXISTS motivo_supervisor TEXT`);
+  } catch (err) {}
+  try {
+    await run(`ALTER TABLE pedido ADD COLUMN IF NOT EXISTS respuesta_supervisor_tipo VARCHAR(30)`);
+  } catch (err) {}
+  try {
+    await run(`ALTER TABLE pedido ADD COLUMN IF NOT EXISTS aprobado_director_area BOOLEAN DEFAULT FALSE`);
+  } catch (err) {}
+  try {
+    await run(`ALTER TABLE pedido ADD COLUMN IF NOT EXISTS aprobado_por_director_id INT REFERENCES usuario(id_usuario)`);
+  } catch (err) {}
+  try {
+    await run(`ALTER TABLE pedido ADD COLUMN IF NOT EXISTS fecha_aprobacion_director TIMESTAMP`);
+  } catch (err) {}
+}
+
 async function getInstitucionNivelExpr(alias = "i") {
   if (await columnExists("institucion", "nivel_educativo")) return `${alias}.nivel_educativo`;
   if (await columnExists("institucion", "nivel")) return `${alias}.nivel`;
@@ -146,6 +170,29 @@ async function getSupervisorAssignedInstitutionIds(supervisorId, jurisdiccion, n
       [parsedId]
     );
     return [...new Set(rows.map((r) => r.id).filter((v) => Number.isInteger(v) && v > 0))];
+  }
+
+  return [];
+}
+
+async function getDirectorAreaAssignedInstitutionIds(directorAreaId) {
+  const parsedId = Number.parseInt(directorAreaId, 10);
+  if (!Number.isInteger(parsedId) || parsedId <= 0) return [];
+
+  const hasZonesTables =
+    (await tableExists("zona_institucion")) && (await tableExists("zona"));
+
+  if (hasZonesTables) {
+    const rows = await all(
+      `SELECT DISTINCT zi.institucion_id AS id
+       FROM zona z
+       JOIN zona_institucion zi ON zi.zona_id = z.id
+       WHERE z.director_area_id = $1
+         AND z.activo = TRUE`,
+      [parsedId]
+    );
+
+    return rows.map((r) => r.id).filter((v) => Number.isInteger(v) && v > 0);
   }
 
   return [];
@@ -492,12 +539,18 @@ router.get("/solicitudes", async (req, res) => {
   try {
     await ensureSupervisorSchema();
 
-    if (req.user?.role === "supervisor") {
-      const institutionIds = await getSupervisorAssignedInstitutionIds(
-        req.user.sub,
-        req.user.jurisdiccion,
-        req.user.nivel_educativo
-      );
+    if (req.user?.role === "supervisor" || req.user?.role === "director_area") {
+      let institutionIds = [];
+      if (req.user.role === "supervisor") {
+        institutionIds = await getSupervisorAssignedInstitutionIds(
+          req.user.sub,
+          req.user.jurisdiccion,
+          req.user.nivel_educativo
+        );
+      } else {
+        institutionIds = await getDirectorAreaAssignedInstitutionIds(req.user.sub);
+      }
+
       if (institutionIds.length === 0) {
         return res.json({ solicitudes: [] });
       }

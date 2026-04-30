@@ -20,9 +20,8 @@
 
 ### 4. Solicitudes y Pedidos (Roles Supervisor y Director de Área)
 **Backend (`backend/src/routes/supervisor.js` y `directorArea.js`)**
-- Se solucionó un error 500 en la ruta de solicitudes mediante la implementación de funciones auxiliares faltantes.
-- Se reemplazó la implementación de prueba en la ruta del Director de Área por consultas reales a la base de datos.
-- La consulta de solicitudes ahora incluye historial de aprobación completo (Supervisor y Director).
+- Se restauró la función `ensureSupervisorSchema` en el backend, solucionando errores 500 al listar solicitudes.
+- Se habilitó la visibilidad de solicitudes para el Director de Área en el endpoint consolidado de supervisión.
 - Se corrigió un error de visibilidad donde supervisores con múltiples jurisdicciones (departamentos) o niveles educativos no veían las solicitudes de sus escuelas.
 
 ---
