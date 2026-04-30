@@ -25,6 +25,25 @@
 - `npm run build` en `frontend/`: OK
 - El build del frontend regenero `frontend/dist/index.html` y los assets compilados correspondientes.
 
+### 3. Gestion de Usuarios para Director de Area
+
+**Frontend (`frontend/src/components/Usuarios.jsx`)**
+
+- Se habilito la apertura del formulario de creacion de usuarios para el rol `director_area`.
+- El campo `Rol` queda fijo en `Supervisor` cuando crea un usuario un Director de Area.
+- El campo `Nivel educativo` se presenta como lista desplegable bloqueada con el nivel del Director de Area logueado.
+- La lista de usuarios visible para Director de Area ahora muestra solo sus supervisores asociados y del mismo nivel educativo.
+- Se agrego un modal de edicion completa para supervisores permitiendo actualizar nombre, apellido, email, DNI, telefono, jurisdiccion y contrasena.
+- Se removio para Director de Area la accion de cambio de rol sobre usuarios.
+
+**Backend (`backend/src/routes/users.js`)**
+
+- `GET /api/users` ahora filtra por contexto del usuario logueado cuando el rol es `director_area`, devolviendo solo supervisores del mismo nivel y vinculados por `director_area_id`.
+- `POST /api/users` refuerza la validacion para que un Director de Area solo pueda crear supervisores de su mismo nivel y asociados a su propia direccion de area.
+- `PATCH /api/users/:id` se agrego para permitir la edicion completa de supervisores con validacion de pertenencia.
+- `PATCH /api/users/:id/role` ahora rechaza con `403` cualquier intento de cambio de rol realizado por un Director de Area.
+- `PATCH /api/users/:id/active` valida que el Director de Area solo pueda activar o desactivar supervisores que le pertenecen.
+
 ## 27 de Abril 2026
 
 ### 1. Corrección del flujo de creación de usuarios

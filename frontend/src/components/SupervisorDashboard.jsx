@@ -22,6 +22,11 @@ export default function SupervisorDashboard() {
   const [tickets, setTickets] = useState([])
   const [procesados, setProcesados] = useState([])
   const [instituciones, setInstituciones] = useState([])
+  const [supervisorMeta, setSupervisorMeta] = useState({
+    zona_label: '',
+    zona_count: 0,
+    nivel_educativo: user?.nivel_educativo || ''
+  })
   const [kits, setKits] = useState([])
   const [kitByInstitucion, setKitByInstitucion] = useState({})
   const [savingTipoId, setSavingTipoId] = useState(null)
@@ -61,7 +66,13 @@ export default function SupervisorDashboard() {
         if (institucionesRes.ok) {
           const data = await institucionesRes.json()
           const rows = data.instituciones || []
+          const meta = data.meta || {}
           setInstituciones(rows)
+          setSupervisorMeta({
+            zona_label: meta.zona_label || '',
+            zona_count: Number(meta.zona_count) || 0,
+            nivel_educativo: meta.nivel_educativo || user?.nivel_educativo || ''
+          })
           setKitByInstitucion(
             Object.fromEntries(rows.map((inst) => [String(inst.id), inst.kit_id ? String(inst.kit_id) : '']))
           )
@@ -76,7 +87,11 @@ export default function SupervisorDashboard() {
       }
     }
     loadInstitucionesYKits()
-  }, [token])
+  }, [token, user?.nivel_educativo])
+
+  const zonaLabel = supervisorMeta.zona_label || 'Sin zona asignada'
+  const nivelLabel = supervisorMeta.nivel_educativo || '-'
+  const zonaTitle = supervisorMeta.zona_count > 1 ? 'Zonas' : 'Zona'
 
   const handleAprobar = async (ticketId) => {
     try {
@@ -213,7 +228,8 @@ export default function SupervisorDashboard() {
 
       <div className="sv-jurisdiction-banner">
         <span className="sv-jurisdiction-dot"></span>
-        <span>Jurisdiccion: <strong>{user?.jurisdiccion || '-'}</strong></span>
+        <span>{zonaTitle}: <strong>{zonaLabel}</strong></span>
+        <span>Nivel: <strong>{nivelLabel}</strong></span>
         <span className="sv-jurisdiction-count">
           {activeSection === 'asignar-kit' ? `${instituciones.length} escuelas asignadas` : `${tickets.length} tickets pendientes`}
         </span>

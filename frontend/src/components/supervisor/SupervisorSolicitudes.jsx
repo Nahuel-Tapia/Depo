@@ -32,7 +32,7 @@ function fallbackHistorial(solicitud) {
 }
 
 export default function SupervisorSolicitudes() {
-  const { token, user } = useAuth()
+  const { token } = useAuth()
 
   const [solicitudes, setSolicitudes] = useState([])
   const [msg, setMsg] = useState({ text: '', type: '' })
@@ -48,8 +48,7 @@ export default function SupervisorSolicitudes() {
   const loadSolicitudes = async () => {
     setLoading(true)
     try {
-      const jurisdiccion = user?.jurisdiccion || ''
-      const res = await apiFetch(`/api/supervisor/solicitudes?jurisdiccion=${encodeURIComponent(jurisdiccion)}`, { token })
+      const res = await apiFetch('/api/supervisor/solicitudes', { token })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
         throw new Error(data.error || 'No se pudieron cargar las solicitudes')
@@ -79,7 +78,7 @@ export default function SupervisorSolicitudes() {
 
   useEffect(() => {
     loadSolicitudes()
-  }, [token, user?.jurisdiccion])
+  }, [token])
 
   const loadHistorial = async (solicitud) => {
     setLoadingHistorial(true)

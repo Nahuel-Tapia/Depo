@@ -121,7 +121,7 @@ export default function Instituciones({ supervisorMode = false }) {
       const data = await res.json().catch(() => ({}))
 
       if (!res.ok) {
-        setPedidosError(data.error || 'No se pudo cargar el historial de pedidos')
+        setPedidosError(data.error || 'No se pudo cargar el historial de egresos')
         return
       }
 
@@ -130,7 +130,7 @@ export default function Instituciones({ supervisorMode = false }) {
         [institucionId]: data.pedidos || []
       }))
     } catch {
-      setPedidosError('No se pudo cargar el historial de pedidos')
+      setPedidosError('No se pudo cargar el historial de egresos')
     } finally {
       setLoadingPedidosId(null)
     }
@@ -308,7 +308,7 @@ export default function Instituciones({ supervisorMode = false }) {
 
           {!selectedEdificioKey && (
             <p style={{ color: 'var(--muted)', marginTop: 8 }}>
-              Seleccioná un pin en el mapa para ver las CUE del edificio y su historial de pedidos.
+              Seleccioná un pin en el mapa para ver las CUE del edificio y los últimos egresos.
             </p>
           )}
 
@@ -360,22 +360,22 @@ export default function Instituciones({ supervisorMode = false }) {
                         }}
                       >
                         <span>{inst.nombre}</span>
-                        <span style={{ fontSize: 12, color: 'var(--muted)' }}>{expanded ? 'Ocultar' : 'Ver pedidos'}</span>
+                        <span style={{ fontSize: 12, color: 'var(--muted)' }}>{expanded ? 'Ocultar' : 'Ver egresos'}</span>
                       </button>
 
                       {expanded && (
                         <div style={{ padding: 10, background: '#fff' }}>
-                          {loadingPedidosId === inst.id && <p style={{ margin: 0, color: 'var(--muted)' }}>Cargando pedidos...</p>}
+                          {loadingPedidosId === inst.id && <p style={{ margin: 0, color: 'var(--muted)' }}>Cargando egresos...</p>}
 
                           {loadingPedidosId !== inst.id && pedidos.length === 0 && (
-                            <p style={{ margin: 0, color: 'var(--muted)' }}>Sin pedidos registrados.</p>
+                            <p style={{ margin: 0, color: 'var(--muted)' }}>Sin egresos registrados.</p>
                           )}
 
                           {loadingPedidosId !== inst.id && pedidos.length > 0 && (
                             <ul style={{ margin: 0, paddingLeft: 18 }}>
                               {pedidos.map(p => (
                                 <li key={p.id} style={{ marginBottom: 6 }}>
-                                  #{p.id} - {p.producto_nombre || '-'} x {p.cantidad} - {p.tipo === 'refuerzo' ? 'Refuerzo' : 'Anual'} - {p.estado} - {new Date(p.created_at).toLocaleDateString('es-AR')}
+                                  #{p.id} - {p.producto_nombre || '-'} x {p.cantidad} {p.unidad_medida || ''} - Egreso - {new Date(p.created_at).toLocaleDateString('es-AR')}
                                 </li>
                               ))}
                             </ul>

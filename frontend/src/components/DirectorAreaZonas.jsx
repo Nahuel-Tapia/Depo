@@ -28,6 +28,28 @@ function getZoneSupervisorLabel(zone) {
     .join(', ')
 }
 
+function getZoneDepartmentsLabel(zone) {
+  const departments = [...new Set(
+    (zone?.instituciones || [])
+      .map((institucion) => normalizeText(institucion.departamento))
+      .filter(Boolean)
+  )].sort((a, b) => a.localeCompare(b, 'es'))
+
+  if (departments.length === 0) return '-'
+  return departments.join(', ')
+}
+
+function getInstitutionOptionLabel(institucion) {
+  return [
+    institucion.nombre,
+    institucion.cue ? `CUE ${institucion.cue}` : '',
+    institucion.departamento || '',
+    institucion.nivel_educativo || ''
+  ]
+    .filter(Boolean)
+    .join(' - ')
+}
+
 export default function DirectorAreaZonas({ nivelEducativo }) {
   const { token } = useAuth()
   const [departamentos, setDepartamentos] = useState([])
@@ -120,7 +142,7 @@ export default function DirectorAreaZonas({ nivelEducativo }) {
   const startEditZone = (zona) => {
     setEditingZoneId(zona.id)
     setNombreZona(zona.name || '')
-    setDepartamentoSeleccionado(zona.departamento || '')
+    setDepartamentoSeleccionado('')
     setInstitucionesSeleccionadas((zona.instituciones || []).map((institucion) => institucion.id))
     setError('')
     setSuccess('')
@@ -143,14 +165,6 @@ export default function DirectorAreaZonas({ nivelEducativo }) {
       setError('Ingresa un nombre para la zona')
       return
     }
-    if (!departamentoSeleccionado) {
-      setError('Selecciona un departamento')
-      return
-    }
-    if (normalizeKey(nombreZona) === normalizeKey(departamentoSeleccionado)) {
-      setError('El nombre de la zona debe ser distinto del departamento')
-      return
-    }
     if (institucionesSeleccionadas.length === 0) {
       setError('Selecciona al menos una institucion')
       return
@@ -167,7 +181,7 @@ export default function DirectorAreaZonas({ nivelEducativo }) {
         method: isEditing ? 'PATCH' : 'POST',
         body: JSON.stringify({
           name: normalizeText(nombreZona),
-          departamento: departamentoSeleccionado,
+          departamento: null,
           nivel_educativo: miNivel,
           institucionIds: institucionesSeleccionadas
         })
@@ -276,11 +290,159 @@ export default function DirectorAreaZonas({ nivelEducativo }) {
     })
   })
 
-  const institucionesDelDepto = institucionesDisponibles.filter((institucion) => (
-    normalizeKey(institucion.departamento) === normalizeKey(departamentoSeleccionado) &&
+  const institucionesFiltradas = institucionesDisponibles.filter((institucion) => (
     normalizeKey(institucion.nivel_educativo) === miNivel &&
-    !institucionesAsignadas.has(institucion.id)
+    !institucionesAsignadas.has(institucion.id) &&
+    (!departamentoSeleccionado || normalizeKey(institucion.departamento) === normalizeKey(departamentoSeleccionado))
   ))
+
+  const institucionesSeleccionadasDetalle = institucionesDisponibles
+    .filter((institucion) => institucionesSeleccionadas.includes(institucion.id))
+    .sort((a, b) => normalizeText(a.nombre).localeCompare(normalizeText(b.nombre), 'es'))
+
+  const renderInstitucionesSelector = () => {
+    return (
+      <div style={{ marginBottom: 16 }}>
+        <label>Escuelas disponibles ({institucionesFiltradas.length})</label>
+        {institucionesSeleccionadasDetalle.length > 0 && (
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: '0.9rem', fontWeight: 600, marginBottom: 6 }}>
+              Escuelas seleccionadas ({institucionesSeleccionadasDetalle.length})
+            </div>
+            <div style={{ display: 'grid', gap: 6 }}>
+              {institucionesSeleccionadasDetalle.map((institucion) => (
+                <div
+                  key={`selected-${institucion.id}`}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 8,
+                    padding: '8px 10px',
+                    border: '1px solid #e6e6e6',
+                    borderRadius: 8,
+                    background: '#f8fafc'
+                  }}
+                >
+                  <span style={{ lineHeight: 1.35 }}>{getInstitutionOptionLabel(institucion)}</span>
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => toggleInstitucion(institucion.id)}
+                    style={{ margin: 0, minHeight: 'auto', padding: '6px 10px' }}
+                  >
+                    Quitar
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {institucionesFiltradas.length === 0 ? (
+          <p style={{ color: '#888' }}>
+            {departamentoSeleccionado
+              ? 'No hay instituciones disponibles de tu nivel para el filtro seleccionado'
+              : 'No hay instituciones disponibles de tu nivel'}
+          </p>
+        ) : (
+          <div
+            style={{
+              border: '1px solid #ddd',
+              borderRadius: 8,
+              padding: 12,
+              display: 'grid',
+              gap: 8
+            }}
+          >
+            {institucionesFiltradas.map((institucion) => (
+              <label
+                key={institucion.id}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '20px minmax(0, 1fr)',
+                  alignItems: 'start',
+                  gap: 10,
+                  padding: '2px 0'
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={institucionesSeleccionadas.includes(institucion.id)}
+                  onChange={() => toggleInstitucion(institucion.id)}
+                  style={{ marginTop: 2 }}
+                />
+                <span style={{ lineHeight: 1.35 }}>
+                  {getInstitutionOptionLabel(institucion)}
+                </span>
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  const renderZoneForm = ({ inline = false } = {}) => (
+    <div
+      style={{
+        marginTop: inline ? 16 : 0,
+        padding: inline ? 16 : 0,
+        border: inline ? '1px solid #e6e6e6' : 'none',
+        borderRadius: inline ? 8 : 0,
+        background: inline ? '#fafafa' : 'transparent'
+      }}
+    >
+      {inline && <h5 style={{ margin: '0 0 12px 0' }}>Editar zona</h5>}
+
+      <div style={{ marginBottom: 16 }}>
+        <label>Nombre de la zona</label>
+        <input
+          type="text"
+          value={nombreZona}
+          onChange={(e) => {
+            setNombreZona(e.target.value)
+            setSuccess('')
+          }}
+          placeholder="Ej: Zona Centro Norte"
+        />
+      </div>
+
+      <div style={{ marginBottom: 16 }}>
+        <label>Filtrar escuelas por departamento</label>
+        <select
+          value={departamentoSeleccionado}
+          onChange={(e) => {
+            setDepartamentoSeleccionado(e.target.value)
+            setSuccess('')
+          }}
+        >
+          <option value="">Todos los departamentos</option>
+          {departamentos.map((departamento) => (
+            <option key={departamento} value={departamento}>{departamento}</option>
+          ))}
+        </select>
+      </div>
+
+      {renderInstitucionesSelector()}
+
+      {(institucionesSeleccionadas.length > 0 || editingZoneId) && (
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button type="button" onClick={handleGuardarZona} disabled={creando || institucionesSeleccionadas.length === 0}>
+            {creando
+              ? 'Guardando...'
+              : editingZoneId
+                ? `Guardar cambios (${institucionesSeleccionadas.length})`
+                : `Crear Zona (${institucionesSeleccionadas.length})`}
+          </button>
+          {editingZoneId && (
+            <button type="button" className="secondary" onClick={resetForm} disabled={creando}>
+              Cancelar edicion
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
 
   if (loading) {
     return (
@@ -313,78 +475,7 @@ export default function DirectorAreaZonas({ nivelEducativo }) {
           </div>
         )}
 
-        <div style={{ marginBottom: 16 }}>
-          <label>Nombre de la zona</label>
-          <input
-            type="text"
-            value={nombreZona}
-            onChange={(e) => {
-              setNombreZona(e.target.value)
-              setSuccess('')
-            }}
-            placeholder="Ej: Zona Centro Norte"
-          />
-        </div>
-
-        <div style={{ marginBottom: 16 }}>
-          <label>Departamento</label>
-          <select
-            value={departamentoSeleccionado}
-            onChange={(e) => {
-              setDepartamentoSeleccionado(e.target.value)
-              setInstitucionesSeleccionadas([])
-              setSuccess('')
-            }}
-          >
-            <option value="">-- Seleccionar --</option>
-            {departamentos.map((departamento) => (
-              <option key={departamento} value={departamento}>{departamento}</option>
-            ))}
-          </select>
-        </div>
-
-        {departamentoSeleccionado && (
-          <div style={{ marginBottom: 16 }}>
-            <label>Instituciones ({institucionesDelDepto.length})</label>
-            {institucionesDelDepto.length === 0 ? (
-              <p style={{ color: '#888' }}>
-                {editingZoneId
-                  ? 'No hay otras instituciones disponibles de tu nivel en este departamento'
-                  : 'No hay instituciones disponibles de tu nivel en este departamento'}
-              </p>
-            ) : (
-              <div style={{ maxHeight: 200, overflowY: 'auto', border: '1px solid #ddd', padding: 8 }}>
-                {institucionesDelDepto.map((institucion) => (
-                  <label key={institucion.id} style={{ display: 'flex', gap: 8, margin: '4px 0' }}>
-                    <input
-                      type="checkbox"
-                      checked={institucionesSeleccionadas.includes(institucion.id)}
-                      onChange={() => toggleInstitucion(institucion.id)}
-                    />
-                    {institucion.nombre} ({institucion.cue}) - {institucion.nivel_educativo || ''}
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {institucionesSeleccionadas.length > 0 && (
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button type="button" onClick={handleGuardarZona} disabled={creando}>
-              {creando
-                ? 'Guardando...'
-                : editingZoneId
-                  ? `Guardar cambios (${institucionesSeleccionadas.length})`
-                  : `Crear Zona (${institucionesSeleccionadas.length})`}
-            </button>
-            {editingZoneId && (
-              <button type="button" className="secondary" onClick={resetForm} disabled={creando}>
-                Cancelar edicion
-              </button>
-            )}
-          </div>
-        )}
+        {!editingZoneId && renderZoneForm()}
 
         {zonas.length > 0 && (
           <div style={{ marginTop: 24 }}>
@@ -393,10 +484,12 @@ export default function DirectorAreaZonas({ nivelEducativo }) {
               <div key={zona.id} style={{ padding: '8px 0', borderBottom: '1px solid #eee' }}>
                 <strong>{getZoneLabel(zona)}</strong>
                 <div style={{ fontSize: '0.85rem', color: '#666' }}>
-                  Departamento: {zona.departamento || '-'}
+                  Departamentos: {getZoneDepartmentsLabel(zona)}
                 </div>
-                <div style={{ fontSize: '0.85rem', color: '#666' }}>
-                  {(zona.instituciones || []).map((institucion) => institucion.nombre).join(', ')}
+                <div style={{ fontSize: '0.85rem', color: '#666', display: 'grid', gap: 2, marginTop: 6 }}>
+                  {(zona.instituciones || []).map((institucion) => (
+                    <span key={institucion.id}>{getInstitutionOptionLabel(institucion)}</span>
+                  ))}
                 </div>
                 <div style={{ fontSize: '0.85rem', color: '#666' }}>
                   Supervisores: {getZoneSupervisorLabel(zona)}
@@ -417,6 +510,7 @@ export default function DirectorAreaZonas({ nivelEducativo }) {
                     {deletingZoneId === zona.id ? 'Eliminando...' : 'Eliminar'}
                   </button>
                 </div>
+                {editingZoneId === zona.id && renderZoneForm({ inline: true })}
               </div>
             ))}
           </div>
