@@ -1,6 +1,21 @@
 # Registro de Cambios - Depo
 
-## 04 de Mayo 2026 - Gestión de Entregas, Proveedores y Recepción de Mercadería
+## [1.2.0] - 2026-05-04
+### Añadido
+- **Módulo de Distribución a Escuelas**: Nueva interfaz para que el operador de depósito registre la salida física de mercadería adjudicada hacia las instituciones.
+- **Trazabilidad de Logística para Directivos**: Stepper de progreso en el panel de la escuela que muestra: Licitación -> En Depósito -> Entregado.
+- **Sistema de Alertas de Vencimiento**: Widget en el Dashboard principal que notifica productos próximos a vencer (ventana de 60 días).
+- **Enriquecimiento de API de Pedidos**: Los pedidos ahora incluyen metadatos de progreso logístico en tiempo real.
+
+### Mejoras
+- **Dashboard Unificado**: El inicio ahora muestra alertas críticas de stock y vencimientos de forma consolidada para roles operativos.
+- **Seguridad en Recepción**: Consolidación de ítems por producto para el operador, manteniendo la confidencialidad de precios y desgloses por escuela.
+
+### Correciones
+- Restauración de `Inicio.jsx` tras error de edición.
+- Sincronización de stock global al realizar distribuciones parciales.
+
+## [1.1.0] - 04 de Mayo 2026 - Gestión de Entregas, Proveedores y Recepción de Mercadería
 
 ### 1. Módulo de Proveedores (CRUD Completo para Compras)
 - **Permisos**: El rol `area_compras` ahora tiene acceso total (crear, editar, eliminar) al módulo de Proveedores.

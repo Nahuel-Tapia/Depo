@@ -1,0 +1,80 @@
+# Guía de Roles y Funciones: Sistema de Gestión Depo
+
+Este documento detalla las capacidades y flujos de trabajo para cada rol dentro del sistema, ideal para capacitación y exposición del proyecto.
+
+---
+
+## 1. Directivo (Nivel Escuela)
+**Objetivo**: Gestionar las necesidades de insumos de su institución.
+
+*   **Solicitud Anual**: Generar el pedido de suministros para todo el ciclo lectivo basado en el Kit asignado a su tipo de escuela.
+*   **Solicitud de Refuerzos**: Realizar pedidos extraordinarios de productos específicos cuando el stock anual sea insuficiente.
+*   **Seguimiento Logístico**: 
+    *   Visualizar el estado de su pedido en tiempo real (Pendiente, Autorizado, Licitación, En Depósito Central).
+    *   Verificar cantidades recibidas vs. cantidades solicitadas.
+*   **Descarga de Comprobantes**: Imprimir comprobantes de retiro una vez que la mercadería está lista para ser buscada o entregada.
+
+---
+
+## 2. Supervisor (Gestión Intermedia)
+**Objetivo**: Validar la pertinencia de los pedidos de su zona.
+
+*   **Bandeja de Aprobación**: Revisar los pedidos (Anuales y Refuerzos) de las escuelas bajo su jurisdicción.
+*   **Gestión de Excepciones**:
+    *   **Aprobar**: Pasa el pedido al siguiente nivel (Director de Área).
+    *   **Rechazar**: Cancela el pedido indicando un motivo.
+    *   **Pedir Aclaración**: Devuelve el pedido al Directivo para que corrija o justifique datos, sin cancelarlo.
+*   **Patrimonio Escolar**: Gestionar tickets de mobiliario y activos fijos de sus escuelas.
+
+---
+
+## 3. Director de Área (Planificación y Control)
+**Objetivo**: Consolidar la demanda y gestionar la estructura del sistema.
+
+*   **Autorización Final**: Último paso de aprobación antes de que los pedidos pasen a ser licitados.
+*   **Consolidación de Planilla Anual**: Visualizar el "Listado Final a Licitar", que agrupa todos los pedidos de todas las escuelas para negociar volúmenes con proveedores.
+*   **Configuración de Kits**: Definir qué productos y en qué cantidades componen los Kits (ej: Kit Comedor, Kit Albergue, Kit Copa de Leche).
+*   **Gestión de Zonas**: Asignar escuelas a supervisores y organizar la estructura territorial.
+
+---
+
+## 4. Área de Compras (Gestión Comercial y Adjudicación)
+**Objetivo**: Transformar pedidos en mercadería real al mejor costo.
+
+*   **Gestión de Proveedores**: Mantener la base de datos de proveedores (CUIT, Razón Social, Rubro, Contacto).
+*   **Licitación y Adjudicación**: 
+    *   Cargar precios de proveedores y adjudicar productos (mejor oferta).
+    *   Cerrar licitaciones para generar las órdenes de compra.
+*   **Gestión de Entregas**: "Enviar a Depósito" la información de las licitaciones cerradas para que el operador sepa qué debe recibir y de qué proveedor.
+*   **Auditoría de Precios**: Único rol (junto al Admin) con acceso a los costos y comparativas económicas.
+
+---
+
+## 5. Operador de Depósito (Logística y Stock)
+**Objetivo**: Control físico de la mercadería y su distribución.
+
+*   **Recepción de Licitación**: 
+    *   Registrar el ingreso de camiones de proveedores.
+    *   Cargar fechas de vencimiento y cantidades recibidas (totales o parciales).
+    *   *Seguridad*: El operador no ve precios, solo cantidades y productos.
+*   **Distribución a Escuelas**: 
+    *   Armar las "salidas" de mercadería hacia cada escuela según lo que se les adjudicó.
+    *   Generar remitos virtuales de entrega.
+*   **Control de Inventario**: 
+    *   Visualizar stock actual por depósito.
+    *   Gestionar movimientos manuales (ajustes por pérdida, rotura, etc.).
+*   **Alertas Tempranas**: Monitorear el widget de vencimientos próximos para evitar desperdicio de alimentos.
+
+---
+
+## 6. Administrador (Gestión de Plataforma)
+**Objetivo**: Garantizar la operatividad técnica del sistema.
+
+*   **Gestión de Usuarios**: Crear cuentas, resetear contraseñas y asignar roles.
+*   **Auditoría Total**: Acceso a todos los módulos para corrección de errores o soporte técnico.
+*   **Configuración de Productos**: Mantener el catálogo maestro de productos y unidades de medida.
+
+---
+
+### Flujo Crítico de un Pedido Anual (Resumen):
+1. **Directivo** pide → 2. **Supervisor** valida → 3. **Director Área** autoriza → 4. **Compras** licita y adjudica → 5. **Operador** recibe del proveedor → 6. **Operador** entrega a la escuela.
