@@ -1,5 +1,38 @@
 # Registro de Cambios - Depo
 
+## 04 de Mayo 2026 - Gestión de Entregas, Proveedores y Recepción de Mercadería
+
+### 1. Módulo de Proveedores (CRUD Completo para Compras)
+- **Permisos**: El rol `area_compras` ahora tiene acceso total (crear, editar, eliminar) al módulo de Proveedores.
+- **Campos ampliados**: Se añadieron nuevos campos a la tabla `proveedor`: Razón Social, Dirección, Rubro, Email Secundario, Sitio Web y Observaciones.
+- **Interfaz renovada**: Formularios de creación/edición organizados por secciones (Datos Fiscales, Contacto, Información Adicional). Tabla principal enriquecida con badges de rubro y links directos al sitio web.
+
+### 2. Gestión de Entregas (Post-Adjudicación — Rol Compras)
+- **Nueva pestaña "Gestión de Entregas"**: Historial de licitaciones adjudicadas con fecha, cantidad de ítems y estado actual.
+- **Envío a Depósito**: Botón para coordinar la logística con el operador de depósito. Al presionar "Enviar a Depósito", la licitación queda visible para el rol operador.
+- **Estados de licitación**: Se implementó un ciclo de estados (`adjudicada` → `en_deposito` → `completada`) en la tabla `licitacion_publicada`.
+
+### 3. Recepción de Licitación (Rol Operador Depósito)
+- **Nueva pestaña "Recepción Licitación"**: Interfaz limpia para el operador, mostrando solo Producto, Cantidad Adjudicada y campos de ingreso.
+- **Sin precios (SEGURIDAD)**: El backend consolida y filtra los datos eliminando toda información de costos antes de enviarla al operador.
+- **Consolidación automática**: Los productos se agrupan por ID, sumando cantidades de todas las escuelas. El operador no ve el desglose por institución.
+- **Ingreso parcial/total**: Soporte para entregas parciales — el sistema trackea lo ya recibido vs. lo pendiente.
+- **Fecha de vencimiento**: Campo opcional para registrar la fecha de vencimiento de cada producto al momento del ingreso.
+- **Actualización de stock automática**: Al confirmar el ingreso, se actualiza el stock del depósito, el stock global del producto y se genera un movimiento de stock con trazabilidad completa.
+
+### 4. Correcciones de Base de Datos
+- Creación de tablas faltantes: `deposito`, `stock_deposito` (con datos iniciales: Depósito Central, Centro Cívico, Cápsula de Seguridad).
+- Creación de tabla `recepcion_licitacion` para auditoría de entregas.
+- Adición de columna `id_deposito` a `movimiento_stock` para vincular movimientos a depósitos específicos.
+- Adición de columna `fecha_vencimiento` a `movimiento_stock` y `recepcion_licitacion`.
+- Adición de columna `estado` a `licitacion_publicada` para el ciclo de vida post-adjudicación.
+
+### 5. Adjudicación: Sincronización con Snapshot
+- El `POST /adjudicacion` ahora valida productos contra la tabla `licitacion_publicada` (snapshot) en lugar de datos en vivo, garantizando consistencia.
+- Al guardar la adjudicación, el estado de la licitación publicada se actualiza automáticamente a `adjudicada`.
+
+---
+
 ## 04 de Mayo 2026 - Automatización de Licitación Anual (Compras)
 
 ### 1. Rol Compras: Licitación Anual Real-Time

@@ -14,16 +14,19 @@ import ComprasPanel from '../components/ComprasPanel'
 import ProductKitsManager from '../components/ProductKitsManager'
 import MiCuenta from '../components/MiCuenta'
 import Depositos from '../components/Depositos'
+import LicitacionesCerradas from '../components/LicitacionesCerradas'
+import RecepcionLicitacion from '../components/RecepcionLicitacion'
 
 const TABS = [
   { key: 'inicio', label: 'Inicio', permission: null },
   { key: 'gestion-escuelas', label: 'Gestión de Zonas', permission: 'supervision.manage', role: 'director_area' },
   { key: 'solicitud-anual', label: 'Solicitud Anual', permission: 'supervision.manage', role: 'director_area' },
   { key: 'resumen-anual', label: 'Resumen Solicitud Anual', permission: 'supervision.manage', role: 'director_area' },
-  { key: 'compras-pedidos', label: 'Gestión de Pedidos Anuales', permission: 'planilla.view', role: 'area_compras' },
   { key: 'compras-licitacion', label: 'Licitación Anual', permission: 'planilla.view', role: 'area_compras' },
   { key: 'compras-listado-final', label: 'Listado Final a Licitar', permission: 'planilla.view', role: 'area_compras' },
   { key: 'compras-adjudicacion', label: 'Adjudicación y Cierre', permission: 'planilla.manage', role: 'area_compras' },
+  { key: 'compras-entregas', label: 'Gestión de Entregas', permission: 'planilla.view', role: 'area_compras' },
+  { key: 'deposito-recepcion', label: 'Recepción Licitación', permission: 'stock.movement.create', role: 'operador' },
   { key: 'supervisor', label: 'Patrimonio Escolar', permission: 'pedidos.manage', role: 'supervisor' },
   { key: 'mis-escuelas', label: 'Mis Escuelas', permission: 'instituciones.view', role: 'supervisor', hideForRoles: ['admin'] },
   { key: 'productos', label: 'Productos', permission: 'productos.view', hideForRoles: ['supervisor', 'director_area'] },
@@ -56,14 +59,25 @@ export default function Dashboard() {
     if (user?.role === 'directivo') {
       return tab.key === 'inicio' || tab.key === 'pedidos' || tab.key === 'mi-cuenta'
     }
+    if (user?.role === 'operador') {
+      return [
+        'inicio',
+        'mi-cuenta',
+        'productos',
+        'movimientos',
+        'proveedores',
+        'deposito-recepcion'
+      ].includes(tab.key)
+    }
     if (user?.role === 'area_compras') {
       return [
         'inicio',
         'mi-cuenta',
-        'compras-pedidos',
         'compras-licitacion',
         'compras-listado-final',
-        'compras-adjudicacion'
+        'compras-adjudicacion',
+        'compras-entregas',
+        'proveedores'
       ].includes(tab.key)
     }
     // Hide tabs explicitly hidden for this role
@@ -102,6 +116,8 @@ export default function Dashboard() {
       case 'usuarios': return <Usuarios />
       case 'kits': return <ProductKitsManager />
       case 'depositos': return <Depositos />
+      case 'compras-entregas': return <LicitacionesCerradas />
+      case 'deposito-recepcion': return <RecepcionLicitacion />
       default: return <Inicio />
     }
   }

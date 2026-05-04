@@ -288,4 +288,115 @@ router.post("/:id/egreso", authorizePermissions(PERMISSIONS.STOCK_MOVEMENT_CREAT
   }
 });
 
+async function getRecepcionesLicitacion(req, res) {
+  try {
+    const rows = await all(
+      `SELECT id, anio, fecha_publicacion, estado
+       FROM licitacion_publicada
+       WHERE estado IN ('en_deposito', 'completada')
+       ORDER BY fecha_publicacion DESC`
+    );
+    res.json({ licitaciones: rows });
+  } catch (err) {
+    res.status(500).json({ error: "Error al obtener recepciones" });
+  }
+}
+
+async function getDetalleRecepcion(req, res) {
+  try {
+    const { id } = req.params;
+    const row = await get(`SELECT id, items, anio FROM licitacion_publicada WHERE id = $1`, [id]);
+    if (!row) return res.status(404).json({ error: "Licitación no encontrada" });
+
+    // Consolidar por producto_id - El operador no necesita ver qué escuela pidió cada cosa
+    const items = typeof row.items === 'string' ? JSON.parse(row.items) : row.items;
+    const consolidatedMap = {};
+    items.forEach(item => {
+      const pid = item.producto_id;
+      if (!consolidatedMap[pid]) {
+        consolidatedMap[pid] = {
+          producto_id: pid,
+          producto: item.producto,
+          unidad_medida: item.unidad_medida,
+          cantidad_total: 0
+        };
+      }
+      consolidatedMap[pid].cantidad_total += Number(item.cantidad_a_licitar || 0);
+    });
+    const cleanItems = Object.values(consolidatedMap);
+
+    // Obtener lo ya recibido
+    const recibidos = await all(
+      `SELECT producto_id, SUM(cantidad_recibida) as total_recibida
+       FROM recepcion_licitacion
+       WHERE licitacion_id = $1
+       GROUP BY producto_id`,
+      [id]
+    );
+
+    res.json({ id: row.id, anio: row.anio, items: cleanItems, recibidos });
+  } catch (err) {
+    res.status(500).json({ error: "Error al obtener detalle" });
+  }
+}
+
+async function registrarIngresoLicitacion(req, res) {
+  const client = await pool.connect();
+  try {
+    const { licitacion_id, ingresos, id_deposito, observaciones } = req.body;
+    if (!licitacion_id || !ingresos || !id_deposito) {
+      return res.status(400).json({ error: "Faltan datos obligatorios" });
+    }
+
+    await client.query("BEGIN");
+
+    for (const ing of ingresos) {
+      const { producto_id, cantidad, fecha_vencimiento } = ing;
+      if (!cantidad || cantidad <= 0) continue;
+
+      // 1. Registrar en recepcion_licitacion
+      await client.query(
+        `INSERT INTO recepcion_licitacion (licitacion_id, producto_id, cantidad_recibida, usuario_id, observaciones, fecha_vencimiento, id_deposito)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [licitacion_id, producto_id, cantidad, req.user.sub, observaciones, fecha_vencimiento || null, id_deposito]
+      );
+
+      // 2. Actualizar stock en depósito
+      await client.query(
+        `INSERT INTO stock_deposito (id_deposito, id_producto, cantidad)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (id_deposito, id_producto) 
+         DO UPDATE SET cantidad = stock_deposito.cantidad + $3`,
+        [id_deposito, producto_id, cantidad]
+      );
+
+      // 3. Actualizar stock global
+      await client.query(
+        "UPDATE producto SET stock_actual = stock_actual + $1 WHERE id_producto = $2",
+        [cantidad, producto_id]
+      );
+
+      // 4. Registrar movimiento de stock
+      await client.query(
+        `INSERT INTO movimiento_stock (id_producto, cantidad, tipo, motivo, id_usuario, id_deposito, fecha_vencimiento)
+         VALUES ($1, $2, 'ingreso', $3, $4, $5, $6)`,
+        [producto_id, cantidad, `Ingreso por Licitación #${licitacion_id}`, req.user.sub, id_deposito, fecha_vencimiento || null]
+      );
+    }
+
+    await client.query("COMMIT");
+    res.json({ ok: true, message: "Mercadería ingresada con éxito" });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("Error al registrar ingreso licitación:", err);
+    res.status(500).json({ error: "Error al procesar el ingreso" });
+  } finally {
+    client.release();
+  }
+}
+
+router.get("/licitacion/recepciones", authorizePermissions(PERMISSIONS.STOCK_VIEW), getRecepcionesLicitacion);
+router.get("/licitacion/recepciones/:id", authorizePermissions(PERMISSIONS.STOCK_VIEW), getDetalleRecepcion);
+router.post("/licitacion/registrar-ingreso", authorizePermissions(PERMISSIONS.STOCK_MOVEMENT_CREATE), registrarIngresoLicitacion);
+
 module.exports = router;

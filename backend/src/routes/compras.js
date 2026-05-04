@@ -648,12 +648,7 @@ async function aceptarPlanilla(req, res) {
     }
 
     const coverage = await getPlanillaCoverage(id, planilla.director_area_id);
-    if (!coverage.ok) {
-      return res.status(400).json({
-        error: "No se puede aceptar la planilla porque no cubre el 100% de las escuelas asignadas.",
-        validacion_cobertura: coverage
-      });
-    }
+    // Permitimos aceptar planillas parciales por pedido del usuario.
 
     await run(
       `UPDATE planilla_pedido_anual
@@ -845,23 +840,182 @@ router.get("/licitacion/anual/enviada-status", getEnviadaStatus);
 router.get("/licitacion/anual/escuelas-pendientes", getEscuelasPendientes);
 router.post("/licitacion/anual/enviar-final", enviarLicitacionFinal);
 
+async function getFinalItems(req, res) {
+  try {
+    await ensureTables();
+    const anio = Number(req.query.anio || new Date().getFullYear());
+    
+    // Solo traemos items de directores que ya enviaron (estado enviada o aceptada)
+    const query = `
+      SELECT 
+        p.id_pedido,
+        i.nombre AS institucion,
+        u.nivel_educativo AS nivel,
+        pr.id_producto AS producto_id,
+        pr.nombre AS producto,
+        COALESCE(pr.unidad_medida, 'unidad') AS unidad_medida,
+        SUM(dp.cantidad_solicitada)::numeric AS cantidad_solicitada
+      FROM pedido p
+      JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido
+      JOIN producto pr ON pr.id_producto = dp.id_producto
+      JOIN institucion i ON i.id_institucion = p.id_institucion
+      JOIN supervisor_escuela_asignacion sea ON sea.institucion_id = i.id_institucion
+      JOIN usuario u ON u.id_usuario = sea.director_area_id
+      JOIN planilla_pedido_anual ppa ON ppa.director_area_id = u.id_usuario
+      WHERE ppa.anio = $1
+        AND ppa.estado IN ('enviada', 'aceptada')
+        AND COALESCE(p.tipo, 'anual') = 'anual'
+        AND p.estado = 'aprobado'
+        AND p.aprobado_director_area IS TRUE
+        AND EXTRACT(YEAR FROM p.fecha_creacion) = $1
+      GROUP BY p.id_pedido, i.nombre, u.nivel_educativo, pr.id_producto, pr.nombre, pr.unidad_medida
+      ORDER BY i.nombre, pr.nombre
+    `;
+    
+    const items = await all(query, [anio]);
+    res.json({ items });
+  } catch (err) {
+    console.error("Error al obtener items finales:", err);
+    res.status(500).json({ error: "No se pudieron obtener los items finales" });
+  }
+}
+
+async function publicarLicitacion(req, res) {
+  const client = await pool.connect();
+  try {
+    await ensureTables();
+    const { anio, items } = req.body;
+    if (!anio || !items || !items.length) {
+      return res.status(400).json({ error: "Datos insuficientes para publicar" });
+    }
+
+    await client.query("BEGIN");
+    
+    // Snapshot en licitacion_publicada
+    await client.query(
+      `INSERT INTO licitacion_publicada (anio, usuario_id, items)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (anio) DO UPDATE SET items = $3, fecha_publicacion = NOW()`,
+      [anio, req.user.sub, JSON.stringify(items)]
+    );
+
+    await client.query("COMMIT");
+    res.json({ ok: true, message: "Licitación publicada con éxito" });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("Error al publicar licitación:", err);
+    res.status(500).json({ error: "No se pudo publicar la licitación" });
+  } finally {
+    client.release();
+  }
+}
+
+async function getPublicadaStatus(req, res) {
+  try {
+    const anio = Number(req.query.anio || new Date().getFullYear());
+    const row = await get(
+      `SELECT lp.id, lp.fecha_publicacion, lp.items, u.nombre, u.apellido
+       FROM licitacion_publicada lp
+       LEFT JOIN usuario u ON u.id_usuario = lp.usuario_id
+       WHERE lp.anio = $1`,
+      [anio]
+    );
+    res.json({ publicada: !!row, data: row });
+  } catch (err) {
+    res.status(500).json({ error: "Error al obtener estado de publicación" });
+  }
+}
+
+router.get("/licitacion/anual/final-items", authorizePermissions(PERMISSIONS.PLANILLA_VIEW), getFinalItems);
+router.get("/licitacion/anual/publicada-status", authorizePermissions(PERMISSIONS.PLANILLA_VIEW), getPublicadaStatus);
+router.post("/licitacion/anual/publicar", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), publicarLicitacion);
+
+async function getLicitacionesCerradas(req, res) {
+  try {
+    const rows = await all(
+      `SELECT id, anio, fecha_publicacion, estado,
+       (SELECT COUNT(*) FROM json_array_elements(items::json)) as total_items
+       FROM licitacion_publicada
+       WHERE estado IN ('adjudicada', 'en_deposito', 'completada')
+       ORDER BY anio DESC`
+    );
+    res.json({ licitaciones: rows });
+  } catch (err) {
+    res.status(500).json({ error: "Error al obtener licitaciones cerradas" });
+  }
+}
+
+async function enviarADeposito(req, res) {
+  try {
+    const { id } = req.body;
+    await run(`UPDATE licitacion_publicada SET estado = 'en_deposito' WHERE id = $1`, [id]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: "No se pudo enviar a depósito" });
+  }
+}
+
+router.get("/licitacion/anual/cerradas", authorizePermissions(PERMISSIONS.PLANILLA_VIEW), getLicitacionesCerradas);
+router.post("/licitacion/anual/enviar-deposito", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), enviarADeposito);
+
 router.get("/adjudicacion", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), async (req, res) => {
   try {
     await ensureTables();
-
     const anio = Number(req.query.anio || new Date().getFullYear());
-    const directorAreaId = Number(req.query.director_area_id || 0) || null;
-    const { nivel = "", estado = "" } = req.query;
+    
+    // 1. Verificar si hay licitación publicada para este año
+    const publicada = await get(`SELECT items FROM licitacion_publicada WHERE anio = $1`, [anio]);
+    
+    let items = [];
+    if (publicada && publicada.items) {
+      // Si está publicada, usamos el snapshot de productos (consolidado por producto)
+      const rawItems = typeof publicada.items === 'string' ? JSON.parse(publicada.items) : publicada.items;
+      const consolidadoMap = {};
+      rawItems.forEach(item => {
+        const pid = item.producto_id;
+        if (!consolidadoMap[pid]) {
+          consolidadoMap[pid] = {
+            producto_id: pid,
+            producto: item.producto,
+            unidad_medida: item.unidad_medida,
+            cantidad_total: 0
+          };
+        }
+        consolidadoMap[pid].cantidad_total += Number(item.cantidad_a_licitar || item.cantidad_solicitada || 0);
+      });
+      items = Object.values(consolidadoMap);
+    } else {
+      // Si no, fallback al consolidado live de planillas aceptadas (legacy/fallback)
+      items = await getConsolidado({ anio });
+    }
 
-    const [items, proveedores] = await Promise.all([
-      getConsolidado({ anio, directorAreaId, nivel, estado }),
-      all(
-        `SELECT id_proveedor AS id, nombre, cuit, contacto, telefono, email, categoria
-         FROM proveedor
-         WHERE COALESCE(activo, TRUE) = TRUE
-         ORDER BY nombre ASC`
-      )
-    ]);
+    const proveedores = await all(
+      `SELECT id_proveedor AS id, nombre, cuit, contacto, telefono, email, categoria
+       FROM proveedor
+       WHERE COALESCE(activo, TRUE) = TRUE
+       ORDER BY nombre ASC`
+    );
+
+    // Enriquecer items con el precio anterior/actual de la tabla compra_precio_historico
+    for (const item of items) {
+      const hist = await get(
+        `SELECT precio_compra_real, id_proveedor FROM compra_precio_historico WHERE anio = $1 AND id_producto = $2`,
+        [anio, item.producto_id]
+      );
+      if (hist) {
+        item.precio_actual = hist.precio_compra_real;
+        item.proveedor_actual_id = hist.id_proveedor;
+      }
+      
+      const ref = await get(
+        `SELECT precio_compra_real, anio FROM compra_precio_historico WHERE id_producto = $1 AND anio < $2 ORDER BY anio DESC LIMIT 1`,
+        [item.producto_id, anio]
+      );
+      if (ref) {
+        item.precio_anterior = ref.precio_compra_real;
+        item.anio_referencia = ref.anio;
+      }
+    }
 
     res.json({ anio, items, proveedores });
   } catch (err) {
@@ -882,8 +1036,17 @@ router.post("/adjudicacion", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), 
       return res.status(400).json({ error: "No hay productos para adjudicar" });
     }
 
-    const consolidado = await getConsolidado({ anio });
-    const productoPermitidos = new Set(consolidado.map((item) => Number(item.producto_id)));
+    // Validar contra lo publicado si existe, sino contra consolidado live
+    const publicada = await get(`SELECT items FROM licitacion_publicada WHERE anio = $1`, [anio]);
+    let productoPermitidos;
+    
+    if (publicada && publicada.items) {
+      const rawItems = typeof publicada.items === 'string' ? JSON.parse(publicada.items) : publicada.items;
+      productoPermitidos = new Set(rawItems.map(item => Number(item.producto_id)));
+    } else {
+      const consolidado = await getConsolidado({ anio });
+      productoPermitidos = new Set(consolidado.map((item) => Number(item.producto_id)));
+    }
 
     await client.query("BEGIN");
 
@@ -927,6 +1090,13 @@ router.post("/adjudicacion", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), 
        SET estado = 'adjudicada'
        WHERE anio = $1
          AND estado = 'aceptada'`,
+      [anio]
+    );
+
+    await client.query(
+      `UPDATE licitacion_publicada
+       SET estado = 'adjudicada'
+       WHERE anio = $1`,
       [anio]
     );
 
