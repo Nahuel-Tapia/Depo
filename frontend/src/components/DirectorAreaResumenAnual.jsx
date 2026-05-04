@@ -1,7 +1,30 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useState, useEffect } from 'react'
+import { apiFetch } from '../api'
+import { useAuth } from '../context/AuthContext'
 
-export default function DirectorAreaResumenAnual({ solicitudes }) {
+export default function DirectorAreaResumenAnual({ solicitudes, submissionStatus, onSent }) {
+  const { token } = useAuth()
   const [filtroEscuela, setFiltroEscuela] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [pendientes, setPendientes] = useState([])
+  const [showModal, setShowModal] = useState(false)
+  const [error, setError] = useState(null)
+  
+  const anioActual = new Date().getFullYear()
+
+  const loadPendientes = async () => {
+    try {
+      const pendRes = await apiFetch(`/api/compras/licitacion/anual/escuelas-pendientes?anio=${anioActual}`, { token })
+      if (pendRes.ok) {
+        const data = await pendRes.json()
+        setPendientes(data.pendientes || [])
+      }
+    } catch (err) {}
+  }
+
+  useEffect(() => {
+    loadPendientes()
+  }, [token])
   
   // Solo solicitudes anuales que ya fueron aprobadas por el director
   const solicitudesAprobadas = useMemo(() => {
@@ -42,12 +65,88 @@ export default function DirectorAreaResumenAnual({ solicitudes }) {
     return filtradas
   }, [solicitudesAprobadas, filtroEscuela])
 
+  const handleSendClick = () => {
+    if (pendientes.length > 0) {
+      setShowModal(true)
+    } else {
+      confirmSend()
+    }
+  }
+
+  const confirmSend = async () => {
+    setLoading(true)
+    setError(null)
+    setShowModal(false)
+    try {
+      const res = await apiFetch('/api/compras/licitacion/anual/enviar-final', {
+        token,
+        method: 'POST'
+      })
+      if (res.ok) {
+        if (onSent) onSent()
+      } else {
+        const data = await res.json()
+        setError(data.error || 'No se pudo realizar el envío')
+      }
+    } catch (err) {
+      setError('Error de conexión')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const isSent = submissionStatus?.sent
+  const sentAt = submissionStatus?.planilla?.enviada_at
+
   return (
     <div style={{ background: '#f9fafb', borderRadius: 8, padding: 20 }}>
-      <h2 style={{ color: '#2a4d8f', marginBottom: 8 }}>Resumen Solicitud Anual</h2>
-      <p style={{ color: 'var(--muted)', marginBottom: 24 }}>
-        Vista consolidada de todos los pedidos aprobados por la Direccion de Area para el ciclo lectivo actual.
-      </p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
+        <div>
+          <h2 style={{ color: '#2a4d8f', marginBottom: 8, marginTop: 0 }}>Resumen Solicitud Anual {anioActual}</h2>
+          <p style={{ color: 'var(--muted)', margin: 0 }}>
+            Vista consolidada de todos los pedidos aprobados para el ciclo lectivo actual.
+          </p>
+        </div>
+
+        <div style={{ textAlign: 'right' }}>
+          {isSent ? (
+            <div className="fade-in">
+              <div style={{ 
+                background: '#f0fdf4', 
+                color: '#166534', 
+                padding: '10px 20px', 
+                borderRadius: 8, 
+                border: '1px solid #bbf7d0',
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                marginBottom: 4
+              }}>
+                <span style={{ fontSize: '1.2rem' }}>✅</span> Enviado a Compras
+              </div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>
+                Fecha: {new Date(sentAt).toLocaleString('es-AR')}
+              </div>
+            </div>
+          ) : (
+            <button 
+              className="primary" 
+              onClick={handleSendClick} 
+              disabled={loading || solicitudesAprobadas.length === 0}
+              style={{ padding: '12px 24px', fontSize: '1rem', fontWeight: 700 }}
+            >
+              {loading ? 'Enviando...' : '🚀 Enviar a Compras'}
+            </button>
+          )}
+          {error && <div style={{ color: 'var(--red)', fontSize: '0.85rem', marginTop: 8 }}>{error}</div>}
+          {!isSent && solicitudesAprobadas.length === 0 && (
+            <div style={{ fontSize: '0.8rem', color: 'var(--red)', marginTop: 4 }}>
+              Debés aprobar al menos una solicitud antes de enviar.
+            </div>
+          )}
+        </div>
+      </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, alignItems: 'start' }}>
         
@@ -118,6 +217,34 @@ export default function DirectorAreaResumenAnual({ solicitudes }) {
         </section>
 
       </div>
+
+      {showModal && (
+        <div className="sv-modal-overlay">
+          <div className="sv-modal">
+            <h2 className="sv-modal-title">⚠️ Atención</h2>
+            <div className="sv-modal-body">
+              <p>Las siguientes instituciones aún no han enviado su solicitud anual:</p>
+              <ul className="sv-list-items">
+                {pendientes.map(p => (
+                  <li key={p.id}>{p.nombre} {p.cue ? `(CUE: ${p.cue})` : ''}</li>
+                ))}
+              </ul>
+              <p style={{ marginTop: 16, fontWeight: 500 }}>
+                Si enviás ahora, estas instituciones <strong>no quedarán incluidas</strong> en la licitación anual.
+              </p>
+              <p>¿Querés enviar de todos modos?</p>
+            </div>
+            <div className="sv-modal-footer">
+              <button className="secondary" onClick={() => setShowModal(false)} disabled={loading}>
+                Cancelar
+              </button>
+              <button className="primary" onClick={confirmSend} disabled={loading} style={{ background: '#E03C31' }}>
+                {loading ? 'Enviando...' : 'Enviar de todos modos'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

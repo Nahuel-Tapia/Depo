@@ -341,6 +341,63 @@ async function getConsolidado({ anio, directorAreaId, nivel, estado }) {
   }));
 }
 
+async function getConsolidadoRealTime({ anio }) {
+  const query = `
+    SELECT
+      dp.id_producto AS producto_id,
+      pr.nombre AS producto,
+      COALESCE(pr.unidad_medida, 'unidad') AS unidad_medida,
+      SUM(dp.cantidad_solicitada)::numeric AS cantidad_total
+    FROM pedido p
+    JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido
+    JOIN producto pr ON pr.id_producto = dp.id_producto
+    WHERE COALESCE(p.tipo, 'anual') = 'anual'
+      AND p.estado = 'aprobado'
+      AND p.aprobado_director_area IS TRUE
+      AND EXTRACT(YEAR FROM p.fecha_creacion) = ?
+      AND EXISTS (
+        SELECT 1 FROM planilla_pedido_anual ppa
+        JOIN supervisor_escuela_asignacion sea ON sea.director_area_id = ppa.director_area_id
+        WHERE sea.institucion_id = p.id_institucion
+          AND ppa.anio = ?
+          AND ppa.estado IN ('enviada', 'aceptada')
+      )
+    GROUP BY dp.id_producto, pr.nombre, pr.unidad_medida
+    ORDER BY pr.nombre ASC
+  `;
+  const rows = await all(query, [anio, anio]);
+  return rows.map((row) => ({
+    ...row,
+    producto_id: Number(row.producto_id),
+    cantidad_total: Number(row.cantidad_total || 0)
+  }));
+}
+
+async function getEstadoDirectores({ anio }) {
+  // Simplificamos la consulta para descartar errores de sintaxis complejos
+  const query = `
+    SELECT 
+      u.id_usuario,
+      u.nombre,
+      u.apellido,
+      u.nivel_educativo,
+      (
+        SELECT COUNT(*) > 0
+        FROM pedido p
+        JOIN supervisor_escuela_asignacion sea ON sea.institucion_id = p.id_institucion
+        WHERE sea.director_area_id = u.id_usuario
+          AND COALESCE(p.tipo, 'anual') = 'anual'
+          AND p.estado = 'aprobado'
+          AND p.aprobado_director_area IS TRUE
+          AND EXTRACT(YEAR FROM p.fecha_creacion) = ?
+      ) AS enviado
+    FROM usuario u
+    WHERE u.role = 'director_area'
+    ORDER BY u.nivel_educativo ASC
+  `;
+  return await all(query, [anio]);
+}
+
 router.get("/planillas", authorizePermissions(PERMISSIONS.PLANILLA_VIEW), async (req, res) => {
   try {
     await ensureTables();
@@ -614,6 +671,106 @@ async function aceptarPlanilla(req, res) {
   }
 }
 
+async function getEnviadaStatus(req, res) {
+  try {
+    await ensureTables();
+    const anio = Number(req.query.anio || new Date().getFullYear());
+    const planilla = await get(
+      `SELECT id, estado, enviada_at, aceptada_at
+       FROM planilla_pedido_anual
+       WHERE director_area_id = $1 AND anio = $2`,
+      [req.user.sub, anio]
+    );
+    res.json({ sent: !!planilla && (planilla.estado === 'enviada' || planilla.estado === 'aceptada'), planilla });
+  } catch (err) {
+    console.error("Error al obtener estado de envío:", err);
+    res.status(500).json({ error: "No se pudo obtener el estado de envío" });
+  }
+}
+
+async function getEscuelasPendientes(req, res) {
+  try {
+    await ensureTables();
+    const anio = Number(req.query.anio || new Date().getFullYear());
+    
+    const coverage = await getPlanillaCoverage(null, req.user.sub);
+    // getPlanillaCoverage(null, ...) should be adapted or we use its logic here.
+    
+    const assigned = await all(
+      `SELECT DISTINCT i.id_institucion AS id, i.nombre, COALESCE(i.cue, '') AS cue
+       FROM supervisor_escuela_asignacion sea
+       JOIN institucion i ON i.id_institucion = sea.institucion_id
+       WHERE sea.director_area_id = $1
+       ORDER BY i.nombre ASC`,
+      [req.user.sub]
+    );
+
+    const approved = await all(
+      `SELECT DISTINCT id_institucion
+       FROM pedido
+       WHERE COALESCE(tipo, 'anual') = 'anual'
+         AND estado = 'aprobado'
+         AND aprobado_director_area IS TRUE
+         AND EXTRACT(YEAR FROM fecha_creacion) = $1`,
+      [anio]
+    );
+
+    const approvedSet = new Set(approved.map(a => Number(a.id_institucion)));
+    const pendientes = assigned.filter(i => !approvedSet.has(Number(i.id)));
+
+    res.json({ pendientes });
+  } catch (err) {
+    console.error("Error al obtener escuelas pendientes:", err);
+    res.status(500).json({ error: "No se pudieron obtener las escuelas pendientes" });
+  }
+}
+
+async function enviarLicitacionFinal(req, res) {
+  const client = await pool.connect();
+  try {
+    await ensureTables();
+    await client.query("BEGIN");
+
+    const anio = new Date().getFullYear();
+    const existing = await client.query(
+      `SELECT id, estado FROM planilla_pedido_anual WHERE director_area_id = $1 AND anio = $2`,
+      [req.user.sub, anio]
+    );
+
+    if (existing.rowCount > 0 && (existing.rows[0].estado === 'enviada' || existing.rows[0].estado === 'aceptada')) {
+      throw new Error(`Ya realizaste el envío para el año ${anio}.`);
+    }
+
+    let planillaId;
+    if (existing.rowCount > 0) {
+      planillaId = existing.rows[0].id;
+      await client.query(
+        `UPDATE planilla_pedido_anual SET estado = 'enviada', enviada_at = NOW() WHERE id = $1`,
+        [planillaId]
+      );
+    } else {
+      const resIns = await client.query(
+        `INSERT INTO planilla_pedido_anual (director_area_id, anio, estado, enviada_at)
+         VALUES ($1, $2, 'enviada', NOW()) RETURNING id`,
+        [req.user.sub, anio]
+      );
+      planillaId = resIns.rows[0].id;
+    }
+
+    // Opcional: Popular planilla_pedido_anual_detalle para mantener compatibilidad histórica si es necesario,
+    // aunque ahora Compras consume de 'pedido' directamente.
+    
+    await client.query("COMMIT");
+    res.json({ ok: true, message: "Envío realizado con éxito", anio });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("Error al enviar a compras:", err);
+    res.status(400).json({ error: err.message });
+  } finally {
+    client.release();
+  }
+}
+
 router.patch("/planillas/:id/aceptar", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), aceptarPlanilla);
 router.patch("/planillas/:id/procesar", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), aceptarPlanilla);
 
@@ -650,7 +807,6 @@ router.get("/licitacion/consolidado", authorizePermissions(PERMISSIONS.PLANILLA_
     const anio = Number(req.query.anio || new Date().getFullYear());
     const directorAreaId = Number(req.query.director_area_id || 0) || null;
     const { nivel = "", estado = "" } = req.query;
-
     const items = await getConsolidado({ anio, directorAreaId, nivel, estado });
     res.json({ anio, items });
   } catch (err) {
@@ -658,6 +814,36 @@ router.get("/licitacion/consolidado", authorizePermissions(PERMISSIONS.PLANILLA_
     res.status(500).json({ error: "No se pudo generar el listado final" });
   }
 });
+
+router.get("/licitacion/anual/consolidado", authorizePermissions(PERMISSIONS.PLANILLA_VIEW), async (req, res) => {
+  try {
+    await ensureTables();
+    const anio = Number(req.query.anio || new Date().getFullYear());
+    console.log("[DEBUG] Consolidado RealTime - Anio:", anio);
+    const items = await getConsolidadoRealTime({ anio });
+    res.json({ anio, items });
+  } catch (err) {
+    console.error("[ERROR] Licitación Consolidado Real-Time:", err);
+    res.status(500).json({ error: err.message || "No se pudo generar el consolidado" });
+  }
+});
+
+router.get("/licitacion/anual/estado-directores", authorizePermissions(PERMISSIONS.PLANILLA_VIEW), async (req, res) => {
+  try {
+    await ensureTables();
+    const anio = Number(req.query.anio || new Date().getFullYear());
+    console.log("[DEBUG] Estado Directores - Anio:", anio);
+    const directores = await getEstadoDirectores({ anio });
+    res.json({ anio, directores });
+  } catch (err) {
+    console.error("[ERROR] Licitación Estado Directores:", err);
+    res.status(500).json({ error: err.message || "No se pudo obtener el estado de los directores" });
+  }
+});
+
+router.get("/licitacion/anual/enviada-status", getEnviadaStatus);
+router.get("/licitacion/anual/escuelas-pendientes", getEscuelasPendientes);
+router.post("/licitacion/anual/enviar-final", enviarLicitacionFinal);
 
 router.get("/adjudicacion", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), async (req, res) => {
   try {
