@@ -10,7 +10,8 @@ const ROLE_LABELS = {
   directivo: 'Directivo',
   operador: 'Operador',
   consulta: 'Consulta',
-  control_ministerio: 'Control Ministerio'
+  control_ministerio: 'Control Ministerio',
+  area_compras: 'Área Compras'
 }
 
 const TIPO_COLORS = {
@@ -23,6 +24,7 @@ const TIPO_COLORS = {
 export default function Inicio({ onNavigate }) {
   const { user, token } = useAuth()
   const [stats, setStats] = useState(null)
+  const [vencimientos, setVencimientos] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [modalType, setModalType] = useState(null)
@@ -36,10 +38,18 @@ export default function Inicio({ onNavigate }) {
     }
     const fetchStats = async () => {
       try {
-        const res = await apiFetch('/api/dashboard/stats', { token })
-        if (!res.ok) throw new Error('Error al obtener datos')
-        const data = await res.json()
+        const [statsRes, vRes] = await Promise.all([
+          apiFetch('/api/dashboard/stats', { token }),
+          apiFetch('/api/depositos/vencimientos-proximos?dias=60', { token })
+        ])
+        if (!statsRes.ok) throw new Error('Error al obtener datos')
+        const data = await statsRes.json()
         setStats(data)
+        
+        if (vRes.ok) {
+          const vData = await vRes.json()
+          setVencimientos(vData.alertas || [])
+        }
       } catch (err) {
         setError(err.message)
       } finally {
@@ -47,7 +57,7 @@ export default function Inicio({ onNavigate }) {
       }
     }
     fetchStats()
-  }, [token])
+  }, [token, user?.role])
 
   if (loading) return <p style={{ color: 'var(--muted)', padding: '24px 0' }}>Cargando resumen...</p>
 
@@ -142,6 +152,47 @@ export default function Inicio({ onNavigate }) {
           onClick={() => onNavigate?.('proveedores')}
         />
       </div>
+
+      {/* Vencimientos Próximos */}
+      {vencimientos.length > 0 && (
+        <div style={{ marginBottom: 30 }}>
+          <h3 style={{ marginBottom: '12px', color: '#b91c1c', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: '1.4rem' }}>⏰</span> Alertas de Vencimiento (Próximos 60 días)
+          </h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
+            {vencimientos.map((v, i) => (
+              <div key={i} style={{ 
+                background: '#fff', 
+                border: '1px solid #fecaca', 
+                borderLeft: '5px solid #ef4444', 
+                borderRadius: 8, 
+                padding: '14px 18px', 
+                boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+              }}>
+                <div>
+                  <div style={{ fontWeight: 700, color: '#111827' }}>{v.producto}</div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>Depósito: {v.deposito}</div>
+                  <div style={{ 
+                    marginTop: 4, 
+                    fontSize: '0.85rem', 
+                    fontWeight: 600, 
+                    color: v.dias_para_vencer <= 15 ? '#b91c1c' : '#92400e' 
+                  }}>
+                    ⌛ Vence el {new Date(v.fecha_vencimiento).toLocaleDateString()} ({v.dias_para_vencer} días)
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: '1.2rem', fontWeight: 800 }}>{v.stock_actual_deposito}</div>
+                  <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', color: 'var(--muted)' }}>Stock</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Movimientos del mes */}
       <h3 style={{ marginBottom: '12px' }}>Movimientos — {mesActual}</h3>

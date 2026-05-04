@@ -16,6 +16,7 @@ import MiCuenta from '../components/MiCuenta'
 import Depositos from '../components/Depositos'
 import LicitacionesCerradas from '../components/LicitacionesCerradas'
 import RecepcionLicitacion from '../components/RecepcionLicitacion'
+import DistribucionEscuelas from '../components/DistribucionEscuelas'
 
 const TABS = [
   { key: 'inicio', label: 'Inicio', permission: null },
@@ -27,6 +28,7 @@ const TABS = [
   { key: 'compras-adjudicacion', label: 'Adjudicación y Cierre', permission: 'planilla.manage', role: 'area_compras' },
   { key: 'compras-entregas', label: 'Gestión de Entregas', permission: 'planilla.view', role: 'area_compras' },
   { key: 'deposito-recepcion', label: 'Recepción Licitación', permission: 'stock.movement.create', role: 'operador' },
+  { key: 'deposito-distribucion', label: 'Distribución a Escuelas', permission: 'stock.movement.create', role: 'operador' },
   { key: 'supervisor', label: 'Patrimonio Escolar', permission: 'pedidos.manage', role: 'supervisor' },
   { key: 'mis-escuelas', label: 'Mis Escuelas', permission: 'instituciones.view', role: 'supervisor', hideForRoles: ['admin'] },
   { key: 'productos', label: 'Productos', permission: 'productos.view', hideForRoles: ['supervisor', 'director_area'] },
@@ -66,7 +68,8 @@ export default function Dashboard() {
         'productos',
         'movimientos',
         'proveedores',
-        'deposito-recepcion'
+        'deposito-recepcion',
+        'deposito-distribucion'
       ].includes(tab.key)
     }
     if (user?.role === 'area_compras') {
@@ -118,6 +121,7 @@ export default function Dashboard() {
       case 'depositos': return <Depositos />
       case 'compras-entregas': return <LicitacionesCerradas />
       case 'deposito-recepcion': return <RecepcionLicitacion />
+      case 'deposito-distribucion': return <DistribucionEscuelas />
       default: return <Inicio />
     }
   }

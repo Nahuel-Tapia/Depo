@@ -617,20 +617,40 @@ function DirectivoPedidos() {
     return pedido.estado
   }
 
-  const ApprovalStepper = ({ estado }) => {
-    const steps = [
+  const ApprovalStepper = ({ pedido }) => {
+    const { estado, logistica } = pedido
+    
+    let steps = [
       { id: 'pendiente', label: 'Supervisor' },
       { id: 'pendiente_director', label: 'Director Área' },
-      { id: 'aprobado', label: 'Listo' }
+      { id: 'aprobado', label: 'Autorizado' }
     ]
 
-    const getStepStatus = (stepId, currentEstado) => {
-      const order = ['pendiente', 'pendiente_director', 'aprobado', 'entregado']
-      const currentIndex = order.indexOf(currentEstado)
+    if (pedido.tipo === 'anual' && logistica) {
+      steps = [
+        ...steps,
+        { id: 'licitacion', label: 'Licitación' },
+        { id: 'en_deposito', label: 'En Depósito' },
+        { id: 'entregado', label: 'Entregado' }
+      ]
+    }
+
+    const getStepStatus = (stepId, currentEstado, log) => {
+      const order = ['pendiente', 'pendiente_director', 'aprobado', 'licitacion', 'en_deposito', 'entregado']
+      let logicalEstado = currentEstado
+
+      if (pedido.tipo === 'anual' && log && currentEstado === 'aprobado') {
+        if (log.porcentaje_entrega >= 100) logicalEstado = 'entregado'
+        else if (log.total_entregada > 0) logicalEstado = 'en_deposito' // Simplificación: si ya entregamos algo, es que ya pasó por depósito
+        else if (log.estado_licitacion === 'en_deposito') logicalEstado = 'en_deposito'
+        else if (log.estado_licitacion === 'adjudicada') logicalEstado = 'licitacion'
+      }
+
+      const currentIndex = order.indexOf(logicalEstado)
       const stepIndex = order.indexOf(stepId)
 
       if (currentEstado === 'rechazado' || currentEstado === 'cancelado') return 'error'
-      if (stepIndex < currentIndex || currentEstado === 'entregado') return 'completed'
+      if (stepIndex < currentIndex || logicalEstado === 'entregado') return 'completed'
       if (stepIndex === currentIndex) return 'active'
       return 'pending'
     }
@@ -638,7 +658,7 @@ function DirectivoPedidos() {
     return (
       <div className="approval-stepper">
         {steps.map((step, idx) => {
-          const status = getStepStatus(step.id, estado)
+          const status = getStepStatus(step.id, estado, logistica)
           return (
             <div key={step.id} className={`step ${status}`}>
               <div className="step-circle">
@@ -652,10 +672,20 @@ function DirectivoPedidos() {
     )
   }
 
-  const formatEstadoPedido = (estado) => {
+  const formatEstadoPedido = (pedido) => {
+    const { estado, logistica } = pedido
     if (estado === 'aclaracion') return 'Aclaración solicitada'
     if (estado === 'pendiente_director') return 'Aprobado por Supervisor'
-    if (estado === 'aprobado') return 'Aprobado - Listo para retirar'
+    
+    if (estado === 'aprobado' && logistica) {
+      if (logistica.porcentaje_entrega >= 100) return 'Entregado (100%)'
+      if (logistica.total_entregada > 0) return `Entrega Parcial (${logistica.porcentaje_entrega}%)`
+      if (logistica.estado_licitacion === 'en_deposito') return 'En Depósito Central'
+      if (logistica.estado_licitacion === 'adjudicada') return 'Licitación Adjudicada'
+      return 'En Proceso de Licitación'
+    }
+
+    if (estado === 'aprobado') return 'Aprobado - Listo'
     if (estado === 'rechazado') return 'Rechazado'
     if (estado === 'cancelado') return 'Cancelado'
     if (estado === 'entregado') return 'Entregado'
@@ -987,7 +1017,7 @@ function DirectivoPedidos() {
                     <td>{pedido.cantidad}</td>
                     <td>
                       <span className={`badge-premium badge-${estadoVisible}`}>
-                        {formatEstadoPedido(estadoVisible)}
+                        {formatEstadoPedido(pedido)}
                       </span>
                     </td>
                     <td>
@@ -999,7 +1029,7 @@ function DirectivoPedidos() {
                       )}
                     </td>
                     <td>{new Date(pedido.created_at).toLocaleDateString('es-AR')}</td>
-                    <td style={{ minWidth: 200 }}><ApprovalStepper estado={pedido.estado} /></td>
+                    <td style={{ minWidth: 200 }}><ApprovalStepper pedido={pedido} /></td>
                     <td>{pedido.resumen_items || '-'}</td>
                     <td>
                       {pedido.estado === 'pendiente' && (
