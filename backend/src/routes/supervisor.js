@@ -584,8 +584,8 @@ router.get("/solicitudes", async (req, res) => {
                   '[]'::json
                 ) AS items
          FROM pedido p
-         JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido
-         JOIN producto pr ON pr.id_producto = dp.id_producto
+         LEFT JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido
+         LEFT JOIN producto pr ON pr.id_producto = dp.id_producto
          JOIN usuario u ON u.id_usuario = p.id_usuario_solicitante
          JOIN institucion i ON i.id_institucion = p.id_institucion
          LEFT JOIN usuario usup ON usup.id_usuario = p.aprobado_por_supervisor_id

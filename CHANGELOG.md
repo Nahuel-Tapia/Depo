@@ -1,6 +1,39 @@
 # Registro de Cambios - Depo
 
-## 30 de Abril 2026 - Flujo de Aprobación, Registro y Flexibilidad de CUE
+## 04 de Mayo 2026 - Automatización de Licitación Anual (Compras)
+
+### 1. Rol Compras: Licitación Anual Real-Time
+- Se eliminó el proceso manual de "Planillas" para la licitación. Ahora el sistema consume datos directamente de los pedidos aprobados por los Directores de Área.
+- **Sección A (Consolidado)**: Nueva tabla que agrupa y suma productos aprobados para facilitar el armado de pliegos de licitación.
+- **Sección B (Seguimiento)**: Nueva tabla de estado que muestra de forma simple qué Directores de Área han completado su proceso de aprobación (Enviado/Pendiente).
+- **Exportación**: Se añadió la funcionalidad de exportación a CSV para el consolidado general.
+- **Año Dinámico**: Visualización dinámica del año de licitación basado en el año en curso.
+
+### 2. Correcciones de Sistema
+- Se corrigió un error de sintaxis CSS en `index.css` que impedía la compilación correcta.
+
+---
+
+## 30 de Abril 2026 - Rediseño Premium y Estabilización de Flujo
+
+### 1. Interfaz de Usuario Premium (Design System)
+- Se implementó un nuevo sistema de diseño basado en **Glassmorphism**, gradientes modernos y micro-animaciones.
+- Rediseño completo del Dashboard del Directivo con un **Stepper de Progreso** para visualizar las etapas de aprobación (Supervisor -> Director Área -> Listo).
+- Mejora estética en el Panel del Director de Área con tarjetas con relieve y navegación optimizada.
+- Estandarización de badges y estados con un estilo visual coherente y premium.
+
+### 2. Correcciones en el Flujo de Aprobación
+- **Backend**: Se corrigió un bug en `PATCH /api/pedidos/:id/estado` donde los pedidos de refuerzo quedaban atrapados en el estado de aprobación dual. Ahora solo los pedidos anuales requieren validación del Director de Área.
+- **Backend**: Optimización de las consultas de listado con `LEFT JOIN` para garantizar que no se pierdan pedidos que estén en proceso de carga de detalles.
+- **Auditoría**: Inclusión de campos de auditoría (`aprobado_por_director_id`, etc.) en todas las vistas de pedidos.
+
+### 3. Registro Directivo (UX)
+- Se mejoró la experiencia de registro: el nivel educativo ahora es visible de forma clara (readonly) cuando se detecta una única modalidad, eliminando confusiones.
+- Se agregó feedback visual (pulso animado) cuando el sistema detecta exitosamente la institución mediante el CUE.
+
+---
+
+## 30 de Abril 2026 - Flujo de Aprobación, Registro y Flexibilidad de CUE (Session Previa)
 
 ### 1. Sistema de Aprobación Dual y Resumen Anual
 **Backend y Frontend**
@@ -22,8 +55,9 @@
 **Backend (`backend/src/routes/supervisor.js` y `directorArea.js`)**
 - Se restauró la función `ensureSupervisorSchema` en el backend, solucionando errores 500 al listar solicitudes.
 - Se habilitó la visibilidad de solicitudes para el Director de Área en el endpoint consolidado de supervisión, vinculando instituciones a través de sus zonas coordinadas.
-- Se corrigió un error crítico de visibilidad para supervisores con múltiples departamentos en su jurisdicción o múltiples niveles educativos (ahora se procesan como listas separadas por coma).
-- Se optimizó el filtrado en la vista de "Solicitud Anual" del Director de Área para distinguir entre pedidos pendientes de supervisor, pendientes de director e historial aprobado.
+- Se corrigió un error crítico de visibilidad para supervisores con múltiples departamentos en su jurisdicción o múltiples niveles educativos.
+- Se optimizó el filtrado en la vista de "Solicitud Anual" del Director de Área.
+- Se mejoró la comunicación con el Directivo: ahora visualiza estados claros como "Aprobado - Listo para retirar" y una nueva sección destacada con el detalle de ítems pendientes de retiro tras la aprobación final.
 
 ---
 

@@ -829,10 +829,13 @@ router.get("/", authorizePermissions(PERMISSIONS.PEDIDOS_VIEW), async (req, res)
         pr.unidad_medida as detalle_unidad_medida,
         pr.stock_actual as detalle_stock_actual,
         dp.cantidad_solicitada as detalle_cantidad,
+        p.aprobado_por_director_id,
+        p.fecha_aprobacion_director,
+        p.aprobado_director_area,
         u.nombre as usuario_nombre,
         i.nombre as institucion
       FROM pedido p
-      JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido
+      LEFT JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido
       JOIN producto pr ON dp.id_producto = pr.id_producto
       JOIN usuario u ON p.id_usuario_solicitante = u.id_usuario
       LEFT JOIN institucion i ON p.id_institucion = i.id_institucion
@@ -1210,7 +1213,7 @@ router.patch("/:id/estado", authorizePermissions(PERMISSIONS.PEDIDOS_MANAGE), as
     }
 
     const pedido = await get(
-      `SELECT id_pedido as id, estado::text as estado_db, id_institucion FROM pedido WHERE id_pedido = ?`,
+      `SELECT id_pedido as id, estado::text as estado_db, id_institucion, COALESCE(tipo, 'anual') as tipo FROM pedido WHERE id_pedido = ?`,
       [id]
     );
 

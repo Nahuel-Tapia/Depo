@@ -78,6 +78,7 @@ export default function ComprasPanel({ section = 'pedidos' }) {
   const [planillas, setPlanillas] = useState([])
   const [detalle, setDetalle] = useState(null)
   const [consolidado, setConsolidado] = useState([])
+  const [estadoDirectores, setEstadoDirectores] = useState([])
   const [adjudicacion, setAdjudicacion] = useState([])
   const [proveedores, setProveedores] = useState([])
   const [formByProduct, setFormByProduct] = useState({})
@@ -103,19 +104,24 @@ export default function ComprasPanel({ section = 'pedidos' }) {
     setLoading(true)
     try {
       const query = buildQuery(activeFilters)
-      const [planillasRes, consolidadoRes, adjudicacionRes] = await Promise.all([
+      const anio = new Date().getFullYear()
+
+      const [planillasRes, consolidadoRes, adjudicacionRes, statusRes] = await Promise.all([
         apiFetch(`/api/compras/planillas${query}`, { token }),
-        apiFetch(`/api/compras/licitacion/consolidado${query}`, { token }),
-        apiFetch(`/api/compras/adjudicacion${query}`, { token })
+        apiFetch(`/api/compras/licitacion/anual/consolidado?anio=${anio}`, { token }),
+        apiFetch(`/api/compras/adjudicacion${query}`, { token }),
+        apiFetch(`/api/compras/licitacion/anual/estado-directores?anio=${anio}`, { token })
       ])
 
       const planillasData = planillasRes.ok ? await planillasRes.json() : { planillas: [] }
       const consolidadoData = consolidadoRes.ok ? await consolidadoRes.json() : { items: [] }
       const adjudicacionData = adjudicacionRes.ok ? await adjudicacionRes.json() : { items: [] }
+      const statusData = statusRes.ok ? await statusRes.json() : { directores: [] }
 
       setPlanillas(planillasData.planillas || [])
       setConsolidado(consolidadoData.items || [])
       setAdjudicacion(adjudicacionData.items || [])
+      setEstadoDirectores(statusData.directores || [])
       setFormByProduct((prev) => {
         const next = { ...prev }
         for (const item of adjudicacionData.items || []) {
@@ -215,6 +221,26 @@ export default function ComprasPanel({ section = 'pedidos' }) {
     }
   }
 
+  const handleExportCSV = () => {
+    if (!consolidado.length) return
+    const headers = ['Producto', 'Cantidad Total', 'Unidad de Medida']
+    const rows = consolidado.map(item => [
+      item.producto,
+      item.cantidad_total,
+      item.unidad_medida
+    ])
+    const csvContent = [headers, ...rows].map(e => e.join(',')).join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.setAttribute('href', url)
+    link.setAttribute('download', `licitacion_${new Date().getFullYear()}.csv`)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
   const handleFormChange = (productoId, field, value) => {
     setFormByProduct((prev) => ({
       ...prev,
@@ -273,8 +299,8 @@ export default function ComprasPanel({ section = 'pedidos' }) {
       subtitle: 'Recepcion de planillas y validacion de integridad antes de aceptar.'
     },
     licitacion: {
-      title: 'Licitacion Anual',
-      subtitle: 'Filtros dinamicos para trabajar las planillas aceptadas por director, nivel y estado.'
+      title: `Licitacion Anual ${new Date().getFullYear()}`,
+      subtitle: 'Consolidado general de pedidos aprobados por directores de area.'
     },
     'listado-final': {
       title: 'Listado Final a Licitar',
@@ -303,7 +329,7 @@ export default function ComprasPanel({ section = 'pedidos' }) {
       )}
 
       <div ref={printRef} style={{ marginTop: 18 }}>
-        {(section === 'licitacion' || section === 'listado-final' || section === 'adjudicacion') && (
+        {(section === 'listado-final' || section === 'adjudicacion') && (
           <section className="card" style={{ padding: 18, marginBottom: 18 }}>
             <h3 style={{ marginTop: 0 }}>Filtros</h3>
             <Filters filters={filters} setFilters={setFilters} directores={directores} />
@@ -424,74 +450,87 @@ export default function ComprasPanel({ section = 'pedidos' }) {
         )}
 
         {section === 'licitacion' && (
-          <section className="card" style={{ padding: 18 }}>
-            <h3 style={{ marginTop: 0 }}>Panel de control</h3>
-            <p style={{ marginTop: 0, color: 'var(--muted)' }}>
-              Esta vista concentra las planillas para el trabajo de licitacion y deja a mano los filtros de director, nivel y estado.
-            </p>
-
-            {loading ? (
-              <div className="sv-empty-state">Cargando datos...</div>
-            ) : planillas.length === 0 ? (
-              <div className="sv-empty-state">No hay planillas para los filtros seleccionados.</div>
-            ) : (
+          <div>
+            <section className="card" style={{ padding: 24, marginBottom: 24 }}>
+              <h3 style={{ marginTop: 0, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: '1.5rem' }}>🚦</span> Sección B — Estado de envío por Director de Área
+              </h3>
               <table style={{ marginBottom: 0 }}>
                 <thead>
-                  <tr>
-                    <th>Planilla</th>
-                    <th>Director de Area</th>
-                    <th>Estado</th>
-                    <th>Escuelas cargadas</th>
-                    <th>Accion</th>
+                  <tr style={{ background: '#f8fafc' }}>
+                    <th>NIVEL EDUCATIVO</th>
+                    <th>DIRECTOR DE ÁREA</th>
+                    <th style={{ textAlign: 'center' }}>ESTADO</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {planillas.map((planilla) => (
-                    <tr key={planilla.id}>
-                      <td>#{planilla.id} - {planilla.anio}</td>
-                      <td>{`${planilla.director_nombre || ''} ${planilla.director_apellido || ''}`.trim()}</td>
-                      <td>{planilla.estado}</td>
-                      <td>{planilla.validacion_cobertura?.escuelas_cargadas || 0} / {planilla.validacion_cobertura?.escuelas_esperadas || 0}</td>
-                      <td>
-                        <button className="secondary" style={{ margin: 0 }} onClick={() => handleVerDetalle(planilla.id)}>
-                          {detalle?.planilla?.id === planilla.id ? 'Ocultar detalle' : 'Ver detalle'}
-                        </button>
+                  {estadoDirectores.length === 0 ? (
+                    <tr>
+                      <td colSpan={3} style={{ textAlign: 'center', padding: 20, color: 'var(--muted)' }}>
+                        No hay directores de área registrados.
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    estadoDirectores.map((dir) => (
+                      <tr key={dir.id_usuario}>
+                        <td style={{ fontWeight: 600 }}>{dir.nivel_educativo || 'Sin nivel'}</td>
+                        <td>{`${dir.nombre || ''} ${dir.apellido || ''}`.trim()}</td>
+                        <td style={{ textAlign: 'center' }}>
+                          {dir.enviado ? (
+                            <span style={{ color: '#166534', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                              ✅ Enviado
+                            </span>
+                          ) : (
+                            <span style={{ color: '#9a3412', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                              ⏳ Pendiente
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
-            )}
+            </section>
 
-            {detalle?.planilla && (
-              <div style={{ marginTop: 18 }}>
-                <h3 style={{ marginBottom: 10 }}>Detalle de la planilla #{detalle.planilla.id}</h3>
-                {groupedDetalle.map((grupo) => (
-                  <div key={grupo.institucion} style={{ marginBottom: 14 }}>
-                    <div style={{ fontWeight: 700, marginBottom: 6 }}>{grupo.institucion}</div>
-                    <table style={{ marginBottom: 0 }}>
-                      <thead>
-                        <tr>
-                          <th>Producto</th>
-                          <th>Unidad</th>
-                          <th>Cantidad</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {grupo.items.map((item) => (
-                          <tr key={item.id}>
-                            <td>{item.producto}</td>
-                            <td>{item.unidad_medida || 'unidad'}</td>
-                            <td>{item.cantidad}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ))}
+            <section className="card" style={{ padding: 24 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: '1.5rem' }}>📋</span> Sección A — Consolidado general
+                </h3>
+                <button className="secondary" onClick={handleExportCSV} disabled={!consolidado.length}>
+                  📥 Exportar Consolidado (CSV)
+                </button>
               </div>
-            )}
-          </section>
+
+              {loading ? (
+                <div className="sv-empty-state">Generando consolidado...</div>
+              ) : consolidado.length === 0 ? (
+                <div className="sv-empty-state">Todavía no hay solicitudes aprobadas para el año en curso.</div>
+              ) : (
+                <table style={{ marginBottom: 0 }}>
+                  <thead>
+                    <tr style={{ background: '#f8fafc' }}>
+                      <th>PRODUCTO</th>
+                      <th style={{ textAlign: 'center' }}>CANTIDAD TOTAL</th>
+                      <th>UNIDAD</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {consolidado.map((item) => (
+                      <tr key={item.producto_id}>
+                        <td style={{ fontWeight: 600 }}>{item.producto}</td>
+                        <td style={{ textAlign: 'center', fontSize: '1.1rem', fontWeight: 700, color: 'var(--primary)' }}>
+                          {item.cantidad_total}
+                        </td>
+                        <td style={{ color: 'var(--muted)' }}>{item.unidad_medida}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </section>
+          </div>
         )}
 
         {section === 'listado-final' && (
