@@ -100,6 +100,8 @@ async function initDb() {
   // Verificar conexión y que existan las tablas del esquema
   const check = await get("SELECT COUNT(*) as count FROM usuario");
   console.log("Database initialized");
+
+  await pool.query("ALTER TABLE usuario DROP CONSTRAINT IF EXISTS usuario_dni_key");
   
   // Crear usuario admin por defecto si no existe
   const admin = await get("SELECT id_usuario FROM usuario WHERE email = $1", ["admin@depo.local"]);
