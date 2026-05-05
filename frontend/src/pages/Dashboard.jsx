@@ -68,6 +68,7 @@ export default function Dashboard() {
         'productos',
         'movimientos',
         'proveedores',
+        'depositos',
         'deposito-recepcion',
         'deposito-distribucion'
       ].includes(tab.key)

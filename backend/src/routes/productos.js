@@ -31,6 +31,7 @@ router.get("/", authorizePermissions(PERMISSIONS.PRODUCTOS_VIEW), async (req, re
           p.stock_minimo,
           p.id_categoria,
           c.nombre as categoria_nombre,
+          COALESCE(SUM(sd.cantidad), 0) as stock_total,
           COALESCE(SUM(CASE WHEN d.tipo = 'central' THEN sd.cantidad ELSE 0 END), 0) as stock_central,
           COALESCE(SUM(CASE WHEN d.tipo = 'centro_civico' THEN sd.cantidad ELSE 0 END), 0) as stock_centro_civico,
           COALESCE(SUM(CASE WHEN d.tipo = 'capsula' THEN sd.cantidad ELSE 0 END), 0) as stock_capsula,
@@ -127,7 +128,25 @@ router.post("/", authorizePermissions(PERMISSIONS.PRODUCTOS_CREATE), async (req,
       [nombre, unidad_medida || 'unidad', stock_actual_val, parseInt(stock_minimo) || 0, id_categoria || null]
     );
 
-    return res.status(201).json({ id: result.lastID });
+    const newId = result.lastID;
+
+    // Sincronizar con Depósito Central si hay stock inicial
+    if (stock_actual_val > 0) {
+      const central = await get("SELECT id_deposito FROM deposito WHERE tipo = 'central' LIMIT 1");
+      if (central) {
+        await run(
+          "INSERT INTO stock_deposito (id_deposito, id_producto, cantidad) VALUES (?, ?, ?) ON CONFLICT (id_deposito, id_producto) DO UPDATE SET cantidad = EXCLUDED.cantidad",
+          [central.id_deposito, newId, stock_actual_val]
+        );
+        // También loguear el movimiento inicial
+        await run(
+          "INSERT INTO movimiento_stock (id_producto, tipo, cantidad, motivo, id_usuario, id_deposito) VALUES (?, 'ingreso', ?, 'Stock inicial catálogo', ?, ?)",
+          [newId, stock_actual_val, req.user.sub, central.id_deposito]
+        );
+      }
+    }
+
+    return res.status(201).json({ id: newId });
   } catch (err) {
     console.error("Error creando producto:", err);
     return res.status(500).json({ error: "No se pudo crear el producto" });
@@ -179,6 +198,18 @@ router.patch("/:id", authorizePermissions(PERMISSIONS.PRODUCTOS_EDIT), async (re
       `UPDATE producto SET ${updates.join(", ")} WHERE id_producto = ?`,
       params
     );
+
+    // Si se actualizó el stock_actual, sincronizar con el depósito central
+    if (req.body.stock_actual !== undefined) {
+      const stock_val = parseInt(req.body.stock_actual) || 0;
+      const central = await get("SELECT id_deposito FROM deposito WHERE tipo = 'central' LIMIT 1");
+      if (central) {
+        await run(
+          "INSERT INTO stock_deposito (id_deposito, id_producto, cantidad) VALUES (?, ?, ?) ON CONFLICT (id_deposito, id_producto) DO UPDATE SET cantidad = EXCLUDED.cantidad",
+          [central.id_deposito, id, stock_val]
+        );
+      }
+    }
 
     return res.json({ ok: true });
   } catch (err) {
