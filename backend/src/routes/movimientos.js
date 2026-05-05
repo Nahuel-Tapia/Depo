@@ -13,7 +13,7 @@ router.use(authenticate);
 // Listar movimientos
 router.get("/", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW), async (req, res) => {
   try {
-    const { producto_id, tipo, limit = 50, offset = 0 } = req.query;
+    const { producto_id, id_deposito, tipo, limit = 50, offset = 0 } = req.query;
 
     let query = `
       SELECT 
@@ -48,6 +48,11 @@ router.get("/", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW), async (req, 
     if (tipo && TIPOS_MOVIMIENTO.includes(tipo)) {
       query += ` AND m.tipo = $${paramIndex++}`;
       params.push(tipo);
+    }
+
+    if (id_deposito) {
+      query += ` AND m.id_deposito = $${paramIndex++}`;
+      params.push(id_deposito);
     }
 
     query += ` ORDER BY m.fecha_movimiento DESC LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;

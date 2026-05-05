@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../api'
 
@@ -7,25 +7,24 @@ export default function Depositos() {
   const [depositos, setDepositos] = useState([])
   const [depositoSeleccionado, setDepositoSeleccionado] = useState(null)
   const [stock, setStock] = useState([])
-  const [perDeposit, setPerDeposit] = useState({})
-  const [msg, setMsg] = useState({ text: '', type: '' })
+  const [movimientos, setMovimientos] = useState([])
   const [loading, setLoading] = useState(false)
+  const [msg, setMsg] = useState({ text: '', type: '' })
   
-  // Formularios
-  const [modalMovimiento, setModalMovimiento] = useState(null)
-  const [formMov, setFormMov] = useState({ id_producto: '', cantidad: '', motivo: '' })
+  // Modales
+  const [modalType, setModalType] = useState(null) // 'ingreso', 'egreso', 'traslado'
   const [productos, setProductos] = useState([])
+  const [form, setForm] = useState({ id_producto: '', cantidad: '', destino_id: '', motivo: '' })
 
   const canMove = hasPermission('stock.movement.create') || user?.role === 'admin'
   const esAdmin = user?.role === 'admin'
   const esOperador = user?.role === 'operador'
 
-  // Operador solo ve Central
   const depositosMostrar = esOperador 
-    ? depositos.filter(d => d.tipo === 'central')
+    ? depositos.filter(d => d.tipo === 'central' || d.tipo === 'centro_civico')
     : depositos
 
-  const loadDepositos = async () => {
+  const loadData = useCallback(async () => {
     try {
       const res = await apiFetch('/api/depositos', { token })
       if (res.ok) {
@@ -35,81 +34,93 @@ export default function Depositos() {
           setDepositoSeleccionado(data.depositos[0])
         }
       }
-    } catch { /* ignore */ }
-  }
-
-  const loadProductos = async () => {
-    try {
-      const res = await apiFetch('/api/productos', { token })
-      if (res.ok) {
-        const data = await res.json()
-        setProductos(data.productos || [])
+      
+      const prodRes = await apiFetch('/api/productos', { token })
+      if (prodRes.ok) {
+        const prodData = await prodRes.json()
+        setProductos(prodData.productos || [])
       }
-    } catch { /* ignore */ }
-  }
+    } catch (err) {
+      console.error('Error loading initial data:', err)
+    }
+  }, [token, depositoSeleccionado])
 
-  const loadStock = async (depositoId) => {
-    if (!depositoId) return
+  const loadStockYMovimientos = useCallback(async () => {
+    if (!depositoSeleccionado?.id) return
     setLoading(true)
     try {
-      const res = await apiFetch(`/api/depositos/${depositoId}/stock`, { token })
-      if (res.ok) {
-        const data = await res.json()
+      const [stockRes, movRes] = await Promise.all([
+        apiFetch(`/api/depositos/${depositoSeleccionado.id}/stock`, { token }),
+        apiFetch(`/api/movimientos?id_deposito=${depositoSeleccionado.id}&limit=10`, { token })
+      ])
+      
+      if (stockRes.ok) {
+        const data = await stockRes.json()
         setStock(data.stock || [])
       }
-    } catch { /* ignore */ }
-    setLoading(false)
-  }
-
-  const loadDepositosProductos = async (depositoId) => {
-    try {
-      const res = await apiFetch(`/api/depositos/${depositoId}/productos`, { token })
-      if (res.ok) {
-        const data = await res.json()
-        setPerDeposit(prev => ({ ...prev, [depositoId]: data.productos || [] }))
+      
+      if (movRes.ok) {
+        const data = await movRes.json()
+        setMovimientos(data.movimientos || [])
       }
-    } catch {}
-  }
-
-  useEffect(() => {
-    loadDepositos()
-    loadProductos()
-  }, [])
-
-  useEffect(() => {
-    if (depositoSeleccionado?.id) {
-      loadStock(depositoSeleccionado.id)
-      loadDepositosProductos(depositoSeleccionado.id)
+    } catch (err) {
+      console.error('Error loading stock/movimientos:', err)
     }
-  }, [depositoSeleccionado])
+    setLoading(false)
+  }, [token, depositoSeleccionado])
 
-  const handleMovimiento = async (tipo) => {
+  useEffect(() => {
+    loadData()
+  }, [loadData])
+
+  useEffect(() => {
+    loadStockYMovimientos()
+  }, [loadStockYMovimientos])
+
+  const handleAction = async (e) => {
+    e.preventDefault()
     setMsg({ text: '', type: '' })
-    if (!formMov.id_producto || !formMov.cantidad) {
+
+    if (!form.id_producto || !form.cantidad) {
       setMsg({ text: 'Producto y cantidad requeridos', type: 'error' })
       return
     }
 
     try {
-      const endpoint = `/api/depositos/${depositoSeleccionado.id}/${tipo}`
+      let endpoint = `/api/depositos/${depositoSeleccionado.id}/${modalType}`
+      let body = {
+        id_producto: parseInt(form.id_producto),
+        cantidad: parseInt(form.cantidad),
+        motivo: form.motivo || `${modalType.charAt(0).toUpperCase() + modalType.slice(1)} manual`
+      }
+
+      if (modalType === 'traslado') {
+        endpoint = '/api/depositos/mover'
+        body = {
+          ...body,
+          origen_id: depositoSeleccionado.id,
+          destino_id: parseInt(form.destino_id)
+        }
+        if (!form.destino_id) {
+          setMsg({ text: 'Depósito de destino requerido', type: 'error' })
+          return
+        }
+      }
+
       const res = await apiFetch(endpoint, {
         token,
         method: 'POST',
-        body: JSON.stringify({
-          id_producto: parseInt(formMov.id_producto),
-          cantidad: parseInt(formMov.cantidad),
-          motivo: formMov.motivo || `${tipo === 'ingreso' ? 'Ingreso' : 'Egreso'} a depósito`
-        })
+        body: JSON.stringify(body)
       })
 
       if (res.ok) {
-        setMsg({ text: `${tipo === 'ingreso' ? 'Ingreso' : 'Egreso'} registrado`, type: 'success' })
-        setFormMov({ id_producto: '', cantidad: '', motivo: '' })
-        setModalMovimiento(null)
-        loadStock(depositoSeleccionado.id)
+        setMsg({ text: 'Operación realizada con éxito', type: 'success' })
+        setForm({ id_producto: '', cantidad: '', destino_id: '', motivo: '' })
+        setModalType(null)
+        loadStockYMovimientos()
       } else {
         const data = await res.json()
-        setMsg({ text: data.error || 'Error', type: 'error' })
+        setMsg({ text: data.error || 'Error en la operación', type: 'error' })
       }
     } catch {
       setMsg({ text: 'Error de conexión', type: 'error' })
@@ -118,7 +129,7 @@ export default function Depositos() {
 
   const getTipoLabel = (tipo) => {
     switch (tipo) {
-      case 'central': return '🗃️ Central'
+      case 'central': return '📦 Central'
       case 'centro_civico': return '🏛️ Centro Cívico'
       case 'capsula': return '🔐 Cápsula'
       default: return tipo
@@ -126,16 +137,36 @@ export default function Depositos() {
   }
 
   return (
-    <div>
-      <h2>📦 Gestión de Depósitos</h2>
-      
-      {/* Selector de depósito */}
-      <div style={{ marginBottom: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-        {depositos.map(d => (
+    <div className="depositos-container">
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+        <div>
+          <h2 style={{ margin: 0 }}>Gestión de Depósitos</h2>
+          <p style={{ color: 'var(--muted)', margin: '4px 0 0 0' }}>Estado del inventario por ubicación</p>
+        </div>
+      </header>
+
+      {/* Selector de Depósitos con Diseño Premium */}
+      <div className="deposito-tabs" style={{ display: 'flex', gap: '12px', marginBottom: '24px', overflowX: 'auto', paddingBottom: '8px' }}>
+        {depositosMostrar.map(d => (
           <button
             key={d.id}
-            className={`tab-btn ${depositoSeleccionado?.id === d.id ? 'active' : ''}`}
             onClick={() => setDepositoSeleccionado(d)}
+            style={{
+              padding: '12px 20px',
+              borderRadius: '12px',
+              border: '2px solid',
+              borderColor: depositoSeleccionado?.id === d.id ? 'var(--primary)' : 'transparent',
+              background: depositoSeleccionado?.id === d.id ? 'var(--primary-light, #eff6ff)' : 'white',
+              color: depositoSeleccionado?.id === d.id ? 'var(--primary)' : 'var(--dark)',
+              fontWeight: 600,
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+              transition: 'all 0.2s ease',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
           >
             {getTipoLabel(d.tipo)}
           </button>
@@ -143,165 +174,227 @@ export default function Depositos() {
       </div>
 
       {depositoSeleccionado && (
-        <div className="card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-            <div>
-              <h3 style={{ margin: 0 }}>
-                {depositoSeleccionado.nombre}
-              </h3>
-              <p style={{ margin: '0.25rem 0', color: 'var(--muted)', fontSize: '0.85rem' }}>
-                {depositoSeleccionado.descripcion} — {depositoSeleccionado.ubicacion}
-              </p>
+        <div className="grid-depositos" style={{ display: 'grid', gridTemplateColumns: '3fr 1.2fr', gap: '24px' }}>
+          
+          {/* Panel Principal: Stock */}
+          <div className="card" style={{ padding: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h3 style={{ margin: 0 }}>Inventario Actual</h3>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {canMove && (depositoSeleccionado.tipo !== 'capsula' || esAdmin) && (
+                  <>
+                    <button className="primary" onClick={() => { setModalType('ingreso'); setForm({ ...form, id_producto: '', cantidad: '' }) }} style={{ padding: '8px 14px', fontSize: '0.85rem' }}>+ Ingreso</button>
+                    <button className="secondary" onClick={() => { setModalType('egreso'); setForm({ ...form, id_producto: '', cantidad: '' }) }} style={{ padding: '8px 14px', fontSize: '0.85rem' }}>- Egreso</button>
+                    <button className="secondary" onClick={() => { setModalType('traslado'); setForm({ ...form, id_producto: '', cantidad: '' }) }} style={{ padding: '8px 14px', fontSize: '0.85rem' }}>🔄 Traslado</button>
+                  </>
+                )}
+              </div>
             </div>
-            {depositoSeleccionado.tipo === 'capsula' && !esAdmin && (
-              <span style={{ background: 'var(--warning-bg)', color: 'var(--warning-color)', padding: '0.25rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem' }}>
-                🔒 Solo admin puede mover
-              </span>
+
+            {msg.text && (
+              <div className={`msg show ${msg.type === 'success' ? 'msg-success' : 'msg-error'}`} style={{ marginBottom: '20px' }}>
+                {msg.text}
+              </div>
+            )}
+
+            {loading ? (
+              <div style={{ textAlign: 'center', padding: '40px' }}>Cargando inventario...</div>
+            ) : (
+              <div className="table-responsive">
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid #f1f5f9', textAlign: 'left' }}>
+                      <th style={{ padding: '12px 8px' }}>Producto</th>
+                      <th style={{ padding: '12px 8px', textAlign: 'center' }}>Cantidad</th>
+                      <th style={{ padding: '12px 8px' }}>Unidad</th>
+                      <th style={{ padding: '12px 8px', textAlign: 'right' }}>Alertas</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {stock.map(s => {
+                      const isLow = s.cantidad < 10 && s.cantidad > 0
+                      const isZero = s.cantidad === 0
+                      return (
+                        <tr key={s.id} style={{ borderBottom: '1px solid #f1f5f9', opacity: isZero ? 0.6 : 1 }}>
+                          <td style={{ padding: '12px 8px', fontWeight: isZero ? 400 : 500 }}>{s.nombre}</td>
+                          <td style={{ padding: '12px 8px', textAlign: 'center' }}>
+                            <span style={{ 
+                              background: isZero ? '#f3f4f6' : (isLow ? '#fef2f2' : '#f0fdf4'), 
+                              color: isZero ? '#6b7280' : (isLow ? '#b91c1c' : '#166534'),
+                              padding: '4px 10px',
+                              borderRadius: '20px',
+                              fontWeight: 700,
+                              fontSize: '0.9rem'
+                            }}>
+                              {s.cantidad}
+                            </span>
+                          </td>
+                          <td style={{ padding: '12px 8px', color: 'var(--muted)', fontSize: '0.85rem' }}>{s.unidad_medida}</td>
+                          <td style={{ padding: '12px 8px', textAlign: 'right' }}>
+                            {isLow && <span style={{ color: '#ef4444', fontSize: '0.75rem', fontWeight: 600 }}>⚠️ STOCK BAJO</span>}
+                            {isZero && <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>SIN STOCK</span>}
+                            {s.requiere_autorizacion && <span style={{ marginLeft: '8px', background: '#fffbeb', color: '#92400e', padding: '2px 6px', borderRadius: '4px', fontSize: '0.7rem' }}>🔒 Cápsula</span>}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                    {stock.length === 0 && (
+                      <tr>
+                        <td colSpan={4} style={{ textAlign: 'center', padding: '40px', color: 'var(--muted)' }}>
+                          No se encontraron productos vinculados.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
 
-          {/* Botones de movimiento */}
-          {canMove && depositoSeleccionado.tipo !== 'capsula' && !esOperador && (
-            <div style={{ marginBottom: '1rem' }}>
-              <button className="primary" onClick={() => setModalMovimiento('ingreso')}>+ Ingreso</button>
-              <button className="secondary" style={{ marginLeft: '0.5rem' }} onClick={() => setModalMovimiento('egreso')}>- Egreso</button>
+          {/* Panel Lateral: Información y Actividad */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            <div className="card" style={{ padding: '20px', background: 'linear-gradient(to bottom, #ffffff, #f8fafc)' }}>
+              <h4 style={{ margin: '0 0 12px 0' }}>Detalles del Nodo</h4>
+              <div style={{ fontSize: '0.85rem', lineHeight: '1.6' }}>
+                <div style={{ marginBottom: '8px' }}><strong>📍 Ubicación:</strong> {depositoSeleccionado.ubicacion}</div>
+                <div style={{ marginBottom: '8px' }}><strong>📝 Descripción:</strong> {depositoSeleccionado.descripcion}</div>
+                <div><strong>🏷️ Tipo:</strong> <span style={{ textTransform: 'capitalize' }}>{depositoSeleccionado.tipo.replace('_', ' ')}</span></div>
+              </div>
             </div>
-          )}
-          {canMove && depositoSeleccionado.tipo === 'capsula' && esAdmin && (
-            <div style={{ marginBottom: '1rem' }}>
-              <button className="primary" onClick={() => setModalMovimiento('ingreso')}>+ Ingreso</button>
-              <button className="secondary" style={{ marginLeft: '0.5rem' }} onClick={() => setModalMovimiento('egreso')}>- Egreso</button>
-            </div>
-          )}
 
-          {/* Mensaje */}
-          {msg.text && (
-            <div className={msg.type === 'error' ? 'error' : 'success'} style={{ marginBottom: '1rem' }}>
-              {msg.text}
-            </div>
-          )}
-
-          {/* Stock */}
-          <h4 style={{ marginTop: '1rem' }}>Stock actual</h4>
-          {loading ? (
-            <p>Cargando...</p>
-          ) : (
-            <table style={{ width: '100%', fontSize: '0.85rem' }}>
-              <thead>
-                <tr>
-                  <th style={{ textAlign: 'left' }}>Producto</th>
-                  <th style={{ textAlign: 'right' }}>Cantidad</th>
-                  <th style={{ textAlign: 'center' }}>Estado</th>
-                </tr>
-              </thead>
-              <tbody>
-                {stock.filter(s => s.cantidad > 0).map(s => (
-                  <tr key={s.id}>
-                    <td>{s.nombre}</td>
-                    <td style={{ textAlign: 'right' }}>{s.cantidad} {s.unidad_medida}</td>
-                    <td style={{ textAlign: 'center' }}>
-                      {s.requiere_autorizacion ? (
-                        <span style={{ background: 'var(--warning-bg)', color: 'var(--warning-color)', padding: '0.1rem 0.3rem', borderRadius: '3px', fontSize: '0.7rem' }}>
-                          🔐 Auth
-                        </span>
-                      ) : '-'}
-                    </td>
-                  </tr>
+            <div className="card" style={{ padding: '20px' }}>
+              <h4 style={{ margin: '0 0 16px 0' }}>Actividad Reciente</h4>
+              <div className="activity-list" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                {movimientos.map((m, i) => (
+                  <div key={i} style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                    <div style={{ 
+                      width: '8px', height: '8px', borderRadius: '50%', marginTop: '6px',
+                      background: m.tipo === 'ingreso' ? '#22c55e' : (m.tipo === 'egreso' ? '#ef4444' : '#f59e0b')
+                    }}></div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>{m.producto_nombre}</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
+                        {m.tipo === 'ingreso' ? 'Ingreso' : 'Egreso'} de {m.cantidad} unidades
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '2px' }}>
+                        {new Date(m.created_at).toLocaleDateString('es-AR')}
+                      </div>
+                    </div>
+                  </div>
                 ))}
-          {stock.filter(s => s.cantidad > 0).length === 0 && (
-            <tr>
-              <td colSpan={3} style={{ textAlign: 'center', color: 'var(--muted)' }}>
-                Sin stock
-              </td>
-            </tr>
-          )}
-              </tbody>
-            </table>
-          )}
+                {movimientos.length === 0 && <p style={{ fontSize: '0.8rem', color: 'var(--muted)', textAlign: 'center' }}>Sin actividad reciente</p>}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* Productos por depósito (ver desde Depositos) */}
-      {depositoSeleccionado && (
-        <div className="card" style={{ marginTop: 20 }}>
-          <h4>Productos en {depositoSeleccionado.nombre}</h4>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr>
-                <th>Producto</th>
-                <th>Cantidad</th>
-                <th>Unidad</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(perDeposit[depositoSeleccionado.id] || []).map((p) => (
-                <tr key={p.id}>
-                  <td>{p.nombre}</td>
-                  <td>{p.cantidad}</td>
-                  <td>{p.unidad_medida}</td>
-                </tr>
-              ))}
-              {(perDeposit[depositoSeleccionado.id] || []).length === 0 && (
-                <tr><td colSpan={3} style={{ textAlign:'center' }}>Sin productos</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* Modal de movimiento */}
-      {modalMovimiento && (
-        <div className="modal-overlay" onClick={() => setModalMovimiento(null)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <h3>{modalMovimiento === 'ingreso' ? '➕ Ingreso' : '➖ Egreso'}</h3>
-            <p style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>
-              {depositoSeleccionado.nombre}
+      {/* Modal Unificado de Movimientos */}
+      {modalType && (
+        <div className="modal-overlay" onClick={() => setModalType(null)} style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
+        }}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{
+            background: 'white', padding: '28px', borderRadius: '16px', width: 'min(500px, 95%)', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)'
+          }}>
+            <h3 style={{ marginTop: 0 }}>
+              {modalType === 'ingreso' ? '➕ Registrar Ingreso Manual' : (modalType === 'egreso' ? '➖ Registrar Egreso Manual' : '🔄 Traslado entre Depósitos')}
+            </h3>
+            <p style={{ color: 'var(--muted)', fontSize: '0.9rem', marginBottom: '20px' }}>
+              Depósito: <strong>{depositoSeleccionado.nombre}</strong>
             </p>
 
-            <form onSubmit={e => { e.preventDefault(); handleMovimiento(modalMovimiento) }}>
-              <label>Producto</label>
-              <select
-                value={formMov.id_producto}
-                onChange={e => setFormMov({ ...formMov, id_producto: e.target.value })}
-                required
-              >
-                <option value="">Seleccionar producto</option>
-                {productos.map(p => (
-                  <option key={p.id} value={p.id}>
-                    {p.nombre} ({p.unidad_medida})
-                  </option>
-                ))}
-              </select>
+            <form onSubmit={handleAction} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '6px' }}>Producto</label>
+                <select
+                  value={form.id_producto}
+                  onChange={e => setForm({ ...form, id_producto: e.target.value })}
+                  required
+                  style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #d1d5db' }}
+                >
+                  <option value="">Seleccionar producto</option>
+                  {productos.map(p => (
+                    <option key={p.id} value={p.id}>{p.nombre} ({p.unidad_medida})</option>
+                  ))}
+                </select>
+              </div>
 
-              <label>Cantidad</label>
-              <input
-                type="number"
-                min="1"
-                value={formMov.cantidad}
-                onChange={e => setFormMov({ ...formMov, cantidad: e.target.value })}
-                required
-              />
+              {modalType === 'traslado' && (
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '6px' }}>Depósito Destino</label>
+                  <select
+                    value={form.destino_id}
+                    onChange={e => setForm({ ...form, destino_id: e.target.value })}
+                    required
+                    style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #d1d5db' }}
+                  >
+                    <option value="">Seleccionar destino</option>
+                    {depositos.filter(d => d.id !== depositoSeleccionado.id).map(d => (
+                      <option key={d.id} value={d.id}>{d.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
-              <label>Motivo (opcional)</label>
-              <input
-                type="text"
-                value={formMov.motivo}
-                onChange={e => setFormMov({ ...formMov, motivo: e.target.value })}
-                placeholder={modalMovimiento === 'ingreso' ? 'Compra, donated, etc.' : 'Entrega a institución'}
-              />
+              <div>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '6px' }}>Cantidad</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={form.cantidad}
+                  onChange={e => setForm({ ...form, cantidad: e.target.value })}
+                  required
+                  placeholder="0"
+                  style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #d1d5db' }}
+                />
+              </div>
 
-              <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
-                <button type="submit" className="primary">
-                  Confirmar {modalMovimiento === 'ingreso' ? 'Ingreso' : 'Egreso'}
-                </button>
-                <button type="button" className="secondary" onClick={() => setModalMovimiento(null)}>
-                  Cancelar
-                </button>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '6px' }}>Motivo / Observaciones</label>
+                <input
+                  type="text"
+                  value={form.motivo}
+                  onChange={e => setForm({ ...form, motivo: e.target.value })}
+                  placeholder="Ej: Ajuste por rotura, vencimiento, etc."
+                  style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #d1d5db' }}
+                />
+              </div>
+
+              <div style={{ marginTop: '12px', display: 'flex', gap: '12px' }}>
+                <button type="submit" className="primary" style={{ flex: 1 }}>Confirmar Operación</button>
+                <button type="button" className="secondary" onClick={() => setModalType(null)}>Cancelar</button>
               </div>
             </form>
           </div>
         </div>
       )}
+
+      <style>{`
+        .depositos-container {
+          animation: fadeIn 0.3s ease-out;
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .deposito-tabs::-webkit-scrollbar {
+          height: 4px;
+        }
+        .deposito-tabs::-webkit-scrollbar-thumb {
+          background: #e2e8f0;
+          border-radius: 10px;
+        }
+        .card {
+          background: white;
+          border-radius: 16px;
+          border: 1px solid #f1f5f9;
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        }
+        tr:hover {
+          background-color: #f8fafc;
+        }
+      `}</style>
     </div>
   )
 }

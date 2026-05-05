@@ -199,7 +199,7 @@ export default function Productos() {
               <td>{p.id}</td>
               <td>{p.nombre}</td>
               <td>{p.unidad_medida || 'unidad'}</td>
-              <td>{p.stock_actual ?? 0}</td>
+              <td>{p.stock_total ?? 0}</td>
               <td>{p.deposito || '-'}</td>
               <td>{p.categoria_nombre || '-'}</td>
               <td>
