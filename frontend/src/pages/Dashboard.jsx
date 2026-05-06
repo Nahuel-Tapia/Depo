@@ -33,9 +33,9 @@ const ROLE_LABELS = {
 
 const TABS = [
   { key: 'inicio', label: 'Inicio', permission: null, icon: GridIcon },
-  { key: 'gestion-escuelas', label: 'Gestion de Zonas', permission: 'supervision.manage', role: 'director_area', icon: BuildingIcon },
-  { key: 'solicitud-anual', label: 'Solicitud Anual', permission: 'supervision.manage', role: 'director_area', icon: ClipboardIcon },
-  { key: 'resumen-anual', label: 'Resumen Solicitud Anual', permission: 'supervision.manage', role: 'director_area', icon: ListIcon },
+  { key: 'zonas', label: 'Gestion de Zonas', permission: 'supervision.manage', role: 'director_area', icon: BuildingIcon },
+  { key: 'solicitud_anual', label: 'Solicitud Anual', permission: 'supervision.manage', role: 'director_area', icon: ClipboardIcon },
+  { key: 'resumen', label: 'Resumen Solicitud Anual', permission: 'supervision.manage', role: 'director_area', icon: ListIcon },
   { key: 'compras-licitacion', label: 'Licitacion Anual', permission: 'planilla.view', role: 'area_compras', icon: DocumentIcon },
   { key: 'compras-listado-final', label: 'Listado Final a Licitar', permission: 'planilla.view', role: 'area_compras', icon: ListIcon },
   { key: 'compras-adjudicacion', label: 'Adjudicacion y Cierre', permission: 'planilla.manage', role: 'area_compras', icon: ShieldIcon },
@@ -150,12 +150,12 @@ export default function Dashboard() {
     switch (activeTab) {
       case 'inicio':
         return <Inicio onNavigate={setActiveTab} />
-      case 'gestion-escuelas':
-        return <DirectorAreaPanel initialSection="gestion-escuelas" />
-      case 'solicitud-anual':
-        return <DirectorAreaPanel initialSection="solicitud-anual" />
-      case 'resumen-anual':
-        return <DirectorAreaPanel initialSection="resumen-anual" />
+      case 'zonas':
+        return <DirectorAreaPanel initialSection="zonas" standalone={true} />
+      case 'solicitud_anual':
+        return <DirectorAreaPanel initialSection="solicitud_anual" standalone={true} />
+      case 'resumen':
+        return <DirectorAreaPanel initialSection="resumen" standalone={true} />
       case 'compras-licitacion':
         return <ComprasPanel section="licitacion" />
       case 'compras-listado-final':

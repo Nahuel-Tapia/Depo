@@ -13,6 +13,10 @@ async function getInstitucionNivelColumn() {
     SELECT CASE
       WHEN EXISTS (
         SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'institucion' AND column_name = 'direccion_area'
+      ) THEN 'direccion_area'
+      WHEN EXISTS (
+        SELECT 1 FROM information_schema.columns
         WHERE table_schema = 'public' AND table_name = 'institucion' AND column_name = 'nivel_educativo'
       ) THEN 'nivel_educativo'
       WHEN EXISTS (

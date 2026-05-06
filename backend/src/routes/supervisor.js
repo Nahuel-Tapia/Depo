@@ -76,6 +76,7 @@ async function ensureSupervisorSchema() {
 }
 
 async function getInstitucionNivelExpr(alias = "i") {
+  if (await columnExists("institucion", "direccion_area")) return `${alias}.direccion_area`;
   if (await columnExists("institucion", "nivel_educativo")) return `${alias}.nivel_educativo`;
   if (await columnExists("institucion", "nivel")) return `${alias}.nivel`;
   return "NULL::text";
