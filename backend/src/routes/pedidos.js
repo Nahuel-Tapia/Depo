@@ -485,13 +485,7 @@ async function getPedidoAnualBloqueante(institucionId, anio) {
      WHERE p.id_institucion = ?
        AND COALESCE(p.tipo, 'anual') = 'anual'
        AND EXTRACT(YEAR FROM p.fecha_creacion) = ?
-       AND (
-         p.estado::text IN ('aprobado', 'entregado', 'finalizado')
-         OR (
-           p.estado::text = 'pendiente'
-           AND COALESCE(p.respuesta_supervisor_tipo, '') <> 'aclaracion'
-         )
-       )
+       AND p.estado::text IN ('aprobado', 'entregado', 'finalizado')
      ORDER BY p.fecha_creacion DESC
      LIMIT 1`,
     [institucionId, anio]
@@ -1088,12 +1082,8 @@ router.post("/", authorizePermissions(PERMISSIONS.PEDIDOS_CREATE), async (req, r
       const pedidoBloqueante = await getPedidoAnualBloqueante(usuario.id_institucion, anioActual);
 
       if (pedidoBloqueante) {
-        const error = pedidoBloqueante.estado === "pendiente"
-          ? "Ya tenés una solicitud anual en curso para este año. Vas a poder crear otra si el supervisor la rechaza o te pide una aclaración."
-          : "Tu institución ya tiene una solicitud anual registrada para este año.";
-
         return res.status(409).json({
-          error,
+          error: "Tu institución ya tiene una solicitud anual registrada para este año.",
           detalle: {
             pedido_id: Number(pedidoBloqueante.id),
             estado: pedidoBloqueante.estado,

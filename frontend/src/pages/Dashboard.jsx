@@ -4,6 +4,7 @@ import Inicio from '../components/Inicio'
 import Productos from '../components/Productos'
 import Movimientos from '../components/Movimientos'
 import Pedidos from '../components/Pedidos'
+import SolicitudesRetiro from '../components/SolicitudesRetiro'
 import Instituciones from '../components/Instituciones'
 import Proveedores from '../components/Proveedores'
 import Usuarios from '../components/Usuarios'
@@ -28,7 +29,8 @@ const TABS = [
   { key: 'mis-escuelas', label: 'Mis Escuelas', permission: 'instituciones.view', role: 'supervisor', hideForRoles: ['admin'] },
   { key: 'productos', label: 'Productos', permission: 'productos.view', hideForRoles: ['supervisor', 'director_area'] },
   { key: 'movimientos', label: 'Movimientos', permission: 'movimientos.view', hideForRoles: ['supervisor', 'director_area'] },
-  { key: 'pedidos', label: 'Pedidos', permission: 'pedidos.view', hideForRoles: ['admin'] },
+  { key: 'pedidos', label: 'Pedidos', permission: 'pedidos.view', hideForRoles: ['admin', 'operador'] },
+  { key: 'retiros', label: 'Retiros', permission: 'movimientos.create', role: 'operador' },
   { key: 'instituciones', label: 'Instituciones', permission: 'instituciones.view', hideForRoles: ['supervisor', 'director_area'] },
   { key: 'historial', label: 'Historial', permission: 'instituciones.view', hideForRoles: ['supervisor', 'director_area'] },
   { key: 'proveedores', label: 'Proveedores', permission: 'proveedores.view', hideForRoles: ['supervisor', 'director_area'] },
@@ -94,6 +96,7 @@ export default function Dashboard() {
       case 'productos': return <Productos />
       case 'movimientos': return <Movimientos />
       case 'pedidos': return <Pedidos />
+      case 'retiros': return <SolicitudesRetiro />
       case 'instituciones': return <Instituciones />
       case 'mis-escuelas': return <Instituciones supervisorMode />
       case 'historial': return <HistorialInstitucion />
@@ -133,7 +136,13 @@ export default function Dashboard() {
               className={`tab-btn ${activeTab === tab.key ? 'active' : ''}`}
               onClick={() => setActiveTab(tab.key)}
             >
-              <span className="tab-label">{tab.key === 'usuarios' && user?.role === 'director_area' ? 'Supervisores' : tab.label}</span>
+              <span className="tab-label">
+                {tab.key === 'usuarios' && user?.role === 'director_area'
+                  ? 'Supervisores'
+                  : tab.key === 'pedidos' && user?.role === 'operador'
+                    ? 'Retiros'
+                    : tab.label}
+              </span>
             </button>
           ))}
         </div>
