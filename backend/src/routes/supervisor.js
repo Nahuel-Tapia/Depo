@@ -11,9 +11,6 @@ const { authenticate } = require("../middleware/auth");
 const router = express.Router();
 router.use(authenticate);
 
-let schemaReady = false;
-let schemaPromise = null;
-
 async function hasTable(tableName) {
   const row = await get(`SELECT to_regclass($1) AS regclass`, [tableName]);
   return Boolean(row?.regclass);
@@ -52,42 +49,6 @@ async function columnExists(tableName, columnName) {
 async function tableExists(tableName) {
   const row = await get("SELECT to_regclass($1) AS regclass", [`public.${tableName}`]);
   return Boolean(row?.regclass);
-}
-
-async function ensureSupervisorSchema() {
-  if (schemaReady) return;
-  if (schemaPromise) {
-    await schemaPromise;
-    return;
-  }
-
-  schemaPromise = (async () => {
-    try {
-      const productoKitExists = await tableExists("producto_kit");
-      
-      // Pedido columns
-      await run(`ALTER TABLE pedido ADD COLUMN IF NOT EXISTS aprobado_por_supervisor_id INT REFERENCES usuario(id_usuario)`);
-      await run(`ALTER TABLE pedido ADD COLUMN IF NOT EXISTS fecha_aprobacion_supervisor TIMESTAMP`);
-      await run(`ALTER TABLE pedido ADD COLUMN IF NOT EXISTS motivo_supervisor TEXT`);
-      await run(`ALTER TABLE pedido ADD COLUMN IF NOT EXISTS respuesta_supervisor_tipo VARCHAR(30)`);
-      await run(`ALTER TABLE pedido ADD COLUMN IF NOT EXISTS aprobado_director_area BOOLEAN DEFAULT FALSE`);
-      await run(`ALTER TABLE pedido ADD COLUMN IF NOT EXISTS aprobado_por_director_id INT REFERENCES usuario(id_usuario)`);
-      await run(`ALTER TABLE pedido ADD COLUMN IF NOT EXISTS fecha_aprobacion_director TIMESTAMP`);
-      
-      // Institucion columns
-      await run(`ALTER TABLE institucion ADD COLUMN IF NOT EXISTS kit_id INT${productoKitExists ? " REFERENCES producto_kit(id)" : ""}`);
-      
-      schemaReady = true;
-    } catch (err) {
-      console.error("Error en migración de esquema supervisor:", err);
-    }
-  })();
-
-  try {
-    await schemaPromise;
-  } finally {
-    schemaPromise = null;
-  }
 }
 
 async function getInstitucionNivelExpr(alias = "i") {
@@ -255,9 +216,6 @@ async function getInstitucionSelectSql() {
   };
 }
 
-<<<<<<< HEAD
-// Función ensureSupervisorSchema consolidada al inicio.
-=======
 let schemaReady = false;
 let schemaPromise = null;
 
@@ -327,7 +285,6 @@ async function ensureSupervisorSchema() {
     schemaPromise = null;
   }
 }
->>>>>>> b4f70f132b415634a85d8ec5071e10c80085b155
 
 // ── Instituciones de la jurisdicción del supervisor ──
 router.get("/instituciones", async (req, res) => {
