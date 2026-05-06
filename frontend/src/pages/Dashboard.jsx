@@ -4,6 +4,7 @@ import Inicio from '../components/Inicio'
 import Productos from '../components/Productos'
 import Movimientos from '../components/Movimientos'
 import Pedidos from '../components/Pedidos'
+import SolicitudesRetiro from '../components/SolicitudesRetiro'
 import Instituciones from '../components/Instituciones'
 import Proveedores from '../components/Proveedores'
 import Usuarios from '../components/Usuarios'
@@ -325,49 +326,13 @@ function BuildingIcon() {
   )
 }
 
-function BoxIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M12 3 4.5 7v10L12 21l7.5-4V7L12 3Z" />
-      <path d="M4.5 7 12 11l7.5-4M12 11v10" />
-    </svg>
-  )
-}
-
-function ActivityIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M3 12h4l2.5-5 4 10 2.5-5H21" />
-    </svg>
-  )
-}
-
 function ListIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M9 6.5h10M9 12h10M9 17.5h10" />
-      <circle cx="5.5" cy="6.5" r="1.25" />
-      <circle cx="5.5" cy="12" r="1.25" />
-      <circle cx="5.5" cy="17.5" r="1.25" />
-    </svg>
-  )
-}
-
-function TruckIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M3 6.5h10v8H3zM13 10h4l3 3v1.5h-7" />
-      <circle cx="7" cy="17.5" r="2" />
-      <circle cx="18" cy="17.5" r="2" />
-    </svg>
-  )
-}
-
-function ShieldIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M12 3.5 5.5 6v5.5c0 4.2 2.5 7.5 6.5 9 4-1.5 6.5-4.8 6.5-9V6L12 3.5Z" />
-      <path d="m9.5 12 1.7 1.7 3.6-3.7" />
+      <path d="M8 6h13M8 12h13M8 18h13" />
+      <circle cx="4" cy="6" r="1" />
+      <circle cx="4" cy="12" r="1" />
+      <circle cx="4" cy="18" r="1" />
     </svg>
   )
 }
@@ -375,8 +340,43 @@ function ShieldIcon() {
 function DocumentIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M7 3.5h7l4 4V20a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 20V5A1.5 1.5 0 0 1 7.5 3.5Z" />
-      <path d="M14 3.5V8h4M9 12h6M9 16h6" />
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <path d="M14 2v6h6" />
+    </svg>
+  )
+}
+
+function ShieldIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M12 2l7 3v5c0 5-3.5 9.7-7 11-3.5-1.3-7-6-7-11V5z" />
+    </svg>
+  )
+}
+
+function TruckIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M1 3h13v13H1z" />
+      <path d="M14 8h6v5h-6z" />
+      <circle cx="6" cy="19" r="1.5" />
+      <circle cx="18" cy="19" r="1.5" />
+    </svg>
+  )
+}
+
+function ActivityIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M3 12h4l2-6 4 12 2-6h4" />
+    </svg>
+  )
+}
+
+function BoxIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M21 16V8a2 2 0 0 0-1-1.73L13 3l-7 3.27A2 2 0 0 0 5 8v8a2 2 0 0 0 1 1.73L11 21l7-3.27A2 2 0 0 0 21 16z" />
     </svg>
   )
 }
@@ -384,8 +384,9 @@ function DocumentIcon() {
 function UserIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <circle cx="12" cy="8" r="3.25" />
-      <path d="M5.5 19a6.5 6.5 0 0 1 13 0" />
+      <path d="M20 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M4 21v-2a4 4 0 0 1 3-3.87" />
+      <circle cx="12" cy="7" r="4" />
     </svg>
   )
 }
@@ -393,7 +394,8 @@ function UserIcon() {
 function MenuIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M4 7h16M4 12h16M4 17h16" />
+      <path d="M4 6h16M4 12h16M4 18h16" />
     </svg>
   )
 }
+

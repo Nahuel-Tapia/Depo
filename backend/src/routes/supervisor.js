@@ -264,6 +264,42 @@ async function ensureSupervisorSchema() {
       ALTER TABLE pedido
       ADD COLUMN IF NOT EXISTS respuesta_supervisor_tipo VARCHAR(30)
     `);
+    await run(`
+      ALTER TABLE pedido
+      ADD COLUMN IF NOT EXISTS aprobado_por_supervisor_id INT REFERENCES usuario(id_usuario)
+    `);
+    await run(`
+      ALTER TABLE pedido
+      ADD COLUMN IF NOT EXISTS fecha_aprobacion_supervisor TIMESTAMP
+    `);
+    await run(`
+      ALTER TABLE pedido
+      ADD COLUMN IF NOT EXISTS aprobado_director_area BOOLEAN DEFAULT FALSE
+    `);
+    await run(`
+      ALTER TABLE pedido
+      ADD COLUMN IF NOT EXISTS aprobado_por_director_id INT REFERENCES usuario(id_usuario)
+    `);
+    await run(`
+      ALTER TABLE pedido
+      ADD COLUMN IF NOT EXISTS fecha_aprobacion_director TIMESTAMP
+    `);
+    await run(`
+      ALTER TABLE pedido
+      ADD COLUMN IF NOT EXISTS tipo VARCHAR(20) DEFAULT 'anual'
+    `);
+    await run(`
+      ALTER TABLE pedido
+      ADD COLUMN IF NOT EXISTS kit_id INT
+    `);
+    await run(`
+      ALTER TABLE pedido
+      ADD COLUMN IF NOT EXISTS kit_nombre VARCHAR(180)
+    `);
+    await run(`
+      ALTER TABLE pedido
+      ADD COLUMN IF NOT EXISTS kit_cantidad NUMERIC(12,2)
+    `);
     schemaReady = true;
   })();
 
