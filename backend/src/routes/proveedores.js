@@ -11,7 +11,9 @@ router.use(authenticate);
 router.get("/", authorizePermissions(PERMISSIONS.PROVEEDORES_VIEW), async (req, res) => {
   try {
     const proveedores = await all(`
-      SELECT id_proveedor as id, nombre, cuit, contacto, telefono, email, categoria, activo
+      SELECT 
+        id_proveedor as id, nombre, cuit, contacto, telefono, email, categoria, activo,
+        razon_social, direccion, rubro, email_secundario, sitio_web, observaciones
       FROM proveedor
       ORDER BY nombre ASC
     `);
@@ -25,15 +27,25 @@ router.get("/", authorizePermissions(PERMISSIONS.PROVEEDORES_VIEW), async (req, 
 // Crear proveedor
 router.post("/", authorizePermissions(PERMISSIONS.PROVEEDORES_CREATE), async (req, res) => {
   try {
-    const { nombre, cuit, contacto, telefono, email, categoria } = req.body;
+    const { 
+      nombre, cuit, contacto, telefono, email, categoria,
+      razon_social, direccion, rubro, email_secundario, sitio_web, observaciones 
+    } = req.body;
+    
     if (!nombre) {
       return res.status(400).json({ error: "El nombre es obligatorio" });
     }
 
     const result = await run(`
-      INSERT INTO proveedor (nombre, cuit, contacto, telefono, email, categoria)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `, [nombre.trim(), cuit || null, contacto || null, telefono || null, email || null, categoria || null]);
+      INSERT INTO proveedor (
+        nombre, cuit, contacto, telefono, email, categoria,
+        razon_social, direccion, rubro, email_secundario, sitio_web, observaciones
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      nombre.trim(), cuit || null, contacto || null, telefono || null, email || null, categoria || null,
+      razon_social || null, direccion || null, rubro || null, email_secundario || null, sitio_web || null, observaciones || null
+    ]);
 
     return res.status(201).json({ id: result.lastID, message: "Proveedor creado correctamente" });
   } catch (err) {
@@ -49,7 +61,10 @@ router.post("/", authorizePermissions(PERMISSIONS.PROVEEDORES_CREATE), async (re
 router.patch("/:id", authorizePermissions(PERMISSIONS.PROVEEDORES_EDIT), async (req, res) => {
   try {
     const { id } = req.params;
-    const { nombre, cuit, contacto, telefono, email, categoria } = req.body;
+    const { 
+      nombre, cuit, contacto, telefono, email, categoria, activo,
+      razon_social, direccion, rubro, email_secundario, sitio_web, observaciones 
+    } = req.body;
 
     const proveedor = await get("SELECT id_proveedor FROM proveedor WHERE id_proveedor = ?", [id]);
     if (!proveedor) {
@@ -64,6 +79,13 @@ router.patch("/:id", authorizePermissions(PERMISSIONS.PROVEEDORES_EDIT), async (
     if (telefono !== undefined) { updates.push("telefono = ?"); params.push(telefono); }
     if (email !== undefined) { updates.push("email = ?"); params.push(email); }
     if (categoria !== undefined) { updates.push("categoria = ?"); params.push(categoria); }
+    if (activo !== undefined) { updates.push("activo = ?"); params.push(activo); }
+    if (razon_social !== undefined) { updates.push("razon_social = ?"); params.push(razon_social); }
+    if (direccion !== undefined) { updates.push("direccion = ?"); params.push(direccion); }
+    if (rubro !== undefined) { updates.push("rubro = ?"); params.push(rubro); }
+    if (email_secundario !== undefined) { updates.push("email_secundario = ?"); params.push(email_secundario); }
+    if (sitio_web !== undefined) { updates.push("sitio_web = ?"); params.push(sitio_web); }
+    if (observaciones !== undefined) { updates.push("observaciones = ?"); params.push(observaciones); }
 
     if (updates.length === 0) {
       return res.status(400).json({ error: "No hay campos para actualizar" });

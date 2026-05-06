@@ -103,16 +103,14 @@ export default function Register() {
   return (
     <main className="container auth-container">
       <section className="card auth-card" style={{ width: 'min(480px, 100%)' }}>
-        <div style={{ textAlign: 'center', marginBottom: 24 }}>
+        <div className="auth-header">
           <img
             src="http://prod.eduge.com.ar/assets/logoGobierno-D5M0tUR9.png"
             alt="San Juan Gobierno"
-            style={{ height: 48, width: 'auto', marginBottom: 20 }}
+            className="auth-logo"
           />
-          <h1 style={{ marginBottom: 4 }}>Registro Directivo</h1>
-          <p className="subtitle" style={{ marginBottom: 0 }}>
-            Ingrese el CUE de su institución
-          </p>
+          <h1>Registro Directivo</h1>
+          <p className="subtitle">Ingrese el CUE de su institución para comenzar</p>
         </div>
 
           <form onSubmit={handleSubmit}>
@@ -163,13 +161,14 @@ export default function Register() {
                     ))}
                   </select>
                 ) : (
-                  <input 
-                    type="text" 
-                    value={nivelEducativo} 
-                    readOnly 
-                    disabled 
-                    style={{ background: '#f9fafb' }}
-                  />
+                  <div className="read-only-field">
+                    <input 
+                      type="text" 
+                      value={nivelEducativo} 
+                      readOnly 
+                    />
+                    <span className="field-badge">Nivel Detectado</span>
+                  </div>
                 )}
               </div>
             ) : null}

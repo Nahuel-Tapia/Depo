@@ -288,4 +288,290 @@ router.post("/:id/egreso", authorizePermissions(PERMISSIONS.STOCK_MOVEMENT_CREAT
   }
 });
 
+async function getRecepcionesLicitacion(req, res) {
+  try {
+    const rows = await all(
+      `SELECT id, anio, fecha_publicacion, estado
+       FROM licitacion_publicada
+       WHERE estado IN ('en_deposito', 'completada')
+       ORDER BY fecha_publicacion DESC`
+    );
+    res.json({ licitaciones: rows });
+  } catch (err) {
+    res.status(500).json({ error: "Error al obtener recepciones" });
+  }
+}
+
+async function getDetalleRecepcion(req, res) {
+  try {
+    const { id } = req.params;
+    const row = await get(`SELECT id, items, anio FROM licitacion_publicada WHERE id = $1`, [id]);
+    if (!row) return res.status(404).json({ error: "Licitación no encontrada" });
+
+    // Consolidar por producto_id - El operador no necesita ver qué escuela pidió cada cosa
+    const items = typeof row.items === 'string' ? JSON.parse(row.items) : row.items;
+    const consolidatedMap = {};
+    items.forEach(item => {
+      const pid = item.producto_id;
+      if (!consolidatedMap[pid]) {
+        consolidatedMap[pid] = {
+          producto_id: pid,
+          producto: item.producto,
+          unidad_medida: item.unidad_medida,
+          cantidad_total: 0
+        };
+      }
+      consolidatedMap[pid].cantidad_total += Number(item.cantidad_a_licitar || 0);
+    });
+    const cleanItems = Object.values(consolidatedMap);
+
+    // Obtener lo ya recibido
+    const recibidos = await all(
+      `SELECT producto_id, SUM(cantidad_recibida) as total_recibida
+       FROM recepcion_licitacion
+       WHERE licitacion_id = $1
+       GROUP BY producto_id`,
+      [id]
+    );
+
+    res.json({ id: row.id, anio: row.anio, items: cleanItems, recibidos });
+  } catch (err) {
+    res.status(500).json({ error: "Error al obtener detalle" });
+  }
+}
+
+async function registrarIngresoLicitacion(req, res) {
+  const client = await pool.connect();
+  try {
+    const { licitacion_id, ingresos, id_deposito, observaciones } = req.body;
+    if (!licitacion_id || !ingresos || !id_deposito) {
+      return res.status(400).json({ error: "Faltan datos obligatorios" });
+    }
+
+    await client.query("BEGIN");
+
+    for (const ing of ingresos) {
+      const { producto_id, cantidad, fecha_vencimiento } = ing;
+      if (!cantidad || cantidad <= 0) continue;
+
+      // 1. Registrar en recepcion_licitacion
+      await client.query(
+        `INSERT INTO recepcion_licitacion (licitacion_id, producto_id, cantidad_recibida, usuario_id, observaciones, fecha_vencimiento, id_deposito)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [licitacion_id, producto_id, cantidad, req.user.sub, observaciones, fecha_vencimiento || null, id_deposito]
+      );
+
+      // 2. Actualizar stock en depósito
+      await client.query(
+        `INSERT INTO stock_deposito (id_deposito, id_producto, cantidad)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (id_deposito, id_producto) 
+         DO UPDATE SET cantidad = stock_deposito.cantidad + $3`,
+        [id_deposito, producto_id, cantidad]
+      );
+
+      // 3. Actualizar stock global
+      await client.query(
+        "UPDATE producto SET stock_actual = stock_actual + $1 WHERE id_producto = $2",
+        [cantidad, producto_id]
+      );
+
+      // 4. Registrar movimiento de stock
+      await client.query(
+        `INSERT INTO movimiento_stock (id_producto, cantidad, tipo, motivo, id_usuario, id_deposito, fecha_vencimiento)
+         VALUES ($1, $2, 'ingreso', $3, $4, $5, $6)`,
+        [producto_id, cantidad, `Ingreso por Licitación #${licitacion_id}`, req.user.sub, id_deposito, fecha_vencimiento || null]
+      );
+    }
+
+    await client.query("COMMIT");
+    res.json({ ok: true, message: "Mercadería ingresada con éxito" });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("Error al registrar ingreso licitación:", err);
+    res.status(500).json({ error: "Error al procesar el ingreso" });
+  } finally {
+    client.release();
+  }
+}
+
+router.get("/licitacion/recepciones", authorizePermissions(PERMISSIONS.STOCK_VIEW), getRecepcionesLicitacion);
+router.get("/licitacion/recepciones/:id", authorizePermissions(PERMISSIONS.STOCK_VIEW), getDetalleRecepcion);
+router.post("/licitacion/registrar-ingreso", authorizePermissions(PERMISSIONS.STOCK_MOVEMENT_CREATE), registrarIngresoLicitacion);
+
+async function getPendientesDistribucion(req, res) {
+  try {
+    const anio = Number(req.query.anio || new Date().getFullYear());
+    // Escuelas que tienen ítems aprobados/adjudicados en su planilla anual
+    // y que aún no han recibido el 100%
+    const rows = await all(`
+      SELECT 
+        i.id_institucion as id, i.nombre, i.cue,
+        COUNT(DISTINCT pad.id_producto) as total_productos,
+        (
+          SELECT COUNT(*) 
+          FROM planilla_pedido_anual_detalle d
+          LEFT JOIN (
+            SELECT id_institucion, id_producto, SUM(cantidad_entregada) as entregado
+            FROM entrega_anual
+            WHERE anio = $1
+            GROUP BY id_institucion, id_producto
+          ) e ON e.id_institucion = d.id_institucion AND e.id_producto = d.id_producto
+          WHERE d.id_institucion = i.id_institucion 
+            AND d.planilla_id IN (SELECT id FROM planilla_pedido_anual WHERE anio = $1 AND estado = 'adjudicada')
+            AND (e.entregado IS NULL OR e.entregado < d.cantidad)
+        ) as productos_pendientes
+      FROM institucion i
+      JOIN planilla_pedido_anual_detalle pad ON pad.id_institucion = i.id_institucion
+      JOIN planilla_pedido_anual pa ON pa.id = pad.planilla_id
+      WHERE pa.anio = $1 AND pa.estado = 'adjudicada'
+      GROUP BY i.id_institucion, i.nombre, i.cue
+      HAVING (
+          SELECT COUNT(*) 
+          FROM planilla_pedido_anual_detalle d
+          LEFT JOIN (
+            SELECT id_institucion, id_producto, SUM(cantidad_entregada) as entregado
+            FROM entrega_anual
+            WHERE anio = $1
+            GROUP BY id_institucion, id_producto
+          ) e ON e.id_institucion = d.id_institucion AND e.id_producto = d.id_producto
+          WHERE d.id_institucion = i.id_institucion 
+            AND d.planilla_id IN (SELECT id FROM planilla_pedido_anual WHERE anio = $1 AND estado = 'adjudicada')
+            AND (e.entregado IS NULL OR e.entregado < d.cantidad)
+      ) > 0
+      ORDER BY i.nombre ASC
+    `, [anio]);
+    res.json({ pendientes: rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Error al obtener pendientes de distribución" });
+  }
+}
+
+async function getDetalleDistribucionEscuela(req, res) {
+  try {
+    const { id } = req.params;
+    const anio = Number(req.query.anio || new Date().getFullYear());
+    
+    const items = await all(`
+      SELECT 
+        p.id_producto as id, p.nombre as producto, p.unidad_medida,
+        pad.cantidad as cantidad_adjudicada,
+        COALESCE(e.entregado, 0) as cantidad_entregada
+      FROM planilla_pedido_anual_detalle pad
+      JOIN producto p ON p.id_producto = pad.id_producto
+      JOIN planilla_pedido_anual pa ON pa.id = pad.planilla_id
+      LEFT JOIN (
+        SELECT id_institucion, id_producto, SUM(cantidad_entregada) as entregado
+        FROM entrega_anual
+        WHERE anio = $1
+        GROUP BY id_institucion, id_producto
+      ) e ON e.id_institucion = pad.id_institucion AND e.id_producto = pad.id_producto
+      WHERE pad.id_institucion = $2 AND pa.anio = $1 AND pa.estado = 'adjudicada'
+    `, [anio, id]);
+
+    res.json({ items });
+  } catch (err) {
+    res.status(500).json({ error: "Error al obtener detalle de escuela" });
+  }
+}
+
+async function registrarSalidaDistribucion(req, res) {
+  const client = await pool.connect();
+  try {
+    const { id_institucion, anio, entregas, id_deposito, observaciones } = req.body;
+    if (!id_institucion || !entregas || !id_deposito) {
+      return res.status(400).json({ error: "Faltan datos obligatorios" });
+    }
+
+    await client.query("BEGIN");
+
+    for (const ent of entregas) {
+      const { id_producto, cantidad } = ent;
+      if (!cantidad || cantidad <= 0) continue;
+
+      // 1. Verificar stock en depósito
+      const stockRes = await client.query(
+        "SELECT cantidad FROM stock_deposito WHERE id_deposito = $1 AND id_producto = $2 FOR UPDATE",
+        [id_deposito, id_producto]
+      );
+      const stockDisp = stockRes.rows[0]?.cantidad || 0;
+      if (stockDisp < cantidad) {
+        throw new Error(`Stock insuficiente para producto ${id_producto}. Disponible: ${stockDisp}`);
+      }
+
+      // 2. Registrar en entrega_anual
+      await client.query(
+        `INSERT INTO entrega_anual (id_institucion, anio, id_producto, cantidad_entregada, id_deposito, id_usuario, observaciones)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [id_institucion, anio, id_producto, cantidad, id_deposito, req.user.sub, observaciones]
+      );
+
+      // 3. Actualizar stock en depósito
+      await client.query(
+        `UPDATE stock_deposito SET cantidad = cantidad - $1 WHERE id_deposito = $2 AND id_producto = $3`,
+        [cantidad, id_deposito, id_producto]
+      );
+
+      // 4. Actualizar stock global
+      await client.query(
+        "UPDATE producto SET stock_actual = stock_actual - $1 WHERE id_producto = $2",
+        [cantidad, id_producto]
+      );
+
+      // 5. Registrar movimiento de stock
+      await client.query(
+        `INSERT INTO movimiento_stock (id_producto, cantidad, tipo, motivo, id_usuario, id_deposito, id_institucion)
+         VALUES ($1, $2, 'egreso', $3, $4, $5, $6)`,
+        [id_producto, cantidad, `Distribución Anual ${anio}`, req.user.sub, id_deposito, id_institucion]
+      );
+    }
+
+    await client.query("COMMIT");
+    res.json({ ok: true, message: "Distribución registrada con éxito" });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("Error al registrar salida distribución:", err);
+    res.status(500).json({ error: err.message || "Error al procesar la salida" });
+  } finally {
+    client.release();
+  }
+}
+
+async function getVencimientosProximos(req, res) {
+  try {
+    const dias = Number(req.query.dias || 60);
+    // Buscamos ingresos que tengan fecha de vencimiento próxima
+    // y que el producto todavía tenga stock en ese depósito
+    const rows = await all(`
+      SELECT 
+        p.nombre as producto,
+        p.unidad_medida,
+        d.nombre as deposito,
+        ms.fecha_vencimiento,
+        sd.cantidad as stock_actual_deposito,
+        (ms.fecha_vencimiento - CURRENT_DATE) as dias_para_vencer
+      FROM movimiento_stock ms
+      JOIN producto p ON p.id_producto = ms.id_producto
+      JOIN deposito d ON d.id_deposito = ms.id_deposito
+      JOIN stock_deposito sd ON sd.id_producto = ms.id_producto AND sd.id_deposito = ms.id_deposito
+      WHERE ms.tipo = 'ingreso' 
+        AND ms.fecha_vencimiento IS NOT NULL
+        AND ms.fecha_vencimiento <= (CURRENT_DATE + $1 * INTERVAL '1 day')
+        AND ms.fecha_vencimiento >= CURRENT_DATE
+        AND sd.cantidad > 0
+      ORDER BY ms.fecha_vencimiento ASC
+    `, [dias]);
+    res.json({ alertas: rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Error al obtener alertas de vencimiento" });
+  }
+}
+
+router.get("/vencimientos-proximos", authorizePermissions(PERMISSIONS.STOCK_VIEW), getVencimientosProximos);
+router.get("/distribucion/pendientes", authorizePermissions(PERMISSIONS.STOCK_VIEW), getPendientesDistribucion);
+router.get("/distribucion/pendientes/:id", authorizePermissions(PERMISSIONS.STOCK_VIEW), getDetalleDistribucionEscuela);
+router.post("/distribucion/registrar-salida", authorizePermissions(PERMISSIONS.STOCK_MOVEMENT_CREATE), registrarSalidaDistribucion);
+
 module.exports = router;

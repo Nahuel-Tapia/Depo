@@ -823,10 +823,13 @@ router.get("/", authorizePermissions(PERMISSIONS.PEDIDOS_VIEW), async (req, res)
         pr.unidad_medida as detalle_unidad_medida,
         pr.stock_actual as detalle_stock_actual,
         dp.cantidad_solicitada as detalle_cantidad,
+        p.aprobado_por_director_id,
+        p.fecha_aprobacion_director,
+        p.aprobado_director_area,
         u.nombre as usuario_nombre,
         i.nombre as institucion
       FROM pedido p
-      JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido
+      LEFT JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido
       JOIN producto pr ON dp.id_producto = pr.id_producto
       JOIN usuario u ON p.id_usuario_solicitante = u.id_usuario
       LEFT JOIN institucion i ON p.id_institucion = i.id_institucion
@@ -841,8 +844,43 @@ router.get("/", authorizePermissions(PERMISSIONS.PEDIDOS_VIEW), async (req, res)
 
     query += " ORDER BY p.fecha_creacion DESC, pr.nombre ASC";
     const pedidoRows = await all(query, params);
-    const pedidos = groupPedidos(pedidoRows);
-    return res.json({ pedidos });
+    const grouped = groupPedidos(pedidoRows);
+
+    // Enriquecer pedidos anuales con progreso de logística
+    for (const p of grouped) {
+      if (p.tipo === 'anual' && p.estado === 'aprobado') {
+        const anio = new Date(p.created_at).getFullYear();
+        // 1. Estado de la licitación
+        const lic = await get(`SELECT estado FROM licitacion_publicada WHERE anio = ?`, [anio]);
+        
+        // 2. Progreso de entrega (consolidado)
+        const progreso = await get(`
+          SELECT 
+            SUM(pad.cantidad) as total_pedida,
+            COALESCE(SUM(ea.entregada), 0) as total_entregada
+          FROM planilla_pedido_anual_detalle pad
+          LEFT JOIN (
+            SELECT id_institucion, id_producto, SUM(cantidad_entregada) as entregada
+            FROM entrega_anual
+            WHERE anio = $1
+            GROUP BY id_institucion, id_producto
+          ) ea ON ea.id_institucion = pad.id_institucion AND ea.id_producto = pad.id_producto
+          WHERE pad.id_institucion = $2 
+            AND pad.planilla_id IN (SELECT id FROM planilla_pedido_anual WHERE anio = $1)
+        `, [anio, p.id_institucion]);
+
+        p.logistica = {
+          estado_licitacion: lic?.estado || 'pendiente',
+          total_pedida: progreso?.total_pedida || 0,
+          total_entregada: progreso?.total_entregada || 0,
+          porcentaje_entrega: progreso?.total_pedida > 0 
+            ? Math.round((progreso.total_entregada / progreso.total_pedida) * 100) 
+            : 0
+        };
+      }
+    }
+
+    return res.json({ pedidos: grouped });
   } catch (err) {
     console.error("Error al listar pedidos:", err);
     return res.status(500).json({ error: "No se pudo listar pedidos" });
@@ -1200,7 +1238,7 @@ router.patch("/:id/estado", authorizePermissions(PERMISSIONS.PEDIDOS_MANAGE), as
     }
 
     const pedido = await get(
-      `SELECT id_pedido as id, estado::text as estado_db, id_institucion FROM pedido WHERE id_pedido = ?`,
+      `SELECT id_pedido as id, estado::text as estado_db, id_institucion, COALESCE(tipo, 'anual') as tipo FROM pedido WHERE id_pedido = ?`,
       [id]
     );
 

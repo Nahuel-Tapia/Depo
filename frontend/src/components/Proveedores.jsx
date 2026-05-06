@@ -8,7 +8,11 @@ export default function Proveedores() {
   const [proveedores, setProveedores] = useState([])
   const [msg, setMsg] = useState({ text: '', type: '' })
   const [formOpen, setFormOpen] = useState(false)
-  const [form, setForm] = useState({ nombre: '', cuit: '', contacto: '', telefono: '', email: '', categoria: '' })
+  const initialForm = { 
+    nombre: '', cuit: '', contacto: '', telefono: '', email: '', categoria: '',
+    razon_social: '', direccion: '', rubro: '', email_secundario: '', sitio_web: '', observaciones: ''
+  }
+  const [form, setForm] = useState(initialForm)
   const [editModal, setEditModal] = useState(null)
 
   const loadProveedores = async () => {
@@ -35,7 +39,13 @@ export default function Proveedores() {
       contacto: form.contacto.trim() || null,
       telefono: form.telefono.trim() || null,
       email: form.email.trim() || null,
-      categoria: form.categoria.trim() || null
+      categoria: form.categoria.trim() || null,
+      razon_social: form.razon_social.trim() || null,
+      direccion: form.direccion.trim() || null,
+      rubro: form.rubro.trim() || null,
+      email_secundario: form.email_secundario.trim() || null,
+      sitio_web: form.sitio_web.trim() || null,
+      observaciones: form.observaciones.trim() || null
     }
 
     const res = await apiFetch('/api/proveedores', {
@@ -50,7 +60,7 @@ export default function Proveedores() {
       return
     }
 
-    setForm({ nombre: '', cuit: '', contacto: '', telefono: '', email: '', categoria: '' })
+    setForm(initialForm)
     setFormOpen(false)
     setMsg({ text: 'Proveedor creado correctamente', type: 'success' })
     loadProveedores()
@@ -78,6 +88,12 @@ export default function Proveedores() {
       telefono: prov.telefono || '',
       email: prov.email || '',
       categoria: prov.categoria || '',
+      razon_social: prov.razon_social || '',
+      direccion: prov.direccion || '',
+      rubro: prov.rubro || '',
+      email_secundario: prov.email_secundario || '',
+      sitio_web: prov.sitio_web || '',
+      observaciones: prov.observaciones || '',
       error: ''
     })
   }
@@ -94,7 +110,13 @@ export default function Proveedores() {
       contacto: editModal.contacto.trim() || null,
       telefono: editModal.telefono.trim() || null,
       email: editModal.email.trim() || null,
-      categoria: editModal.categoria.trim() || null
+      categoria: editModal.categoria.trim() || null,
+      razon_social: editModal.razon_social.trim() || null,
+      direccion: editModal.direccion.trim() || null,
+      rubro: editModal.rubro.trim() || null,
+      email_secundario: editModal.email_secundario.trim() || null,
+      sitio_web: editModal.sitio_web.trim() || null,
+      observaciones: editModal.observaciones.trim() || null
     }
 
     const res = await apiFetch(`/api/proveedores/${editModal.id}`, {
@@ -149,11 +171,11 @@ export default function Proveedores() {
         <table>
           <thead>
             <tr>
-              <th>Empresa</th>
-              <th>Contacto</th>
-              <th>Teléfono</th>
-              <th>Email</th>
-              <th>Categoría</th>
+              <th>Empresa / Razón Social</th>
+              <th>CUIT</th>
+              <th>Contacto Principal</th>
+              <th>Email / Web</th>
+              <th>Rubro / Categoría</th>
               <th>Acciones</th>
             </tr>
           </thead>
@@ -165,11 +187,23 @@ export default function Proveedores() {
             ) : (
               proveedores.map(p => (
                 <tr key={p.id}>
-                  <td><strong>{p.nombre}</strong><br /><small style={{ color: '#6b7280' }}>{p.cuit || ''}</small></td>
-                  <td>{p.contacto || '-'}</td>
-                  <td>{p.telefono || '-'}</td>
-                  <td>{p.email || '-'}</td>
-                  <td>{p.categoria || '-'}</td>
+                  <td>
+                    <strong>{p.nombre}</strong>
+                    {p.razon_social && <div style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>{p.razon_social}</div>}
+                    {p.direccion && <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>📍 {p.direccion}</div>}
+                  </td>
+                  <td><code style={{ fontSize: '0.85rem' }}>{p.cuit || '-'}</code></td>
+                  <td>
+                    <div style={{ fontWeight: 600 }}>{p.contacto || '-'}</div>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>{p.telefono || ''}</div>
+                  </td>
+                  <td>
+                    <div style={{ fontSize: '0.9rem' }}>{p.email || '-'}</div>
+                    {p.sitio_web && <div style={{ fontSize: '0.8rem' }}><a href={p.sitio_web.startsWith('http') ? p.sitio_web : `https://${p.sitio_web}`} target="_blank" rel="noreferrer">🌐 Link</a></div>}
+                  </td>
+                  <td>
+                    <div className="badge">{p.rubro || p.categoria || 'Sin rubro'}</div>
+                  </td>
                   <td>
                     <div className="inline-actions">
                       {canEdit && <button onClick={() => handleEditOpen(p)} style={{ padding: '6px 10px' }}>✏️</button>}
@@ -185,63 +219,150 @@ export default function Proveedores() {
 
       {editModal && (
         <div
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
           onClick={e => { if (e.target === e.currentTarget) setEditModal(null) }}
         >
-          <div style={{ background: 'white', padding: 28, borderRadius: 10, minWidth: 380, maxWidth: 520, width: '90%' }}>
-            <h3 style={{ marginBottom: 20 }}>Editar proveedor</h3>
-            <div className="grid" style={{ gap: 12 }}>
-              <div><label>Empresa *</label><input value={editModal.nombre} onChange={e => setEditModal({ ...editModal, nombre: e.target.value })} style={{ width: '100%' }} /></div>
-              <div><label>CUIT</label><input value={editModal.cuit} onChange={e => setEditModal({ ...editModal, cuit: e.target.value })} style={{ width: '100%' }} /></div>
-              <div><label>Contacto</label><input value={editModal.contacto} onChange={e => setEditModal({ ...editModal, contacto: e.target.value })} style={{ width: '100%' }} /></div>
-              <div><label>Teléfono</label><input value={editModal.telefono} onChange={e => setEditModal({ ...editModal, telefono: e.target.value })} style={{ width: '100%' }} /></div>
-              <div><label>Email</label><input value={editModal.email} onChange={e => setEditModal({ ...editModal, email: e.target.value })} style={{ width: '100%' }} /></div>
-              <div><label>Categoría</label><input value={editModal.categoria} onChange={e => setEditModal({ ...editModal, categoria: e.target.value })} style={{ width: '100%' }} /></div>
+          <div style={{ background: 'white', padding: 32, borderRadius: 16, width: 'min(850px, 95%)', maxHeight: '90vh', overflowY: 'auto' }}>
+            <h2 style={{ marginBottom: 24, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span>✏️</span> Editar Proveedor
+            </h2>
+            
+            <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20 }}>
+              <section>
+                <h4 style={{ borderBottom: '1px solid #eee', paddingBottom: 8, marginBottom: 12 }}>Datos Fiscales</h4>
+                <div style={{ marginBottom: 12 }}>
+                  <label>Nombre Comercial *</label>
+                  <input value={editModal.nombre} onChange={e => setEditModal({ ...editModal, nombre: e.target.value })} style={{ width: '100%' }} />
+                </div>
+                <div style={{ marginBottom: 12 }}>
+                  <label>Razón Social</label>
+                  <input value={editModal.razon_social} onChange={e => setEditModal({ ...editModal, razon_social: e.target.value })} style={{ width: '100%' }} />
+                </div>
+                <div style={{ marginBottom: 12 }}>
+                  <label>CUIT</label>
+                  <input value={editModal.cuit} onChange={e => setEditModal({ ...editModal, cuit: e.target.value })} style={{ width: '100%' }} />
+                </div>
+                <div style={{ marginBottom: 12 }}>
+                  <label>Dirección</label>
+                  <input value={editModal.direccion} onChange={e => setEditModal({ ...editModal, direccion: e.target.value })} style={{ width: '100%' }} />
+                </div>
+              </section>
+
+              <section>
+                <h4 style={{ borderBottom: '1px solid #eee', paddingBottom: 8, marginBottom: 12 }}>Contacto y Web</h4>
+                <div style={{ marginBottom: 12 }}>
+                  <label>Contacto Responsable</label>
+                  <input value={editModal.contacto} onChange={e => setEditModal({ ...editModal, contacto: e.target.value })} style={{ width: '100%' }} />
+                </div>
+                <div style={{ marginBottom: 12 }}>
+                  <label>Teléfono</label>
+                  <input value={editModal.telefono} onChange={e => setEditModal({ ...editModal, telefono: e.target.value })} style={{ width: '100%' }} />
+                </div>
+                <div style={{ marginBottom: 12 }}>
+                  <label>Email Principal</label>
+                  <input value={editModal.email} onChange={e => setEditModal({ ...editModal, email: e.target.value })} style={{ width: '100%' }} />
+                </div>
+                <div style={{ marginBottom: 12 }}>
+                  <label>Sitio Web</label>
+                  <input value={editModal.sitio_web} onChange={e => setEditModal({ ...editModal, sitio_web: e.target.value })} placeholder="https://..." style={{ width: '100%' }} />
+                </div>
+              </section>
+
+              <section style={{ gridColumn: '1 / -1' }}>
+                <h4 style={{ borderBottom: '1px solid #eee', paddingBottom: 8, marginBottom: 12 }}>Categorización y Notas</h4>
+                <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                  <div>
+                    <label>Rubro / Actividad</label>
+                    <input value={editModal.rubro} onChange={e => setEditModal({ ...editModal, rubro: e.target.value })} placeholder="Ej: Papelería" style={{ width: '100%' }} />
+                  </div>
+                  <div>
+                    <label>Categoría Interna</label>
+                    <input value={editModal.categoria} onChange={e => setEditModal({ ...editModal, categoria: e.target.value })} style={{ width: '100%' }} />
+                  </div>
+                </div>
+                <div style={{ marginTop: 12 }}>
+                  <label>Observaciones</label>
+                  <textarea 
+                    value={editModal.observaciones} 
+                    onChange={e => setEditModal({ ...editModal, observaciones: e.target.value })} 
+                    style={{ width: '100%', height: 80, padding: 10, borderRadius: 8, border: '1px solid #cbd5e1' }}
+                  />
+                </div>
+              </section>
             </div>
-            <div style={{ display: 'flex', gap: 10, marginTop: 20, justifyContent: 'flex-end' }}>
+
+            <div style={{ display: 'flex', gap: 12, marginTop: 32, justifyContent: 'flex-end' }}>
               <button className="secondary" onClick={() => setEditModal(null)}>Cancelar</button>
-              <button onClick={handleEditSave}>Guardar cambios</button>
+              <button onClick={handleEditSave} style={{ padding: '10px 24px' }}>Guardar cambios</button>
             </div>
-            {editModal.error && <div className="msg show msg-error" style={{ marginTop: 10 }}>{editModal.error}</div>}
+            {editModal.error && <div className="msg show msg-error" style={{ marginTop: 16 }}>{editModal.error}</div>}
           </div>
         </div>
       )}
 
       {formOpen && canCreate && (
         <div
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}
           onClick={e => { if (e.target === e.currentTarget) setFormOpen(false) }}
         >
-          <div style={{ background: '#f9fafb', padding: 24, borderRadius: 10, width: 'min(720px, 100%)' }}>
-            <h3>Agregar proveedor</h3>
-            <form onSubmit={handleCreate} className="grid">
-              <div>
-                <label>Empresa *</label>
-                <input type="text" value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Ej: Distribuidora del Norte" required />
+          <div style={{ background: 'white', padding: 32, borderRadius: 16, width: 'min(850px, 95%)', maxHeight: '90vh', overflowY: 'auto' }}>
+            <h2 style={{ marginBottom: 24 }}>🚀 Nuevo Proveedor</h2>
+            <form onSubmit={handleCreate}>
+              <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20 }}>
+                <section>
+                  <h4 style={{ borderBottom: '1px solid #eee', paddingBottom: 8, marginBottom: 12 }}>Identificación</h4>
+                  <div style={{ marginBottom: 12 }}>
+                    <label>Nombre Comercial *</label>
+                    <input type="text" value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Ej: Librería Central" required />
+                  </div>
+                  <div style={{ marginBottom: 12 }}>
+                    <label>Razón Social</label>
+                    <input type="text" value={form.razon_social} onChange={e => setForm({ ...form, razon_social: e.target.value })} placeholder="Ej: Juan Perez S.R.L." />
+                  </div>
+                  <div style={{ marginBottom: 12 }}>
+                    <label>CUIT</label>
+                    <input type="text" value={form.cuit} onChange={e => setForm({ ...form, cuit: e.target.value })} placeholder="30-..." />
+                  </div>
+                </section>
+
+                <section>
+                  <h4 style={{ borderBottom: '1px solid #eee', paddingBottom: 8, marginBottom: 12 }}>Contacto</h4>
+                  <div style={{ marginBottom: 12 }}>
+                    <label>Email Principal</label>
+                    <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="info@..." />
+                  </div>
+                  <div style={{ marginBottom: 12 }}>
+                    <label>Teléfono</label>
+                    <input type="text" value={form.telefono} onChange={e => setForm({ ...form, telefono: e.target.value })} />
+                  </div>
+                  <div style={{ marginBottom: 12 }}>
+                    <label>Dirección</label>
+                    <input type="text" value={form.direccion} onChange={e => setForm({ ...form, direccion: e.target.value })} placeholder="Calle y altura" />
+                  </div>
+                </section>
+
+                <section style={{ gridColumn: '1 / -1' }}>
+                   <h4 style={{ borderBottom: '1px solid #eee', paddingBottom: 8, marginBottom: 12 }}>Información Adicional</h4>
+                   <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                    <div>
+                      <label>Rubro / Actividad</label>
+                      <input type="text" value={form.rubro} onChange={e => setForm({ ...form, rubro: e.target.value })} />
+                    </div>
+                    <div>
+                      <label>Sitio Web</label>
+                      <input type="text" value={form.sitio_web} onChange={e => setForm({ ...form, sitio_web: e.target.value })} placeholder="www.empresa.com" />
+                    </div>
+                   </div>
+                   <div style={{ marginTop: 12 }}>
+                    <label>Observaciones</label>
+                    <textarea value={form.observaciones} onChange={e => setForm({ ...form, observaciones: e.target.value })} style={{ width: '100%', height: 60, padding: 10, borderRadius: 8, border: '1px solid #cbd5e1' }} />
+                   </div>
+                </section>
               </div>
-              <div>
-                <label>CUIT</label>
-                <input type="text" value={form.cuit} onChange={e => setForm({ ...form, cuit: e.target.value })} placeholder="Ej: 30-12345678-9" />
-              </div>
-              <div>
-                <label>Contacto</label>
-                <input type="text" value={form.contacto} onChange={e => setForm({ ...form, contacto: e.target.value })} placeholder="Nombre del contacto" />
-              </div>
-              <div>
-                <label>Teléfono</label>
-                <input type="text" value={form.telefono} onChange={e => setForm({ ...form, telefono: e.target.value })} placeholder="Ej: 0351-123456" />
-              </div>
-              <div>
-                <label>Email</label>
-                <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="proveedor@empresa.com" />
-              </div>
-              <div>
-                <label>Categoría</label>
-                <input type="text" value={form.categoria} onChange={e => setForm({ ...form, categoria: e.target.value })} placeholder="Ej: Librería, Informática" />
-              </div>
-              <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+
+              <div style={{ display: 'flex', gap: 12, marginTop: 32, justifyContent: 'flex-end' }}>
                 <button type="button" className="secondary" onClick={() => setFormOpen(false)}>Cancelar</button>
-                <button type="submit" style={{ width: 'auto', margin: 0, padding: '10px 18px' }}>Guardar proveedor</button>
+                <button type="submit" style={{ padding: '10px 24px' }}>Guardar Proveedor</button>
               </div>
             </form>
           </div>

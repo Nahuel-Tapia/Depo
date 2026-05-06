@@ -618,10 +618,75 @@ function DirectivoPedidos() {
     return pedido.estado
   }
 
-  const formatEstadoPedido = (estado) => {
+  const ApprovalStepper = ({ pedido }) => {
+    const { estado, logistica } = pedido
+    
+    let steps = [
+      { id: 'pendiente', label: 'Supervisor' },
+      { id: 'pendiente_director', label: 'Director Área' },
+      { id: 'aprobado', label: 'Autorizado' }
+    ]
+
+    if (pedido.tipo === 'anual' && logistica) {
+      steps = [
+        ...steps,
+        { id: 'licitacion', label: 'Licitación' },
+        { id: 'en_deposito', label: 'En Depósito' },
+        { id: 'entregado', label: 'Entregado' }
+      ]
+    }
+
+    const getStepStatus = (stepId, currentEstado, log) => {
+      const order = ['pendiente', 'pendiente_director', 'aprobado', 'licitacion', 'en_deposito', 'entregado']
+      let logicalEstado = currentEstado
+
+      if (pedido.tipo === 'anual' && log && currentEstado === 'aprobado') {
+        if (log.porcentaje_entrega >= 100) logicalEstado = 'entregado'
+        else if (log.total_entregada > 0) logicalEstado = 'en_deposito' // Simplificación: si ya entregamos algo, es que ya pasó por depósito
+        else if (log.estado_licitacion === 'en_deposito') logicalEstado = 'en_deposito'
+        else if (log.estado_licitacion === 'adjudicada') logicalEstado = 'licitacion'
+      }
+
+      const currentIndex = order.indexOf(logicalEstado)
+      const stepIndex = order.indexOf(stepId)
+
+      if (currentEstado === 'rechazado' || currentEstado === 'cancelado') return 'error'
+      if (stepIndex < currentIndex || logicalEstado === 'entregado') return 'completed'
+      if (stepIndex === currentIndex) return 'active'
+      return 'pending'
+    }
+
+    return (
+      <div className="approval-stepper">
+        {steps.map((step, idx) => {
+          const status = getStepStatus(step.id, estado, logistica)
+          return (
+            <div key={step.id} className={`step ${status}`}>
+              <div className="step-circle">
+                {status === 'completed' ? '✓' : idx + 1}
+              </div>
+              <div className="step-label">{step.label}</div>
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
+  const formatEstadoPedido = (pedido) => {
+    const { estado, logistica } = pedido
     if (estado === 'aclaracion') return 'Aclaración solicitada'
     if (estado === 'pendiente_director') return 'Aprobado por Supervisor'
-    if (estado === 'aprobado') return 'Aprobado - Listo para retirar'
+    
+    if (estado === 'aprobado' && logistica) {
+      if (logistica.porcentaje_entrega >= 100) return 'Entregado (100%)'
+      if (logistica.total_entregada > 0) return `Entrega Parcial (${logistica.porcentaje_entrega}%)`
+      if (logistica.estado_licitacion === 'en_deposito') return 'En Depósito Central'
+      if (logistica.estado_licitacion === 'adjudicada') return 'Licitación Adjudicada'
+      return 'En Proceso de Licitación'
+    }
+
+    if (estado === 'aprobado') return 'Aprobado - Listo'
     if (estado === 'rechazado') return 'Rechazado'
     if (estado === 'cancelado') return 'Cancelado'
     if (estado === 'entregado') return 'Entregado'
@@ -772,21 +837,42 @@ function DirectivoPedidos() {
 
       {/* Sección de Pedidos Listos para Retirar */}
       {tab === 'anual' && pedidos.some(p => p.estado === 'aprobado' && (p.tipo || 'anual') === 'anual') && (
-        <div style={{ marginTop: 24, padding: 20, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 12 }}>
-          <h3 style={{ marginTop: 0, color: '#166534', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: '1.4rem' }}>✅</span> ¡Tu solicitud anual fue aprobada!
-          </h3>
-          <p style={{ color: '#166534', fontWeight: 500 }}>Ya podés acercarte al depósito para retirar los siguientes productos pendientes:</p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: 12, marginTop: 16 }}>
+        <div className="fade-in" style={{ marginTop: 24, padding: '24px 30px', background: 'var(--surface-gradient)', border: '1px solid #dcfce7', borderRadius: 16, boxShadow: 'var(--shadow-premium)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+            <div>
+              <h3 style={{ marginTop: 0, color: '#166534', display: 'flex', alignItems: 'center', gap: 10, fontSize: '1.4rem' }}>
+                <span style={{ fontSize: '1.8rem' }}>🎉</span> ¡Solicitud Anual Aprobada!
+              </h3>
+              <p style={{ color: '#166534', fontWeight: 500, margin: 0, opacity: 0.8 }}>
+                Tu pedido ha pasado todas las etapas de validación. Ya podés retirar tus insumos.
+              </p>
+            </div>
+            <div style={{ background: '#dcfce7', padding: '12px 20px', borderRadius: 12, textAlign: 'center' }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#166534', textTransform: 'uppercase' }}>Estado Final</div>
+              <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#166534' }}>LISTO PARA RETIRO</div>
+            </div>
+          </div>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16, marginTop: 20 }}>
             {pedidos
               .filter(p => p.estado === 'aprobado' && (p.tipo || 'anual') === 'anual')
               .flatMap(p => p.items || [])
               .map((item, idx) => (
-                <div key={idx} style={{ background: '#fff', padding: '12px 16px', borderRadius: 8, border: '1px solid #dcfce7', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
-                  <div style={{ fontWeight: 600, color: '#111827' }}>{item.producto_nombre}</div>
-                  <div style={{ color: '#166534', fontSize: '1.1rem', fontWeight: 700 }}>{item.cantidad} {item.unidad_medida || 'unidades'}</div>
+                <div key={idx} style={{ background: '#fff', padding: '16px 20px', borderRadius: 12, border: '1px solid #f0fdf4', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', transition: 'transform 0.2s' }} className="stat-card-clickable">
+                  <div>
+                    <div style={{ fontWeight: 700, color: '#111827', fontSize: '1rem' }}>{item.producto_nombre}</div>
+                    <div style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>{item.unidad_medida || 'unidades'}</div>
+                  </div>
+                  <div style={{ background: '#f0fdf4', color: '#166534', fontSize: '1.4rem', fontWeight: 800, padding: '4px 12px', borderRadius: 8 }}>
+                    {item.cantidad}
+                  </div>
                 </div>
               ))}
+          </div>
+          <div style={{ marginTop: 24, textAlign: 'right' }}>
+            <button className="secondary" style={{ borderRadius: 8 }} onClick={() => window.print()}>
+              🖨️ Descargar Comprobante de Retiro
+            </button>
           </div>
         </div>
       )}
@@ -923,6 +1009,7 @@ function DirectivoPedidos() {
                 <th>Estado</th>
                 <th>Notas</th>
                 <th>Fecha</th>
+                <th>Progreso</th>
                 <th>Detalle</th>
                 <th>Acciones</th>
               </tr>
@@ -936,8 +1023,8 @@ function DirectivoPedidos() {
                     <td>{pedido.producto_nombre || '-'}</td>
                     <td>{pedido.cantidad}</td>
                     <td>
-                      <span className={`badge badge-estado-${estadoVisible}`}>
-                        {formatEstadoPedido(estadoVisible)}
+                      <span className={`badge-premium badge-${estadoVisible}`}>
+                        {formatEstadoPedido(pedido)}
                       </span>
                     </td>
                     <td>
@@ -949,6 +1036,7 @@ function DirectivoPedidos() {
                       )}
                     </td>
                     <td>{new Date(pedido.created_at).toLocaleDateString('es-AR')}</td>
+                    <td style={{ minWidth: 200 }}><ApprovalStepper pedido={pedido} /></td>
                     <td>{pedido.resumen_items || '-'}</td>
                     <td>
                       {pedido.estado === 'pendiente' && (

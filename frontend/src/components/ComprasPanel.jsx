@@ -78,6 +78,7 @@ export default function ComprasPanel({ section = 'pedidos' }) {
   const [planillas, setPlanillas] = useState([])
   const [detalle, setDetalle] = useState(null)
   const [consolidado, setConsolidado] = useState([])
+  const [estadoDirectores, setEstadoDirectores] = useState([])
   const [adjudicacion, setAdjudicacion] = useState([])
   const [proveedores, setProveedores] = useState([])
   const [formByProduct, setFormByProduct] = useState({})
@@ -85,37 +86,42 @@ export default function ComprasPanel({ section = 'pedidos' }) {
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [updatingId, setUpdatingId] = useState(null)
+  const [itemsFinales, setItemsFinales] = useState([])
+  const [publicacionStatus, setPublicacionStatus] = useState({ publicada: false, data: null })
+  const [editQty, setEditQty] = useState({})
+  const [showConfirmPublicar, setShowConfirmPublicar] = useState(false)
 
   const loadCatalogData = async () => {
-    const [planillasRes, proveedoresRes] = await Promise.all([
-      apiFetch('/api/compras/planillas', { token }),
-      apiFetch('/api/proveedores', { token })
-    ])
-
-    const planillasData = planillasRes.ok ? await planillasRes.json() : { planillas: [] }
+    const proveedoresRes = await apiFetch('/api/proveedores', { token })
     const proveedoresData = proveedoresRes.ok ? await proveedoresRes.json() : { proveedores: [] }
-
-    setCatalogPlanillas(planillasData.planillas || [])
     setProveedores(proveedoresData.proveedores || [])
   }
 
   const loadWorkflowData = async (activeFilters = filters) => {
     setLoading(true)
     try {
-      const query = buildQuery(activeFilters)
-      const [planillasRes, consolidadoRes, adjudicacionRes] = await Promise.all([
-        apiFetch(`/api/compras/planillas${query}`, { token }),
-        apiFetch(`/api/compras/licitacion/consolidado${query}`, { token }),
-        apiFetch(`/api/compras/adjudicacion${query}`, { token })
+      const anio = new Date().getFullYear()
+
+      const [consolidadoRes, statusRes, finalRes, pubRes, adjudicacionRes] = await Promise.all([
+        apiFetch(`/api/compras/licitacion/anual/consolidado?anio=${anio}`, { token }),
+        apiFetch(`/api/compras/licitacion/anual/estado-directores?anio=${anio}`, { token }),
+        apiFetch(`/api/compras/licitacion/anual/final-items?anio=${anio}`, { token }),
+        apiFetch(`/api/compras/licitacion/anual/publicada-status?anio=${anio}`, { token }),
+        apiFetch(`/api/compras/adjudicacion?anio=${anio}`, { token })
       ])
 
-      const planillasData = planillasRes.ok ? await planillasRes.json() : { planillas: [] }
       const consolidadoData = consolidadoRes.ok ? await consolidadoRes.json() : { items: [] }
+      const statusData = statusRes.ok ? await statusRes.json() : { directores: [] }
+      const finalData = finalRes.ok ? await finalRes.json() : { items: [] }
+      const pubData = pubRes.ok ? await pubRes.json() : { publicada: false }
       const adjudicacionData = adjudicacionRes.ok ? await adjudicacionRes.json() : { items: [] }
 
-      setPlanillas(planillasData.planillas || [])
       setConsolidado(consolidadoData.items || [])
+      setEstadoDirectores(statusData.directores || [])
+      setItemsFinales(finalData.items || [])
+      setPublicacionStatus(pubData)
       setAdjudicacion(adjudicacionData.items || [])
+      
       setFormByProduct((prev) => {
         const next = { ...prev }
         for (const item of adjudicacionData.items || []) {
@@ -127,6 +133,23 @@ export default function ComprasPanel({ section = 'pedidos' }) {
         }
         return next
       })
+      
+      // Inicializar cantidades editables con las originales si no hay publicación previa
+      if (!pubData.publicada) {
+        const initialEdit = {}
+        finalData.items.forEach(item => {
+          initialEdit[item.id_pedido + '-' + item.producto_id] = item.cantidad_solicitada
+        })
+        setEditQty(initialEdit)
+      } else {
+        // Si ya está publicada, las cantidades vienen del snapshot
+        const snapshotEdit = {}
+        pubData.data.items.forEach(item => {
+          snapshotEdit[item.id_pedido + '-' + item.producto_id] = item.cantidad_a_licitar
+        })
+        setEditQty(snapshotEdit)
+      }
+
     } catch (err) {
       setMsg({ text: err.message || 'No se pudo cargar la informacion', type: 'error' })
     } finally {
@@ -215,6 +238,26 @@ export default function ComprasPanel({ section = 'pedidos' }) {
     }
   }
 
+  const handleExportCSV = () => {
+    if (!consolidado.length) return
+    const headers = ['Producto', 'Cantidad Total', 'Unidad de Medida']
+    const rows = consolidado.map(item => [
+      item.producto,
+      item.cantidad_total,
+      item.unidad_medida
+    ])
+    const csvContent = [headers, ...rows].map(e => e.join(',')).join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.setAttribute('href', url)
+    link.setAttribute('download', `licitacion_${new Date().getFullYear()}.csv`)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
   const handleFormChange = (productoId, field, value) => {
     setFormByProduct((prev) => ({
       ...prev,
@@ -223,6 +266,44 @@ export default function ComprasPanel({ section = 'pedidos' }) {
         [field]: value
       }
     }))
+  }
+
+  const handleEditQty = (idPedido, idProducto, val) => {
+    setEditQty(prev => ({
+      ...prev,
+      [`${idPedido}-${idProducto}`]: Number(val)
+    }))
+  }
+
+  const handlePublicar = async () => {
+    setSaving(true)
+    try {
+      const anio = new Date().getFullYear()
+      const payload = {
+        anio,
+        items: itemsFinales.map(item => ({
+          ...item,
+          cantidad_a_licitar: editQty[`${item.id_pedido}-${item.producto_id}`] || item.cantidad_solicitada
+        }))
+      }
+      const res = await apiFetch('/api/compras/licitacion/anual/publicar', {
+        token,
+        method: 'POST',
+        body: JSON.stringify(payload)
+      })
+      if (res.ok) {
+        setShowConfirmPublicar(false)
+        await loadWorkflowData()
+        setMsg({ text: 'Licitación publicada con éxito', type: 'success' })
+      } else {
+        const data = await res.json()
+        throw new Error(data.error || 'Error al publicar')
+      }
+    } catch (err) {
+      setMsg({ text: err.message, type: 'error' })
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleGuardarAdjudicacion = async () => {
@@ -268,17 +349,15 @@ export default function ComprasPanel({ section = 'pedidos' }) {
   }
 
   const headerBySection = {
-    pedidos: {
-      title: 'Gestion de Pedidos Anuales',
-      subtitle: 'Recepcion de planillas y validacion de integridad antes de aceptar.'
-    },
     licitacion: {
-      title: 'Licitacion Anual',
-      subtitle: 'Filtros dinamicos para trabajar las planillas aceptadas por director, nivel y estado.'
+      title: `Licitacion Anual ${new Date().getFullYear()}`,
+      subtitle: 'Consolidado general de pedidos aprobados por directores de area.'
     },
     'listado-final': {
-      title: 'Listado Final a Licitar',
-      subtitle: 'Reporte consolidado por producto, unidad de medida y cantidad total.'
+      title: publicacionStatus.publicada ? `Licitación Publicada — ${new Date().getFullYear()}` : 'Listado Final a Licitar',
+      subtitle: publicacionStatus.publicada 
+        ? `Licitación cerrada el ${new Date(publicacionStatus.data.fecha_publicacion).toLocaleString('es-AR')}.`
+        : 'Listado detallado por institución para validación y ajuste de cantidades finales.'
     },
     adjudicacion: {
       title: 'Adjudicacion y Cierre de Compra',
@@ -286,7 +365,7 @@ export default function ComprasPanel({ section = 'pedidos' }) {
     }
   }
 
-  const header = headerBySection[section] || headerBySection.pedidos
+  const header = headerBySection[section] || headerBySection.licitacion
 
   return (
     <div>
@@ -303,237 +382,192 @@ export default function ComprasPanel({ section = 'pedidos' }) {
       )}
 
       <div ref={printRef} style={{ marginTop: 18 }}>
-        {(section === 'licitacion' || section === 'listado-final' || section === 'adjudicacion') && (
-          <section className="card" style={{ padding: 18, marginBottom: 18 }}>
-            <h3 style={{ marginTop: 0 }}>Filtros</h3>
+        {(section === 'listado-final' || section === 'adjudicacion') && (
+          <section style={{ 
+            background: 'white', 
+            padding: 24, 
+            borderRadius: 12, 
+            boxShadow: '0 1px 3px rgba(0,0,0,0.1)', 
+            marginBottom: 24 
+          }}>
+            <h3 style={{ marginTop: 0 }}>Filtros de búsqueda</h3>
             <Filters filters={filters} setFilters={setFilters} directores={directores} />
           </section>
         )}
 
-        {section === 'pedidos' && (
-          <section className="card" style={{ padding: 18 }}>
-            <h3 style={{ marginTop: 0 }}>Recepcion</h3>
-            <p style={{ marginTop: 0, color: 'var(--muted)' }}>
-              Se listan las planillas enviadas por Direccion de Area. El boton Aceptar solo se habilita si la cobertura de escuelas es completa.
-            </p>
-
-            <Filters filters={filters} setFilters={setFilters} directores={directores} compact />
-
-            <div style={{ marginTop: 18 }}>
-              {loading ? (
-                <div className="sv-empty-state">Cargando planillas...</div>
-              ) : planillas.length === 0 ? (
-                <div className="sv-empty-state">No hay planillas para mostrar.</div>
-              ) : (
-                planillas.map((planilla) => {
-                  const coverage = planilla.validacion_cobertura || {}
-                  return (
-                    <div
-                      key={planilla.id}
-                      style={{
-                        border: '1px solid var(--border)',
-                        borderRadius: 12,
-                        padding: 16,
-                        marginBottom: 14,
-                        background: planilla.estado === 'aceptada' ? '#f0fdf4' : '#fff'
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: 14, flexWrap: 'wrap' }}>
-                        <div>
-                          <strong style={{ fontSize: '1.04rem' }}>Planilla #{planilla.id} - Ano {planilla.anio}</strong>
-                          <span className={`badge badge-estado-${ESTADO_BADGE[planilla.estado] || 'pendiente'}`} style={{ marginLeft: 10 }}>
-                            {planilla.estado}
-                          </span>
-                          <div style={{ color: 'var(--muted)', fontSize: '0.9rem', marginTop: 6 }}>
-                            Director/a: <strong>{`${planilla.director_nombre || ''} ${planilla.director_apellido || ''}`.trim()}</strong>
-                          </div>
-                          <div style={{ color: 'var(--muted)', fontSize: '0.88rem', marginTop: 4 }}>
-                            Cobertura: {coverage.escuelas_cargadas || 0} de {coverage.escuelas_esperadas || 0} escuelas
-                          </div>
-                          {!coverage.ok && planilla.estado === 'enviada' && (
-                            <div style={{ color: '#b45309', fontSize: '0.88rem', marginTop: 4 }}>
-                              Faltan {coverage.escuelas_faltantes || 0} escuelas para aceptar.
-                            </div>
-                          )}
-                        </div>
-
-                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                          <button className="secondary" style={{ margin: 0 }} onClick={() => handleVerDetalle(planilla.id)}>
-                            {detalle?.planilla?.id === planilla.id ? 'Ocultar detalle' : 'Ver detalle'}
-                          </button>
-                          {planilla.estado === 'enviada' && (
-                            <button
-                              style={{ margin: 0 }}
-                              onClick={() => handleAceptarPlanilla(planilla.id)}
-                              disabled={updatingId === planilla.id}
-                            >
-                              {updatingId === planilla.id ? 'Validando...' : 'Aceptar'}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-
-                      {detalle?.planilla?.id === planilla.id && (
-                        <div style={{ marginTop: 16 }}>
-                          <div style={{ marginBottom: 10, padding: 12, borderRadius: 10, background: '#f8fafc', border: '1px solid var(--border)' }}>
-                            <strong>Validacion de integridad</strong>
-                            <div style={{ marginTop: 6, color: 'var(--muted)', fontSize: '0.9rem' }}>
-                              {detalle.validacion_cobertura?.ok
-                                ? 'La planilla cubre el 100% de las escuelas bajo su jurisdiccion.'
-                                : `Escuelas faltantes: ${(detalle.validacion_cobertura?.faltantes || []).map((item) => `${item.nombre}${item.cue ? ` (${item.cue})` : ''}`).join(', ') || 'sin detalle'}`}
-                            </div>
-                          </div>
-
-                          {groupedDetalle.map((grupo) => (
-                            <div key={grupo.institucion} style={{ marginBottom: 14 }}>
-                              <div style={{ fontWeight: 700, marginBottom: 6 }}>
-                                {grupo.institucion}
-                                {grupo.cue && <span style={{ color: 'var(--muted)', fontWeight: 400, marginLeft: 8 }}>CUE: {grupo.cue}</span>}
-                                {grupo.nivel && <span style={{ color: 'var(--muted)', fontWeight: 400, marginLeft: 8 }}>Nivel: {grupo.nivel}</span>}
-                              </div>
-                              <table style={{ marginBottom: 0 }}>
-                                <thead>
-                                  <tr>
-                                    <th>Producto</th>
-                                    <th>Unidad</th>
-                                    <th>Cantidad</th>
-                                    <th>Notas</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {grupo.items.map((item) => (
-                                    <tr key={item.id}>
-                                      <td>{item.producto}</td>
-                                      <td>{item.unidad_medida || 'unidad'}</td>
-                                      <td style={{ textAlign: 'center', fontWeight: 700 }}>{item.cantidad}</td>
-                                      <td>{item.notas || '-'}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })
-              )}
-            </div>
-          </section>
-        )}
 
         {section === 'licitacion' && (
-          <section className="card" style={{ padding: 18 }}>
-            <h3 style={{ marginTop: 0 }}>Panel de control</h3>
-            <p style={{ marginTop: 0, color: 'var(--muted)' }}>
-              Esta vista concentra las planillas para el trabajo de licitacion y deja a mano los filtros de director, nivel y estado.
-            </p>
-
-            {loading ? (
-              <div className="sv-empty-state">Cargando datos...</div>
-            ) : planillas.length === 0 ? (
-              <div className="sv-empty-state">No hay planillas para los filtros seleccionados.</div>
-            ) : (
+          <div>
+            <section className="card" style={{ padding: 24, marginBottom: 24, minHeight: 'auto' }}>
+              <h3 style={{ marginTop: 0, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: '1.5rem' }}>🚦</span> Sección B — Estado de envío por Director de Área
+              </h3>
               <table style={{ marginBottom: 0 }}>
                 <thead>
-                  <tr>
-                    <th>Planilla</th>
-                    <th>Director de Area</th>
-                    <th>Estado</th>
-                    <th>Escuelas cargadas</th>
-                    <th>Accion</th>
+                  <tr style={{ background: '#f8fafc' }}>
+                    <th>NIVEL EDUCATIVO</th>
+                    <th>DIRECTOR DE ÁREA</th>
+                    <th style={{ textAlign: 'center' }}>ESTADO</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {planillas.map((planilla) => (
-                    <tr key={planilla.id}>
-                      <td>#{planilla.id} - {planilla.anio}</td>
-                      <td>{`${planilla.director_nombre || ''} ${planilla.director_apellido || ''}`.trim()}</td>
-                      <td>{planilla.estado}</td>
-                      <td>{planilla.validacion_cobertura?.escuelas_cargadas || 0} / {planilla.validacion_cobertura?.escuelas_esperadas || 0}</td>
-                      <td>
-                        <button className="secondary" style={{ margin: 0 }} onClick={() => handleVerDetalle(planilla.id)}>
-                          {detalle?.planilla?.id === planilla.id ? 'Ocultar detalle' : 'Ver detalle'}
-                        </button>
+                  {estadoDirectores.length === 0 ? (
+                    <tr>
+                      <td colSpan={3} style={{ textAlign: 'center', padding: 20, color: 'var(--muted)' }}>
+                        No hay directores de área registrados.
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    estadoDirectores.map((dir) => (
+                      <tr key={dir.id_usuario}>
+                        <td style={{ fontWeight: 600 }}>{dir.nivel_educativo || 'Sin nivel'}</td>
+                        <td>{`${dir.nombre || ''} ${dir.apellido || ''}`.trim()}</td>
+                        <td style={{ textAlign: 'center' }}>
+                          {dir.enviado ? (
+                            <span style={{ color: '#166534', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                              ✅ Enviado
+                            </span>
+                          ) : (
+                            <span style={{ color: '#9a3412', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                              ⏳ Pendiente
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
-            )}
+            </section>
 
-            {detalle?.planilla && (
-              <div style={{ marginTop: 18 }}>
-                <h3 style={{ marginBottom: 10 }}>Detalle de la planilla #{detalle.planilla.id}</h3>
-                {groupedDetalle.map((grupo) => (
-                  <div key={grupo.institucion} style={{ marginBottom: 14 }}>
-                    <div style={{ fontWeight: 700, marginBottom: 6 }}>{grupo.institucion}</div>
-                    <table style={{ marginBottom: 0 }}>
-                      <thead>
-                        <tr>
-                          <th>Producto</th>
-                          <th>Unidad</th>
-                          <th>Cantidad</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {grupo.items.map((item) => (
-                          <tr key={item.id}>
-                            <td>{item.producto}</td>
-                            <td>{item.unidad_medida || 'unidad'}</td>
-                            <td>{item.cantidad}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ))}
+            <section className="card" style={{ padding: 24, minHeight: 'auto' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: '1.5rem' }}>📋</span> Sección A — Consolidado general
+                </h3>
+                <button className="secondary" onClick={handleExportCSV} disabled={!consolidado.length}>
+                  📥 Exportar Consolidado (CSV)
+                </button>
               </div>
-            )}
-          </section>
+
+              {loading ? (
+                <div className="sv-empty-state">Generando consolidado...</div>
+              ) : consolidado.length === 0 ? (
+                <div className="sv-empty-state">Todavía no hay solicitudes aprobadas para el año en curso.</div>
+              ) : (
+                <table style={{ marginBottom: 0 }}>
+                  <thead>
+                    <tr style={{ background: '#f8fafc' }}>
+                      <th>PRODUCTO</th>
+                      <th style={{ textAlign: 'center' }}>CANTIDAD TOTAL</th>
+                      <th>UNIDAD</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {consolidado.map((item) => (
+                      <tr key={item.producto_id}>
+                        <td style={{ fontWeight: 600 }}>{item.producto}</td>
+                        <td style={{ textAlign: 'center', fontSize: '1.1rem', fontWeight: 700, color: 'var(--primary)' }}>
+                          {item.cantidad_total}
+                        </td>
+                        <td style={{ color: 'var(--muted)' }}>{item.unidad_medida}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </section>
+          </div>
         )}
 
         {section === 'listado-final' && (
-          <section className="card" style={{ padding: 18 }}>
-            <h3 style={{ marginTop: 0 }}>Listado final</h3>
-            <p style={{ marginTop: 0, color: 'var(--muted)' }}>
-              Consolidado general por producto individual, unidad de medida y cantidad total a licitar.
-            </p>
+          <section className="card" style={{ padding: 24, minHeight: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <h3 style={{ margin: 0 }}>
+                {publicacionStatus.publicada ? '📋 Licitación Publicada (Solo Lectura)' : '📝 Listado Detallado a Licitar'}
+              </h3>
+              {!publicacionStatus.publicada && itemsFinales.length > 0 && (
+                <button className="primary" onClick={() => setShowConfirmPublicar(true)}>
+                  🚀 Subir Licitación
+                </button>
+              )}
+              {publicacionStatus.publicada && (
+                <button className="secondary" onClick={() => window.print()}>
+                  🖨️ Imprimir / Exportar PDF
+                </button>
+              )}
+            </div>
 
             {loading ? (
-              <div className="sv-empty-state">Generando listado...</div>
-            ) : consolidado.length === 0 ? (
-              <div className="sv-empty-state">Todavia no hay planillas aceptadas para consolidar.</div>
+              <div className="sv-empty-state">Cargando listado...</div>
+            ) : itemsFinales.length === 0 ? (
+              <div className="sv-empty-state">No hay pedidos disponibles para el listado final.</div>
             ) : (
-              <table style={{ marginBottom: 0 }}>
-                <thead>
-                  <tr>
-                    <th>Producto</th>
-                    <th>Unidad de medida</th>
-                    <th>Cantidad total</th>
-                    <th>Directores</th>
-                    <th>Niveles</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {consolidado.map((item) => (
-                    <tr key={item.producto_id}>
-                      <td>{item.producto}</td>
-                      <td>{item.unidad_medida}</td>
-                      <td style={{ fontWeight: 700 }}>{item.cantidad_total}</td>
-                      <td>{item.directores || '-'}</td>
-                      <td>{item.niveles || '-'}</td>
+              <>
+                <table style={{ marginBottom: 24 }}>
+                  <thead>
+                    <tr style={{ background: '#f8fafc' }}>
+                      <th>INSTITUCIÓN</th>
+                      <th>NIVEL</th>
+                      <th>PRODUCTO</th>
+                      <th style={{ textAlign: 'center' }}>CANT. SOLICITADA</th>
+                      <th style={{ textAlign: 'center', width: 140 }}>CANT. A LICITAR</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {itemsFinales.map((item) => {
+                      const key = `${item.id_pedido}-${item.producto_id}`
+                      const currentVal = editQty[key]
+                      return (
+                        <tr key={key}>
+                          <td>{item.institucion}</td>
+                          <td>{item.nivel || '-'}</td>
+                          <td style={{ fontWeight: 600 }}>{item.producto}</td>
+                          <td style={{ textAlign: 'center', color: 'var(--muted)' }}>{item.cantidad_solicitada}</td>
+                          <td style={{ textAlign: 'center' }}>
+                            {publicacionStatus.publicada ? (
+                              <span style={{ fontWeight: 700, color: 'var(--primary)' }}>{currentVal}</span>
+                            ) : (
+                              <input
+                                type="number"
+                                min="0"
+                                value={currentVal || ''}
+                                onChange={(e) => handleEditQty(item.id_pedido, item.producto_id, e.target.value)}
+                                style={{ textAlign: 'center', fontWeight: 700, border: '1px solid #cbd5e1' }}
+                              />
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+
+                {/* Resumen Consolidado al Pie */}
+                <div style={{ background: '#f1f5f9', padding: 20, borderRadius: 8 }}>
+                  <h4 style={{ marginTop: 0 }}>Resumen Consolidado</h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 16 }}>
+                    {Object.values(itemsFinales.reduce((acc, item) => {
+                      const key = item.producto_id
+                      const qty = editQty[`${item.id_pedido}-${item.producto_id}`] || item.cantidad_solicitada
+                      if (!acc[key]) acc[key] = { name: item.producto, total: 0, unit: item.unidad_medida }
+                      acc[key].total += Number(qty)
+                      return acc
+                    }, {})).map(summary => (
+                      <div key={summary.name} style={{ background: 'white', padding: 12, borderRadius: 6, border: '1px solid #e2e8f0' }}>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>{summary.name}</div>
+                        <div style={{ fontSize: '1.2rem', fontWeight: 800 }}>{summary.total} <small style={{ fontWeight: 400, fontSize: '0.8rem' }}>{summary.unit}</small></div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
             )}
           </section>
         )}
 
         {section === 'adjudicacion' && (
-          <section className="card" style={{ padding: 18 }}>
+          <section className="card" style={{ padding: 18, minHeight: 'auto' }}>
             <h3 style={{ marginTop: 0 }}>Cierre de compra</h3>
             <p style={{ marginTop: 0, color: 'var(--muted)' }}>
               Selecciona proveedor ganador y registra el precio de compra real. El precio historico queda visible como referencia.
@@ -608,6 +642,25 @@ export default function ComprasPanel({ section = 'pedidos' }) {
           </section>
         )}
       </div>
+      {showConfirmPublicar && (
+        <div className="sv-modal-overlay">
+          <div className="sv-modal">
+            <h2 className="sv-modal-title" style={{ color: 'var(--primary)' }}>📋 ¿Confirmar subida de licitación?</h2>
+            <div className="sv-modal-body">
+              <p>Se registrará el listado final con las cantidades editadas.</p>
+              <p style={{ fontWeight: 700, color: '#e11d48' }}>Esta acción no se puede deshacer.</p>
+            </div>
+            <div className="sv-modal-footer">
+              <button className="secondary" onClick={() => setShowConfirmPublicar(false)} disabled={saving}>
+                Cancelar
+              </button>
+              <button className="primary" onClick={handlePublicar} disabled={saving}>
+                {saving ? 'Publicando...' : 'Confirmar y subir'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

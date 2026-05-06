@@ -1,16 +1,17 @@
 import { useAuth } from '../context/AuthContext'
-import { useState, useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { apiFetch } from '../api'
 import PrintButton from './PrintButton'
 
 const ROLE_LABELS = {
   admin: 'Administrador',
   supervisor: 'Supervisor',
-  director_area: 'Director de Área',
+  director_area: 'Director de Area',
   directivo: 'Directivo',
   operador: 'Operador',
   consulta: 'Consulta',
-  control_ministerio: 'Control Ministerio'
+  control_ministerio: 'Control Ministerio',
+  area_compras: 'Area Compras',
 }
 
 const TIPO_COLORS = {
@@ -23,321 +24,357 @@ const TIPO_COLORS = {
 export default function Inicio({ onNavigate }) {
   const { user, token } = useAuth()
   const [stats, setStats] = useState(null)
+  const [vencimientos, setVencimientos] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [modalType, setModalType] = useState(null)
   const printRef = useRef(null)
 
   useEffect(() => {
-    // Supervisor y Directivo no necesitan stats del depósito
     if (user?.role === 'supervisor' || user?.role === 'directivo') {
       setLoading(false)
       return
     }
+
     const fetchStats = async () => {
       try {
-        const res = await apiFetch('/api/dashboard/stats', { token })
-        if (!res.ok) throw new Error('Error al obtener datos')
-        const data = await res.json()
+        const [statsRes, vencimientosRes] = await Promise.all([
+          apiFetch('/api/dashboard/stats', { token }),
+          apiFetch('/api/depositos/vencimientos-proximos?dias=60', { token }),
+        ])
+
+        if (!statsRes.ok) {
+          throw new Error('Error al obtener datos')
+        }
+
+        const data = await statsRes.json()
         setStats(data)
+
+        if (vencimientosRes.ok) {
+          const vencimientosData = await vencimientosRes.json()
+          setVencimientos(vencimientosData.alertas || [])
+        }
       } catch (err) {
         setError(err.message)
       } finally {
         setLoading(false)
       }
     }
+
     fetchStats()
-  }, [token])
+  }, [token, user?.role])
 
-  if (loading) return <p style={{ color: 'var(--muted)', padding: '24px 0' }}>Cargando resumen...</p>
+  if (loading) {
+    return <p className="dashboard-muted-copy">Cargando resumen...</p>
+  }
 
-  // Supervisor: mostrar su vista propia sin necesidad de stats
   if (user?.role === 'supervisor') {
-    return (
-      <div>
-        <div className="stock-alert-box">
-          <div className="stock-alert-title">
-            <span className="stock-alert-triangle"></span>
-            Bienvenido, {user?.nombre || 'Usuario'}
-          </div>
-          <p className="stock-alert-role">Supervisor</p>
-        </div>
-        <SupervisorInicio onNavigate={onNavigate} token={token} user={user} />
-      </div>
-    )
+    return <SupervisorInicio onNavigate={onNavigate} token={token} user={user} />
   }
 
-  // Directivo: mostrar su dashboard
   if (user?.role === 'directivo') {
-    return (
-      <div>
-        <div className="stock-alert-box">
-          <div className="stock-alert-title">
-            <span className="stock-alert-triangle"></span>
-            Bienvenido, {user?.nombre || 'Usuario'}
-          </div>
-          <p className="stock-alert-role">{ROLE_LABELS[user?.role]}</p>
-          <p className="stock-alert-role directivo-institucion" style={{ marginTop: 4 }}>
-            {user?.institucion?.nombre || 'Sin institución asignada'}
-          </p>
-        </div>
-        <DirectivoInicio onNavigate={onNavigate} token={token} user={user} />
-      </div>
-    )
+    return <DirectivoInicio onNavigate={onNavigate} token={token} user={user} />
   }
 
-  if (error) return <p style={{ color: '#b91c1c', padding: '24px 0' }}>Error: {error}</p>
-  if (!stats) return null
+  if (error) {
+    return <p style={{ color: '#b91c1c', margin: 0 }}>Error: {error}</p>
+  }
+
+  if (!stats) {
+    return null
+  }
 
   const mesActual = new Date().toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })
   const sinStockList = stats.sin_stock_list || []
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <span></span>
-        <PrintButton targetRef={printRef} title="Resumen General — Dashboard" />
+    <div className="dashboard-stack">
+      <div className="dashboard-page-actions">
+        <PrintButton targetRef={printRef} title="Resumen General - Dashboard" />
       </div>
-      <div ref={printRef}>
-      {/* Bienvenida */}
-      <div className="stock-alert-box">
-        <div className="stock-alert-title">
-          <span className="stock-alert-triangle"></span>
-          Bienvenido, {user?.nombre || 'Usuario'}
+
+      <div ref={printRef} className="dashboard-stack">
+        <section className="dashboard-hero">
+          <div className="dashboard-hero-copy">
+            <span className="dashboard-hero-chip">Panel administrativo</span>
+            <h2>Bienvenido, {user?.nombre || 'Usuario'}</h2>
+            <p>{ROLE_LABELS[user?.role] || user?.role || 'Sin rol'} con acceso al estado general del deposito.</p>
+          </div>
+
+          <div className="dashboard-hero-aside">
+            <div className="dashboard-status-list">
+              <div className="dashboard-status-row">
+                <span className="dashboard-status-label">Periodo activo</span>
+                <span className="dashboard-status-value">{mesActual}</span>
+              </div>
+              <div className="dashboard-status-row">
+                <span className="dashboard-status-label">Productos sin stock</span>
+                <span className="dashboard-status-value">{stats.productos.sin_stock}</span>
+              </div>
+              <div className="dashboard-status-row">
+                <span className="dashboard-status-label">Stock bajo</span>
+                <span className="dashboard-status-value">{stats.productos.stock_bajo}</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <div className="dashboard-section-grid">
+          <section className="dashboard-section-card dashboard-section-card--span-8 dashboard-highlight">
+            <div className="dashboard-section-head">
+              <div>
+                <h3>Resumen operativo</h3>
+                <p>Accesos rapidos a las areas principales del panel.</p>
+              </div>
+            </div>
+
+            <div className="dashboard-stats-grid">
+              <StatCard label="Productos" value={stats.productos.total} icon="PR" onClick={() => onNavigate?.('productos')} />
+              <StatCard label="Stock bajo" value={stats.productos.stock_bajo} icon="SB" accent={stats.productos.stock_bajo > 0 ? '#E03C31' : '#065f46'} onClick={() => setModalType('stock_bajo')} />
+              <StatCard label="Sin stock" value={stats.productos.sin_stock} icon="SS" accent={stats.productos.sin_stock > 0 ? '#b91c1c' : '#065f46'} onClick={() => setModalType('sin_stock')} />
+              <StatCard label="Instituciones" value={stats.instituciones.total} icon="IN" onClick={() => onNavigate?.('instituciones')} />
+              <StatCard label="Proveedores" value={stats.proveedores.total} icon="PV" onClick={() => onNavigate?.('proveedores')} />
+            </div>
+          </section>
+
+          <section className="dashboard-section-card dashboard-section-card--span-4">
+            <div className="dashboard-section-head">
+              <div>
+                <h3>Alertas</h3>
+                <p>Lectura rapida del inventario actual.</p>
+              </div>
+            </div>
+
+            <div className="dashboard-status-list">
+              <div className="dashboard-status-row">
+                <span className="dashboard-status-label">Productos activos</span>
+                <span className="dashboard-status-value">{stats.productos.total}</span>
+              </div>
+              <div className="dashboard-status-row">
+                <span className="dashboard-status-label">Alertas de vencimiento</span>
+                <span className="dashboard-status-value">{vencimientos.length}</span>
+              </div>
+              <div className="dashboard-status-row">
+                <span className="dashboard-status-label">Ultimos movimientos</span>
+                <span className="dashboard-status-value">{stats.ultimos_movimientos.length}</span>
+              </div>
+            </div>
+          </section>
         </div>
-        <p className="stock-alert-role">
-          {ROLE_LABELS[user?.role] || user?.role || 'Sin rol'}
-        </p>
-      </div>
 
-      {/* Cards de resumen */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-        <StatCard
-          label="Productos"
-          value={stats.productos.total}
-          icon="📦"
-          onClick={() => onNavigate?.('productos')}
-        />
-        <StatCard
-          label="Stock bajo"
-          value={stats.productos.stock_bajo}
-          icon="⚠️"
-          accent={stats.productos.stock_bajo > 0 ? '#E03C31' : '#065f46'}
-          onClick={() => setModalType('stock_bajo')}
-        />
-        <StatCard label="Sin stock" value={stats.productos.sin_stock} icon="🚫"
-          accent={stats.productos.sin_stock > 0 ? '#b91c1c' : '#065f46'}
-          onClick={() => setModalType('sin_stock')}
-        />
-        <StatCard
-          label="Instituciones"
-          value={stats.instituciones.total}
-          icon="🏫"
-          onClick={() => onNavigate?.('instituciones')}
-        />
-        <StatCard
-          label="Proveedores"
-          value={stats.proveedores.total}
-          icon="🏢"
-          onClick={() => onNavigate?.('proveedores')}
-        />
-      </div>
+        {vencimientos.length > 0 && (
+          <section className="dashboard-section-card dashboard-table-card">
+            <div className="dashboard-section-head">
+              <div>
+                <h3>Alertas de vencimiento</h3>
+                <p>Productos que vencen dentro de los proximos 60 dias.</p>
+              </div>
+            </div>
 
-      {/* Movimientos del mes */}
-      <h3 style={{ marginBottom: '12px' }}>Movimientos — {mesActual}</h3>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', marginBottom: '28px' }}>
-        <MiniCard label="Total" value={stats.movimientos_mes.total} color="var(--dark)" />
-        <MiniCard label="Ingresos" value={stats.movimientos_mes.ingresos} color="#065f46" />
-        <MiniCard label="Egresos" value={stats.movimientos_mes.egresos} color="#b91c1c" />
-        <MiniCard label="Ajustes" value={stats.movimientos_mes.ajustes} color="#92400e" />
-        <MiniCard label="Devoluciones" value={stats.movimientos_mes.devoluciones} color="#1e40af" />
-      </div>
-
-      {/* Stock bajo */}
-      {stats.stock_bajo.length > 0 && (
-        <>
-          <h3 style={{ marginBottom: '12px' }}>Productos con stock bajo</h3>
-          <table>
-            <thead>
-              <tr>
-                <th>Producto</th>
-                <th>Categoría</th>
-                <th>Stock actual</th>
-                <th>Mínimo</th>
-              </tr>
-            </thead>
-            <tbody>
-              {stats.stock_bajo.map(p => (
-                <tr key={p.id}>
-                  <td style={{ fontWeight: 600 }}>{p.nombre}</td>
-                  <td>{p.categoria || '—'}</td>
-                  <td style={{ color: p.stock_actual === 0 ? '#b91c1c' : '#92400e', fontWeight: 700 }}>
-                    {p.stock_actual}
-                  </td>
-                  <td>{p.stock_minimo}</td>
-                </tr>
+            <div className="dashboard-vencimientos-grid">
+              {vencimientos.map((item, index) => (
+                <div key={`${item.producto}-${item.fecha_vencimiento}-${index}`} className="dashboard-vencimiento-card">
+                  <div>
+                    <strong>{item.producto}</strong>
+                    <p>Deposito: {item.deposito}</p>
+                    <span className="dashboard-vencimiento-date">
+                      Vence el {new Date(item.fecha_vencimiento).toLocaleDateString('es-AR')} ({item.dias_para_vencer} dias)
+                    </span>
+                  </div>
+                  <div className="dashboard-vencimiento-stock">
+                    <span>{item.stock_actual_deposito}</span>
+                    <small>Stock</small>
+                  </div>
+                </div>
               ))}
-            </tbody>
-          </table>
-        </>
-      )}
+            </div>
+          </section>
+        )}
 
-      {/* Últimos movimientos */}
-      {stats.ultimos_movimientos.length > 0 && (
-        <>
-          <h3 style={{ marginBottom: '12px' }}>Actividad reciente</h3>
-          <table>
-            <thead>
-              <tr>
-                <th>Fecha</th>
-                <th>Tipo</th>
-                <th>Producto</th>
-                <th>Cantidad</th>
-                <th>Institución</th>
-                <th>Usuario</th>
-              </tr>
-            </thead>
-            <tbody>
-              {stats.ultimos_movimientos.map(m => {
-                const tipoStyle = TIPO_COLORS[m.tipo] || {}
-                return (
-                  <tr key={m.id}>
-                    <td>{new Date(m.fecha).toLocaleDateString('es-AR')}</td>
-                    <td>
-                      <span className="badge" style={{ background: tipoStyle.bg, color: tipoStyle.color }}>
-                        {m.tipo}
-                      </span>
-                    </td>
-                    <td>{m.producto || '—'}</td>
-                    <td style={{ fontWeight: 600 }}>{m.cantidad}</td>
-                    <td>{m.institucion || '—'}</td>
-                    <td>{m.usuario || '—'}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </>
-      )}
+        <section className="dashboard-section-card">
+          <div className="dashboard-section-head">
+            <div>
+              <h3>Movimientos del mes</h3>
+              <p>Indicadores rapidos del periodo actual.</p>
+            </div>
+          </div>
 
-      {modalType && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0, 0, 0, 0.45)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1200,
-            padding: 16
-          }}
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setModalType(null)
-          }}
-        >
-          <div style={{ background: '#f9fafb', padding: 24, borderRadius: 10, width: 'min(760px, 100%)', maxHeight: '80vh', overflowY: 'auto' }}>
-            <h3 style={{ marginTop: 0 }}>
-              {modalType === 'stock_bajo' ? 'Productos con stock bajo' : 'Productos sin stock'}
-            </h3>
+          <div className="dashboard-mini-grid">
+            <MiniCard label="Total" value={stats.movimientos_mes.total} color="var(--dark)" />
+            <MiniCard label="Ingresos" value={stats.movimientos_mes.ingresos} color="#065f46" />
+            <MiniCard label="Egresos" value={stats.movimientos_mes.egresos} color="#b91c1c" />
+            <MiniCard label="Ajustes" value={stats.movimientos_mes.ajustes} color="#92400e" />
+            <MiniCard label="Devoluciones" value={stats.movimientos_mes.devoluciones} color="#1e40af" />
+          </div>
+        </section>
+
+        {stats.stock_bajo.length > 0 && (
+          <section className="dashboard-section-card dashboard-table-card">
+            <div className="dashboard-section-head">
+              <div>
+                <h3>Productos con stock bajo</h3>
+                <p>Seguimiento de items cercanos al minimo.</p>
+              </div>
+            </div>
 
             <table>
               <thead>
                 <tr>
                   <th>Producto</th>
-                  <th>Categoría</th>
+                  <th>Categoria</th>
                   <th>Stock actual</th>
-                  <th>Mínimo</th>
+                  <th>Minimo</th>
                 </tr>
               </thead>
               <tbody>
-                {(modalType === 'stock_bajo' ? stats.stock_bajo : sinStockList).length === 0 ? (
-                  <tr>
-                    <td colSpan={4} style={{ textAlign: 'center', color: 'var(--muted)' }}>No hay productos para mostrar</td>
+                {stats.stock_bajo.map((producto) => (
+                  <tr key={producto.id}>
+                    <td style={{ fontWeight: 600 }}>{producto.nombre}</td>
+                    <td>{producto.categoria || '-'}</td>
+                    <td style={{ color: producto.stock_actual === 0 ? '#b91c1c' : '#92400e', fontWeight: 700 }}>
+                      {producto.stock_actual}
+                    </td>
+                    <td>{producto.stock_minimo}</td>
                   </tr>
-                ) : (
-                  (modalType === 'stock_bajo' ? stats.stock_bajo : sinStockList).map((p) => (
-                    <tr key={p.id}>
-                      <td style={{ fontWeight: 600 }}>{p.nombre}</td>
-                      <td>{p.categoria || '—'}</td>
-                      <td style={{ color: p.stock_actual === 0 ? '#b91c1c' : '#92400e', fontWeight: 700 }}>{p.stock_actual}</td>
-                      <td>{p.stock_minimo}</td>
-                    </tr>
-                  ))
-                )}
+                ))}
               </tbody>
             </table>
+          </section>
+        )}
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
-              <button type="button" className="secondary" onClick={() => setModalType(null)}>
-                Cerrar
-              </button>
+        {stats.ultimos_movimientos.length > 0 && (
+          <section className="dashboard-section-card dashboard-table-card">
+            <div className="dashboard-section-head">
+              <div>
+                <h3>Actividad reciente</h3>
+                <p>Ultimos movimientos registrados en el sistema.</p>
+              </div>
+            </div>
+
+            <table>
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Tipo</th>
+                  <th>Producto</th>
+                  <th>Cantidad</th>
+                  <th>Institucion</th>
+                  <th>Usuario</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats.ultimos_movimientos.map((movimiento) => {
+                  const tipoStyle = TIPO_COLORS[movimiento.tipo] || {}
+
+                  return (
+                    <tr key={movimiento.id}>
+                      <td>{new Date(movimiento.fecha).toLocaleDateString('es-AR')}</td>
+                      <td>
+                        <span className="badge" style={{ background: tipoStyle.bg, color: tipoStyle.color }}>
+                          {movimiento.tipo}
+                        </span>
+                      </td>
+                      <td>{movimiento.producto || '-'}</td>
+                      <td style={{ fontWeight: 600 }}>{movimiento.cantidad}</td>
+                      <td>{movimiento.institucion || '-'}</td>
+                      <td>{movimiento.usuario || '-'}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </section>
+        )}
+
+        {modalType && (
+          <div
+            className="dashboard-modal-overlay"
+            onClick={(event) => {
+              if (event.target === event.currentTarget) setModalType(null)
+            }}
+          >
+            <div className="dashboard-modal-panel">
+              <div className="dashboard-section-head">
+                <div>
+                  <h3>{modalType === 'stock_bajo' ? 'Productos con stock bajo' : 'Productos sin stock'}</h3>
+                  <p>Detalle del inventario filtrado.</p>
+                </div>
+              </div>
+
+              <table>
+                <thead>
+                  <tr>
+                    <th>Producto</th>
+                    <th>Categoria</th>
+                    <th>Stock actual</th>
+                    <th>Minimo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(modalType === 'stock_bajo' ? stats.stock_bajo : sinStockList).length === 0 ? (
+                    <tr>
+                      <td colSpan={4} style={{ textAlign: 'center', color: 'var(--muted)' }}>
+                        No hay productos para mostrar
+                      </td>
+                    </tr>
+                  ) : (
+                    (modalType === 'stock_bajo' ? stats.stock_bajo : sinStockList).map((producto) => (
+                      <tr key={producto.id}>
+                        <td style={{ fontWeight: 600 }}>{producto.nombre}</td>
+                        <td>{producto.categoria || '-'}</td>
+                        <td style={{ color: producto.stock_actual === 0 ? '#b91c1c' : '#92400e', fontWeight: 700 }}>
+                          {producto.stock_actual}
+                        </td>
+                        <td>{producto.stock_minimo}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+                <button type="button" className="secondary" onClick={() => setModalType(null)}>
+                  Cerrar
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
     </div>
   )
 }
 
 function StatCard({ label, value, icon, accent, onClick }) {
-  const clickable = typeof onClick === 'function'
-
   return (
     <button
       type="button"
-      className={`stat-card ${clickable ? 'stat-card-clickable' : ''}`}
+      className={`dashboard-stat-card ${typeof onClick === 'function' ? 'dashboard-stat-card-clickable' : ''}`}
       onClick={onClick}
-      style={{
-      background: 'white',
-      border: '1px solid var(--border)',
-      borderRadius: '8px',
-      padding: '20px',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '4px',
-      textAlign: 'left',
-      width: '100%',
-      margin: 0,
-      cursor: clickable ? 'pointer' : 'default'
-    }}>
-      <span style={{ fontSize: '1.5rem' }}>{icon}</span>
-      <span style={{
-        fontSize: '1.75rem',
-        fontWeight: 700,
-        color: accent || 'var(--dark)',
-        lineHeight: 1.1,
-      }}>{value}</span>
-      <span style={{ fontSize: '0.8rem', color: 'var(--muted)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.3px' }}>
-        {label}
-      </span>
+      style={accent ? { '--dashboard-stat-accent': accent } : undefined}
+    >
+      <span className="dashboard-stat-icon" aria-hidden="true">{icon}</span>
+      <span className="dashboard-stat-value">{value}</span>
+      <span className="dashboard-stat-label">{label}</span>
     </button>
   )
 }
 
 function MiniCard({ label, value, color }) {
   return (
-    <div style={{
-      background: '#fafafa',
-      border: '1px solid var(--border)',
-      borderRadius: '6px',
-      padding: '14px',
-      textAlign: 'center',
-    }}>
-      <div style={{ fontSize: '1.4rem', fontWeight: 700, color }}>{value}</div>
-      <div style={{ fontSize: '0.75rem', color: 'var(--muted)', fontWeight: 500, marginTop: '2px' }}>{label}</div>
+    <div className="dashboard-mini-card">
+      <div className="dashboard-mini-value" style={{ color }}>{value}</div>
+      <div className="dashboard-mini-label">{label}</div>
     </div>
   )
 }
 
-// ── Vista de Inicio para Supervisor ──
 function SupervisorInicio({ onNavigate, token, user }) {
   const [instituciones, setInstituciones] = useState([])
   const [supervisorMeta, setSupervisorMeta] = useState({
     zona_label: '',
     zona_count: 0,
-    nivel_educativo: user?.nivel_educativo || ''
+    nivel_educativo: user?.nivel_educativo || '',
   })
 
   useEffect(() => {
@@ -350,99 +387,110 @@ function SupervisorInicio({ onNavigate, token, user }) {
           setSupervisorMeta({
             zona_label: data?.meta?.zona_label || '',
             zona_count: Number(data?.meta?.zona_count) || 0,
-            nivel_educativo: data?.meta?.nivel_educativo || user?.nivel_educativo || ''
+            nivel_educativo: data?.meta?.nivel_educativo || user?.nivel_educativo || '',
           })
         }
       } catch (err) {
         console.error('Error cargando instituciones del supervisor:', err)
       }
     }
+
     load()
   }, [token, user?.nivel_educativo])
 
-  const totalPendientes = instituciones.reduce((sum, i) => sum + (i.pedidos_pendientes || 0), 0)
-  const totalTickets = instituciones.reduce((sum, i) => sum + (i.tickets_patrimonio || 0), 0)
+  const totalPendientes = instituciones.reduce((sum, item) => sum + (item.pedidos_pendientes || 0), 0)
+  const totalTickets = instituciones.reduce((sum, item) => sum + (item.tickets_patrimonio || 0), 0)
   const zonaLabel = supervisorMeta.zona_label || 'Sin zona asignada'
   const nivelLabel = supervisorMeta.nivel_educativo || '-'
   const zonaTitle = supervisorMeta.zona_count > 1 ? 'Zonas' : 'Zona'
 
   return (
-    <div>
-      <div className="sv-jurisdiction-banner">
-        <span className="sv-jurisdiction-dot"></span>
-        <span>{zonaTitle}: <strong>{zonaLabel}</strong></span>
-        <span>Nivel: <strong>{nivelLabel}</strong></span>
-        <span className="sv-jurisdiction-count">{instituciones.length} escuelas asignadas</span>
-      </div>
+    <div className="dashboard-stack">
+      <section className="dashboard-hero">
+        <div className="dashboard-hero-copy">
+          <span className="dashboard-hero-chip">Supervisor</span>
+          <h2>Bienvenido, {user?.nombre || 'Usuario'}</h2>
+          <p>Seguimiento de escuelas, pedidos pendientes y tickets de patrimonio.</p>
+        </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-        <StatCard
-          label="Escuelas"
-          value={instituciones.length}
-          icon="🏫"
-          onClick={() => onNavigate?.('pedidos')}
-        />
-        <StatCard
-          label="Pedidos pendientes"
-          value={totalPendientes}
-          icon="📋"
-          accent={totalPendientes > 0 ? '#E03C31' : '#065f46'}
-          onClick={() => onNavigate?.('pedidos')}
-        />
-        <StatCard
-          label="Tickets patrimonio"
-          value={totalTickets}
-          icon="🪑"
-          accent={totalTickets > 0 ? '#2563eb' : '#065f46'}
-          onClick={() => onNavigate?.('supervisor')}
-        />
-      </div>
+        <div className="dashboard-hero-aside">
+          <div className="dashboard-status-list">
+            <div className="dashboard-status-row">
+              <span className="dashboard-status-label">{zonaTitle}</span>
+              <span className="dashboard-status-value">{zonaLabel}</span>
+            </div>
+            <div className="dashboard-status-row">
+              <span className="dashboard-status-label">Nivel</span>
+              <span className="dashboard-status-value">{nivelLabel}</span>
+            </div>
+            <div className="dashboard-status-row">
+              <span className="dashboard-status-label">Escuelas asignadas</span>
+              <span className="dashboard-status-value">{instituciones.length}</span>
+            </div>
+          </div>
+        </div>
+      </section>
 
-      <h3 style={{ marginBottom: '12px' }}>Mis Escuelas</h3>
-      <table>
-        <thead>
-          <tr>
-            <th>Escuela</th>
-            <th>CUE</th>
-            <th>Pedidos</th>
-            <th>Patrimonio</th>
-            <th>Acciones</th>
-          </tr>
-        </thead>
-        <tbody>
-          {instituciones.map(inst => (
-            <tr key={inst.id}>
-              <td style={{ fontWeight: 600 }}>{inst.nombre}</td>
-              <td>{inst.cue}</td>
-              <td style={{ textAlign: 'center' }}>
-                {inst.pedidos_pendientes > 0 ? (
-                  <span className="badge badge-estado-pendiente">{inst.pedidos_pendientes}</span>
-                ) : (
-                  <span className="badge badge-estado-aprobado">0</span>
-                )}
-              </td>
-              <td style={{ textAlign: 'center' }}>
-                {inst.tickets_patrimonio > 0 ? (
-                  <span className="badge" style={{ background: '#eff6ff', color: '#1e40af' }}>{inst.tickets_patrimonio}</span>
-                ) : (
-                  <span className="badge badge-estado-aprobado">0</span>
-                )}
-              </td>
-              <td>
-                <div className="inline-actions">
-                  <button onClick={() => onNavigate?.('pedidos')}>Pedidos</button>
-                  <button onClick={() => onNavigate?.('supervisor')} style={{ background: '#2563eb' }}>Patrimonio</button>
-                </div>
-              </td>
+      <section className="dashboard-section-card">
+        <div className="dashboard-stats-grid">
+          <StatCard label="Escuelas" value={instituciones.length} icon="ES" onClick={() => onNavigate?.('mis-escuelas')} />
+          <StatCard label="Pedidos pendientes" value={totalPendientes} icon="PD" accent={totalPendientes > 0 ? '#E03C31' : '#065f46'} onClick={() => onNavigate?.('pedidos')} />
+          <StatCard label="Tickets patrimonio" value={totalTickets} icon="PT" accent={totalTickets > 0 ? '#2563eb' : '#065f46'} onClick={() => onNavigate?.('supervisor')} />
+        </div>
+      </section>
+
+      <section className="dashboard-section-card dashboard-table-card">
+        <div className="dashboard-section-head">
+          <div>
+            <h3>Mis escuelas</h3>
+            <p>Vista rapida de instituciones asignadas.</p>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Escuela</th>
+              <th>CUE</th>
+              <th>Pedidos</th>
+              <th>Patrimonio</th>
+              <th>Acciones</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {instituciones.map((inst) => (
+              <tr key={inst.id}>
+                <td style={{ fontWeight: 600 }}>{inst.nombre}</td>
+                <td>{inst.cue}</td>
+                <td style={{ textAlign: 'center' }}>
+                  {inst.pedidos_pendientes > 0 ? (
+                    <span className="badge badge-estado-pendiente">{inst.pedidos_pendientes}</span>
+                  ) : (
+                    <span className="badge badge-estado-aprobado">0</span>
+                  )}
+                </td>
+                <td style={{ textAlign: 'center' }}>
+                  {inst.tickets_patrimonio > 0 ? (
+                    <span className="badge" style={{ background: '#eff6ff', color: '#1e40af' }}>{inst.tickets_patrimonio}</span>
+                  ) : (
+                    <span className="badge badge-estado-aprobado">0</span>
+                  )}
+                </td>
+                <td>
+                  <div className="inline-actions">
+                    <button type="button" onClick={() => onNavigate?.('pedidos')}>Pedidos</button>
+                    <button type="button" onClick={() => onNavigate?.('supervisor')} style={{ background: '#2563eb' }}>Patrimonio</button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
     </div>
   )
 }
 
-// ── Vista de Inicio para Directivo ──
 function DirectivoInicio({ onNavigate, token, user }) {
   const [alertas, setAlertas] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -465,11 +513,12 @@ function DirectivoInicio({ onNavigate, token, user }) {
         setLoading(false)
       }
     }
+
     load()
   }, [token])
 
   if (loading) {
-    return <p style={{ color: 'var(--muted)', padding: '24px 0' }}>Cargando información...</p>
+    return <p className="dashboard-muted-copy">Cargando informacion...</p>
   }
 
   const institucion = alertas?.institucion || user?.institucion
@@ -478,128 +527,112 @@ function DirectivoInicio({ onNavigate, token, user }) {
   const ultimasTransacciones = alertas?.ultimasTransacciones || []
 
   return (
-    <div>
-      {/* Header con institución */}
-      <div className="directivo-header" style={{
-        background: 'linear-gradient(135deg, var(--orange) 0%, var(--red) 100%)',
-        color: 'white',
-        padding: '24px',
-        borderRadius: '10px',
-        marginBottom: '24px',
-        boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '12px' }}>
-          <span style={{ fontSize: '3rem' }}>🏫</span>
-          <div>
-            <h2 className="directivo-institucion" style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700 }}>
-              {institucion?.nombre || 'Tu institución'}
-            </h2>
-            <p style={{ margin: '4px 0 0 0', opacity: 0.9, fontSize: '0.9rem' }}>
-              CUE: {institucion?.cue || '—'}
-            </p>
+    <div className="dashboard-stack">
+      <section className="dashboard-hero">
+        <div className="dashboard-hero-copy">
+          <span className="dashboard-hero-chip">Directivo</span>
+          <h2>{institucion?.nombre || 'Tu institucion'}</h2>
+          <p>CUE: {institucion?.cue || '-'}.</p>
+        </div>
+
+        <div className="dashboard-hero-aside">
+          <div className="dashboard-status-list">
+            <div className="dashboard-status-row">
+              <span className="dashboard-status-label">Pedidos aprobados</span>
+              <span className="dashboard-status-value">{pedidosAprobados.cantidad || 0}</span>
+            </div>
+            <div className="dashboard-status-row">
+              <span className="dashboard-status-label">Pendiente retirar</span>
+              <span className="dashboard-status-value">{movimientosPendientes.cantidad || 0}</span>
+            </div>
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* Alertas principales */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-        <StatCard
-          label="Pedidos aprobados"
-          value={pedidosAprobados.cantidad || 0}
-          icon="📦"
-          accent={pedidosAprobados.cantidad > 0 ? '#667eea' : '#065f46'}
-        />
-        <StatCard
-          label="Pendiente retirar"
-          value={movimientosPendientes.cantidad || 0}
-          icon="⚠️"
-          accent={movimientosPendientes.cantidad > 0 ? '#E03C31' : '#065f46'}
-        />
-      </div>
+      <section className="dashboard-section-card">
+        <div className="dashboard-stats-grid">
+          <StatCard label="Pedidos aprobados" value={pedidosAprobados.cantidad || 0} icon="AP" accent={pedidosAprobados.cantidad > 0 ? '#FF8200' : '#065f46'} />
+          <StatCard label="Pendiente retirar" value={movimientosPendientes.cantidad || 0} icon="RT" accent={movimientosPendientes.cantidad > 0 ? '#E03C31' : '#065f46'} onClick={() => onNavigate?.('pedidos')} />
+        </div>
+      </section>
 
-      {/* Pedidos Aprobados */}
-      {pedidosAprobados.items && pedidosAprobados.items.length > 0 && (
-        <div style={{ marginBottom: '24px' }}>
-          <h3 style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span>📋</span> Pedidos Aprobados para Retirar
-          </h3>
+      {pedidosAprobados.items?.length > 0 && (
+        <section className="dashboard-section-card dashboard-table-card">
+          <div className="dashboard-section-head">
+            <div>
+              <h3>Pedidos aprobados para retirar</h3>
+              <p>Solicitudes listas para coordinar la entrega.</p>
+            </div>
+          </div>
+
           <table>
             <thead>
               <tr>
                 <th>ID Pedido</th>
                 <th>Fecha</th>
-                <th>Cantidad de Items</th>
+                <th>Cantidad de items</th>
                 <th>Estado</th>
               </tr>
             </thead>
             <tbody>
-              {pedidosAprobados.items.map(pedido => (
+              {pedidosAprobados.items.map((pedido) => (
                 <tr key={pedido.id}>
                   <td style={{ fontWeight: 600 }}>#{pedido.id}</td>
                   <td>{new Date(pedido.created_at).toLocaleDateString('es-AR')}</td>
                   <td style={{ textAlign: 'center' }}>{pedido.cantidad_items}</td>
-                  <td>
-                    <span className="badge badge-estado-aprobado" style={{ background: '#ecfdf5', color: '#065f46' }}>
-                      Aprobado
-                    </span>
-                  </td>
+                  <td><span className="badge badge-estado-aprobado">Aprobado</span></td>
                 </tr>
               ))}
             </tbody>
           </table>
-          <button 
-            onClick={() => onNavigate?.('pedidos')} 
-            style={{ marginTop: '12px', width: '100%' }}
-          >
+
+          <button type="button" onClick={() => onNavigate?.('pedidos')}>
             Ver todos los pedidos
           </button>
-        </div>
+        </section>
       )}
 
-      {/* Movimientos Pendientes de Retirar */}
-      {movimientosPendientes.items && movimientosPendientes.items.length > 0 && (
-        <div style={{ marginBottom: '24px' }}>
-          <div style={{
-            background: '#fef2f2',
-            border: '2px solid #fecaca',
-            borderRadius: '8px',
-            padding: '16px',
-            marginBottom: '16px'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-              <span style={{ fontSize: '1.5rem' }}>⚠️</span>
-              <h3 style={{ margin: 0, color: '#b91c1c' }}>Productos pendientes de retirar</h3>
+      {movimientosPendientes.items?.length > 0 && (
+        <section className="dashboard-section-card dashboard-table-card">
+          <div className="dashboard-section-head">
+            <div>
+              <h3>Productos pendientes de retirar</h3>
+              <p>Movimientos ya aprobados para la institucion.</p>
             </div>
-            <table>
-              <thead>
-                <tr>
-                  <th>Producto</th>
-                  <th>Cantidad</th>
-                  <th>Unidad</th>
-                  <th>Fecha</th>
-                </tr>
-              </thead>
-              <tbody>
-                {movimientosPendientes.items.map(mov => (
-                  <tr key={mov.id}>
-                    <td style={{ fontWeight: 600 }}>{mov.producto_nombre}</td>
-                    <td style={{ textAlign: 'center' }}>{mov.cantidad}</td>
-                    <td>{mov.unidad_medida || '—'}</td>
-                    <td>{new Date(mov.fecha).toLocaleDateString('es-AR')}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           </div>
-        </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Producto</th>
+                <th>Cantidad</th>
+                <th>Unidad</th>
+                <th>Fecha</th>
+              </tr>
+            </thead>
+            <tbody>
+              {movimientosPendientes.items.map((movimiento) => (
+                <tr key={movimiento.id}>
+                  <td style={{ fontWeight: 600 }}>{movimiento.producto_nombre}</td>
+                  <td style={{ textAlign: 'center' }}>{movimiento.cantidad}</td>
+                  <td>{movimiento.unidad_medida || '-'}</td>
+                  <td>{new Date(movimiento.fecha).toLocaleDateString('es-AR')}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
       )}
 
-      {/* Últimas Transacciones */}
       {ultimasTransacciones.length > 0 && (
-        <div style={{ marginBottom: '24px' }}>
-          <h3 style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span>📊</span> Últimos Movimientos
-          </h3>
+        <section className="dashboard-section-card dashboard-table-card">
+          <div className="dashboard-section-head">
+            <div>
+              <h3>Ultimos movimientos</h3>
+              <p>Actividad reciente de la institucion.</p>
+            </div>
+          </div>
+
           <table>
             <thead>
               <tr>
@@ -611,48 +644,40 @@ function DirectivoInicio({ onNavigate, token, user }) {
               </tr>
             </thead>
             <tbody>
-              {ultimasTransacciones.map(trans => {
-                const tipoStyle = TIPO_COLORS[trans.tipo] || {}
+              {ultimasTransacciones.map((transaccion) => {
+                const tipoStyle = TIPO_COLORS[transaccion.tipo] || {}
+
                 return (
-                  <tr key={trans.id}>
-                    <td>{new Date(trans.fecha).toLocaleDateString('es-AR')}</td>
+                  <tr key={transaccion.id}>
+                    <td>{new Date(transaccion.fecha).toLocaleDateString('es-AR')}</td>
                     <td>
                       <span className="badge" style={{ background: tipoStyle.bg, color: tipoStyle.color }}>
-                        {trans.tipo}
+                        {transaccion.tipo}
                       </span>
                     </td>
-                    <td style={{ fontWeight: 600 }}>{trans.producto_nombre}</td>
-                    <td style={{ textAlign: 'center' }}>
-                      {trans.cantidad} {trans.unidad_medida || ''}
-                    </td>
-                    <td>{trans.usuario_nombre || '—'}</td>
+                    <td style={{ fontWeight: 600 }}>{transaccion.producto_nombre}</td>
+                    <td style={{ textAlign: 'center' }}>{transaccion.cantidad} {transaccion.unidad_medida || ''}</td>
+                    <td>{transaccion.usuario_nombre || '-'}</td>
                   </tr>
                 )
               })}
             </tbody>
           </table>
-        </div>
+        </section>
       )}
 
-      {/* Mensaje si no hay alertas */}
       {!pedidosAprobados.items?.length && !movimientosPendientes.items?.length && !ultimasTransacciones.length && (
-        <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--muted)' }}>
-          <p style={{ fontSize: '1rem', marginBottom: '16px' }}>✅ Todo está al día</p>
-          <p style={{ marginBottom: '24px' }}>No hay pedidos pendientes de retirar ni movimientos recientes.</p>
-          <button onClick={() => onNavigate?.('pedidos')} style={{ fontSize: '1rem' }}>
+        <section className="dashboard-empty-state">
+          <p style={{ margin: '0 0 12px', fontWeight: 700 }}>Todo esta al dia</p>
+          <p style={{ margin: '0 0 20px' }}>No hay pedidos pendientes de retirar ni movimientos recientes.</p>
+          <button type="button" onClick={() => onNavigate?.('pedidos')} style={{ width: 'auto' }}>
             Ir a Pedidos
           </button>
-        </div>
+        </section>
       )}
 
       {error && (
-        <div style={{
-          background: '#fef2f2',
-          color: '#b91c1c',
-          padding: '16px',
-          borderRadius: '8px',
-          marginTop: '12px'
-        }}>
+        <div className="msg show msg-error">
           {error}
         </div>
       )}

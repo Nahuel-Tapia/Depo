@@ -7,6 +7,7 @@ import { calculateRatio } from './ratioUtils'
 
 function normalizeEstado(estado, respuestaSupervisorTipo) {
   if (estado === 'pendiente' && respuestaSupervisorTipo === 'aclaracion') return 'aclaracion'
+  if (estado === 'pendiente_director') return 'pendiente_director'
   if (estado === 'aprobado') return 'aprobado'
   if (estado === 'rechazado') return 'rechazado'
   if (estado === 'cancelado') return 'cancelado'
@@ -126,23 +127,26 @@ export default function SupervisorSolicitudes() {
         throw new Error(data.error || 'No se pudo actualizar la solicitud')
       }
 
-      const nextChanges = nuevoEstado === 'aclaracion'
+      const resData = await res.json()
+      const serverEstado = resData.estado || nuevoEstado
+
+      const nextChanges = serverEstado === 'aclaracion'
         ? {
             estado: 'aclaracion',
             respuesta_supervisor_tipo: 'aclaracion',
             motivo_supervisor: observacion || null
           }
         : {
-            estado: nuevoEstado,
-            respuesta_supervisor_tipo: nuevoEstado === 'rechazado' ? 'rechazo' : 'aprobacion',
-            motivo_supervisor: nuevoEstado === 'rechazado' ? (observacion || null) : null
+            estado: serverEstado,
+            respuesta_supervisor_tipo: serverEstado === 'rechazado' ? 'rechazo' : 'aprobacion',
+            motivo_supervisor: serverEstado === 'rechazado' ? (observacion || null) : null
           }
 
       updateEstadoLocal(selected.id, nextChanges)
       setMsg({
-        text: nuevoEstado === 'aclaracion'
-          ? `Se pidio aclaracion para la solicitud #${selected.id}.`
-          : `Solicitud #${selected.id} actualizada a ${nuevoEstado}.`,
+        text: serverEstado === 'aclaracion'
+          ? `Se pidió aclaración para la solicitud #${selected.id}.`
+          : `Solicitud #${selected.id} actualizada a ${serverEstado}.`,
         type: 'success'
       })
     } catch (err) {
@@ -176,38 +180,66 @@ export default function SupervisorSolicitudes() {
   const sospechosas = solicitudes.filter(s => calculateRatio(s.cantidad, s.matricula) >= 0.2).length
 
   return (
-    <div className="supervisor-dashboard">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <h2>Solicitudes de Escuelas</h2>
-        <span className="badge" style={{ background: '#fff7ed', color: '#9a3412' }}>
+    <div className="supervisor-dashboard fade-in">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
+        <div>
+          <h2 style={{ marginBottom: 4 }}>Solicitudes de Escuelas</h2>
+          <p style={{ marginTop: 0, color: 'var(--muted)', fontSize: '0.9rem' }}>
+            Revisión por coherencia con matrícula.
+          </p>
+        </div>
+        <span className="badge-premium" style={{ background: '#fff7ed', color: '#9a3412', border: '1px solid #ffedd5' }}>
           {sospechosas} solicitudes con ratio alto
         </span>
       </div>
 
-      <p style={{ marginTop: 0, color: 'var(--muted)' }}>
-        Revision por coherencia con matricula. Esta vista no muestra datos de stock.
-      </p>
-
       {msg.text && <div className={`msg show ${msg.type === 'success' ? 'msg-success' : 'msg-error'}`}>{msg.text}</div>}
 
-      <div className="sv-solicitudes-filtros">
-        <div>
-          <label>Filtrar por estado</label>
-          <select value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)}>
-            <option value="todos">Todos</option>
-            <option value="pendiente">Pendiente</option>
-            <option value="aclaracion">Aclaracion solicitada</option>
-            <option value="aprobado">Aprobado</option>
-            <option value="rechazado">Rechazado</option>
-            <option value="cancelado">Cancelado</option>
-          </select>
-        </div>
+      <div className="tabs" style={{ marginBottom: 24 }}>
+        <button
+          className={`tab-btn ${filtroEstado === 'pendiente' ? 'active' : ''}`}
+          onClick={() => setFiltroEstado('pendiente')}
+        >
+          Pendientes
+        </button>
+        <button
+          className={`tab-btn ${filtroEstado === 'pendiente_director' ? 'active' : ''}`}
+          onClick={() => setFiltroEstado('pendiente_director')}
+        >
+          Enviados a Director
+        </button>
+        <button
+          className={`tab-btn ${filtroEstado === 'aprobado' ? 'active' : ''}`}
+          onClick={() => setFiltroEstado('aprobado')}
+        >
+          Aprobados
+        </button>
+        <button
+          className={`tab-btn ${filtroEstado === 'rechazado' ? 'active' : ''}`}
+          onClick={() => setFiltroEstado('rechazado')}
+        >
+          Rechazados
+        </button>
+        <button
+          className={`tab-btn ${filtroEstado === 'aclaracion' ? 'active' : ''}`}
+          onClick={() => setFiltroEstado('aclaracion')}
+        >
+          Aclaraciones
+        </button>
+        <button
+          className={`tab-btn ${filtroEstado === 'todos' ? 'active' : ''}`}
+          onClick={() => setFiltroEstado('todos')}
+        >
+          Todos
+        </button>
+      </div>
 
-        <div>
-          <label>Ordenar por</label>
+      <div className="sv-solicitudes-filtros" style={{ marginBottom: 20, display: 'flex', gap: 16 }}>
+        <div style={{ flex: 1 }}>
+          <label style={{ fontSize: '0.75rem' }}>Ordenar por</label>
           <select value={orden} onChange={e => setOrden(e.target.value)}>
-            <option value="fecha_desc">Fecha (mas reciente)</option>
-            <option value="fecha_asc">Fecha (mas antigua)</option>
+            <option value="fecha_desc">Fecha (más reciente)</option>
+            <option value="fecha_asc">Fecha (más antigua)</option>
             <option value="ratio_desc">Ratio (alto a bajo)</option>
             <option value="ratio_asc">Ratio (bajo a alto)</option>
           </select>
@@ -215,9 +247,11 @@ export default function SupervisorSolicitudes() {
       </div>
 
       {loading ? (
-        <p style={{ color: 'var(--muted)' }}>Cargando solicitudes...</p>
+        <p style={{ color: 'var(--muted)', textAlign: 'center', padding: 40 }}>Cargando solicitudes...</p>
       ) : (
-        <SolicitudesTable solicitudes={solicitudesVista} onView={openDetalle} />
+        <div className="card" style={{ padding: 0, minHeight: 'auto', boxShadow: 'var(--shadow-premium)', borderRadius: 12, overflow: 'hidden' }}>
+          <SolicitudesTable solicitudes={solicitudesVista} onView={openDetalle} />
+        </div>
       )}
 
       {selected && (

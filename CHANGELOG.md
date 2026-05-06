@@ -1,6 +1,87 @@
 # Registro de Cambios - Depo
 
-## 30 de Abril 2026 - Flujo de Aprobación, Registro y Flexibilidad de CUE
+## [1.2.0] - 2026-05-04
+### Añadido
+- **Módulo de Distribución a Escuelas**: Nueva interfaz para que el operador de depósito registre la salida física de mercadería adjudicada hacia las instituciones.
+- **Trazabilidad de Logística para Directivos**: Stepper de progreso en el panel de la escuela que muestra: Licitación -> En Depósito -> Entregado.
+- **Sistema de Alertas de Vencimiento**: Widget en el Dashboard principal que notifica productos próximos a vencer (ventana de 60 días).
+- **Enriquecimiento de API de Pedidos**: Los pedidos ahora incluyen metadatos de progreso logístico en tiempo real.
+
+### Mejoras
+- **Dashboard Unificado**: El inicio ahora muestra alertas críticas de stock y vencimientos de forma consolidada para roles operativos.
+- **Seguridad en Recepción**: Consolidación de ítems por producto para el operador, manteniendo la confidencialidad de precios y desgloses por escuela.
+
+### Correciones
+- Restauración de `Inicio.jsx` tras error de edición.
+- Sincronización de stock global al realizar distribuciones parciales.
+
+## [1.1.0] - 04 de Mayo 2026 - Gestión de Entregas, Proveedores y Recepción de Mercadería
+
+### 1. Módulo de Proveedores (CRUD Completo para Compras)
+- **Permisos**: El rol `area_compras` ahora tiene acceso total (crear, editar, eliminar) al módulo de Proveedores.
+- **Campos ampliados**: Se añadieron nuevos campos a la tabla `proveedor`: Razón Social, Dirección, Rubro, Email Secundario, Sitio Web y Observaciones.
+- **Interfaz renovada**: Formularios de creación/edición organizados por secciones (Datos Fiscales, Contacto, Información Adicional). Tabla principal enriquecida con badges de rubro y links directos al sitio web.
+
+### 2. Gestión de Entregas (Post-Adjudicación — Rol Compras)
+- **Nueva pestaña "Gestión de Entregas"**: Historial de licitaciones adjudicadas con fecha, cantidad de ítems y estado actual.
+- **Envío a Depósito**: Botón para coordinar la logística con el operador de depósito. Al presionar "Enviar a Depósito", la licitación queda visible para el rol operador.
+- **Estados de licitación**: Se implementó un ciclo de estados (`adjudicada` → `en_deposito` → `completada`) en la tabla `licitacion_publicada`.
+
+### 3. Recepción de Licitación (Rol Operador Depósito)
+- **Nueva pestaña "Recepción Licitación"**: Interfaz limpia para el operador, mostrando solo Producto, Cantidad Adjudicada y campos de ingreso.
+- **Sin precios (SEGURIDAD)**: El backend consolida y filtra los datos eliminando toda información de costos antes de enviarla al operador.
+- **Consolidación automática**: Los productos se agrupan por ID, sumando cantidades de todas las escuelas. El operador no ve el desglose por institución.
+- **Ingreso parcial/total**: Soporte para entregas parciales — el sistema trackea lo ya recibido vs. lo pendiente.
+- **Fecha de vencimiento**: Campo opcional para registrar la fecha de vencimiento de cada producto al momento del ingreso.
+- **Actualización de stock automática**: Al confirmar el ingreso, se actualiza el stock del depósito, el stock global del producto y se genera un movimiento de stock con trazabilidad completa.
+
+### 4. Correcciones de Base de Datos
+- Creación de tablas faltantes: `deposito`, `stock_deposito` (con datos iniciales: Depósito Central, Centro Cívico, Cápsula de Seguridad).
+- Creación de tabla `recepcion_licitacion` para auditoría de entregas.
+- Adición de columna `id_deposito` a `movimiento_stock` para vincular movimientos a depósitos específicos.
+- Adición de columna `fecha_vencimiento` a `movimiento_stock` y `recepcion_licitacion`.
+- Adición de columna `estado` a `licitacion_publicada` para el ciclo de vida post-adjudicación.
+
+### 5. Adjudicación: Sincronización con Snapshot
+- El `POST /adjudicacion` ahora valida productos contra la tabla `licitacion_publicada` (snapshot) en lugar de datos en vivo, garantizando consistencia.
+- Al guardar la adjudicación, el estado de la licitación publicada se actualiza automáticamente a `adjudicada`.
+
+---
+
+## 04 de Mayo 2026 - Automatización de Licitación Anual (Compras)
+
+### 1. Rol Compras: Licitación Anual Real-Time
+- Se eliminó el proceso manual de "Planillas" para la licitación. Ahora el sistema consume datos directamente de los pedidos aprobados por los Directores de Área.
+- **Sección A (Consolidado)**: Nueva tabla que agrupa y suma productos aprobados para facilitar el armado de pliegos de licitación.
+- **Sección B (Seguimiento)**: Nueva tabla de estado que muestra de forma simple qué Directores de Área han completado su proceso de aprobación (Enviado/Pendiente).
+- **Exportación**: Se añadió la funcionalidad de exportación a CSV para el consolidado general.
+- **Año Dinámico**: Visualización dinámica del año de licitación basado en el año en curso.
+
+### 2. Correcciones de Sistema
+- Se corrigió un error de sintaxis CSS en `index.css` que impedía la compilación correcta.
+
+---
+
+## 30 de Abril 2026 - Rediseño Premium y Estabilización de Flujo
+
+### 1. Interfaz de Usuario Premium (Design System)
+- Se implementó un nuevo sistema de diseño basado en **Glassmorphism**, gradientes modernos y micro-animaciones.
+- Rediseño completo del Dashboard del Directivo con un **Stepper de Progreso** para visualizar las etapas de aprobación (Supervisor -> Director Área -> Listo).
+- Mejora estética en el Panel del Director de Área con tarjetas con relieve y navegación optimizada.
+- Estandarización de badges y estados con un estilo visual coherente y premium.
+
+### 2. Correcciones en el Flujo de Aprobación
+- **Backend**: Se corrigió un bug en `PATCH /api/pedidos/:id/estado` donde los pedidos de refuerzo quedaban atrapados en el estado de aprobación dual. Ahora solo los pedidos anuales requieren validación del Director de Área.
+- **Backend**: Optimización de las consultas de listado con `LEFT JOIN` para garantizar que no se pierdan pedidos que estén en proceso de carga de detalles.
+- **Auditoría**: Inclusión de campos de auditoría (`aprobado_por_director_id`, etc.) en todas las vistas de pedidos.
+
+### 3. Registro Directivo (UX)
+- Se mejoró la experiencia de registro: el nivel educativo ahora es visible de forma clara (readonly) cuando se detecta una única modalidad, eliminando confusiones.
+- Se agregó feedback visual (pulso animado) cuando el sistema detecta exitosamente la institución mediante el CUE.
+
+---
+
+## 30 de Abril 2026 - Flujo de Aprobación, Registro y Flexibilidad de CUE (Session Previa)
 
 ### 1. Sistema de Aprobación Dual y Resumen Anual
 **Backend y Frontend**
@@ -22,8 +103,9 @@
 **Backend (`backend/src/routes/supervisor.js` y `directorArea.js`)**
 - Se restauró la función `ensureSupervisorSchema` en el backend, solucionando errores 500 al listar solicitudes.
 - Se habilitó la visibilidad de solicitudes para el Director de Área en el endpoint consolidado de supervisión, vinculando instituciones a través de sus zonas coordinadas.
-- Se corrigió un error crítico de visibilidad para supervisores con múltiples departamentos en su jurisdicción o múltiples niveles educativos (ahora se procesan como listas separadas por coma).
-- Se optimizó el filtrado en la vista de "Solicitud Anual" del Director de Área para distinguir entre pedidos pendientes de supervisor, pendientes de director e historial aprobado.
+- Se corrigió un error crítico de visibilidad para supervisores con múltiples departamentos en su jurisdicción o múltiples niveles educativos.
+- Se optimizó el filtrado en la vista de "Solicitud Anual" del Director de Área.
+- Se mejoró la comunicación con el Directivo: ahora visualiza estados claros como "Aprobado - Listo para retirar" y una nueva sección destacada con el detalle de ítems pendientes de retiro tras la aprobación final.
 
 ---
 
