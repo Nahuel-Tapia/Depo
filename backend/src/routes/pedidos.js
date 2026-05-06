@@ -1210,16 +1210,21 @@ router.post("/", authorizePermissions(PERMISSIONS.PEDIDOS_CREATE), async (req, r
       ]
     );
 
+    // Asegurar que las cantidades sean enteras positivas antes de insertar
     for (const item of detalleItems) {
+      const cantidadEntera = Math.round(Number(item.cantidad || 0));
+      if (!Number.isFinite(cantidadEntera) || cantidadEntera <= 0) {
+        return res.status(400).json({ error: "Cada ítem del pedido debe tener una cantidad entera mayor a cero" });
+      }
       await run(
         `INSERT INTO detalle_pedido (id_pedido, id_producto, cantidad_solicitada, observacion) VALUES (?, ?, ?, ?)`,
-        [pedidoResult.lastID, item.producto_id, item.cantidad, null]
+        [pedidoResult.lastID, item.producto_id, cantidadEntera, null]
       );
     }
 
     return res.status(201).json({ id: pedidoResult.lastID, estado: "pendiente" });
   } catch (err) {
-    console.error("Error al crear pedido:", err);
+    console.error("Error al crear pedido:", err && err.stack ? err.stack : err, "user:", req.user && req.user.sub, "body:", req.body);
     return res.status(500).json({ error: "No se pudo crear pedido" });
   }
 });
