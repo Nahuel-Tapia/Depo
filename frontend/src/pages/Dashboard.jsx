@@ -4,11 +4,13 @@ import Inicio from '../components/Inicio'
 import Productos from '../components/Productos'
 import Movimientos from '../components/Movimientos'
 import Pedidos from '../components/Pedidos'
+import SolicitudesRetiro from '../components/SolicitudesRetiro'
 import Instituciones from '../components/Instituciones'
 import Proveedores from '../components/Proveedores'
 import Usuarios from '../components/Usuarios'
 import HistorialInstitucion from '../components/HistorialInstitucion'
 import SupervisorDashboard from '../components/SupervisorDashboard'
+import AsignarKit from '../components/AsignarKit'
 import DirectorAreaPanel from '../components/DirectorAreaPanel'
 import ComprasPanel from '../components/ComprasPanel'
 import ProductKitsManager from '../components/ProductKitsManager'
@@ -33,16 +35,18 @@ const ROLE_LABELS = {
 
 const TABS = [
   { key: 'inicio', label: 'Inicio', permission: null, icon: GridIcon },
-  { key: 'gestion-escuelas', label: 'Gestion de Zonas', permission: 'supervision.manage', role: 'director_area', icon: BuildingIcon },
-  { key: 'solicitud-anual', label: 'Solicitud Anual', permission: 'supervision.manage', role: 'director_area', icon: ClipboardIcon },
-  { key: 'resumen-anual', label: 'Resumen Solicitud Anual', permission: 'supervision.manage', role: 'director_area', icon: ListIcon },
+  { key: 'zonas', label: 'Gestion de Zonas', permission: 'supervision.manage', role: 'director_area', icon: BuildingIcon },
+  { key: 'solicitud_anual', label: 'Solicitud Anual', permission: 'supervision.manage', role: 'director_area', icon: ClipboardIcon },
+  { key: 'resumen', label: 'Resumen Solicitud Anual', permission: 'supervision.manage', role: 'director_area', icon: ListIcon },
   { key: 'compras-licitacion', label: 'Licitacion Anual', permission: 'planilla.view', role: 'area_compras', icon: DocumentIcon },
   { key: 'compras-listado-final', label: 'Listado Final a Licitar', permission: 'planilla.view', role: 'area_compras', icon: ListIcon },
   { key: 'compras-adjudicacion', label: 'Adjudicacion y Cierre', permission: 'planilla.manage', role: 'area_compras', icon: ShieldIcon },
   { key: 'compras-entregas', label: 'Gestion de Entregas', permission: 'planilla.view', role: 'area_compras', icon: TruckIcon },
   { key: 'deposito-recepcion', label: 'Recepcion Licitacion', permission: 'stock.movement.create', role: 'operador', icon: DocumentIcon },
   { key: 'deposito-distribucion', label: 'Distribucion a Escuelas', permission: 'stock.movement.create', role: 'operador', icon: TruckIcon },
+  { key: 'solicitudes-retiro', label: 'Retiros Escolares', permission: 'stock.movement.create', role: 'operador', icon: ClipboardIcon },
   { key: 'supervisor', label: 'Patrimonio Escolar', permission: 'pedidos.manage', role: 'supervisor', icon: ActivityIcon },
+  { key: 'asignar-kit', label: 'Asignar Kit', permission: 'pedidos.manage', role: 'supervisor', icon: BoxIcon },
   { key: 'mis-escuelas', label: 'Mis Escuelas', permission: 'instituciones.view', role: 'supervisor', hideForRoles: ['admin'], icon: BuildingIcon },
   { key: 'productos', label: 'Productos', permission: 'productos.view', hideForRoles: ['supervisor', 'director_area'], icon: BoxIcon },
   { key: 'movimientos', label: 'Movimientos', permission: 'movimientos.view', hideForRoles: ['supervisor', 'director_area'], icon: ActivityIcon },
@@ -87,6 +91,7 @@ export default function Dashboard() {
         'depositos',
         'deposito-recepcion',
         'deposito-distribucion',
+        'solicitudes-retiro',
       ].includes(tab.key))
     }
 
@@ -150,12 +155,12 @@ export default function Dashboard() {
     switch (activeTab) {
       case 'inicio':
         return <Inicio onNavigate={setActiveTab} />
-      case 'gestion-escuelas':
-        return <DirectorAreaPanel initialSection="gestion-escuelas" />
-      case 'solicitud-anual':
-        return <DirectorAreaPanel initialSection="solicitud-anual" />
-      case 'resumen-anual':
-        return <DirectorAreaPanel initialSection="resumen-anual" />
+      case 'zonas':
+        return <DirectorAreaPanel initialSection="zonas" standalone={true} />
+      case 'solicitud_anual':
+        return <DirectorAreaPanel initialSection="solicitud_anual" standalone={true} />
+      case 'resumen':
+        return <DirectorAreaPanel initialSection="resumen" standalone={true} />
       case 'compras-licitacion':
         return <ComprasPanel section="licitacion" />
       case 'compras-listado-final':
@@ -168,8 +173,12 @@ export default function Dashboard() {
         return <RecepcionLicitacion />
       case 'deposito-distribucion':
         return <DistribucionEscuelas />
+      case 'solicitudes-retiro':
+        return <SolicitudesRetiro />
       case 'supervisor':
         return <SupervisorDashboard />
+      case 'asignar-kit':
+        return <AsignarKit />
       case 'mis-escuelas':
         return <Instituciones supervisorMode />
       case 'productos':
@@ -325,49 +334,13 @@ function BuildingIcon() {
   )
 }
 
-function BoxIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M12 3 4.5 7v10L12 21l7.5-4V7L12 3Z" />
-      <path d="M4.5 7 12 11l7.5-4M12 11v10" />
-    </svg>
-  )
-}
-
-function ActivityIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M3 12h4l2.5-5 4 10 2.5-5H21" />
-    </svg>
-  )
-}
-
 function ListIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M9 6.5h10M9 12h10M9 17.5h10" />
-      <circle cx="5.5" cy="6.5" r="1.25" />
-      <circle cx="5.5" cy="12" r="1.25" />
-      <circle cx="5.5" cy="17.5" r="1.25" />
-    </svg>
-  )
-}
-
-function TruckIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M3 6.5h10v8H3zM13 10h4l3 3v1.5h-7" />
-      <circle cx="7" cy="17.5" r="2" />
-      <circle cx="18" cy="17.5" r="2" />
-    </svg>
-  )
-}
-
-function ShieldIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M12 3.5 5.5 6v5.5c0 4.2 2.5 7.5 6.5 9 4-1.5 6.5-4.8 6.5-9V6L12 3.5Z" />
-      <path d="m9.5 12 1.7 1.7 3.6-3.7" />
+      <path d="M8 6h13M8 12h13M8 18h13" />
+      <circle cx="4" cy="6" r="1" />
+      <circle cx="4" cy="12" r="1" />
+      <circle cx="4" cy="18" r="1" />
     </svg>
   )
 }
@@ -375,8 +348,43 @@ function ShieldIcon() {
 function DocumentIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M7 3.5h7l4 4V20a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 20V5A1.5 1.5 0 0 1 7.5 3.5Z" />
-      <path d="M14 3.5V8h4M9 12h6M9 16h6" />
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <path d="M14 2v6h6" />
+    </svg>
+  )
+}
+
+function ShieldIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M12 2l7 3v5c0 5-3.5 9.7-7 11-3.5-1.3-7-6-7-11V5z" />
+    </svg>
+  )
+}
+
+function TruckIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M1 3h13v13H1z" />
+      <path d="M14 8h6v5h-6z" />
+      <circle cx="6" cy="19" r="1.5" />
+      <circle cx="18" cy="19" r="1.5" />
+    </svg>
+  )
+}
+
+function ActivityIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M3 12h4l2-6 4 12 2-6h4" />
+    </svg>
+  )
+}
+
+function BoxIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M21 16V8a2 2 0 0 0-1-1.73L13 3l-7 3.27A2 2 0 0 0 5 8v8a2 2 0 0 0 1 1.73L11 21l7-3.27A2 2 0 0 0 21 16z" />
     </svg>
   )
 }
@@ -384,8 +392,9 @@ function DocumentIcon() {
 function UserIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <circle cx="12" cy="8" r="3.25" />
-      <path d="M5.5 19a6.5 6.5 0 0 1 13 0" />
+      <path d="M20 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M4 21v-2a4 4 0 0 1 3-3.87" />
+      <circle cx="12" cy="7" r="4" />
     </svg>
   )
 }
@@ -393,7 +402,8 @@ function UserIcon() {
 function MenuIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-      <path d="M4 7h16M4 12h16M4 17h16" />
+      <path d="M4 6h16M4 12h16M4 18h16" />
     </svg>
   )
 }
+

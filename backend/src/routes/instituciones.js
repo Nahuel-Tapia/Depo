@@ -8,6 +8,20 @@ const router = express.Router();
 const NIVELES = ["inicial", "primario", "secundario", "superior", "especial", "adultos", "otro"];
 const TIPOS = ["publica", "privada", "municipal"];
 
+function mapNivelToArea(nivel) {
+  if (!nivel) return null;
+  const n = nivel.toUpperCase();
+  if (['CENS', 'PROPAA', 'UEPA'].includes(n)) return 'Adultos';
+  if (['EDUCACION ESPECIAL', 'EDUCACION HOSPITALARIA'].includes(n)) return 'Especial';
+  if (['INICIAL'].includes(n)) return 'Inicial';
+  if (['NO FORMAL', 'SECUNDARIO'].includes(n)) return 'Secundario';
+  if (['SUPERIOR'].includes(n)) return 'Superior';
+  if (['AGROTECNICA', 'FOR. PROF. EDUC. NO FORMAL', 'MONOTECNICA', 'TECNICA', 'TECNICO', 'TEC. CAP. LABORAL'].includes(n)) return 'Tecnica';
+  if (['PRIMARIO', 'ALBERGUE'].includes(n)) return 'Primario';
+  return null;
+}
+
+
 /**
  * Calcula el factor de asignación según cantidad de matriculados
  * @param {number} matriculados - Cantidad de alumnos matriculados
@@ -37,6 +51,10 @@ function calcularCantidadAsignada(matriculados, cantidadBase = 10) {
 async function getInstitucionNivelColumn() {
   const row = await get(`
     SELECT CASE
+      WHEN EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'institucion' AND column_name = 'direccion_area'
+      ) THEN 'direccion_area'
       WHEN EXISTS (
         SELECT 1 FROM information_schema.columns
         WHERE table_schema = 'public' AND table_name = 'institucion' AND column_name = 'nivel_educativo'

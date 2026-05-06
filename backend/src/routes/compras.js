@@ -94,6 +94,11 @@ async function ensureTables() {
     `);
 
       await client.query(`
+      ALTER TABLE pedido
+      ADD COLUMN IF NOT EXISTS tipo VARCHAR(20) DEFAULT 'anual'
+    `);
+
+      await client.query(`
       ALTER TABLE usuario
       ADD COLUMN IF NOT EXISTS nivel_educativo VARCHAR(120)
     `);

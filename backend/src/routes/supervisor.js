@@ -91,6 +91,7 @@ async function ensureSupervisorSchema() {
 }
 
 async function getInstitucionNivelExpr(alias = "i") {
+  if (await columnExists("institucion", "direccion_area")) return `${alias}.direccion_area`;
   if (await columnExists("institucion", "nivel_educativo")) return `${alias}.nivel_educativo`;
   if (await columnExists("institucion", "nivel")) return `${alias}.nivel`;
   return "NULL::text";
@@ -254,7 +255,79 @@ async function getInstitucionSelectSql() {
   };
 }
 
+<<<<<<< HEAD
 // Función ensureSupervisorSchema consolidada al inicio.
+=======
+let schemaReady = false;
+let schemaPromise = null;
+
+async function ensureSupervisorSchema() {
+  if (schemaReady) return;
+  if (schemaPromise) {
+    await schemaPromise;
+    return;
+  }
+
+  schemaPromise = (async () => {
+    const productoKitExists = await tableExists("producto_kit");
+    await run(`
+      ALTER TABLE institucion
+      ADD COLUMN IF NOT EXISTS kit_id INT${productoKitExists ? " REFERENCES producto_kit(id)" : ""}
+    `);
+    await run(`
+      ALTER TABLE pedido
+      ADD COLUMN IF NOT EXISTS motivo_supervisor TEXT
+    `);
+    await run(`
+      ALTER TABLE pedido
+      ADD COLUMN IF NOT EXISTS respuesta_supervisor_tipo VARCHAR(30)
+    `);
+    await run(`
+      ALTER TABLE pedido
+      ADD COLUMN IF NOT EXISTS aprobado_por_supervisor_id INT REFERENCES usuario(id_usuario)
+    `);
+    await run(`
+      ALTER TABLE pedido
+      ADD COLUMN IF NOT EXISTS fecha_aprobacion_supervisor TIMESTAMP
+    `);
+    await run(`
+      ALTER TABLE pedido
+      ADD COLUMN IF NOT EXISTS aprobado_director_area BOOLEAN DEFAULT FALSE
+    `);
+    await run(`
+      ALTER TABLE pedido
+      ADD COLUMN IF NOT EXISTS aprobado_por_director_id INT REFERENCES usuario(id_usuario)
+    `);
+    await run(`
+      ALTER TABLE pedido
+      ADD COLUMN IF NOT EXISTS fecha_aprobacion_director TIMESTAMP
+    `);
+    await run(`
+      ALTER TABLE pedido
+      ADD COLUMN IF NOT EXISTS tipo VARCHAR(20) DEFAULT 'anual'
+    `);
+    await run(`
+      ALTER TABLE pedido
+      ADD COLUMN IF NOT EXISTS kit_id INT
+    `);
+    await run(`
+      ALTER TABLE pedido
+      ADD COLUMN IF NOT EXISTS kit_nombre VARCHAR(180)
+    `);
+    await run(`
+      ALTER TABLE pedido
+      ADD COLUMN IF NOT EXISTS kit_cantidad NUMERIC(12,2)
+    `);
+    schemaReady = true;
+  })();
+
+  try {
+    await schemaPromise;
+  } finally {
+    schemaPromise = null;
+  }
+}
+>>>>>>> b4f70f132b415634a85d8ec5071e10c80085b155
 
 // ── Instituciones de la jurisdicción del supervisor ──
 router.get("/instituciones", async (req, res) => {

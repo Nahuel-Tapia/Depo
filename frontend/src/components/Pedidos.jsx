@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../api'
 import PrintButton from './PrintButton'
 import SupervisorSolicitudes from './supervisor/SupervisorSolicitudes'
+import SolicitudesRetiro from './SolicitudesRetiro'
 
 function normalizeLabelText(value) {
   const text = String(value || '').replace(/\s+/g, ' ').trim()
@@ -766,7 +767,8 @@ function DirectivoPedidos() {
       <div style={{ display: 'flex', gap: 4, marginTop: 20, borderBottom: '2px solid var(--border)' }}>
         {[
           { key: 'anual', label: 'Solicitud Anual' },
-          { key: 'refuerzo', label: 'Solicitud de Refuerzos' }
+          { key: 'refuerzo', label: 'Solicitud de Refuerzos' },
+          { key: 'retiro', label: 'Solicitud de Retiro' }
         ].map(({ key, label }) => (
           <button
             key={key}
@@ -795,6 +797,10 @@ function DirectivoPedidos() {
           ? 'Pedido anual planificado según el kit asignado a la escuela.'
           : 'Pedidos extraordinarios para reforzar el stock cuando el pedido anual no fue suficiente.'}
       </p>
+
+      {tab === 'retiro' && (
+        <SolicitudesRetiro embedded />
+      )}
 
       {tab === 'anual' && (
         <div className="msg show" style={{ background: '#ecfeff', color: '#155e75', border: '1px solid #67e8f9', marginTop: 8 }}>
@@ -987,6 +993,7 @@ function DirectivoPedidos() {
         </div>
       )}
 
+      {tab !== 'retiro' && (
       <div ref={printRef} style={{ marginTop: 16 }}>
         {pedidosFiltrados.length === 0 ? (
           <div className="sv-empty-state">
@@ -1045,6 +1052,7 @@ function DirectivoPedidos() {
           </table>
         )}
       </div>
+      )}
     </div>
   )
 }
@@ -1061,6 +1069,10 @@ export default function Pedidos() {
 
   if (user?.role === 'directivo') {
     return <DirectivoPedidos />
+  }
+
+  if (user?.role === 'operador') {
+    return <SolicitudesRetiro />
   }
 
   return <DepositoPedidos />
