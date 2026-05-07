@@ -8,7 +8,7 @@ import DirectorAreaResumenAnual from './DirectorAreaResumenAnual'
 
 export default function DirectorAreaPanel({ initialSection }) {
   const { token, user } = useAuth()
-  const [activeSection, setActiveSection] = useState(initialSection || 'zonas')
+  const [activeSection, setActiveSection] = useState(initialSection || 'gestion-escuelas')
   const [supervisores, setSupervisores] = useState([])
   const [escuelas, setEscuelas] = useState([])
   const [nivelEducativo, setNivelEducativo] = useState('')
@@ -106,35 +106,10 @@ export default function DirectorAreaPanel({ initialSection }) {
 
   return (
     <div className="container fade-in" style={{ padding: '40px 24px', background: 'var(--bg)', minHeight: '100vh', display: 'block' }}>
-      <header className="directivo-header" style={{ background: 'var(--secondary-gradient)', padding: '32px 40px', borderRadius: 16, marginBottom: 32, boxShadow: 'var(--shadow-premium)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h1 style={{ color: 'white', margin: 0, fontSize: '2.2rem', fontWeight: 800 }}>Panel Director de Área</h1>
-          <p style={{ color: 'rgba(255,255,255,0.7)', margin: '8px 0 0 0', fontSize: '1.1rem' }}>
-            Nivel {nivelEducativo || 'Educativo'} — Control y Gestión
-          </p>
-        </div>
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: 1 }}>Jurisdicción</div>
-          <div style={{ color: 'var(--yellow)', fontSize: '1.2rem', fontWeight: 700 }}>{user?.jurisdiccion || 'San Juan'}</div>
-        </div>
-      </header>
-
-      <div className="tabs" style={{ marginBottom: 32, background: 'white', padding: '0 20px', borderRadius: 12, boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
-        <button className={`tab-btn ${activeSection === 'zonas' ? 'active' : ''}`} onClick={() => setActiveSection('zonas')}>
-          <span className="tab-icon">🏢</span> <span className="tab-label">Gestión de Zonas</span>
-        </button>
-        <button className={`tab-btn ${activeSection === 'solicitud_anual' ? 'active' : ''}`} onClick={() => setActiveSection('solicitud_anual')}>
-          <span className="tab-icon">📅</span> <span className="tab-label">Solicitud Anual</span>
-        </button>
-        <button className={`tab-btn ${activeSection === 'resumen' ? 'active' : ''}`} onClick={() => setActiveSection('resumen')}>
-          <span className="tab-icon">📊</span> <span className="tab-label">Resumen Anual</span>
-        </button>
-      </div>
-
       {msg.text && <div className={`msg show ${msg.type === 'success' ? 'msg-success' : 'msg-error'}`} style={{ marginBottom: 24 }}>{msg.text}</div>}
 
       <main>
-        {activeSection === 'zonas' && (
+        {activeSection === 'gestion-escuelas' && (
           <section className="fade-in">
             <div className="card" style={{ padding: 32, borderRadius: 16, boxShadow: 'var(--shadow-premium)', minHeight: 'auto' }}>
               <h2 style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
@@ -160,7 +135,7 @@ export default function DirectorAreaPanel({ initialSection }) {
           </section>
         )}
 
-        {activeSection === 'solicitud_anual' && (
+        {activeSection === 'solicitud-anual' && (
           <section className="fade-in">
             <DirectorAreaPedidosAnuales 
               solicitudes={solicitudes} 
@@ -169,7 +144,7 @@ export default function DirectorAreaPanel({ initialSection }) {
           </section>
         )}
 
-        {activeSection === 'resumen' && (
+        {activeSection === 'resumen-anual' && (
           <section className="fade-in">
              <div className="card" style={{ padding: 32, borderRadius: 16, boxShadow: 'var(--shadow-premium)', minHeight: 'auto' }}>
                <DirectorAreaResumenAnual 
