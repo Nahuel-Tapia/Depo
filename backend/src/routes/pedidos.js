@@ -227,6 +227,20 @@ async function ensurePedidosSchema() {
 
     try {
       await run(`
+        ALTER TABLE pedido
+        ADD COLUMN IF NOT EXISTS aprobado_por_director_id INT REFERENCES usuario(id_usuario)
+      `);
+    } catch (_) { /* ya existe o no se puede */ }
+
+    try {
+      await run(`
+        ALTER TABLE pedido
+        ADD COLUMN IF NOT EXISTS fecha_aprobacion_director TIMESTAMP
+      `);
+    } catch (_) { /* ya existe o no se puede */ }
+
+    try {
+      await run(`
         ALTER TABLE institucion
         ADD COLUMN IF NOT EXISTS tipo_escuela VARCHAR(40)
       `);

@@ -7,9 +7,67 @@ const router = express.Router();
 
 router.use(authenticate);
 
+let schemaReady = false;
+let schemaPromise = null;
+
+async function ensureDepositosSchema() {
+  if (schemaReady) return;
+  if (schemaPromise) {
+    await schemaPromise;
+    return;
+  }
+
+  schemaPromise = (async () => {
+    try {
+      // Agregar fecha_vencimiento a movimiento_stock
+      await run(`ALTER TABLE movimiento_stock ADD COLUMN IF NOT EXISTS fecha_vencimiento DATE`);
+      
+      // Asegurar tablas de licitación y distribución
+      await run(`
+        CREATE TABLE IF NOT EXISTS recepcion_licitacion (
+          id SERIAL PRIMARY KEY,
+          licitacion_id INT NOT NULL,
+          producto_id INT NOT NULL,
+          cantidad_recibida NUMERIC(12,2) NOT NULL,
+          usuario_id INT,
+          id_deposito INT,
+          fecha_vencimiento DATE,
+          observaciones TEXT,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+
+      await run(`
+        CREATE TABLE IF NOT EXISTS entrega_anual (
+          id SERIAL PRIMARY KEY,
+          id_institucion INT NOT NULL,
+          anio INT NOT NULL,
+          id_producto INT NOT NULL,
+          cantidad_entregada NUMERIC(12,2) NOT NULL,
+          id_deposito INT,
+          id_usuario INT,
+          observaciones TEXT,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+
+      schemaReady = true;
+    } catch (err) {
+      console.error("Error en migración de depósitos:", err);
+    }
+  })();
+
+  try {
+    await schemaPromise;
+  } finally {
+    schemaPromise = null;
+  }
+}
+
 // Listar todos los depósitos
  router.get("/", authorizePermissions(PERMISSIONS.STOCK_VIEW), async (req, res) => {
   try {
+    await ensureDepositosSchema();
     const depositos = await all(`
       SELECT 
         d.id_deposito as id,
@@ -540,6 +598,7 @@ async function registrarSalidaDistribucion(req, res) {
 
 async function getVencimientosProximos(req, res) {
   try {
+    await ensureDepositosSchema();
     const dias = Number(req.query.dias || 60);
     // Buscamos ingresos que tengan fecha de vencimiento próxima
     // y que el producto todavía tenga stock en ese depósito
