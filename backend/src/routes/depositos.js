@@ -541,10 +541,24 @@ async function registrarSalidaDistribucion(req, res) {
 async function getVencimientosProximos(req, res) {
   try {
     const dias = Number(req.query.dias || 60);
+    console.log("[vencimientos-proximos] Consultando con dias:", dias);
+
+    // Verificar que existen las columnas necesarias
+    const columnCheck = await get(`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_name = 'movimiento_stock' AND column_name = 'fecha_vencimiento'
+    `);
+    console.log("[vencimientos-proximos] Column check:", columnCheck);
+
+    if (!columnCheck) {
+      console.log("[vencimientos-proximos] Columna fecha_vencimiento no existe");
+      return res.json({ alertas: [] });
+    }
+
     // Buscamos ingresos que tengan fecha de vencimiento próxima
-    // y que el producto todavía tenga stock en ese depósito
     const rows = await all(`
-      SELECT 
+      SELECT
         p.nombre as producto,
         p.unidad_medida,
         d.nombre as deposito,
@@ -555,17 +569,19 @@ async function getVencimientosProximos(req, res) {
       JOIN producto p ON p.id_producto = ms.id_producto
       JOIN deposito d ON d.id_deposito = ms.id_deposito
       JOIN stock_deposito sd ON sd.id_producto = ms.id_producto AND sd.id_deposito = ms.id_deposito
-      WHERE ms.tipo = 'ingreso' 
+      WHERE ms.tipo = 'ingreso'
         AND ms.fecha_vencimiento IS NOT NULL
-        AND ms.fecha_vencimiento <= (CURRENT_DATE + $1 * INTERVAL '1 day')
+        AND ms.fecha_vencimiento <= (CURRENT_DATE + ? * INTERVAL '1 day')
         AND ms.fecha_vencimiento >= CURRENT_DATE
         AND sd.cantidad > 0
       ORDER BY ms.fecha_vencimiento ASC
     `, [dias]);
+    console.log("[vencimientos-proximos] Resultados:", rows.length);
     res.json({ alertas: rows });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Error al obtener alertas de vencimiento" });
+    console.error("[vencimientos-proximos] Error detallado:", err.message);
+    console.error("[vencimientos-proximos] Stack:", err.stack);
+    res.status(500).json({ error: "Error al obtener alertas de vencimiento", details: err.message });
   }
 }
 

@@ -115,76 +115,108 @@ router.get("/:id", authorizePermissions(PERMISSIONS.PRODUCTOS_VIEW), async (req,
 
 // Crear producto
 router.post("/", authorizePermissions(PERMISSIONS.PRODUCTOS_CREATE), async (req, res) => {
+  const client = await pool.connect();
   try {
     const { nombre, unidad_medida, stock_minimo, id_categoria } = req.body;
-    
+
     if (!nombre) {
       return res.status(400).json({ error: "El nombre es obligatorio" });
     }
 
     const stock_actual_val = parseInt(req.body.stock_actual) || 0;
-    const result = await run(
-      "INSERT INTO producto (nombre, unidad_medida, stock_actual, stock_minimo, id_categoria) VALUES (?, ?, ?, ?, ?)",
+
+    await client.query("BEGIN");
+
+    // Insertar producto
+    const insertResult = await client.query(
+      `INSERT INTO producto (nombre, unidad_medida, stock_actual, stock_minimo, id_categoria)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id_producto`,
       [nombre, unidad_medida || 'unidad', stock_actual_val, parseInt(stock_minimo) || 0, id_categoria || null]
     );
 
-    const newId = result.lastID;
+    const newId = insertResult.rows[0].id_producto;
 
     // Sincronizar con Depósito Central si hay stock inicial
     if (stock_actual_val > 0) {
-      const central = await get("SELECT id_deposito FROM deposito WHERE tipo = 'central' LIMIT 1");
+      const centralResult = await client.query(
+        "SELECT id_deposito FROM deposito WHERE tipo = 'central' LIMIT 1"
+      );
+      const central = centralResult.rows[0];
+
       if (central) {
-        await run(
-          "INSERT INTO stock_deposito (id_deposito, id_producto, cantidad) VALUES (?, ?, ?) ON CONFLICT (id_deposito, id_producto) DO UPDATE SET cantidad = EXCLUDED.cantidad",
-          [central.id_deposito, newId, stock_actual_val]
-        );
-        // También loguear el movimiento inicial
-        await run(
-          "INSERT INTO movimiento_stock (id_producto, tipo, cantidad, motivo, id_usuario, id_deposito) VALUES (?, 'ingreso', ?, 'Stock inicial catálogo', ?, ?)",
-          [newId, stock_actual_val, req.user.sub, central.id_deposito]
-        );
+        // Verificar si existe la tabla stock_deposito
+        const hasStockDeposito = await hasTable('stock_deposito');
+        if (hasStockDeposito) {
+          await client.query(
+            `INSERT INTO stock_deposito (id_deposito, id_producto, cantidad)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (id_deposito, id_producto)
+             DO UPDATE SET cantidad = EXCLUDED.cantidad`,
+            [central.id_deposito, newId, stock_actual_val]
+          );
+        }
+
+        // Verificar si existe la tabla movimiento_stock
+        const hasMovimientoStock = await hasTable('movimiento_stock');
+        if (hasMovimientoStock) {
+          await client.query(
+            `INSERT INTO movimiento_stock (id_producto, tipo, cantidad, motivo, id_usuario, id_deposito)
+             VALUES ($1, 'ingreso', $2, 'Stock inicial catálogo', $3, $4)`,
+            [newId, stock_actual_val, req.user.sub, central.id_deposito]
+          );
+        }
       }
     }
 
+    await client.query("COMMIT");
     return res.status(201).json({ id: newId });
   } catch (err) {
-    console.error("Error creando producto:", err);
-    return res.status(500).json({ error: "No se pudo crear el producto" });
+    await client.query("ROLLBACK").catch(() => {});
+    console.error("[crear-producto] Error:", err.message);
+    return res.status(500).json({ error: "No se pudo crear el producto", details: err.message });
+  } finally {
+    client.release();
   }
 });
 
 // Editar producto
 router.patch("/:id", authorizePermissions(PERMISSIONS.PRODUCTOS_EDIT), async (req, res) => {
+  const client = await pool.connect();
   try {
     const { id } = req.params;
     const { nombre, unidad_medida, stock_minimo, id_categoria } = req.body;
 
-    const producto = await get("SELECT * FROM producto WHERE id_producto = ?", [id]);
-    if (!producto) {
+    const productoResult = await client.query(
+      "SELECT * FROM producto WHERE id_producto = $1",
+      [id]
+    );
+    if (productoResult.rows.length === 0) {
       return res.status(404).json({ error: "Producto no encontrado" });
     }
 
     const updates = [];
     const params = [];
-    
+    let paramIndex = 1;
+
     if (nombre !== undefined) {
-      updates.push("nombre = ?");
+      updates.push(`nombre = $${paramIndex++}`);
       params.push(nombre);
     }
     if (unidad_medida !== undefined) {
-      updates.push("unidad_medida = ?");
+      updates.push(`unidad_medida = $${paramIndex++}`);
       params.push(unidad_medida);
     }
     if (stock_minimo !== undefined) {
-      updates.push("stock_minimo = ?");
+      updates.push(`stock_minimo = $${paramIndex++}`);
       params.push(parseInt(stock_minimo) || 0);
     }
     if (id_categoria !== undefined) {
-      updates.push("id_categoria = ?");
+      updates.push(`id_categoria = $${paramIndex++}`);
       params.push(id_categoria || null);
     }
     if (req.body.stock_actual !== undefined) {
-      updates.push("stock_actual = ?");
+      updates.push(`stock_actual = $${paramIndex++}`);
       params.push(parseInt(req.body.stock_actual) || 0);
     }
 
@@ -194,27 +226,39 @@ router.patch("/:id", authorizePermissions(PERMISSIONS.PRODUCTOS_EDIT), async (re
 
     params.push(id);
 
-    await run(
-      `UPDATE producto SET ${updates.join(", ")} WHERE id_producto = ?`,
+    await client.query(
+      `UPDATE producto SET ${updates.join(", ")} WHERE id_producto = $${paramIndex}`,
       params
     );
 
     // Si se actualizó el stock_actual, sincronizar con el depósito central
     if (req.body.stock_actual !== undefined) {
       const stock_val = parseInt(req.body.stock_actual) || 0;
-      const central = await get("SELECT id_deposito FROM deposito WHERE tipo = 'central' LIMIT 1");
+      const centralResult = await client.query(
+        "SELECT id_deposito FROM deposito WHERE tipo = 'central' LIMIT 1"
+      );
+      const central = centralResult.rows[0];
+
       if (central) {
-        await run(
-          "INSERT INTO stock_deposito (id_deposito, id_producto, cantidad) VALUES (?, ?, ?) ON CONFLICT (id_deposito, id_producto) DO UPDATE SET cantidad = EXCLUDED.cantidad",
-          [central.id_deposito, id, stock_val]
-        );
+        const hasStockDeposito = await hasTable('stock_deposito');
+        if (hasStockDeposito) {
+          await client.query(
+            `INSERT INTO stock_deposito (id_deposito, id_producto, cantidad)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (id_deposito, id_producto)
+             DO UPDATE SET cantidad = EXCLUDED.cantidad`,
+            [central.id_deposito, id, stock_val]
+          );
+        }
       }
     }
 
     return res.json({ ok: true });
   } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: "No se pudo editar el producto" });
+    console.error("[editar-producto] Error:", err.message);
+    return res.status(500).json({ error: "No se pudo editar el producto", details: err.message });
+  } finally {
+    client.release();
   }
 });
 
