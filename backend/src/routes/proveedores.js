@@ -7,9 +7,47 @@ const router = express.Router();
 
 router.use(authenticate);
 
+let schemaReady = false;
+let schemaPromise = null;
+
+async function ensureProveedoresSchema() {
+  if (schemaReady) return;
+  if (schemaPromise) {
+    await schemaPromise;
+    return;
+  }
+
+  schemaPromise = (async () => {
+    const columns = [
+      "razon_social VARCHAR(255)",
+      "direccion VARCHAR(255)",
+      "rubro VARCHAR(100)",
+      "email_secundario VARCHAR(100)",
+      "sitio_web VARCHAR(255)",
+      "observaciones TEXT"
+    ];
+
+    for (const col of columns) {
+      try {
+        await run(`ALTER TABLE proveedor ADD COLUMN IF NOT EXISTS ${col}`);
+      } catch (err) {
+        console.error(`Error agregando columna ${col} a proveedor:`, err);
+      }
+    }
+    schemaReady = true;
+  })();
+
+  try {
+    await schemaPromise;
+  } finally {
+    schemaPromise = null;
+  }
+}
+
 // Listar todos los proveedores
 router.get("/", authorizePermissions(PERMISSIONS.PROVEEDORES_VIEW), async (req, res) => {
   try {
+    await ensureProveedoresSchema();
     const proveedores = await all(`
       SELECT 
         id_proveedor as id, nombre, cuit, contacto, telefono, email, categoria, activo,
