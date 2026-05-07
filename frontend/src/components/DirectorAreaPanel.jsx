@@ -106,8 +106,6 @@ export default function DirectorAreaPanel({ initialSection, standalone = false }
 
   return (
     <div className="container fade-in" style={{ padding: '40px 24px', background: 'var(--bg)', minHeight: '100vh', display: 'block' }}>
-<<<<<<< HEAD
-=======
       {!standalone && (
         <header className="directivo-header" style={{ background: 'var(--secondary-gradient)', padding: '32px 40px', borderRadius: 16, marginBottom: 32, boxShadow: 'var(--shadow-premium)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
@@ -136,8 +134,6 @@ export default function DirectorAreaPanel({ initialSection, standalone = false }
           </button>
         </div>
       )}
-
->>>>>>> f7498e637ec97d32acd658834df30a76d4997b29
       {msg.text && <div className={`msg show ${msg.type === 'success' ? 'msg-success' : 'msg-error'}`} style={{ marginBottom: 24 }}>{msg.text}</div>}
 
       <main>
