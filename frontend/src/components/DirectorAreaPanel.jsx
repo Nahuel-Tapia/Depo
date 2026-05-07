@@ -8,7 +8,7 @@ import DirectorAreaResumenAnual from './DirectorAreaResumenAnual'
 
 export default function DirectorAreaPanel({ initialSection, standalone = false }) {
   const { token, user } = useAuth()
-  const [activeSection, setActiveSection] = useState(initialSection || 'zonas')
+  const [activeSection, setActiveSection] = useState(initialSection || 'gestion-escuelas')
   const [supervisores, setSupervisores] = useState([])
   const [escuelas, setEscuelas] = useState([])
   const [nivelEducativo, setNivelEducativo] = useState('')
@@ -106,6 +106,8 @@ export default function DirectorAreaPanel({ initialSection, standalone = false }
 
   return (
     <div className="container fade-in" style={{ padding: '40px 24px', background: 'var(--bg)', minHeight: '100vh', display: 'block' }}>
+<<<<<<< HEAD
+=======
       {!standalone && (
         <header className="directivo-header" style={{ background: 'var(--secondary-gradient)', padding: '32px 40px', borderRadius: 16, marginBottom: 32, boxShadow: 'var(--shadow-premium)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
@@ -135,10 +137,11 @@ export default function DirectorAreaPanel({ initialSection, standalone = false }
         </div>
       )}
 
+>>>>>>> f7498e637ec97d32acd658834df30a76d4997b29
       {msg.text && <div className={`msg show ${msg.type === 'success' ? 'msg-success' : 'msg-error'}`} style={{ marginBottom: 24 }}>{msg.text}</div>}
 
       <main>
-        {activeSection === 'zonas' && (
+        {activeSection === 'gestion-escuelas' && (
           <section className="fade-in">
             <div className="card" style={{ padding: 32, borderRadius: 16, boxShadow: 'var(--shadow-premium)', minHeight: 'auto' }}>
               <h2 style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
@@ -164,7 +167,7 @@ export default function DirectorAreaPanel({ initialSection, standalone = false }
           </section>
         )}
 
-        {activeSection === 'solicitud_anual' && (
+        {activeSection === 'solicitud-anual' && (
           <section className="fade-in">
             <DirectorAreaPedidosAnuales 
               solicitudes={solicitudes} 
@@ -173,7 +176,7 @@ export default function DirectorAreaPanel({ initialSection, standalone = false }
           </section>
         )}
 
-        {activeSection === 'resumen' && (
+        {activeSection === 'resumen-anual' && (
           <section className="fade-in">
              <div className="card" style={{ padding: 32, borderRadius: 16, boxShadow: 'var(--shadow-premium)', minHeight: 'auto' }}>
                <DirectorAreaResumenAnual 
