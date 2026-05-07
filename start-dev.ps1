@@ -6,38 +6,36 @@ $ErrorActionPreference = "SilentlyContinue"
 Write-Host "Iniciando Depo en modo desarrollo..." -ForegroundColor Cyan
 Write-Host ""
 
-# Verificar si los puertos están ocupados y liberarlos si es necesario
-$ports = @(4000, 4001, 5173, 5174, 5175, 5176)
-foreach ($port in $ports) {
-    $conn = Get-NetTCPConnection -LocalPort $port -ErrorAction SilentlyContinue
-    if ($conn) {
-        Write-Host "Liberando puerto $port..." -ForegroundColor Yellow
-        Stop-Process -Id $conn.OwningProcess -Force -ErrorAction SilentlyContinue
-        Start-Sleep -Milliseconds 500
-    }
+# Primero detener cualquier proceso existente
+Write-Host "Limpiando procesos anteriores..." -ForegroundColor Yellow
+Get-Process node -ErrorAction SilentlyContinue | Stop-Process -Force
+Start-Sleep -Seconds 2
+
+# Crear directorio para logs si no existe
+$logDir = "$PSScriptRoot\logs"
+if (!(Test-Path $logDir)) {
+    New-Item -ItemType Directory -Path $logDir -Force | Out-Null
 }
 
-# Iniciar Backend
+$timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+
+# Iniciar Backend en nueva ventana
 Write-Host "Iniciando Backend..." -ForegroundColor Green
-$backendJob = Start-Job -ScriptBlock {
-    Set-Location "c:\Users\leone\OneDrive\Desktop\Depo"
-    npm run dev
-} -Name "Depo-Backend"
+$backendLog = "$logDir\backend_$timestamp.log"
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$PSScriptRoot'; npm run dev | Tee-Object '$backendLog'" -WindowStyle Normal
 
-# Esperar un poco para que el backend inicie
-Start-Sleep -Seconds 3
+# Esperar para que el backend inicie
+Start-Sleep -Seconds 4
 
-# Iniciar Frontend
+# Iniciar Frontend en nueva ventana
 Write-Host "Iniciando Frontend..." -ForegroundColor Green
-$frontendJob = Start-Job -ScriptBlock {
-    Set-Location "c:\Users\leone\OneDrive\Desktop\Depo\frontend"
-    npm run dev
-} -Name "Depo-Frontend"
+$frontendLog = "$logDir\frontend_$timestamp.log"
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "Set-Location '$PSScriptRoot\frontend'; npm run dev | Tee-Object '$frontendLog'" -WindowStyle Normal
 
 Write-Host ""
 Write-Host "Servicios iniciados:" -ForegroundColor Cyan
 Write-Host "- Backend: http://localhost:4000" -ForegroundColor White
 Write-Host "- Frontend: http://localhost:5173" -ForegroundColor White
 Write-Host ""
-Write-Host "Para ver logs: Get-Job | Receive-Job -Keep" -ForegroundColor Gray
-Write-Host "Para detener: .\stop-dev.ps1" -ForegroundColor Gray
+Write-Host "Logs en: $logDir" -ForegroundColor Gray
+Write-Host "Para detener: cierra las ventanas o ejecuta .\stop-dev.ps1" -ForegroundColor Gray
