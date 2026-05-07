@@ -10,6 +10,7 @@ import Proveedores from '../components/Proveedores'
 import Usuarios from '../components/Usuarios'
 import HistorialInstitucion from '../components/HistorialInstitucion'
 import SupervisorDashboard from '../components/SupervisorDashboard'
+import AsignarKit from '../components/AsignarKit'
 import DirectorAreaPanel from '../components/DirectorAreaPanel'
 import ComprasPanel from '../components/ComprasPanel'
 import ProductKitsManager from '../components/ProductKitsManager'
@@ -34,16 +35,18 @@ const ROLE_LABELS = {
 
 const TABS = [
   { key: 'inicio', label: 'Inicio', permission: null, icon: GridIcon },
-  { key: 'gestion-escuelas', label: 'Gestion de Zonas', permission: 'supervision.manage', role: 'director_area', icon: BuildingIcon },
-  { key: 'solicitud-anual', label: 'Solicitud Anual', permission: 'supervision.manage', role: 'director_area', icon: ClipboardIcon },
-  { key: 'resumen-anual', label: 'Resumen Solicitud Anual', permission: 'supervision.manage', role: 'director_area', icon: ListIcon },
+  { key: 'zonas', label: 'Gestion de Zonas', permission: 'supervision.manage', role: 'director_area', icon: BuildingIcon },
+  { key: 'solicitud_anual', label: 'Solicitud Anual', permission: 'supervision.manage', role: 'director_area', icon: ClipboardIcon },
+  { key: 'resumen', label: 'Resumen Solicitud Anual', permission: 'supervision.manage', role: 'director_area', icon: ListIcon },
   { key: 'compras-licitacion', label: 'Licitacion Anual', permission: 'planilla.view', role: 'area_compras', icon: DocumentIcon },
   { key: 'compras-listado-final', label: 'Listado Final a Licitar', permission: 'planilla.view', role: 'area_compras', icon: ListIcon },
   { key: 'compras-adjudicacion', label: 'Adjudicacion y Cierre', permission: 'planilla.manage', role: 'area_compras', icon: ShieldIcon },
   { key: 'compras-entregas', label: 'Gestion de Entregas', permission: 'planilla.view', role: 'area_compras', icon: TruckIcon },
   { key: 'deposito-recepcion', label: 'Recepcion Licitacion', permission: 'stock.movement.create', role: 'operador', icon: DocumentIcon },
   { key: 'deposito-distribucion', label: 'Distribucion a Escuelas', permission: 'stock.movement.create', role: 'operador', icon: TruckIcon },
+  { key: 'solicitudes-retiro', label: 'Retiros Escolares', permission: 'stock.movement.create', role: 'operador', icon: ClipboardIcon },
   { key: 'supervisor', label: 'Patrimonio Escolar', permission: 'pedidos.manage', role: 'supervisor', icon: ActivityIcon },
+  { key: 'asignar-kit', label: 'Asignar Kit', permission: 'pedidos.manage', role: 'supervisor', icon: BoxIcon },
   { key: 'mis-escuelas', label: 'Mis Escuelas', permission: 'instituciones.view', role: 'supervisor', hideForRoles: ['admin'], icon: BuildingIcon },
   { key: 'productos', label: 'Productos', permission: 'productos.view', hideForRoles: ['supervisor', 'director_area'], icon: BoxIcon },
   { key: 'movimientos', label: 'Movimientos', permission: 'movimientos.view', hideForRoles: ['supervisor', 'director_area'], icon: ActivityIcon },
@@ -88,6 +91,7 @@ export default function Dashboard() {
         'depositos',
         'deposito-recepcion',
         'deposito-distribucion',
+        'solicitudes-retiro',
       ].includes(tab.key))
     }
 
@@ -151,12 +155,12 @@ export default function Dashboard() {
     switch (activeTab) {
       case 'inicio':
         return <Inicio onNavigate={setActiveTab} />
-      case 'gestion-escuelas':
-        return <DirectorAreaPanel initialSection="gestion-escuelas" />
-      case 'solicitud-anual':
-        return <DirectorAreaPanel initialSection="solicitud-anual" />
-      case 'resumen-anual':
-        return <DirectorAreaPanel initialSection="resumen-anual" />
+      case 'zonas':
+        return <DirectorAreaPanel initialSection="zonas" standalone={true} />
+      case 'solicitud_anual':
+        return <DirectorAreaPanel initialSection="solicitud_anual" standalone={true} />
+      case 'resumen':
+        return <DirectorAreaPanel initialSection="resumen" standalone={true} />
       case 'compras-licitacion':
         return <ComprasPanel section="licitacion" />
       case 'compras-listado-final':
@@ -169,8 +173,12 @@ export default function Dashboard() {
         return <RecepcionLicitacion />
       case 'deposito-distribucion':
         return <DistribucionEscuelas />
+      case 'solicitudes-retiro':
+        return <SolicitudesRetiro />
       case 'supervisor':
         return <SupervisorDashboard />
+      case 'asignar-kit':
+        return <AsignarKit />
       case 'mis-escuelas':
         return <Instituciones supervisorMode />
       case 'productos':

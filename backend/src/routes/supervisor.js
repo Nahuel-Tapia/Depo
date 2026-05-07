@@ -51,31 +51,8 @@ async function tableExists(tableName) {
   return Boolean(row?.regclass);
 }
 
-async function ensureSupervisorSchema() {
-  try {
-    await run(`ALTER TABLE pedido ADD COLUMN IF NOT EXISTS aprobado_por_supervisor_id INT REFERENCES usuario(id_usuario)`);
-  } catch (err) {}
-  try {
-    await run(`ALTER TABLE pedido ADD COLUMN IF NOT EXISTS fecha_aprobacion_supervisor TIMESTAMP`);
-  } catch (err) {}
-  try {
-    await run(`ALTER TABLE pedido ADD COLUMN IF NOT EXISTS motivo_supervisor TEXT`);
-  } catch (err) {}
-  try {
-    await run(`ALTER TABLE pedido ADD COLUMN IF NOT EXISTS respuesta_supervisor_tipo VARCHAR(30)`);
-  } catch (err) {}
-  try {
-    await run(`ALTER TABLE pedido ADD COLUMN IF NOT EXISTS aprobado_director_area BOOLEAN DEFAULT FALSE`);
-  } catch (err) {}
-  try {
-    await run(`ALTER TABLE pedido ADD COLUMN IF NOT EXISTS aprobado_por_director_id INT REFERENCES usuario(id_usuario)`);
-  } catch (err) {}
-  try {
-    await run(`ALTER TABLE pedido ADD COLUMN IF NOT EXISTS fecha_aprobacion_director TIMESTAMP`);
-  } catch (err) {}
-}
-
 async function getInstitucionNivelExpr(alias = "i") {
+  if (await columnExists("institucion", "direccion_area")) return `${alias}.direccion_area`;
   if (await columnExists("institucion", "nivel_educativo")) return `${alias}.nivel_educativo`;
   if (await columnExists("institucion", "nivel")) return `${alias}.nivel`;
   return "NULL::text";

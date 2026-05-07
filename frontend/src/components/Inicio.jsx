@@ -31,7 +31,7 @@ export default function Inicio({ onNavigate }) {
   const printRef = useRef(null)
 
   useEffect(() => {
-    if (user?.role === 'supervisor' || user?.role === 'directivo') {
+    if (user?.role === 'supervisor' || user?.role === 'directivo' || user?.role === 'director_area') {
       setLoading(false)
       return
     }
@@ -74,6 +74,10 @@ export default function Inicio({ onNavigate }) {
 
   if (user?.role === 'directivo') {
     return <DirectivoInicio onNavigate={onNavigate} token={token} user={user} />
+  }
+
+  if (user?.role === 'director_area') {
+    return <DirectorAreaInicio onNavigate={onNavigate} user={user} />
   }
 
   if (error) {
@@ -681,6 +685,43 @@ function DirectivoInicio({ onNavigate, token, user }) {
           {error}
         </div>
       )}
+    </div>
+  )
+}
+
+function DirectorAreaInicio({ onNavigate, user }) {
+  return (
+    <div className="dashboard-stack">
+      <section className="dashboard-hero">
+        <div className="dashboard-hero-copy">
+          <span className="dashboard-hero-chip">Director de Área</span>
+          <h2>Bienvenido, {user?.nombre || 'Usuario'}</h2>
+          <p>Gestion de zonas, supervisores y solicitudes anuales.</p>
+        </div>
+
+        <div className="dashboard-hero-aside">
+          <div className="dashboard-status-list">
+            <div className="dashboard-status-row">
+              <span className="dashboard-status-label">Jurisdiccion</span>
+              <span className="dashboard-status-value">{user?.jurisdiccion || 'San Juan'}</span>
+            </div>
+            <div className="dashboard-status-row">
+              <span className="dashboard-status-label">Nivel</span>
+              <span className="dashboard-status-value">{user?.nivel_educativo || '-'}</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="dashboard-section-card">
+        <div className="dashboard-stats-grid">
+          <StatCard label="Gestion de Zonas" value="📍" icon="ZN" onClick={() => onNavigate?.('zonas')} />
+          <StatCard label="Solicitud Anual" value="📅" icon="SA" onClick={() => onNavigate?.('solicitud_anual')} />
+          <StatCard label="Resumen Anual" value="📊" icon="RA" onClick={() => onNavigate?.('resumen')} />
+          <StatCard label="Kits de Productos" value="📦" icon="KT" onClick={() => onNavigate?.('kits')} />
+          <StatCard label="Supervisores" value="👥" icon="SV" onClick={() => onNavigate?.('usuarios')} />
+        </div>
+      </section>
     </div>
   )
 }

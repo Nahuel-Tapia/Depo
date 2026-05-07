@@ -1,7 +1,10 @@
 import { useState, useMemo } from 'react'
+import { apiFetch } from '../api'
+import { useAuth } from '../context/AuthContext'
 
 export default function DirectorAreaPedidosAnuales({ solicitudes, isSent }) {
   const [detalle, setDetalle] = useState(null)
+  const { token } = useAuth()
   
   const anioActual = new Date().getFullYear()
 
@@ -159,7 +162,7 @@ export default function DirectorAreaPedidosAnuales({ solicitudes, isSent }) {
         </div>
       </section>
 
-      {/* Modal o Detalle (Placeholder por ahora) */}
+      {/* Modal o Detalle */}
       {detalle && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
           <div className="card fade-in" style={{ width: 'min(600px, 95%)', minHeight: 'auto', padding: 32, borderRadius: 20 }}>
@@ -167,7 +170,29 @@ export default function DirectorAreaPedidosAnuales({ solicitudes, isSent }) {
              <p><strong>Escuela:</strong> {detalle.escuela_nombre || detalle.institucion}</p>
              <p><strong>Productos:</strong> {formatItems(detalle.items)}</p>
              <div style={{ display: 'flex', gap: 12, marginTop: 32 }}>
-                <button style={{ flex: 1 }}>Aprobar Solicitud</button>
+                <button 
+                  style={{ flex: 1 }} 
+                  onClick={async () => {
+                    try {
+                      const res = await apiFetch(`/api/pedidos/${detalle.id}/aprobar-director`, {
+                        token,
+                        method: 'PATCH',
+                        body: JSON.stringify({ decision: 'aceptar' })
+                      })
+                      if (res.ok) {
+                        alert('Solicitud aprobada correctamente')
+                        window.location.reload()
+                      } else {
+                        const err = await res.json()
+                        alert(err.error || 'Error al aprobar')
+                      }
+                    } catch (e) {
+                      alert('Error de conexión')
+                    }
+                  }}
+                >
+                  Aprobar Solicitud
+                </button>
                 <button className="secondary" onClick={() => setDetalle(null)}>Cerrar</button>
              </div>
           </div>

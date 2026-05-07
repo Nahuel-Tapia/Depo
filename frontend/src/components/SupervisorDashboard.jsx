@@ -18,18 +18,13 @@ export default function SupervisorDashboard() {
   const { token, user } = useAuth()
   const printRef = useRef(null)
 
-  const [activeSection, setActiveSection] = useState('patrimonio')
   const [tickets, setTickets] = useState([])
   const [procesados, setProcesados] = useState([])
-  const [instituciones, setInstituciones] = useState([])
   const [supervisorMeta, setSupervisorMeta] = useState({
     zona_label: '',
     zona_count: 0,
     nivel_educativo: user?.nivel_educativo || ''
   })
-  const [kits, setKits] = useState([])
-  const [kitByInstitucion, setKitByInstitucion] = useState({})
-  const [savingTipoId, setSavingTipoId] = useState(null)
   const [msg, setMsg] = useState({ text: '', type: '' })
 
   const [accionandoId, setAccionandoId] = useState(null)
@@ -56,37 +51,23 @@ export default function SupervisorDashboard() {
   }, [token])
 
   useEffect(() => {
-    const loadInstitucionesYKits = async () => {
+    const loadMeta = async () => {
       try {
-        const [institucionesRes, kitsRes] = await Promise.all([
-          apiFetch('/api/supervisor/instituciones', { token }),
-          apiFetch('/api/pedidos/kits', { token })
-        ])
-
-        if (institucionesRes.ok) {
-          const data = await institucionesRes.json()
-          const rows = data.instituciones || []
+        const res = await apiFetch('/api/supervisor/instituciones', { token })
+        if (res.ok) {
+          const data = await res.json()
           const meta = data.meta || {}
-          setInstituciones(rows)
           setSupervisorMeta({
             zona_label: meta.zona_label || '',
             zona_count: Number(meta.zona_count) || 0,
             nivel_educativo: meta.nivel_educativo || user?.nivel_educativo || ''
           })
-          setKitByInstitucion(
-            Object.fromEntries(rows.map((inst) => [String(inst.id), inst.kit_id ? String(inst.kit_id) : '']))
-          )
-        }
-
-        if (kitsRes.ok) {
-          const data = await kitsRes.json()
-          setKits(data.kits || [])
         }
       } catch (err) {
-        console.error('Error cargando escuelas del supervisor:', err)
+        console.error('Error cargando meta del supervisor:', err)
       }
     }
-    loadInstitucionesYKits()
+    loadMeta()
   }, [token, user?.nivel_educativo])
 
   const zonaLabel = supervisorMeta.zona_label || 'Sin zona asignada'
@@ -178,35 +159,6 @@ export default function SupervisorDashboard() {
     setTimeout(() => setMsg({ text: '', type: '' }), 3000)
   }
 
-  const handleGuardarTipoKit = async (institucionId) => {
-    const kit_id = Number(kitByInstitucion[String(institucionId)] || 0)
-    setSavingTipoId(institucionId)
-    try {
-      const res = await apiFetch(`/api/supervisor/instituciones/${institucionId}/tipo-kit`, {
-        token,
-        method: 'PATCH',
-        body: JSON.stringify({ kit_id })
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        throw new Error(data.error || 'No se pudo asignar el kit.')
-      }
-
-      setInstituciones((prev) => prev.map((inst) => (
-        Number(inst.id) === Number(institucionId)
-          ? { ...inst, kit_id, kit_nombre: data.kit_nombre || '' }
-          : inst
-      )))
-      setMsg({ text: 'Kit actualizado correctamente.', type: 'success' })
-      setTimeout(() => setMsg({ text: '', type: '' }), 3000)
-    } catch (err) {
-      setMsg({ text: err.message || 'No se pudo asignar el kit.', type: 'error' })
-      setTimeout(() => setMsg({ text: '', type: '' }), 3000)
-    } finally {
-      setSavingTipoId(null)
-    }
-  }
-
   const ticketsFiltrados = tickets.filter((t) => {
     if (busqueda.trim()) {
       const q = busqueda.toLowerCase()
@@ -222,8 +174,8 @@ export default function SupervisorDashboard() {
   return (
     <div className="supervisor-dashboard">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-        <h2>{activeSection === 'asignar-kit' ? 'Asignar kit' : 'Patrimonio Escolar'}</h2>
-        <PrintButton targetRef={printRef} title={activeSection === 'asignar-kit' ? 'Reporte Asignar Kit' : 'Reporte Patrimonio Escolar'} />
+        <h2>Patrimonio Escolar</h2>
+        <PrintButton targetRef={printRef} title="Reporte Patrimonio Escolar" />
       </div>
 
       <div className="sv-jurisdiction-banner">
@@ -231,188 +183,118 @@ export default function SupervisorDashboard() {
         <span>{zonaTitle}: <strong>{zonaLabel}</strong></span>
         <span>Nivel: <strong>{nivelLabel}</strong></span>
         <span className="sv-jurisdiction-count">
-          {activeSection === 'asignar-kit' ? `${instituciones.length} escuelas asignadas` : `${tickets.length} tickets pendientes`}
+          {tickets.length} tickets pendientes
         </span>
       </div>
 
       {msg.text && <div className={`msg show ${msg.type === 'success' ? 'msg-success' : 'msg-error'}`}>{msg.text}</div>}
 
-      <div className="sub-tabs">
-        <button type="button" className={`sub-tab-btn ${activeSection === 'patrimonio' ? 'active' : ''}`} onClick={() => setActiveSection('patrimonio')}>
-          Patrimonio
-        </button>
-        <button type="button" className={`sub-tab-btn ${activeSection === 'asignar-kit' ? 'active' : ''}`} onClick={() => setActiveSection('asignar-kit')}>
-          Asignar kit
-        </button>
+      <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+        <input type="text" placeholder="Buscar institucion, categoria o descripcion..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} style={{ flex: '1 1 250px', marginBottom: 0 }} />
+        <select value={filtroCategoria} onChange={(e) => setFiltroCategoria(e.target.value)} style={{ flex: '0 1 180px' }}>
+          <option value="">Todas las categorias</option>
+          {CATEGORIAS_PATRIMONIO.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select value={filtroPrioridad} onChange={(e) => setFiltroPrioridad(e.target.value)} style={{ flex: '0 1 140px' }}>
+          <option value="">Toda prioridad</option>
+          <option value="alta">Alta</option>
+          <option value="media">Media</option>
+          <option value="baja">Baja</option>
+        </select>
       </div>
 
-      {activeSection === 'patrimonio' && (
-        <>
-          <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
-            <input type="text" placeholder="Buscar institucion, categoria o descripcion..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} style={{ flex: '1 1 250px', marginBottom: 0 }} />
-            <select value={filtroCategoria} onChange={(e) => setFiltroCategoria(e.target.value)} style={{ flex: '0 1 180px' }}>
-              <option value="">Todas las categorias</option>
-              {CATEGORIAS_PATRIMONIO.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <select value={filtroPrioridad} onChange={(e) => setFiltroPrioridad(e.target.value)} style={{ flex: '0 1 140px' }}>
-              <option value="">Toda prioridad</option>
-              <option value="alta">Alta</option>
-              <option value="media">Media</option>
-              <option value="baja">Baja</option>
-            </select>
-          </div>
+      <div ref={printRef}>
+        <h3>Tickets Pendientes</h3>
 
-          <div ref={printRef}>
-            <h3>Tickets Pendientes</h3>
-
-            {ticketsFiltrados.length === 0 ? (
-              <div className="sv-empty-state">No hay tickets pendientes de patrimonio</div>
-            ) : (
-              <table>
-                <thead>
-                  <tr>
-                    <th>N°</th>
-                    <th>Institucion</th>
-                    <th>Fecha</th>
-                    <th>Categoria</th>
-                    <th>Descripcion</th>
-                    <th>Cant.</th>
-                    <th>Prioridad</th>
-                    <th>Acciones</th>
+        {ticketsFiltrados.length === 0 ? (
+          <div className="sv-empty-state">No hay tickets pendientes de patrimonio</div>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>N°</th>
+                <th>Institucion</th>
+                <th>Fecha</th>
+                <th>Categoria</th>
+                <th>Descripcion</th>
+                <th>Cant.</th>
+                <th>Prioridad</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ticketsFiltrados.map((ticket) => {
+                const pStyle = PRIORIDAD_STYLE[ticket.prioridad] || {}
+                return (
+                  <tr key={ticket.id}>
+                    <td style={{ fontWeight: 600, color: 'var(--muted)' }}>#{ticket.id}</td>
+                    <td><strong>{ticket.institucion}</strong><br /><span style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>CUE: {ticket.cue}</span></td>
+                    <td>{new Date(ticket.fecha).toLocaleDateString('es-AR')}</td>
+                    <td><span className="badge" style={{ background: '#f3f4f6' }}>{ticket.categoria}</span></td>
+                    <td style={{ fontSize: '0.88rem', maxWidth: 260 }}>{ticket.descripcion}</td>
+                    <td style={{ textAlign: 'center', fontWeight: 600 }}>{ticket.cantidad}</td>
+                    <td><span className="badge" style={{ background: pStyle.bg, color: pStyle.color }}>{pStyle.label}</span></td>
+                    <td>
+                      {accionandoId === ticket.id ? (
+                        <div className="sv-rechazo-box">
+                          <p style={{ margin: '0 0 4px', fontSize: '0.78rem', fontWeight: 600, color: accionTipo === 'rechazar' ? '#b91c1c' : '#1e40af' }}>
+                            {accionTipo === 'rechazar' ? 'Motivo del rechazo:' : 'Detalle de reparacion:'}
+                          </p>
+                          <textarea className="sv-rechazo-input" placeholder={accionTipo === 'rechazar' ? 'Motivo del rechazo...' : 'Indicar taller, plazo estimado...'} value={motivoAccion} onChange={(e) => setMotivoAccion(e.target.value)} rows={2} style={accionTipo === 'reparar' ? { borderColor: '#3b82f6' } : {}} />
+                          <div className="inline-actions" style={{ marginTop: 6 }}>
+                            <button onClick={() => confirmarAccion(ticket.id)} className={accionTipo === 'rechazar' ? 'sv-btn-confirmar-rechazo' : 'sv-btn-confirmar-reparar'}>Confirmar</button>
+                            <button onClick={cancelarAccion} className="secondary" style={{ margin: 0, minHeight: 'auto', padding: '6px 12px', fontSize: '0.75rem' }}>Cancelar</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="inline-actions">
+                          <button onClick={() => handleAprobar(ticket.id)} title="Aprobar reemplazo completo">Aprobar</button>
+                          <button onClick={() => iniciarAccion(ticket.id, 'reparar')} className="sv-btn-reparar" title="Enviar a reparacion">Reparar</button>
+                          <button onClick={() => iniciarAccion(ticket.id, 'rechazar')} className="sv-btn-rechazar" title="Rechazar solicitud">Rechazar</button>
+                        </div>
+                      )}
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {ticketsFiltrados.map((ticket) => {
-                    const pStyle = PRIORIDAD_STYLE[ticket.prioridad] || {}
-                    return (
-                      <tr key={ticket.id}>
-                        <td style={{ fontWeight: 600, color: 'var(--muted)' }}>#{ticket.id}</td>
-                        <td><strong>{ticket.institucion}</strong><br /><span style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>CUE: {ticket.cue}</span></td>
-                        <td>{new Date(ticket.fecha).toLocaleDateString('es-AR')}</td>
-                        <td><span className="badge" style={{ background: '#f3f4f6' }}>{ticket.categoria}</span></td>
-                        <td style={{ fontSize: '0.88rem', maxWidth: 260 }}>{ticket.descripcion}</td>
-                        <td style={{ textAlign: 'center', fontWeight: 600 }}>{ticket.cantidad}</td>
-                        <td><span className="badge" style={{ background: pStyle.bg, color: pStyle.color }}>{pStyle.label}</span></td>
-                        <td>
-                          {accionandoId === ticket.id ? (
-                            <div className="sv-rechazo-box">
-                              <p style={{ margin: '0 0 4px', fontSize: '0.78rem', fontWeight: 600, color: accionTipo === 'rechazar' ? '#b91c1c' : '#1e40af' }}>
-                                {accionTipo === 'rechazar' ? 'Motivo del rechazo:' : 'Detalle de reparacion:'}
-                              </p>
-                              <textarea className="sv-rechazo-input" placeholder={accionTipo === 'rechazar' ? 'Motivo del rechazo...' : 'Indicar taller, plazo estimado...'} value={motivoAccion} onChange={(e) => setMotivoAccion(e.target.value)} rows={2} style={accionTipo === 'reparar' ? { borderColor: '#3b82f6' } : {}} />
-                              <div className="inline-actions" style={{ marginTop: 6 }}>
-                                <button onClick={() => confirmarAccion(ticket.id)} className={accionTipo === 'rechazar' ? 'sv-btn-confirmar-rechazo' : 'sv-btn-confirmar-reparar'}>Confirmar</button>
-                                <button onClick={cancelarAccion} className="secondary" style={{ margin: 0, minHeight: 'auto', padding: '6px 12px', fontSize: '0.75rem' }}>Cancelar</button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="inline-actions">
-                              <button onClick={() => handleAprobar(ticket.id)} title="Aprobar reemplazo completo">Aprobar</button>
-                              <button onClick={() => iniciarAccion(ticket.id, 'reparar')} className="sv-btn-reparar" title="Enviar a reparacion">Reparar</button>
-                              <button onClick={() => iniciarAccion(ticket.id, 'rechazar')} className="sv-btn-rechazar" title="Rechazar solicitud">Rechazar</button>
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            )}
+                )
+              })}
+            </tbody>
+          </table>
+        )}
 
-            {procesados.length > 0 && (
-              <>
-                <h3>Tickets Procesados</h3>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>N°</th>
-                      <th>Institucion</th>
-                      <th>Categoria</th>
-                      <th>Cant.</th>
-                      <th>Resolucion</th>
-                      <th>Observacion</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {procesados.map((t) => (
-                      <tr key={t.id}>
-                        <td>#{t.id}</td>
-                        <td>{t.institucion}</td>
-                        <td>{t.categoria}</td>
-                        <td style={{ textAlign: 'center' }}>{t.cantidad}</td>
-                        <td>
-                          <span className={`badge badge-estado-${t.estado === 'en_reparacion' ? 'reparacion' : t.estado}`}>
-                            {t.resolucion}
-                          </span>
-                        </td>
-                        <td>{t.observacion || '-'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </>
-            )}
-          </div>
-        </>
-      )}
-
-      {activeSection === 'asignar-kit' && (
-        <section ref={printRef}>
-          <h3>Asignar kit</h3>
-          <p style={{ marginTop: 0, color: 'var(--muted)' }}>
-            Aca podes asignar a cada escuela uno de los kits que ya fueron creados.
-          </p>
-
-          {instituciones.length === 0 ? (
-            <div className="sv-empty-state">Este supervisor no tiene escuelas asignadas.</div>
-          ) : kits.length === 0 ? (
-            <div className="sv-empty-state">No hay kits creados para asignar todavia.</div>
-          ) : (
-            <div className="sv-kit-grid">
-              {instituciones.map((inst) => (
-                <article key={inst.id} className="sv-kit-card">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
-                    <div>
-                      <div className="sv-inst-nombre">{inst.nombre}</div>
-                      <div className="sv-inst-cue">CUE: {inst.cue || '-'}</div>
-                    </div>
-                    {inst.kit_nombre && <span className="badge sv-badge-tipo-escuela">{inst.kit_nombre}</span>}
-                  </div>
-
-                  <div className="sv-kit-meta">
-                    <span>Nivel: <strong>{inst.nivel || '-'}</strong></span>
-                    <span>Departamento: <strong>{inst.departamento || '-'}</strong></span>
-                  </div>
-
-                  <label>Kit asignado</label>
-                  <select
-                    value={kitByInstitucion[String(inst.id)] || ''}
-                    onChange={(e) => setKitByInstitucion((prev) => ({
-                      ...prev,
-                      [String(inst.id)]: e.target.value
-                    }))}
-                  >
-                    <option value="">Seleccionar kit...</option>
-                    {kits.map((kit) => (
-                      <option key={kit.id} value={kit.id}>{kit.nombre}</option>
-                    ))}
-                  </select>
-
-                  <button
-                    type="button"
-                    className="sv-btn-historial"
-                    onClick={() => handleGuardarTipoKit(inst.id)}
-                    disabled={savingTipoId === inst.id}
-                  >
-                    {savingTipoId === inst.id ? 'Guardando...' : 'Asignar kit'}
-                  </button>
-                </article>
-              ))}
-            </div>
-          )}
-        </section>
-      )}
+        {procesados.length > 0 && (
+          <>
+            <h3>Tickets Procesados</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>N°</th>
+                  <th>Institucion</th>
+                  <th>Categoria</th>
+                  <th>Cant.</th>
+                  <th>Resolucion</th>
+                  <th>Observacion</th>
+                </tr>
+              </thead>
+              <tbody>
+                {procesados.map((t) => (
+                  <tr key={t.id}>
+                    <td>#{t.id}</td>
+                    <td>{t.institucion}</td>
+                    <td>{t.categoria}</td>
+                    <td style={{ textAlign: 'center' }}>{t.cantidad}</td>
+                    <td>
+                      <span className={`badge badge-estado-${t.estado === 'en_reparacion' ? 'reparacion' : t.estado}`}>
+                        {t.resolucion}
+                      </span>
+                    </td>
+                    <td>{t.observacion || '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        )}
+      </div>
     </div>
   )
 }

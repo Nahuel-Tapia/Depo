@@ -281,23 +281,29 @@ export default function Movimientos() {
 
   const printRef = useRef(null)
 
-  const handlePrintMovimiento = (movimiento) => {
+  const handlePrintMovimiento = (movimientoOrGroup) => {
     const printWindow = window.open('', '_blank', 'width=700,height=600')
     if (!printWindow) return
 
-    const institucionCargo = movimiento.institucion_nombre && movimiento.cargo_retira
-      ? `${movimiento.institucion_nombre} (${movimiento.cargo_retira})`
-      : movimiento.institucion_nombre || movimiento.cargo_retira || '-'
+    const isGroup = Array.isArray(movimientoOrGroup);
+    const movs = isGroup ? movimientoOrGroup : [movimientoOrGroup];
+    const primer = movs[0];
 
-    const fecha = movimiento.created_at
-      ? new Date(movimiento.created_at).toLocaleString('es-AR')
+    const institucionCargo = primer.institucion_nombre && primer.cargo_retira
+      ? `${primer.institucion_nombre} (${primer.cargo_retira})`
+      : primer.institucion_nombre || primer.cargo_retira || '-'
+
+    const fecha = primer.created_at
+      ? new Date(primer.created_at).toLocaleString('es-AR')
       : '-'
+
+    const rowsHTML = movs.map(m => `<tr><td>${m.producto_nombre || '-'}</td><td>${m.cantidad ?? '-'}</td><td>${m.estado_producto || '-'}</td></tr>`).join('');
 
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Movimiento #${movimiento.id || ''}</title>
+        <title>Movimiento #${primer.id || ''}</title>
         <style>
           @import url('https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;500;700&display=swap');
           * { box-sizing: border-box; font-family: 'Ubuntu', sans-serif; }
@@ -305,11 +311,12 @@ export default function Movimientos() {
           .print-header { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
           .print-header img { height: 36px; width: auto; object-fit: contain; }
           h2 { margin: 0 0 14px; font-size: 20px; }
-          table { width: 100%; border-collapse: collapse; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
           th, td { border: 1px solid #d1d5db; padding: 8px 10px; text-align: left; }
           th { background: #f3f4f6; width: 220px; font-size: 12px; text-transform: uppercase; }
           .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 700; color: #111827; background: #e5e7eb; }
           .footer { margin-top: 14px; color: #6b7280; font-size: 12px; }
+          .product-table th { width: auto; }
         </style>
       </head>
       <body>
@@ -318,14 +325,20 @@ export default function Movimientos() {
           <h2>Detalle de Movimiento</h2>
         </div>
         <table>
-          <tr><th>Producto</th><td>${movimiento.producto_nombre || '-'}</td></tr>
-          <tr><th>Tipo</th><td><span class="badge">${movimiento.tipo || '-'}</span></td></tr>
-          <tr><th>Cantidad</th><td>${movimiento.cantidad ?? '-'}</td></tr>
-          <tr><th>Estado</th><td>${movimiento.estado_producto || '-'}</td></tr>
+          <tr><th>Tipo</th><td><span class="badge">${primer.tipo || '-'}</span></td></tr>
           <tr><th>Institucion/Cargo</th><td>${institucionCargo}</td></tr>
-          <tr><th>Motivo</th><td>${movimiento.motivo || '-'}</td></tr>
-          <tr><th>Registrado por</th><td>${movimiento.usuario_nombre || '-'}</td></tr>
+          <tr><th>Motivo</th><td>${primer.motivo || '-'}</td></tr>
+          <tr><th>Registrado por</th><td>${primer.usuario_nombre || '-'}</td></tr>
           <tr><th>Fecha</th><td>${fecha}</td></tr>
+        </table>
+        <h4>Productos</h4>
+        <table class="product-table">
+          <thead>
+            <tr><th>Producto</th><th>Cantidad</th><th>Estado</th></tr>
+          </thead>
+          <tbody>
+            ${rowsHTML}
+          </tbody>
         </table>
         <div class="footer">Impreso: ${new Date().toLocaleString('es-AR')}</div>
       </body>
@@ -778,26 +791,51 @@ export default function Movimientos() {
           </tr>
         </thead>
         <tbody>
-          {movimientos.map((m, i) => {
-            const institucionCargo = m.institucion_nombre && m.cargo_retira
-              ? `${m.institucion_nombre} (${m.cargo_retira})`
-              : m.institucion_nombre || m.cargo_retira || '-'
-            return (
-              <tr key={m.id || i}>
-                <td>{m.producto_nombre || '-'}</td>
-                <td><span className={`badge badge-${m.tipo}`}>{m.tipo}</span></td>
-                <td>{m.cantidad}</td>
-                <td>{m.estado_producto || '-'}</td>
-                <td>{institucionCargo}</td>
-                <td>{m.motivo || '-'}</td>
-                <td>{m.usuario_nombre || '-'}</td>
-                <td>{new Date(m.created_at).toLocaleDateString()}</td>
-                <td style={{ textAlign: 'center' }}>
-                  <button
-                    type="button"
-                    className="secondary"
-                    onClick={() => handlePrintMovimiento(m)}
-                    title="Imprimir movimiento"
+          {(() => {
+            const grouped = [];
+            let currentGroup = null;
+
+            // Sort is done by backend (usually DESC). We iterate and group adjacent or identical transaction rows.
+            movimientos.forEach((m) => {
+              // Create a grouping key based on the transaction metadata
+              const timeStr = m.created_at ? new Date(m.created_at).toISOString().slice(0, 16) : '';
+              const key = `${m.tipo}|${m.motivo || ''}|${m.institucion_nombre || ''}|${m.cargo_retira || ''}|${m.usuario_nombre || ''}|${timeStr}`;
+              
+              if (currentGroup && currentGroup.key === key) {
+                currentGroup.items.push(m);
+              } else {
+                currentGroup = { key, items: [m] };
+                grouped.push(currentGroup);
+              }
+            });
+
+            return grouped.map((group, i) => {
+              const first = group.items[0];
+              const institucionCargo = first.institucion_nombre && first.cargo_retira
+                ? `${first.institucion_nombre} (${first.cargo_retira})`
+                : first.institucion_nombre || first.cargo_retira || '-';
+              
+              const isMulti = group.items.length > 1;
+              const productSummary = group.items.map(item => `${item.producto_nombre || '-'} (x${item.cantidad})`).join(', ');
+              
+              const totalCantidad = group.items.reduce((sum, item) => sum + Number(item.cantidad || 0), 0);
+              
+              return (
+                <tr key={first.id || i}>
+                  <td style={{ maxWidth: 250 }}>{productSummary}</td>
+                  <td><span className={`badge badge-${first.tipo}`}>{first.tipo}</span></td>
+                  <td>{isMulti ? totalCantidad : first.cantidad}</td>
+                  <td>{isMulti ? 'Varios' : (first.estado_producto || '-')}</td>
+                  <td>{institucionCargo}</td>
+                  <td>{first.motivo || '-'}</td>
+                  <td>{first.usuario_nombre || '-'}</td>
+                  <td>{new Date(first.created_at).toLocaleDateString()}</td>
+                  <td style={{ textAlign: 'center' }}>
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => handlePrintMovimiento(group.items)}
+                      title="Imprimir movimiento"
                     aria-label="Imprimir movimiento"
                     style={{ width: 'auto', margin: 0, minWidth: 36, padding: '6px 10px' }}
                   >
@@ -806,7 +844,8 @@ export default function Movimientos() {
                 </td>
               </tr>
             )
-          })}
+          }) // closes map
+        })()}
         </tbody>
       </table>
       </div>
