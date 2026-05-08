@@ -751,7 +751,7 @@ export default function Movimientos() {
       )}
 
       {/* Traslado entre depósitos */}
-      <section className="card" style={{ marginTop: 20 }}>
+      <section style={{ marginTop: 20, background: 'var(--card)', borderRadius: '10px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', padding: '24px' }}>
         <h3>Traslado entre depósitos</h3>
         <div className="grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
           <select value={transfer.productoId} onChange={e => setTransfer({ ...transfer, productoId: e.target.value })}>
@@ -777,8 +777,9 @@ export default function Movimientos() {
         <button type="button" className="primary" onClick={handleTransferSubmit} style={{ marginTop: 8 }}>Trasladar</button>
       </section>
 
-      <div ref={printRef}>
-      <table>
+      <div ref={printRef} style={{ marginTop: 20, overflowX: 'auto' }}>
+      <h3>Lista de Movimientos</h3>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead>
           <tr>
             <th>Producto</th>
