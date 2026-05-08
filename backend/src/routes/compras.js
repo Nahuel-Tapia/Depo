@@ -352,7 +352,8 @@ async function getConsolidadoRealTime({ anio }) {
       dp.id_producto AS producto_id,
       pr.nombre AS producto,
       COALESCE(pr.unidad_medida, 'unidad') AS unidad_medida,
-      SUM(dp.cantidad_solicitada)::numeric AS cantidad_total
+      SUM(dp.cantidad_solicitada)::numeric AS cantidad_total,
+      COALESCE((SELECT SUM(sd.cantidad) FROM stock_deposito sd WHERE sd.id_producto = dp.id_producto), 0)::numeric AS stock_actual
     FROM pedido p
     JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido
     JOIN producto pr ON pr.id_producto = dp.id_producto
@@ -374,7 +375,8 @@ async function getConsolidadoRealTime({ anio }) {
   return rows.map((row) => ({
     ...row,
     producto_id: Number(row.producto_id),
-    cantidad_total: Number(row.cantidad_total || 0)
+    cantidad_total: Number(row.cantidad_total || 0),
+    stock_actual: Number(row.stock_actual || 0)
   }));
 }
 
@@ -917,6 +919,30 @@ async function publicarLicitacion(req, res) {
   }
 }
 
+async function reabrirLicitacion(req, res) {
+  const client = await pool.connect();
+  try {
+    const anio = Number(req.params.anio);
+    await client.query("BEGIN");
+    
+    // Check current state
+    const lp = await client.query("SELECT estado FROM licitacion_publicada WHERE anio = $1", [anio]);
+    if (lp.rowCount > 0 && ['adjudicada', 'en_deposito', 'completada'].includes(lp.rows[0].estado)) {
+      throw new Error("No se puede reabrir una licitación que ya fue adjudicada o enviada a depósito.");
+    }
+
+    await client.query("DELETE FROM licitacion_publicada WHERE anio = $1", [anio]);
+    await client.query("COMMIT");
+    res.json({ ok: true, message: "Licitación reabierta con éxito" });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("Error al reabrir licitación:", err);
+    res.status(500).json({ error: err.message || "No se pudo reabrir la licitación" });
+  } finally {
+    client.release();
+  }
+}
+
 async function getPublicadaStatus(req, res) {
   try {
     const anio = Number(req.query.anio || new Date().getFullYear());
@@ -936,6 +962,7 @@ async function getPublicadaStatus(req, res) {
 router.get("/licitacion/anual/final-items", authorizePermissions(PERMISSIONS.PLANILLA_VIEW), getFinalItems);
 router.get("/licitacion/anual/publicada-status", authorizePermissions(PERMISSIONS.PLANILLA_VIEW), getPublicadaStatus);
 router.post("/licitacion/anual/publicar", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), publicarLicitacion);
+router.delete("/licitacion/anual/publicar/:anio", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), reabrirLicitacion);
 
 async function getLicitacionesCerradas(req, res) {
   try {
