@@ -134,19 +134,23 @@ export default function ComprasPanel({ section = 'pedidos' }) {
         return next
       })
       
-      // Inicializar cantidades editables con las originales si no hay publicación previa
+      // Inicializar cantidades editables con las originales (sin descontar stock automáticamente)
       if (!pubData.publicada) {
         const initialEdit = {}
-        finalData.items.forEach(item => {
-          initialEdit[item.id_pedido + '-' + item.producto_id] = item.cantidad_solicitada
+        const itemsToUse = consolidadoData.items || []
+        itemsToUse.forEach(item => {
+          initialEdit[item.producto_id] = item.cantidad_total
         })
         setEditQty(initialEdit)
       } else {
         // Si ya está publicada, las cantidades vienen del snapshot
         const snapshotEdit = {}
-        pubData.data.items.forEach(item => {
-          snapshotEdit[item.id_pedido + '-' + item.producto_id] = item.cantidad_a_licitar
-        })
+        if (pubData.data && pubData.data.items) {
+          const rawItems = typeof pubData.data.items === 'string' ? JSON.parse(pubData.data.items) : pubData.data.items
+          rawItems.forEach(item => {
+            snapshotEdit[item.producto_id] = item.cantidad_a_licitar
+          })
+        }
         setEditQty(snapshotEdit)
       }
 
@@ -268,10 +272,10 @@ export default function ComprasPanel({ section = 'pedidos' }) {
     }))
   }
 
-  const handleEditQty = (idPedido, idProducto, val) => {
+  const handleEditQty = (idProducto, val) => {
     setEditQty(prev => ({
       ...prev,
-      [`${idPedido}-${idProducto}`]: Number(val)
+      [idProducto]: Number(val)
     }))
   }
 
@@ -281,9 +285,9 @@ export default function ComprasPanel({ section = 'pedidos' }) {
       const anio = new Date().getFullYear()
       const payload = {
         anio,
-        items: itemsFinales.map(item => ({
+        items: consolidado.map(item => ({
           ...item,
-          cantidad_a_licitar: editQty[`${item.id_pedido}-${item.producto_id}`] || item.cantidad_solicitada
+          cantidad_a_licitar: editQty[item.producto_id] !== undefined ? editQty[item.producto_id] : item.cantidad_total
         }))
       }
       const res = await apiFetch('/api/compras/licitacion/anual/publicar', {
@@ -303,6 +307,29 @@ export default function ComprasPanel({ section = 'pedidos' }) {
       setMsg({ text: err.message, type: 'error' })
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleReabrir = async () => {
+    if (!window.confirm('¿Estás seguro que deseas reabrir la licitación? Las cantidades volverán a ser editables y la adjudicación se bloqueará.')) return
+    
+    setLoading(true)
+    try {
+      const anio = new Date().getFullYear()
+      const res = await apiFetch(`/api/compras/licitacion/anual/publicar/${anio}`, {
+        token,
+        method: 'DELETE'
+      })
+      if (res.ok) {
+        await loadWorkflowData()
+        setMsg({ text: 'Licitación reabierta. Ahora puedes editar las cantidades en el paso anterior.', type: 'success' })
+      } else {
+        const data = await res.json()
+        throw new Error(data.error || 'Error al reabrir')
+      }
+    } catch (err) {
+      setMsg({ text: err.message, type: 'error' })
+      setLoading(false)
     }
   }
 
@@ -382,7 +409,7 @@ export default function ComprasPanel({ section = 'pedidos' }) {
       )}
 
       <div ref={printRef} style={{ marginTop: 18 }}>
-        {(section === 'listado-final' || section === 'adjudicacion') && (
+        {section === 'adjudicacion' && (
           <section style={{ 
             background: 'white', 
             padding: 24, 
@@ -484,83 +511,63 @@ export default function ComprasPanel({ section = 'pedidos' }) {
           <section className="card" style={{ padding: 24, minHeight: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <h3 style={{ margin: 0 }}>
-                {publicacionStatus.publicada ? '📋 Licitación Publicada (Solo Lectura)' : '📝 Listado Detallado a Licitar'}
+                {publicacionStatus.publicada ? '📋 Licitación Publicada' : '📝 Listado Final a Licitar'}
               </h3>
-              {!publicacionStatus.publicada && itemsFinales.length > 0 && (
+              {!publicacionStatus.publicada && consolidado.length > 0 && (
                 <button className="primary" onClick={() => setShowConfirmPublicar(true)}>
-                  🚀 Subir Licitación
-                </button>
-              )}
-              {publicacionStatus.publicada && (
-                <button className="secondary" onClick={() => window.print()}>
-                  🖨️ Imprimir / Exportar PDF
+                  🔒 Cerrar Licitación
                 </button>
               )}
             </div>
 
             {loading ? (
               <div className="sv-empty-state">Cargando listado...</div>
-            ) : itemsFinales.length === 0 ? (
+            ) : consolidado.length === 0 ? (
               <div className="sv-empty-state">No hay pedidos disponibles para el listado final.</div>
             ) : (
               <>
                 <table style={{ marginBottom: 24 }}>
                   <thead>
                     <tr style={{ background: '#f8fafc' }}>
-                      <th>INSTITUCIÓN</th>
-                      <th>NIVEL</th>
                       <th>PRODUCTO</th>
-                      <th style={{ textAlign: 'center' }}>CANT. SOLICITADA</th>
+                      <th style={{ textAlign: 'center' }}>CANTIDAD TOTAL</th>
+                      <th style={{ textAlign: 'center' }}>STOCK ACTUAL</th>
                       <th style={{ textAlign: 'center', width: 140 }}>CANT. A LICITAR</th>
+                      <th>UNIDAD</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {itemsFinales.map((item) => {
-                      const key = `${item.id_pedido}-${item.producto_id}`
-                      const currentVal = editQty[key]
+                    {consolidado.map((item) => {
+                      const currentVal = editQty[item.producto_id]
                       return (
-                        <tr key={key}>
-                          <td>{item.institucion}</td>
-                          <td>{item.nivel || '-'}</td>
+                        <tr key={item.producto_id}>
                           <td style={{ fontWeight: 600 }}>{item.producto}</td>
-                          <td style={{ textAlign: 'center', color: 'var(--muted)' }}>{item.cantidad_solicitada}</td>
+                          <td style={{ textAlign: 'center', fontSize: '1.1rem', fontWeight: 700, color: 'var(--muted)' }}>
+                            {item.cantidad_total}
+                          </td>
+                          <td style={{ textAlign: 'center', fontSize: '1.1rem', fontWeight: 700, color: '#ca8a04' }}>
+                            {item.stock_actual}
+                          </td>
                           <td style={{ textAlign: 'center' }}>
                             {publicacionStatus.publicada ? (
-                              <span style={{ fontWeight: 700, color: 'var(--primary)' }}>{currentVal}</span>
+                              <span style={{ fontWeight: 700, color: 'var(--primary)', fontSize: '1.1rem' }}>{currentVal !== undefined ? currentVal : item.cantidad_total}</span>
                             ) : (
                               <input
                                 type="number"
                                 min="0"
-                                value={currentVal || ''}
-                                onChange={(e) => handleEditQty(item.id_pedido, item.producto_id, e.target.value)}
-                                style={{ textAlign: 'center', fontWeight: 700, border: '1px solid #cbd5e1' }}
+                                value={currentVal !== undefined ? currentVal : ''}
+                                onChange={(e) => handleEditQty(item.producto_id, e.target.value)}
+                                style={{ textAlign: 'center', fontWeight: 700, border: '1px solid #94a3b8', borderRadius: '6px', padding: '6px', width: '90px', margin: '0 auto', background: '#f8fafc' }}
+                                title="Editar cantidad a licitar"
                               />
                             )}
                           </td>
+                          <td style={{ color: 'var(--muted)' }}>{item.unidad_medida}</td>
                         </tr>
                       )
                     })}
                   </tbody>
                 </table>
-
-                {/* Resumen Consolidado al Pie */}
-                <div style={{ background: '#f1f5f9', padding: 20, borderRadius: 8 }}>
-                  <h4 style={{ marginTop: 0 }}>Resumen Consolidado</h4>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 16 }}>
-                    {Object.values(itemsFinales.reduce((acc, item) => {
-                      const key = item.producto_id
-                      const qty = editQty[`${item.id_pedido}-${item.producto_id}`] || item.cantidad_solicitada
-                      if (!acc[key]) acc[key] = { name: item.producto, total: 0, unit: item.unidad_medida }
-                      acc[key].total += Number(qty)
-                      return acc
-                    }, {})).map(summary => (
-                      <div key={summary.name} style={{ background: 'white', padding: 12, borderRadius: 6, border: '1px solid #e2e8f0' }}>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>{summary.name}</div>
-                        <div style={{ fontSize: '1.2rem', fontWeight: 800 }}>{summary.total} <small style={{ fontWeight: 400, fontSize: '0.8rem' }}>{summary.unit}</small></div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
               </>
             )}
           </section>
@@ -568,75 +575,93 @@ export default function ComprasPanel({ section = 'pedidos' }) {
 
         {section === 'adjudicacion' && (
           <section className="card" style={{ padding: 18, minHeight: 'auto' }}>
-            <h3 style={{ marginTop: 0 }}>Cierre de compra</h3>
-            <p style={{ marginTop: 0, color: 'var(--muted)' }}>
-              Selecciona proveedor ganador y registra el precio de compra real. El precio historico queda visible como referencia.
-            </p>
-
-            {loading ? (
-              <div className="sv-empty-state">Cargando adjudicacion...</div>
-            ) : adjudicacion.length === 0 ? (
-              <div className="sv-empty-state">No hay productos disponibles para adjudicar.</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
+              <h3 style={{ margin: 0 }}>Cierre de compra</h3>
+              {publicacionStatus.publicada && (
+                <button className="secondary" onClick={handleReabrir}>
+                  ⏪ Regresar a editar listado
+                </button>
+              )}
+            </div>
+            
+            {!publicacionStatus.publicada ? (
+              <div className="sv-empty-state" style={{ marginTop: 20 }}>
+                <span style={{ fontSize: '2.5rem', display: 'block', marginBottom: 12 }}>🔒</span>
+                <strong style={{ display: 'block', marginBottom: 5, fontSize: '1.2rem', color: '#334155' }}>Adjudicación bloqueada</strong>
+                <p style={{ color: 'var(--muted)', margin: 0 }}>Debes aprobar y subir el "Listado Final a Licitar" antes de poder adjudicar a proveedores.</p>
+              </div>
             ) : (
               <>
-                <table style={{ marginBottom: 14 }}>
-                  <thead>
-                    <tr>
-                      <th>Producto</th>
-                      <th>Cantidad total</th>
-                      <th>Proveedor ganador</th>
-                      <th>Precio anterior</th>
-                      <th>Precio real</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {adjudicacion.map((item) => {
-                      const form = formByProduct[String(item.producto_id)] || {}
-                      return (
-                        <tr key={item.producto_id}>
-                          <td>
-                            <div style={{ fontWeight: 700 }}>{item.producto}</div>
-                            <div style={{ color: 'var(--muted)', fontSize: '0.84rem' }}>{item.unidad_medida}</div>
-                          </td>
-                          <td>{item.cantidad_total}</td>
-                          <td style={{ minWidth: 220 }}>
-                            <select
-                              value={form.proveedor_id || ''}
-                              onChange={(e) => handleFormChange(String(item.producto_id), 'proveedor_id', e.target.value)}
-                            >
-                              <option value="">Seleccionar proveedor</option>
-                              {proveedores.map((proveedor) => (
-                                <option key={proveedor.id} value={proveedor.id}>{proveedor.nombre}</option>
-                              ))}
-                            </select>
-                          </td>
-                          <td>
-                            <div>{formatCurrency(item.precio_anterior)}</div>
-                            <div style={{ color: 'var(--muted)', fontSize: '0.82rem' }}>
-                              {item.anio_referencia ? `Licitacion ${item.anio_referencia}` : 'Sin historial'}
-                            </div>
-                          </td>
-                          <td style={{ minWidth: 160 }}>
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={form.precio_compra_real || ''}
-                              onChange={(e) => handleFormChange(String(item.producto_id), 'precio_compra_real', e.target.value)}
-                              placeholder="0,00"
-                            />
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
+                <p style={{ marginTop: 0, color: 'var(--muted)' }}>
+                  Selecciona proveedor ganador y registra el precio de compra real. El precio historico queda visible como referencia.
+                </p>
 
-                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                  <button onClick={handleGuardarAdjudicacion} disabled={saving}>
-                    {saving ? 'Guardando...' : 'Guardar adjudicacion'}
-                  </button>
-                </div>
+                {loading ? (
+                  <div className="sv-empty-state">Cargando adjudicacion...</div>
+                ) : adjudicacion.length === 0 ? (
+                  <div className="sv-empty-state">No hay productos disponibles para adjudicar.</div>
+                ) : (
+                  <>
+                    <table style={{ marginBottom: 14 }}>
+                      <thead>
+                        <tr>
+                          <th>Producto</th>
+                          <th>Cantidad total</th>
+                          <th>Proveedor ganador</th>
+                          <th>Precio anterior</th>
+                          <th>Precio real</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {adjudicacion.map((item) => {
+                          const form = formByProduct[String(item.producto_id)] || {}
+                          return (
+                            <tr key={item.producto_id}>
+                              <td>
+                                <div style={{ fontWeight: 700 }}>{item.producto}</div>
+                                <div style={{ color: 'var(--muted)', fontSize: '0.84rem' }}>{item.unidad_medida}</div>
+                              </td>
+                              <td>{item.cantidad_total}</td>
+                              <td style={{ minWidth: 220 }}>
+                                <select
+                                  value={form.proveedor_id || ''}
+                                  onChange={(e) => handleFormChange(String(item.producto_id), 'proveedor_id', e.target.value)}
+                                >
+                                  <option value="">Seleccionar proveedor</option>
+                                  {proveedores.map((proveedor) => (
+                                    <option key={proveedor.id} value={proveedor.id}>{proveedor.nombre}</option>
+                                  ))}
+                                </select>
+                              </td>
+                              <td>
+                                <div>{formatCurrency(item.precio_anterior)}</div>
+                                <div style={{ color: 'var(--muted)', fontSize: '0.82rem' }}>
+                                  {item.anio_referencia ? `Licitacion ${item.anio_referencia}` : 'Sin historial'}
+                                </div>
+                              </td>
+                              <td style={{ minWidth: 160 }}>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  value={form.precio_compra_real || ''}
+                                  onChange={(e) => handleFormChange(String(item.producto_id), 'precio_compra_real', e.target.value)}
+                                  placeholder="0,00"
+                                />
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+
+                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                      <button onClick={handleGuardarAdjudicacion} disabled={saving}>
+                        {saving ? 'Guardando...' : 'Guardar adjudicacion'}
+                      </button>
+                    </div>
+                  </>
+                )}
               </>
             )}
           </section>
@@ -645,9 +670,9 @@ export default function ComprasPanel({ section = 'pedidos' }) {
       {showConfirmPublicar && (
         <div className="sv-modal-overlay">
           <div className="sv-modal">
-            <h2 className="sv-modal-title" style={{ color: 'var(--primary)' }}>📋 ¿Confirmar subida de licitación?</h2>
+            <h2 className="sv-modal-title" style={{ color: 'var(--primary)' }}>🔒 ¿Confirmar cierre de licitación?</h2>
             <div className="sv-modal-body">
-              <p>Se registrará el listado final con las cantidades editadas.</p>
+              <p>Se registrará el listado final con las cantidades editadas y se habilitará la fase de Adjudicación.</p>
               <p style={{ fontWeight: 700, color: '#e11d48' }}>Esta acción no se puede deshacer.</p>
             </div>
             <div className="sv-modal-footer">
@@ -655,7 +680,7 @@ export default function ComprasPanel({ section = 'pedidos' }) {
                 Cancelar
               </button>
               <button className="primary" onClick={handlePublicar} disabled={saving}>
-                {saving ? 'Publicando...' : 'Confirmar y subir'}
+                {saving ? 'Cerrando...' : 'Confirmar cierre'}
               </button>
             </div>
           </div>

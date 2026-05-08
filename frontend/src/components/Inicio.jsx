@@ -689,20 +689,50 @@ function DirectivoInicio({ onNavigate, token, user }) {
   )
 }
 
-function DirectorAreaInicio({ onNavigate, user }) {
+function DirectorAreaInicio({ onNavigate }) {
+  const { user, token } = useAuth()
+  const [instituciones, setInstituciones] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await apiFetch('/api/instituciones', { token })
+        if (res.ok) {
+          const data = await res.json()
+          let list = data.instituciones || []
+          // Filtrar por nivel educativo del director
+          if (user?.nivel_educativo) {
+            list = list.filter(inst => inst.nivel === user.nivel_educativo)
+          }
+          setInstituciones(list)
+        }
+      } catch (err) {
+        console.error('Error cargando instituciones:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [token, user?.nivel_educativo])
+
+  const escuelasSinRetiro = instituciones.filter(inst => inst.status === 'no_retiraron')
+
+  if (loading) return <p className="dashboard-muted-copy">Cargando...</p>
+
   return (
     <div className="dashboard-stack">
       <section className="dashboard-hero">
         <div className="dashboard-hero-copy">
           <span className="dashboard-hero-chip">Director de Área</span>
           <h2>Bienvenido, {user?.nombre || 'Usuario'}</h2>
-          <p>Gestion de zonas, supervisores y solicitudes anuales.</p>
+          <p>Gestión de zonas, supervisores y solicitudes anuales.</p>
         </div>
 
         <div className="dashboard-hero-aside">
           <div className="dashboard-status-list">
             <div className="dashboard-status-row">
-              <span className="dashboard-status-label">Jurisdiccion</span>
+              <span className="dashboard-status-label">Jurisdicción</span>
               <span className="dashboard-status-value">{user?.jurisdiccion || 'San Juan'}</span>
             </div>
             <div className="dashboard-status-row">
@@ -715,13 +745,43 @@ function DirectorAreaInicio({ onNavigate, user }) {
 
       <section className="dashboard-section-card">
         <div className="dashboard-stats-grid">
-          <StatCard label="Gestion de Zonas" value="📍" icon="ZN" onClick={() => onNavigate?.('zonas')} />
+          <StatCard label="Escuelas Totales" value={instituciones.length} icon="ES" onClick={() => onNavigate?.('instituciones')} />
+          <StatCard label="Sin Retiro" value={escuelasSinRetiro.length} icon="SR" accent={escuelasSinRetiro.length > 0 ? '#E03C31' : '#065f46'} />
+          <StatCard label="Zonas" value="📍" icon="ZN" onClick={() => onNavigate?.('zonas')} />
           <StatCard label="Solicitud Anual" value="📅" icon="SA" onClick={() => onNavigate?.('solicitud_anual')} />
-          <StatCard label="Resumen Anual" value="📊" icon="RA" onClick={() => onNavigate?.('resumen')} />
-          <StatCard label="Kits de Productos" value="📦" icon="KT" onClick={() => onNavigate?.('kits')} />
-          <StatCard label="Supervisores" value="👥" icon="SV" onClick={() => onNavigate?.('usuarios')} />
+          <StatCard label="Kits" value="📦" icon="KT" onClick={() => onNavigate?.('kits')} />
         </div>
       </section>
+
+      {escuelasSinRetiro.length > 0 && (
+        <section className="dashboard-section-card dashboard-table-card">
+          <div className="dashboard-section-head">
+            <div>
+              <h3>Escuelas sin retiro</h3>
+              <p>Instituciones que aún no han registrado retiros.</p>
+            </div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Escuela</th>
+                <th>CUE</th>
+                <th>Departamento</th>
+              </tr>
+            </thead>
+            <tbody>
+              {escuelasSinRetiro.map((inst) => (
+                <tr key={inst.id}>
+                  <td style={{ fontWeight: 600 }}>{inst.nombre}</td>
+                  <td>{inst.cue || '-'}</td>
+                  <td>{inst.departamento || '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
     </div>
   )
 }

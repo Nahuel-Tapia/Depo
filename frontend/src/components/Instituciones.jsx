@@ -1,6 +1,7 @@
-﻿import { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
 import { apiFetch } from '../api.js'
+import { useAuth } from '../context/AuthContext'
 import 'leaflet/dist/leaflet.css'
 import 'leaflet.markercluster/dist/MarkerCluster.css'
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
@@ -16,6 +17,7 @@ L.Icon.Default.mergeOptions({
 })
 
 export default function Instituciones({ supervisorMode = false }) {
+  const { user } = useAuth()
   const [instituciones, setInstituciones] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -24,6 +26,7 @@ export default function Instituciones({ supervisorMode = false }) {
   const [searchCUI, setSearchCUI] = useState('')
   const [filterDepartamento, setFilterDepartamento] = useState('')
   const [filterNivel, setFilterNivel] = useState('')
+  const [filterPedido, setFilterPedido] = useState('')
   const [selectedEdificioKey, setSelectedEdificioKey] = useState(null)
   const [expandedInstitucionId, setExpandedInstitucionId] = useState(null)
   const [pedidosByInstitucion, setPedidosByInstitucion] = useState({})
@@ -43,6 +46,12 @@ export default function Instituciones({ supervisorMode = false }) {
           // Excluir comedores — solo escuelas
           list = list.filter(i =>
             !(i.tipo || i.categoria || '').toLowerCase().includes('comedor')
+          )
+        }
+
+        if (user?.role === 'director_area' && user?.nivel_educativo) {
+          list = list.filter(i => 
+            String(i.nivel || '').toLowerCase().trim() === String(user.nivel_educativo).toLowerCase().trim()
           )
         }
 
@@ -74,7 +83,8 @@ export default function Instituciones({ supervisorMode = false }) {
     String(inst.cue || '').toLowerCase().includes(searchCUE.toLowerCase()) &&
     (inst.cui || '').toLowerCase().includes(searchCUI.toLowerCase()) &&
     (!filterDepartamento || String(inst.departamento || '').trim() === filterDepartamento) &&
-    (!filterNivel || String(inst.nivel || '').trim() === filterNivel)
+    (!filterNivel || String(inst.nivel || '').trim() === filterNivel) &&
+    (!filterPedido || inst.pedido_status === filterPedido)
   )
 
   const validInstituciones = filteredInstituciones.filter(inst =>
@@ -137,16 +147,23 @@ export default function Instituciones({ supervisorMode = false }) {
   }
 
   // Crear iconos
-  const createIcon = (status) => L.icon({
-    iconUrl: status === 'retiraron' 
-      ? 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png'
-      : 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
-    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-    popupAnchor: [1, -34],
-    shadowSize: [41, 41]
-  })
+  const createIcon = (status, pedido_status) => {
+    let color = 'red';
+    if (status === 'retiraron') {
+      color = 'green';
+    } else if (pedido_status === 'con_pedido') {
+      color = 'yellow';
+    }
+    
+    return L.icon({
+      iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-${color}.png`,
+      shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+      iconSize: [25, 41],
+      iconAnchor: [12, 41],
+      popupAnchor: [1, -34],
+      shadowSize: [41, 41]
+    })
+  }
 
   if (loading) return <div>Cargando mapa...</div>
   if (error) return <div>Error: {error}</div>
@@ -171,10 +188,23 @@ export default function Instituciones({ supervisorMode = false }) {
             onChange={(e) => setSearchCUE(e.target.value)}
             style={{ flex: 1, padding: '8px' }}
           />
+          <select
+            value={filterPedido}
+            onChange={(e) => setFilterPedido(e.target.value)}
+            style={{ padding: '8px' }}
+          >
+            <option value="">Todos los estados</option>
+            <option value="con_pedido">Con Pedido</option>
+            <option value="sin_pedido">Sin Pedido</option>
+          </select>
         </div>
 
         {filteredInstituciones.length === 0 ? (
-          <div className="sv-empty-state">No tenés escuelas asignadas por el director de área.</div>
+          <div className="sv-empty-state">
+            {user?.role === 'director_area' 
+              ? `No hay instituciones encontradas para el nivel "${user?.nivel_educativo || 'vacio'}".` 
+              : 'No tenés escuelas asignadas por el director de área.'}
+          </div>
         ) : (
           <table>
             <thead>
@@ -183,6 +213,7 @@ export default function Instituciones({ supervisorMode = false }) {
                 <th>CUE</th>
                 <th>Departamento</th>
                 <th>Nivel</th>
+                <th>Estado Pedido</th>
               </tr>
             </thead>
             <tbody>
@@ -192,6 +223,11 @@ export default function Instituciones({ supervisorMode = false }) {
                   <td>{inst.cue || '-'}</td>
                   <td>{inst.departamento || '-'}</td>
                   <td>{inst.nivel || '-'}</td>
+                  <td>
+                    <span className={`badge ${inst.pedido_status === 'con_pedido' ? 'badge-estado-aprobado' : 'badge-estado-pendiente'}`}>
+                      {inst.pedido_status === 'con_pedido' ? 'Con Pedido' : 'Sin Pedido'}
+                    </span>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -285,7 +321,7 @@ export default function Instituciones({ supervisorMode = false }) {
                   <Marker
                     key={buildingKey}
                     position={[lat, lng]}
-                    icon={createIcon(firstInst.status)}
+                    icon={createIcon(firstInst.status, firstInst.pedido_status)}
                     eventHandlers={{ click: () => handleSelectEdificio(buildingKey) }}
                   >
                     <Popup>

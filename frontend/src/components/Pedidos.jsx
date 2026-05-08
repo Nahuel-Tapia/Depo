@@ -275,6 +275,82 @@ function DepositoPedidos() {
   const [msg, setMsg] = useState({ text: '', type: '' })
   const [form, setForm] = useState({ producto_id: '', cantidad: '', notas: '' })
   const [createModalOpen, setCreateModalOpen] = useState(false)
+  const [viewingPedido, setViewingPedido] = useState(null)
+
+  const handleImprimirPedido = (pedido) => {
+    const printWindow = window.open('', '_blank')
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Pedido #${pedido.id}</title>
+          <style>
+            body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 40px; color: #333; }
+            .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px; }
+            .header-left { font-weight: bold; font-size: 1.2rem; }
+            .header-right { text-align: right; font-size: 0.9rem; color: #666; }
+            .title { text-align: center; font-size: 1.8rem; font-weight: bold; margin: 30px 0; letter-spacing: 2px; text-decoration: underline; }
+            .date { text-align: right; margin-bottom: 30px; font-style: italic; }
+            .content { margin-bottom: 30px; line-height: 1.6; }
+            .content p { margin: 5px 0; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+            th { background-color: #f8fafc; font-weight: bold; }
+            .text-center { text-align: center; }
+            .footer { margin-top: 50px; text-align: center; font-size: 0.8rem; color: #aaa; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="header-left" style="display: flex; align-items: center; gap: 12px;">
+              <img src="/faviconmin.png" alt="Logo San Juan" style="height: 45px; width: auto; object-fit: contain;" />
+              <div>
+                <div style="font-weight: bold; font-size: 1.1rem;">San Juan Gobierno</div>
+                <div style="font-size: 0.9rem; color: #666;">Ministerio de Educación</div>
+              </div>
+            </div>
+            <div class="header-right">Pedido #${pedido.id}</div>
+          </div>
+          
+          <div class="title">PEDIDO</div>
+          
+          <div class="date">San Juan, ${new Date(pedido.created_at).toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+          
+          <div class="content">
+            <p><b>Institución:</b> ${pedido.institucion || '-'}</p>
+            <p><b>Solicitado por:</b> ${pedido.usuario_nombre || '-'}</p>
+            <p><b>Estado:</b> ${pedido.estado}</p>
+            <p><b>Notas:</b> ${pedido.notas || '-'}</p>
+          </div>
+          
+          <p>Sírvase remitir a éste Ministerio, lo siguiente:</p>
+          
+          <table>
+            <thead>
+              <tr>
+                <th class="text-center" style="width: 50px;">Reng</th>
+                <th class="text-center" style="width: 80px;">Cant.</th>
+                <th>Descripción</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="text-center">1</td>
+                <td class="text-center">${pedido.cantidad}</td>
+                <td>${pedido.producto_nombre || '-'}</td>
+              </tr>
+            </tbody>
+          </table>
+          
+          <div class="footer">
+            Documento generado por el sistema Depo.
+          </div>
+          
+          <script>window.print(); window.close();</script>
+        </body>
+      </html>
+    `)
+    printWindow.document.close()
+  }
 
   const loadProductos = async () => {
     try {
@@ -368,7 +444,7 @@ function DepositoPedidos() {
   const canCreatePedido = hasPermission('pedidos.create') && user?.role === 'directivo'
   const canManage = hasPermission('pedidos.manage')
   const canSupervisorDecision = canManage && user?.role === 'supervisor'
-  const canEntregar = canManage && user?.role !== 'supervisor'
+  const canEntregar = canManage && user?.role !== 'supervisor' && user?.role !== 'director_area'
   const productosOrdenados = [...productos].sort((a, b) =>
     String(a?.nombre || '').localeCompare(String(b?.nombre || ''), 'es', { sensitivity: 'base' })
   )
@@ -378,7 +454,7 @@ function DepositoPedidos() {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <h2 style={{ margin: 0 }}>Gestión de Pedidos</h2>
+        <h2 style={{ margin: 0 }}>{user?.role === 'director_area' ? 'Historial Pedidos' : 'Gestión de Pedidos'}</h2>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           {canCreatePedido && (
             <button
@@ -454,6 +530,42 @@ function DepositoPedidos() {
         </div>
       )}
 
+      {viewingPedido && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: 16
+          }}
+          onClick={e => {
+            if (e.target === e.currentTarget) {
+              setViewingPedido(null)
+            }
+          }}
+        >
+          <div style={{ background: '#f9fafb', padding: 24, borderRadius: 10, width: 'min(500px, 100%)', maxHeight: '90vh', overflowY: 'auto' }}>
+            <h3 style={{ marginTop: 0 }}>Detalle del Pedido #{viewingPedido.id}</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div><b>Institución:</b> {viewingPedido.institucion || '-'}</div>
+              <div><b>Producto:</b> {viewingPedido.producto_nombre || '-'}</div>
+              <div><b>Cantidad:</b> {viewingPedido.cantidad}</div>
+              <div><b>Estado:</b> <span className={`badge badge-estado-\${viewingPedido.estado}`}>{viewingPedido.estado}</span></div>
+              <div><b>Solicitado por:</b> {viewingPedido.usuario_nombre || '-'}</div>
+              <div><b>Fecha:</b> \${new Date(viewingPedido.created_at).toLocaleDateString()}</div>
+              <div><b>Notas:</b> {viewingPedido.notas || '-'}</div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 20 }}>
+              <button className="secondary" onClick={() => setViewingPedido(null)}>Cerrar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {msg.text && (
         <div className={`msg show ${msg.type === 'success' ? 'msg-success' : 'msg-error'}`}>{msg.text}</div>
       )}
@@ -503,6 +615,12 @@ function DepositoPedidos() {
                     )}
                     {canCancel && (
                       <button onClick={() => handleAction(pedido.id, 'cancelar')}>Cancelar</button>
+                    )}
+                    {user?.role === 'director_area' && (
+                      <>
+                        <button onClick={() => setViewingPedido(pedido)} style={{ color: 'white', backgroundColor: '#2563eb' }}>Ver</button>
+                        <button onClick={() => handleImprimirPedido(pedido)} style={{ color: 'white', backgroundColor: '#2563eb' }}>Imprimir</button>
+                      </>
                     )}
                   </div>
                 </td>

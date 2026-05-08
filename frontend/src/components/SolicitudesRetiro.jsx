@@ -23,9 +23,21 @@ function Comprobante({ solicitud }, ref) {
 
   return (
     <div ref={ref} style={{ background: '#fff', color: '#111827', padding: 24 }}>
-      <h2 style={{ margin: '0 0 6px' }}>Comprobante de entrega</h2>
-      <div style={{ borderBottom: '2px solid #d1d5db', paddingBottom: 10, marginBottom: 14 }}>
-        <strong>Solicitud #{solicitud.id}</strong> - Pedido anual #{solicitud.id_pedido}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #FF8200', paddingBottom: 10, marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <img src="/faviconmin.png" alt="Logo San Juan" style={{ height: 40, width: 'auto' }} />
+          <div>
+            <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>San Juan Gobierno</div>
+            <div style={{ fontSize: '0.9rem', color: '#666' }}>Ministerio de Educación</div>
+          </div>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>Comprobante de entrega</div>
+          <div style={{ fontSize: '0.9rem', color: '#666' }}>Solicitud #{solicitud.id}</div>
+        </div>
+      </div>
+      <div style={{ paddingBottom: 10, marginBottom: 14 }}>
+        <strong>Pedido anual #{solicitud.id_pedido}</strong>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
