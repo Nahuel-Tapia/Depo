@@ -507,11 +507,13 @@ export default function ComprasPanel({ section = 'pedidos' }) {
                 <table style={{ marginBottom: 24 }}>
                   <thead>
                     <tr style={{ background: '#f8fafc' }}>
-                      <th>INSTITUCIÓN</th>
-                      <th>NIVEL</th>
                       <th>PRODUCTO</th>
                       <th style={{ textAlign: 'center' }}>CANT. SOLICITADA</th>
                       <th style={{ textAlign: 'center', width: 140 }}>CANT. A LICITAR</th>
+                      <th>INSTITUCIÓN</th>
+                      <th>NIVEL</th>
+                      <th>ESTADO</th>
+                      <th>FECHA</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -520,8 +522,6 @@ export default function ComprasPanel({ section = 'pedidos' }) {
                       const currentVal = editQty[key]
                       return (
                         <tr key={key}>
-                          <td>{item.institucion}</td>
-                          <td>{item.nivel || '-'}</td>
                           <td style={{ fontWeight: 600 }}>{item.producto}</td>
                           <td style={{ textAlign: 'center', color: 'var(--muted)' }}>{item.cantidad_solicitada}</td>
                           <td style={{ textAlign: 'center' }}>
@@ -537,6 +537,14 @@ export default function ComprasPanel({ section = 'pedidos' }) {
                               />
                             )}
                           </td>
+                          <td>{item.institucion}</td>
+                          <td>{item.nivel || '-'}</td>
+                          <td>
+                            <span className={`badge ${item.estado === 'aceptada' ? 'badge-estado-aprobado' : 'badge-estado-pendiente'}`}>
+                              {item.estado === 'enviada' ? 'Enviado Compras' : item.estado}
+                            </span>
+                          </td>
+                          <td>{item.fecha ? new Date(item.fecha).toLocaleDateString('es-AR') : '-'}</td>
                         </tr>
                       )
                     })}

@@ -5,10 +5,11 @@ import DirectorAreaGestion from './DirectorAreaGestion'
 import DirectorAreaPedidosAnuales from './DirectorAreaPedidosAnuales'
 import DirectorAreaZonas from './DirectorAreaZonas'
 import DirectorAreaResumenAnual from './DirectorAreaResumenAnual'
+import DirectorAreaDashboard from './DirectorAreaDashboard'
 
 export default function DirectorAreaPanel({ initialSection }) {
   const { token, user } = useAuth()
-  const [activeSection, setActiveSection] = useState(initialSection || 'gestion-escuelas')
+  const [activeSection, setActiveSection] = useState(initialSection || 'dashboard')
   const [supervisores, setSupervisores] = useState([])
   const [escuelas, setEscuelas] = useState([])
   const [nivelEducativo, setNivelEducativo] = useState('')
@@ -109,6 +110,19 @@ export default function DirectorAreaPanel({ initialSection }) {
       {msg.text && <div className={`msg show ${msg.type === 'success' ? 'msg-success' : 'msg-error'}`} style={{ marginBottom: 24 }}>{msg.text}</div>}
 
       <main>
+        {activeSection === 'dashboard' && (
+          <section className="fade-in">
+            <DirectorAreaDashboard 
+              escuelas={escuelas}
+              supervisores={supervisores}
+              solicitudes={solicitudes}
+              submissionStatus={submissionStatus}
+              nivelEducativo={nivelEducativo}
+              onNavigate={setActiveSection}
+            />
+          </section>
+        )}
+
         {activeSection === 'gestion-escuelas' && (
           <section className="fade-in">
             <div className="card" style={{ padding: 32, borderRadius: 16, boxShadow: 'var(--shadow-premium)', minHeight: 'auto' }}>

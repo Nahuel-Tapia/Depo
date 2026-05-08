@@ -6,7 +6,7 @@ import RetirarPedidoAnual from './RetirarPedidoAnual'
 
 const ESTADOS_PRODUCTO = ['nuevo', 'usado', 'dañado', 'reparado']
 const CARGOS = ['director/a', 'vicedirector/a', 'secretario/a', 'rector/a', 'maestro/a a cargo']
-const MINISTERIO_LOGO_URL = 'http://prod.eduge.com.ar/assets/logoGobierno-D5M0tUR9.png'
+const MINISTERIO_LOGO_URL = '/faviconmin.png'
 
 export default function Movimientos() {
   const { token, hasPermission } = useAuth()

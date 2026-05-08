@@ -1,5 +1,14 @@
 # Registro de Cambios - Depo
 
+## [1.3.0] - 2026-05-08
+### Añadido
+- **Dashboard para Director de Área**: Nueva interfaz inicial con banner de bienvenida, tarjetas de métricas (KPIs) y un gráfico de barra apilada CSS para visualizar el estado de las solicitudes anuales de las escuelas.
+- **Logo Unificado**: Se unificó el uso del logo oficial del Gobierno de San Juan en todos los documentos imprimibles (Pedidos, Solicitudes de Retiro) utilizando un recurso local (`/faviconmin.png`) para garantizar su visualización.
+
+### Mejoras
+- **Pestaña Inicio para Director de Área**: Se redirigió la pestaña "Inicio" para que muestre el nuevo dashboard personalizado en lugar de la vista genérica sin datos.
+- **Formato de Impresión de Pedidos**: Se ajustó el título del documento impreso de "ORDEN DE PROVISIÓN" a "PEDIDO" a solicitud del usuario.
+
 ## [1.2.0] - 2026-05-04
 ### Añadido
 - **Módulo de Distribución a Escuelas**: Nueva interfaz para que el operador de depósito registre la salida física de mercadería adjudicada hacia las instituciones.

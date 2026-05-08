@@ -51,7 +51,7 @@ const TABS = [
   { key: 'productos', label: 'Productos', permission: 'productos.view', hideForRoles: ['supervisor', 'director_area'], icon: BoxIcon },
   { key: 'movimientos', label: 'Movimientos', permission: 'movimientos.view', hideForRoles: ['supervisor', 'director_area'], icon: ActivityIcon },
   { key: 'pedidos', label: 'Pedidos', permission: 'pedidos.view', hideForRoles: ['admin'], icon: ClipboardIcon },
-  { key: 'instituciones', label: 'Instituciones', permission: 'instituciones.view', hideForRoles: ['supervisor', 'director_area'], icon: BuildingIcon },
+  { key: 'instituciones', label: 'Instituciones', permission: 'instituciones.view', hideForRoles: ['supervisor'], icon: BuildingIcon },
   { key: 'historial', label: 'Historial', permission: 'instituciones.view', hideForRoles: ['supervisor', 'director_area'], icon: ListIcon },
   { key: 'proveedores', label: 'Proveedores', permission: 'proveedores.view', hideForRoles: ['supervisor', 'director_area'], icon: TruckIcon },
   { key: 'usuarios', label: 'Usuarios', permission: 'users.read', icon: UserIcon },
@@ -154,13 +154,16 @@ export default function Dashboard() {
   const renderTab = () => {
     switch (activeTab) {
       case 'inicio':
+        if (user?.role === 'director_area') {
+          return <DirectorAreaPanel initialSection="dashboard" standalone={true} />
+        }
         return <Inicio onNavigate={setActiveTab} />
       case 'zonas':
-        return <DirectorAreaPanel initialSection="zonas" standalone={true} />
+        return <DirectorAreaPanel initialSection="gestion-escuelas" standalone={true} />
       case 'solicitud_anual':
-        return <DirectorAreaPanel initialSection="solicitud_anual" standalone={true} />
+        return <DirectorAreaPanel initialSection="solicitud-anual" standalone={true} />
       case 'resumen':
-        return <DirectorAreaPanel initialSection="resumen" standalone={true} />
+        return <DirectorAreaPanel initialSection="resumen-anual" standalone={true} />
       case 'compras-licitacion':
         return <ComprasPanel section="licitacion" />
       case 'compras-listado-final':

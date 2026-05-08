@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 
-const MINISTERIO_LOGO_URL = 'http://prod.eduge.com.ar/assets/logoGobierno-D5M0tUR9.png'
+const MINISTERIO_LOGO_URL = '/faviconmin.png'
 
 export default function PrintButton({ targetRef, title }) {
   const handlePrint = useCallback(() => {

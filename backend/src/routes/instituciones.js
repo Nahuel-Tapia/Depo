@@ -156,7 +156,10 @@ router.get("/", async (req, res) => {
         d.longitud,
         CASE WHEN EXISTS (
           SELECT 1 FROM orden_dispensacion od WHERE od.id_institucion = i.id_institucion
-        ) THEN 'retiraron' ELSE 'no_retiraron' END AS status
+        ) THEN 'retiraron' ELSE 'no_retiraron' END AS status,
+        CASE WHEN EXISTS (
+          SELECT 1 FROM pedido p WHERE p.id_institucion = i.id_institucion AND COALESCE(p.tipo, 'anual') = 'anual'
+        ) THEN 'con_pedido' ELSE 'sin_pedido' END AS pedido_status
       FROM institucion i
       LEFT JOIN edificio e ON i.id_edificio = e.id_edificio
       LEFT JOIN direccion d ON e.id_direccion = d.id_direccion

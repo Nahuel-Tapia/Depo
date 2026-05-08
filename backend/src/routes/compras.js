@@ -859,7 +859,9 @@ async function getFinalItems(req, res) {
         pr.id_producto AS producto_id,
         pr.nombre AS producto,
         COALESCE(pr.unidad_medida, 'unidad') AS unidad_medida,
-        SUM(dp.cantidad_solicitada)::numeric AS cantidad_solicitada
+        SUM(dp.cantidad_solicitada)::numeric AS cantidad_solicitada,
+        ppa.estado AS estado,
+        ppa.enviada_at AS fecha
       FROM pedido p
       JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido
       JOIN producto pr ON pr.id_producto = dp.id_producto
@@ -873,7 +875,7 @@ async function getFinalItems(req, res) {
         AND p.estado = 'aprobado'
         AND p.aprobado_director_area IS TRUE
         AND EXTRACT(YEAR FROM p.fecha_creacion) = $1
-      GROUP BY p.id_pedido, i.nombre, u.nivel_educativo, pr.id_producto, pr.nombre, pr.unidad_medida
+      GROUP BY p.id_pedido, i.nombre, u.nivel_educativo, pr.id_producto, pr.nombre, pr.unidad_medida, ppa.estado, ppa.enviada_at
       ORDER BY i.nombre, pr.nombre
     `;
     
