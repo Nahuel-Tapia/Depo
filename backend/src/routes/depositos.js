@@ -24,6 +24,22 @@ async function ensureDepositosSchema() {
       
       // Asegurar tablas de licitación y distribución
       await run(`
+        CREATE TABLE IF NOT EXISTS licitacion_publicada (
+          id SERIAL PRIMARY KEY,
+          anio INT NOT NULL UNIQUE,
+          usuario_id INT,
+          items JSONB NOT NULL DEFAULT '[]'::jsonb,
+          fecha_publicacion TIMESTAMP DEFAULT NOW(),
+          estado VARCHAR(30) NOT NULL DEFAULT 'publicada'
+        )
+      `);
+
+      await run(`ALTER TABLE licitacion_publicada ADD COLUMN IF NOT EXISTS usuario_id INT`);
+      await run(`ALTER TABLE licitacion_publicada ADD COLUMN IF NOT EXISTS items JSONB NOT NULL DEFAULT '[]'::jsonb`);
+      await run(`ALTER TABLE licitacion_publicada ADD COLUMN IF NOT EXISTS fecha_publicacion TIMESTAMP DEFAULT NOW()`);
+      await run(`ALTER TABLE licitacion_publicada ADD COLUMN IF NOT EXISTS estado VARCHAR(30) NOT NULL DEFAULT 'publicada'`);
+
+      await run(`
         CREATE TABLE IF NOT EXISTS recepcion_licitacion (
           id SERIAL PRIMARY KEY,
           licitacion_id INT NOT NULL,
@@ -342,6 +358,7 @@ router.post("/:id/egreso", authorizePermissions(PERMISSIONS.STOCK_MOVEMENT_CREAT
 
 async function getRecepcionesLicitacion(req, res) {
   try {
+    await ensureDepositosSchema();
     const rows = await all(
       `SELECT id, anio, fecha_publicacion, estado
        FROM licitacion_publicada
@@ -356,6 +373,7 @@ async function getRecepcionesLicitacion(req, res) {
 
 async function getDetalleRecepcion(req, res) {
   try {
+    await ensureDepositosSchema();
     const { id } = req.params;
     const row = await get(`SELECT id, items, anio FROM licitacion_publicada WHERE id = $1`, [id]);
     if (!row) return res.status(404).json({ error: "Licitación no encontrada" });
@@ -400,6 +418,7 @@ async function registrarIngresoLicitacion(req, res) {
       return res.status(400).json({ error: "Faltan datos obligatorios" });
     }
 
+    await ensureDepositosSchema();
     await client.query("BEGIN");
 
     for (const ing of ingresos) {
@@ -594,7 +613,6 @@ async function getVencimientosProximos(req, res) {
   try {
     await ensureDepositosSchema();
     const dias = Number(req.query.dias || 60);
-    console.log("[vencimientos-proximos] Consultando con dias:", dias);
 
     // Verificar que existen las columnas necesarias
     const columnCheck = await get(`
@@ -602,10 +620,8 @@ async function getVencimientosProximos(req, res) {
       FROM information_schema.columns
       WHERE table_name = 'movimiento_stock' AND column_name = 'fecha_vencimiento'
     `);
-    console.log("[vencimientos-proximos] Column check:", columnCheck);
 
     if (!columnCheck) {
-      console.log("[vencimientos-proximos] Columna fecha_vencimiento no existe");
       return res.json({ alertas: [] });
     }
 
@@ -629,7 +645,6 @@ async function getVencimientosProximos(req, res) {
         AND sd.cantidad > 0
       ORDER BY ms.fecha_vencimiento ASC
     `, [dias]);
-    console.log("[vencimientos-proximos] Resultados:", rows.length);
     res.json({ alertas: rows });
   } catch (err) {
     console.error("[vencimientos-proximos] Error detallado:", err.message);

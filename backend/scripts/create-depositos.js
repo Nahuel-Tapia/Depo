@@ -80,11 +80,29 @@ async function main() {
         padreId = padre.rows[0]?.id_deposito;
       }
 
-      await client.query(`
-        INSERT INTO deposito (nombre, descripcion, ubicacion, tipo, deposito_padre_id)
-        VALUES ($1, $2, $3, $4, $5)
-        ON CONFLICT DO NOTHING
-      `, [d.nombre, d.descripcion, d.ubicacion, d.tipo, padreId]);
+      const existente = await client.query(
+        "SELECT id_deposito FROM deposito WHERE tipo = $1 LIMIT 1",
+        [d.tipo]
+      );
+
+      if (existente.rows[0]) {
+        await client.query(
+          `UPDATE deposito
+           SET nombre = $1,
+               descripcion = $2,
+               ubicacion = $3,
+               deposito_padre_id = $4,
+               activo = TRUE
+           WHERE id_deposito = $5`,
+          [d.nombre, d.descripcion, d.ubicacion, padreId, existente.rows[0].id_deposito]
+        );
+      } else {
+        await client.query(
+          `INSERT INTO deposito (nombre, descripcion, ubicacion, tipo, deposito_padre_id)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [d.nombre, d.descripcion, d.ubicacion, d.tipo, padreId]
+        );
+      }
     }
 
     // 6. Actualizar capsula con padre_id correcto
@@ -98,6 +116,36 @@ async function main() {
     await client.query(`
       ALTER TABLE producto 
       ADD COLUMN IF NOT EXISTS requiere_autorizacion BOOLEAN DEFAULT FALSE
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS licitacion_publicada (
+        id SERIAL PRIMARY KEY,
+        anio INT NOT NULL UNIQUE,
+        usuario_id INT,
+        items JSONB NOT NULL DEFAULT '[]'::jsonb,
+        fecha_publicacion TIMESTAMP DEFAULT NOW(),
+        estado VARCHAR(30) NOT NULL DEFAULT 'publicada'
+      )
+    `);
+
+    await client.query(`ALTER TABLE licitacion_publicada ADD COLUMN IF NOT EXISTS usuario_id INT`);
+    await client.query(`ALTER TABLE licitacion_publicada ADD COLUMN IF NOT EXISTS items JSONB NOT NULL DEFAULT '[]'::jsonb`);
+    await client.query(`ALTER TABLE licitacion_publicada ADD COLUMN IF NOT EXISTS fecha_publicacion TIMESTAMP DEFAULT NOW()`);
+    await client.query(`ALTER TABLE licitacion_publicada ADD COLUMN IF NOT EXISTS estado VARCHAR(30) NOT NULL DEFAULT 'publicada'`);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS recepcion_licitacion (
+        id SERIAL PRIMARY KEY,
+        licitacion_id INT NOT NULL,
+        producto_id INT NOT NULL,
+        cantidad_recibida NUMERIC(12,2) NOT NULL,
+        usuario_id INT,
+        id_deposito INT,
+        fecha_vencimiento DATE,
+        observaciones TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
     `);
 
     await client.query("COMMIT");

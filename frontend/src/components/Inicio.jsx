@@ -133,11 +133,11 @@ export default function Inicio({ onNavigate }) {
             </div>
 
             <div className="dashboard-stats-grid">
-              <StatCard label="Productos" value={stats.productos.total} icon="PR" onClick={() => onNavigate?.('productos')} />
-              <StatCard label="Stock bajo" value={stats.productos.stock_bajo} icon="SB" accent={stats.productos.stock_bajo > 0 ? '#E03C31' : '#065f46'} onClick={() => setModalType('stock_bajo')} />
-              <StatCard label="Sin stock" value={stats.productos.sin_stock} icon="SS" accent={stats.productos.sin_stock > 0 ? '#b91c1c' : '#065f46'} onClick={() => setModalType('sin_stock')} />
-              <StatCard label="Instituciones" value={stats.instituciones.total} icon="IN" onClick={() => onNavigate?.('instituciones')} />
-              <StatCard label="Proveedores" value={stats.proveedores.total} icon="PV" onClick={() => onNavigate?.('proveedores')} />
+              <StatCard label="Productos" value={stats.productos.total} icon={<BoxIcon />} onClick={() => onNavigate?.('productos')} />
+              <StatCard label="Stock bajo" value={stats.productos.stock_bajo} icon={<AlertTriangleIcon />} accent={stats.productos.stock_bajo > 0 ? '#E03C31' : '#065f46'} onClick={() => setModalType('stock_bajo')} />
+              <StatCard label="Sin stock" value={stats.productos.sin_stock} icon={<XCircleIcon />} accent={stats.productos.sin_stock > 0 ? '#b91c1c' : '#065f46'} onClick={() => setModalType('sin_stock')} />
+              <StatCard label="Instituciones" value={stats.instituciones.total} icon={<BuildingIcon />} onClick={() => onNavigate?.('instituciones')} />
+              <StatCard label="Proveedores" value={stats.proveedores.total} icon={<TruckIcon />} onClick={() => onNavigate?.('proveedores')} />
             </div>
           </section>
 
@@ -437,9 +437,9 @@ function SupervisorInicio({ onNavigate, token, user }) {
 
       <section className="dashboard-section-card">
         <div className="dashboard-stats-grid">
-          <StatCard label="Escuelas" value={instituciones.length} icon="ES" onClick={() => onNavigate?.('mis-escuelas')} />
-          <StatCard label="Pedidos pendientes" value={totalPendientes} icon="PD" accent={totalPendientes > 0 ? '#E03C31' : '#065f46'} onClick={() => onNavigate?.('pedidos')} />
-          <StatCard label="Tickets patrimonio" value={totalTickets} icon="PT" accent={totalTickets > 0 ? '#2563eb' : '#065f46'} onClick={() => onNavigate?.('supervisor')} />
+          <StatCard label="Escuelas" value={instituciones.length} icon={<BuildingIcon />} onClick={() => onNavigate?.('mis-escuelas')} />
+          <StatCard label="Pedidos pendientes" value={totalPendientes} icon={<ClipboardIcon />} accent={totalPendientes > 0 ? '#E03C31' : '#065f46'} onClick={() => onNavigate?.('pedidos')} />
+          <StatCard label="Tickets patrimonio" value={totalTickets} icon={<ActivityIcon />} accent={totalTickets > 0 ? '#2563eb' : '#065f46'} onClick={() => onNavigate?.('supervisor')} />
         </div>
       </section>
 
@@ -555,8 +555,8 @@ function DirectivoInicio({ onNavigate, token, user }) {
 
       <section className="dashboard-section-card">
         <div className="dashboard-stats-grid">
-          <StatCard label="Pedidos aprobados" value={pedidosAprobados.cantidad || 0} icon="AP" accent={pedidosAprobados.cantidad > 0 ? '#FF8200' : '#065f46'} />
-          <StatCard label="Pendiente retirar" value={movimientosPendientes.cantidad || 0} icon="RT" accent={movimientosPendientes.cantidad > 0 ? '#E03C31' : '#065f46'} onClick={() => onNavigate?.('pedidos')} />
+          <StatCard label="Pedidos aprobados" value={pedidosAprobados.cantidad || 0} icon={<ClipboardIcon />} accent={pedidosAprobados.cantidad > 0 ? '#FF8200' : '#065f46'} />
+          <StatCard label="Pendiente retirar" value={movimientosPendientes.cantidad || 0} icon={<TruckIcon />} accent={movimientosPendientes.cantidad > 0 ? '#E03C31' : '#065f46'} onClick={() => onNavigate?.('pedidos')} />
         </div>
       </section>
 
@@ -745,11 +745,11 @@ function DirectorAreaInicio({ onNavigate }) {
 
       <section className="dashboard-section-card">
         <div className="dashboard-stats-grid">
-          <StatCard label="Escuelas Totales" value={instituciones.length} icon="ES" onClick={() => onNavigate?.('instituciones')} />
-          <StatCard label="Sin Retiro" value={escuelasSinRetiro.length} icon="SR" accent={escuelasSinRetiro.length > 0 ? '#E03C31' : '#065f46'} />
-          <StatCard label="Zonas" value="📍" icon="ZN" onClick={() => onNavigate?.('zonas')} />
-          <StatCard label="Solicitud Anual" value="📅" icon="SA" onClick={() => onNavigate?.('solicitud_anual')} />
-          <StatCard label="Kits" value="📦" icon="KT" onClick={() => onNavigate?.('kits')} />
+          <StatCard label="Escuelas Totales" value={instituciones.length} icon={<BuildingIcon />} onClick={() => onNavigate?.('instituciones')} />
+          <StatCard label="Sin Retiro" value={escuelasSinRetiro.length} icon={<AlertTriangleIcon />} accent={escuelasSinRetiro.length > 0 ? '#E03C31' : '#065f46'} />
+          <StatCard label="Zonas" value="📍" icon={<MapIcon />} onClick={() => onNavigate?.('zonas')} />
+          <StatCard label="Solicitud Anual" value="📅" icon={<ClipboardIcon />} onClick={() => onNavigate?.('solicitud_anual')} />
+          <StatCard label="Kits" value="📦" icon={<BoxIcon />} onClick={() => onNavigate?.('kits')} />
         </div>
       </section>
 
@@ -783,5 +783,82 @@ function DirectorAreaInicio({ onNavigate }) {
         </section>
       )}
     </div>
+  )
+}
+
+function BoxIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" width="22" height="22">
+      <path d="M21 16V8a2 2 0 0 0-1-1.73L13 3l-7 3.27A2 2 0 0 0 5 8v8a2 2 0 0 0 1 1.73L11 21l7-3.27A2 2 0 0 0 21 16z" />
+    </svg>
+  )
+}
+
+function BuildingIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" width="22" height="22">
+      <path d="M4 20.5V6.5A1.5 1.5 0 0 1 5.5 5H12v15.5" />
+      <path d="M12 8h6.5A1.5 1.5 0 0 1 20 9.5v11" />
+      <path d="M7.5 8.5h1M7.5 12h1M7.5 15.5h1M15.5 11.5h1M15.5 15h1" />
+    </svg>
+  )
+}
+
+function TruckIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" width="22" height="22">
+      <path d="M1 3h13v13H1z" />
+      <path d="M14 8h6v5h-6z" />
+      <circle cx="6" cy="19" r="1.5" />
+      <circle cx="18" cy="19" r="1.5" />
+    </svg>
+  )
+}
+
+function AlertTriangleIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" width="22" height="22">
+      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+      <line x1="12" y1="9" x2="12" y2="13" />
+      <line x1="12" y1="17" x2="12.01" y2="17" />
+    </svg>
+  )
+}
+
+function XCircleIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" width="22" height="22">
+      <circle cx="12" cy="12" r="10" />
+      <line x1="15" y1="9" x2="9" y2="15" />
+      <line x1="9" y1="9" x2="15" y2="15" />
+    </svg>
+  )
+}
+
+function ClipboardIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" width="22" height="22">
+      <path d="M9 4.5h6" />
+      <rect x="6" y="3" width="12" height="18" rx="2.5" />
+      <path d="M9 8.5h6M9 12.5h6M9 16.5h4" />
+    </svg>
+  )
+}
+
+function ActivityIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" width="22" height="22">
+      <path d="M3 12h4l2-6 4 12 2-6h4" />
+    </svg>
+  )
+}
+
+function MapIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" width="22" height="22">
+      <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21" />
+      <line x1="9" y1="3" x2="9" y2="21" />
+      <line x1="15" y1="3" x2="15" y2="21" />
+    </svg>
   )
 }

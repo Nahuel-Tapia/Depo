@@ -18,11 +18,7 @@ export default function Depositos() {
 
   const canMove = hasPermission('stock.movement.create') || user?.role === 'admin'
   const esAdmin = user?.role === 'admin'
-  const esOperador = user?.role === 'operador'
-
-  const depositosMostrar = esOperador 
-    ? depositos.filter(d => d.tipo === 'central' || d.tipo === 'centro_civico')
-    : depositos
+  const depositosMostrar = depositos
 
   const loadData = useCallback(async () => {
     try {
@@ -84,6 +80,14 @@ export default function Depositos() {
     if (!form.id_producto || !form.cantidad) {
       setMsg({ text: 'Producto y cantidad requeridos', type: 'error' })
       return
+    }
+
+    if (modalType === 'traslado' || modalType === 'egreso') {
+      const disp = stock.find(s => s.id === parseInt(form.id_producto))?.cantidad || 0;
+      if (disp < parseInt(form.cantidad)) {
+        setMsg({ text: `Stock insuficiente en depósito origen. Disponible: ${disp}`, type: 'error' })
+        return
+      }
     }
 
     try {
@@ -297,12 +301,29 @@ export default function Depositos() {
           <div className="modal" onClick={e => e.stopPropagation()} style={{
             background: 'white', padding: '28px', borderRadius: '16px', width: 'min(500px, 95%)', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)'
           }}>
+            {form.id_producto && (modalType === 'egreso' || modalType === 'traslado') && (() => {
+              const disp = stock.find(s => s.id === parseInt(form.id_producto))?.cantidad || 0;
+              if (disp === 0) {
+                return <div style={{ marginBottom: '20px', padding: '10px 14px', background: '#fef2f2', color: '#b91c1c', borderRadius: '8px', fontSize: '0.9rem', fontWeight: 600, border: '1px solid #fecaca' }}>🚫 Sin stock para trasladar o egresar.</div>;
+              }
+              if (disp < 10) {
+                return <div style={{ marginBottom: '20px', padding: '10px 14px', background: '#fffbeb', color: '#92400e', borderRadius: '8px', fontSize: '0.9rem', fontWeight: 600, border: '1px solid #fde68a' }}>⚠️ Queda poco stock ({disp} unidades).</div>;
+              }
+              return <div style={{ marginBottom: '20px', padding: '10px 14px', background: '#f0fdf4', color: '#166534', borderRadius: '8px', fontSize: '0.9rem', fontWeight: 600, border: '1px solid #bbf7d0' }}>✅ Stock disponible: {disp}</div>;
+            })()}
+
             <h3 style={{ marginTop: 0 }}>
               {modalType === 'ingreso' ? '➕ Registrar Ingreso Manual' : (modalType === 'egreso' ? '➖ Registrar Egreso Manual' : '🔄 Traslado entre Depósitos')}
             </h3>
             <p style={{ color: 'var(--muted)', fontSize: '0.9rem', marginBottom: '20px' }}>
               Depósito: <strong>{depositoSeleccionado.nombre}</strong>
             </p>
+
+            {msg.text && (
+              <div className={`msg show ${msg.type === 'success' ? 'msg-success' : 'msg-error'}`} style={{ marginBottom: '20px' }}>
+                {msg.text}
+              </div>
+            )}
 
             <form onSubmit={handleAction} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div>
@@ -314,9 +335,13 @@ export default function Depositos() {
                   style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #d1d5db' }}
                 >
                   <option value="">Seleccionar producto</option>
-                  {productos.map(p => (
-                    <option key={p.id} value={p.id}>{p.nombre} ({p.unidad_medida})</option>
-                  ))}
+                  {productos.map(p => {
+                    const disp = stock.find(s => s.id === p.id)?.cantidad || 0;
+                    const stockText = (modalType === 'egreso' || modalType === 'traslado') ? ` - Disp: ${disp}` : '';
+                    return (
+                      <option key={p.id} value={p.id}>{p.nombre} ({p.unidad_medida}){stockText}</option>
+                    )
+                  })}
                 </select>
               </div>
 
