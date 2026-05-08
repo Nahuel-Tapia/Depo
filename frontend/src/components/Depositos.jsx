@@ -18,11 +18,7 @@ export default function Depositos() {
 
   const canMove = hasPermission('stock.movement.create') || user?.role === 'admin'
   const esAdmin = user?.role === 'admin'
-  const esOperador = user?.role === 'operador'
-
-  const depositosMostrar = esOperador 
-    ? depositos.filter(d => d.tipo === 'central' || d.tipo === 'centro_civico')
-    : depositos
+  const depositosMostrar = depositos
 
   const loadData = useCallback(async () => {
     try {

@@ -130,6 +130,37 @@ async function ensureTables() {
     `);
 
       await client.query(`
+      CREATE TABLE IF NOT EXISTS licitacion_publicada (
+        id SERIAL PRIMARY KEY,
+        anio INT NOT NULL UNIQUE,
+        usuario_id INT,
+        items JSONB NOT NULL DEFAULT '[]'::jsonb,
+        fecha_publicacion TIMESTAMP DEFAULT NOW(),
+        estado VARCHAR(30) NOT NULL DEFAULT 'publicada'
+      )
+    `);
+
+      await client.query(`
+      ALTER TABLE licitacion_publicada
+      ADD COLUMN IF NOT EXISTS usuario_id INT
+    `);
+
+      await client.query(`
+      ALTER TABLE licitacion_publicada
+      ADD COLUMN IF NOT EXISTS items JSONB NOT NULL DEFAULT '[]'::jsonb
+    `);
+
+      await client.query(`
+      ALTER TABLE licitacion_publicada
+      ADD COLUMN IF NOT EXISTS fecha_publicacion TIMESTAMP DEFAULT NOW()
+    `);
+
+      await client.query(`
+      ALTER TABLE licitacion_publicada
+      ADD COLUMN IF NOT EXISTS estado VARCHAR(30) NOT NULL DEFAULT 'publicada'
+    `);
+
+      await client.query(`
       UPDATE planilla_pedido_anual
       SET estado = 'aceptada'
       WHERE estado = 'procesada'
