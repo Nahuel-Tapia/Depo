@@ -744,32 +744,8 @@ export default function Movimientos() {
         </>
       )}
 
-      {/* Traslado entre depósitos */}
-      <section className="card" style={{ marginTop: 20 }}>
-        <h3>Traslado entre depósitos</h3>
-        <div className="grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
-          <select value={transfer.productoId} onChange={e => setTransfer({ ...transfer, productoId: e.target.value })}>
-            <option value="">Producto</option>
-            {productos.map(p => (
-              <option key={p.id} value={p.id}>{p.nombre}</option>
-            ))}
-          </select>
-          <select value={transfer.origenId} onChange={e => setTransfer({ ...transfer, origenId: e.target.value })}>
-            <option value="">Origen</option>
-            {depositos.map(d => (
-              <option key={d.id} value={d.id}>{d.nombre} ({d.tipo})</option>
-            ))}
-          </select>
-          <select value={transfer.destinoId} onChange={e => setTransfer({ ...transfer, destinoId: e.target.value })}>
-            <option value="">Destino</option>
-            {depositos.map(d => (
-              <option key={d.id} value={d.id}>{d.nombre} ({d.tipo})</option>
-            ))}
-          </select>
-          <input type="number" min="1" placeholder="Cantidad" value={transfer.cantidad} onChange={e => setTransfer({ ...transfer, cantidad: e.target.value })} />
-        </div>
-        <button type="button" className="primary" onClick={handleTransferSubmit} style={{ marginTop: 8 }}>Trasladar</button>
-      </section>
+
+
 
       {msg.text && (
         <div className={`msg show ${msg.type === 'success' ? 'msg-success' : 'msg-error'}`}>{msg.text}</div>

@@ -10,6 +10,7 @@ import Proveedores from '../components/Proveedores'
 import Usuarios from '../components/Usuarios'
 import HistorialInstitucion from '../components/HistorialInstitucion'
 import SupervisorDashboard from '../components/SupervisorDashboard'
+import SupervisorStatsDashboard from '../components/SupervisorStatsDashboard'
 import AsignarKit from '../components/AsignarKit'
 import DirectorAreaPanel from '../components/DirectorAreaPanel'
 import ComprasPanel from '../components/ComprasPanel'
@@ -156,6 +157,9 @@ export default function Dashboard() {
       case 'inicio':
         if (user?.role === 'director_area') {
           return <DirectorAreaPanel initialSection="dashboard" standalone={true} />
+        }
+        if (user?.role === 'supervisor') {
+          return <SupervisorStatsDashboard />
         }
         return <Inicio onNavigate={setActiveTab} />
       case 'zonas':

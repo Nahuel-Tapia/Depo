@@ -116,23 +116,19 @@ router.get("/stock-por-producto", authorizePermissions(PERMISSIONS.STOCK_VIEW), 
         p.nombre,
         p.unidad_medida,
         p.stock_actual,
-        p.requiere_autorizacion,
-        COALESCE(sd_central.cantidad, 0) as stock_central,
-        COALESCE(sd_civico.cantidad, 0) as stock_centro_civico,
-        COALESCE(sd_capsula.cantidad, 0) as stock_capsula
+        COALESCE(SUM(CASE WHEN d.tipo = 'central' THEN sd.cantidad ELSE 0 END), 0) as stock_central,
+        COALESCE(SUM(CASE WHEN d.tipo = 'centro_civico' THEN sd.cantidad ELSE 0 END), 0) as stock_centro_civico,
+        COALESCE(SUM(CASE WHEN d.tipo = 'capsula' THEN sd.cantidad ELSE 0 END), 0) as stock_capsula
       FROM producto p
-      LEFT JOIN stock_deposito sd_central ON sd_central.id_producto = p.id_producto 
-        AND sd_central.id_deposito = (SELECT id_deposito FROM deposito WHERE tipo = 'central')
-      LEFT JOIN stock_deposito sd_civico ON sd_civico.id_producto = p.id_producto 
-        AND sd_civico.id_deposito = (SELECT id_deposito FROM deposito WHERE tipo = 'centro_civico')
-      LEFT JOIN stock_deposito sd_capsula ON sd_capsula.id_producto = p.id_producto 
-        AND sd_capsula.id_deposito = (SELECT id_deposito FROM deposito WHERE tipo = 'capsula')
+      LEFT JOIN stock_deposito sd ON sd.id_producto = p.id_producto
+      LEFT JOIN deposito d ON d.id_deposito = sd.id_deposito
+      GROUP BY p.id_producto, p.nombre, p.unidad_medida, p.stock_actual
       ORDER BY p.nombre
     `);
     return res.json({ productos });
   } catch (err) {
     console.error("Error listando stock:", err);
-    return res.status(500).json({ error: "No se pudo listar stock" });
+    return res.status(500).json({ error: "No se pudo listar stock", details: err.message });
   }
 });
 
@@ -152,8 +148,7 @@ router.get("/:id/stock", authorizePermissions(PERMISSIONS.STOCK_VIEW), async (re
         p.id_producto as id,
         p.nombre,
         p.unidad_medida,
-        COALESCE(sd.cantidad, 0) as cantidad,
-        p.requiere_autorizacion
+        COALESCE(sd.cantidad, 0) as cantidad
       FROM producto p
       LEFT JOIN stock_deposito sd ON sd.id_producto = p.id_producto 
         AND sd.id_deposito = $1
@@ -168,13 +163,12 @@ router.get("/:id/stock", authorizePermissions(PERMISSIONS.STOCK_VIEW), async (re
           p.nombre,
           p.unidad_medida,
           COALESCE(SUM(sd.cantidad), 0) as cantidad,
-          p.requiere_autorizacion,
           CASE WHEN sd_caps.id_deposito IS NOT NULL THEN 'capsula' ELSE NULL END as en_capsula
         FROM producto p
         LEFT JOIN stock_deposito sd ON sd.id_producto = p.id_producto AND sd.id_deposito = $1
         LEFT JOIN stock_deposito sd_caps ON sd_caps.id_producto = p.id_producto 
           AND sd_caps.id_deposito = (SELECT id_deposito FROM deposito WHERE tipo = 'capsula')
-        GROUP BY p.id_producto, p.nombre, p.unidad_medida, p.requiere_autorizacion, sd_caps.id_deposito
+        GROUP BY p.id_producto, p.nombre, p.unidad_medida, sd_caps.id_deposito
       `;
     }
 

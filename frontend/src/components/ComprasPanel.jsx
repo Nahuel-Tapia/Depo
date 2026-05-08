@@ -102,12 +102,13 @@ export default function ComprasPanel({ section = 'pedidos' }) {
     try {
       const anio = new Date().getFullYear()
 
-      const [consolidadoRes, statusRes, finalRes, pubRes, adjudicacionRes] = await Promise.all([
+      const [consolidadoRes, statusRes, finalRes, pubRes, adjudicacionRes, planillasRes] = await Promise.all([
         apiFetch(`/api/compras/licitacion/anual/consolidado?anio=${anio}`, { token }),
         apiFetch(`/api/compras/licitacion/anual/estado-directores?anio=${anio}`, { token }),
         apiFetch(`/api/compras/licitacion/anual/final-items?anio=${anio}`, { token }),
         apiFetch(`/api/compras/licitacion/anual/publicada-status?anio=${anio}`, { token }),
-        apiFetch(`/api/compras/adjudicacion?anio=${anio}`, { token })
+        apiFetch(`/api/compras/adjudicacion?anio=${anio}`, { token }),
+        apiFetch(`/api/compras/planillas?anio=${anio}`, { token })
       ])
 
       const consolidadoData = consolidadoRes.ok ? await consolidadoRes.json() : { items: [] }
@@ -115,12 +116,14 @@ export default function ComprasPanel({ section = 'pedidos' }) {
       const finalData = finalRes.ok ? await finalRes.json() : { items: [] }
       const pubData = pubRes.ok ? await pubRes.json() : { publicada: false }
       const adjudicacionData = adjudicacionRes.ok ? await adjudicacionRes.json() : { items: [] }
+      const planillasData = planillasRes.ok ? await planillasRes.json() : { planillas: [] }
 
       setConsolidado(consolidadoData.items || [])
       setEstadoDirectores(statusData.directores || [])
       setItemsFinales(finalData.items || [])
       setPublicacionStatus(pubData)
       setAdjudicacion(adjudicacionData.items || [])
+      setPlanillas(planillasData.planillas || [])
       
       setFormByProduct((prev) => {
         const next = { ...prev }
@@ -466,6 +469,78 @@ export default function ComprasPanel({ section = 'pedidos' }) {
                 </tbody>
               </table>
             </section>
+
+            <section className="card" style={{ padding: 24, marginBottom: 24, minHeight: 'auto' }}>
+              <h3 style={{ marginTop: 0, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: '1.5rem' }}>📜</span> Historial de Resúmenes Enviados
+              </h3>
+              <table style={{ marginBottom: 0 }}>
+                <thead>
+                  <tr style={{ background: '#f8fafc' }}>
+                    <th>AÑO</th>
+                    <th>DIRECTOR DE ÁREA</th>
+                    <th>ESTADO</th>
+                    <th>FECHA ENVÍO</th>
+                    <th>ACCIONES</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {planillas.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} style={{ textAlign: 'center', padding: 20, color: 'var(--muted)' }}>
+                        No hay resúmenes enviados aún.
+                      </td>
+                    </tr>
+                  ) : (
+                    planillas.map((p) => (
+                      <tr key={p.id}>
+                        <td>{p.anio}</td>
+                        <td>{`${p.director_nombre || ''} ${p.director_apellido || ''}`.trim()}</td>
+                        <td>
+                          <span className={`badge badge-${ESTADO_BADGE[p.estado] || 'pendiente'}`}>
+                            {p.estado}
+                          </span>
+                        </td>
+                        <td>{p.enviada_at ? new Date(p.enviada_at).toLocaleString('es-AR') : '-'}</td>
+                        <td>
+                          <button className="secondary" onClick={() => handleVerDetalle(p.id)}>
+                            {detalle?.planilla?.id === p.id ? 'Ocultar' : 'Ver Detalle'}
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </section>
+
+            {detalle && detalle.planilla && (
+              <section className="card" style={{ padding: 24, marginBottom: 24, minHeight: 'auto' }}>
+                <h3 style={{ marginTop: 0, marginBottom: 20 }}>
+                  Detalle del Resumen #{detalle.planilla.id} - {detalle.planilla.director_nombre} {detalle.planilla.director_apellido}
+                </h3>
+                <table>
+                  <thead>
+                    <tr style={{ background: '#f8fafc' }}>
+                      <th>PRODUCTO</th>
+                      <th style={{ textAlign: 'center' }}>CANTIDAD</th>
+                      <th>UNIDAD</th>
+                      <th>INSTITUCIÓN</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detalle.detalles.map((det) => (
+                      <tr key={det.id}>
+                        <td style={{ fontWeight: 600 }}>{det.producto}</td>
+                        <td style={{ textAlign: 'center', fontWeight: 700 }}>{det.cantidad}</td>
+                        <td style={{ color: 'var(--muted)' }}>{det.unidad_medida}</td>
+                        <td>{det.institucion} ({det.cue})</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </section>
+            )}
 
             <section className="card" style={{ padding: 24, minHeight: 'auto' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>

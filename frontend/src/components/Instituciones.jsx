@@ -149,10 +149,22 @@ export default function Instituciones({ supervisorMode = false }) {
   // Crear iconos
   const createIcon = (status, pedido_status) => {
     let color = 'red';
-    if (status === 'retiraron') {
-      color = 'green';
-    } else if (pedido_status === 'con_pedido') {
-      color = 'yellow';
+    if (supervisorMode) {
+      if (status === 'sin_kit') {
+        color = 'red';
+      } else if (status === 'sin_solicitud') {
+        color = 'yellow';
+      } else if (status === 'solicitud_enviada') {
+        color = 'orange';
+      } else if (status === 'solicitud_aprobada') {
+        color = 'green';
+      }
+    } else {
+      if (status === 'retiraron') {
+        color = 'green';
+      } else if (pedido_status === 'con_pedido') {
+        color = 'yellow';
+      }
     }
     
     return L.icon({
@@ -168,74 +180,7 @@ export default function Instituciones({ supervisorMode = false }) {
   if (loading) return <div>Cargando mapa...</div>
   if (error) return <div>Error: {error}</div>
 
-  if (supervisorMode) {
-    return (
-      <div>
-        <h2>Mis Escuelas Asignadas</h2>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px', marginBottom: '20px' }}>
-          <input
-            type="text"
-            placeholder="Buscar por Nombre"
-            value={searchNombre}
-            onChange={(e) => setSearchNombre(e.target.value)}
-            style={{ flex: 1, padding: '8px' }}
-          />
-          <input
-            type="text"
-            placeholder="Buscar por CUE"
-            value={searchCUE}
-            onChange={(e) => setSearchCUE(e.target.value)}
-            style={{ flex: 1, padding: '8px' }}
-          />
-          <select
-            value={filterPedido}
-            onChange={(e) => setFilterPedido(e.target.value)}
-            style={{ padding: '8px' }}
-          >
-            <option value="">Todos los estados</option>
-            <option value="con_pedido">Con Pedido</option>
-            <option value="sin_pedido">Sin Pedido</option>
-          </select>
-        </div>
-
-        {filteredInstituciones.length === 0 ? (
-          <div className="sv-empty-state">
-            {user?.role === 'director_area' 
-              ? `No hay instituciones encontradas para el nivel "${user?.nivel_educativo || 'vacio'}".` 
-              : 'No tenés escuelas asignadas por el director de área.'}
-          </div>
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Escuela</th>
-                <th>CUE</th>
-                <th>Departamento</th>
-                <th>Nivel</th>
-                <th>Estado Pedido</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredInstituciones.map(inst => (
-                <tr key={inst.id}>
-                  <td><strong>{inst.nombre}</strong></td>
-                  <td>{inst.cue || '-'}</td>
-                  <td>{inst.departamento || '-'}</td>
-                  <td>{inst.nivel || '-'}</td>
-                  <td>
-                    <span className={`badge ${inst.pedido_status === 'con_pedido' ? 'badge-estado-aprobado' : 'badge-estado-pendiente'}`}>
-                      {inst.pedido_status === 'con_pedido' ? 'Con Pedido' : 'Sin Pedido'}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-    )
-  }
 
   return (
     <div>

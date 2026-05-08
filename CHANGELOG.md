@@ -1,4 +1,14 @@
 # Registro de Cambios - Depo
+ 
+## [1.4.0] - 2026-05-08
+### Añadido
+- **Control de Stock en Licitación**: Se integró la visualización del stock actual del depósito en la vista de "Listado Final a Licitar" para que el rol de Compras tome decisiones informadas.
+- **Botón de Reabrir Licitación**: Se añadió la posibilidad de regresar al paso anterior desde la pantalla de Adjudicación (reabrir listado), permitiendo corregir cantidades si es necesario.
+
+### Mejoras
+- **Flujo de Compras Optimizado**: Se unificaron los pedidos en un listado consolidado por producto, permitiendo editar la cantidad final a licitar antes de cerrar el proceso.
+- **Bloqueo de Adjudicación**: Se implementó una restricción que impide entrar a la fase de adjudicación hasta que la licitación no haya sido formalmente cerrada.
+- **Interfaz de Edición**: Se mejoró el diseño visual de las casillas de edición en el listado para que sea más intuitivo interactuar con ellas.
 
 ## [1.3.0] - 2026-05-08
 ### Añadido

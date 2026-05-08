@@ -39,14 +39,19 @@ Este documento detalla las capacidades y flujos de trabajo para cada rol dentro 
 ---
 
 ## 4. Área de Compras (Gestión Comercial y Adjudicación)
-**Objetivo**: Transformar pedidos en mercadería real al mejor costo.
+**Objetivo**: Transformar pedidos en mercadería real al mejor costo y volumen optimizado.
 
 *   **Gestión de Proveedores**: Mantener la base de datos de proveedores (CUIT, Razón Social, Rubro, Contacto).
+*   **Listado Final a Licitar**:
+    *   Visualizar el consolidado total de productos requeridos por todas las escuelas.
+    *   Consultar el **Stock Actual** del depósito como referencia visual para decidir la cantidad final a comprar.
+    *   Editar las cantidades finales a licitar y **Cerrar Licitación** para bloquear la edición y habilitar la adjudicación.
 *   **Licitación y Adjudicación**: 
     *   Cargar precios de proveedores y adjudicar productos (mejor oferta).
-    *   Cerrar licitaciones para generar las órdenes de compra.
+    *   *Flexibilidad*: Permite regresar al paso anterior (reabrir listado) si se necesita corregir cantidades antes de finalizar la adjudicación.
 *   **Gestión de Entregas**: "Enviar a Depósito" la información de las licitaciones cerradas para que el operador sepa qué debe recibir y de qué proveedor.
 *   **Auditoría de Precios**: Único rol (junto al Admin) con acceso a los costos y comparativas económicas.
+
 
 ---
 
