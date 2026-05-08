@@ -744,6 +744,12 @@ export default function Movimientos() {
         </>
       )}
 
+      {msg.text && (
+        <div className={`msg show ${msg.type === 'success' ? 'msg-success' : 'msg-error'}`} style={{ marginBottom: 20 }}>
+          {msg.text}
+        </div>
+      )}
+
       {/* Traslado entre depósitos */}
       <section className="card" style={{ marginTop: 20 }}>
         <h3>Traslado entre depósitos</h3>
@@ -770,10 +776,6 @@ export default function Movimientos() {
         </div>
         <button type="button" className="primary" onClick={handleTransferSubmit} style={{ marginTop: 8 }}>Trasladar</button>
       </section>
-
-      {msg.text && (
-        <div className={`msg show ${msg.type === 'success' ? 'msg-success' : 'msg-error'}`}>{msg.text}</div>
-      )}
 
       <div ref={printRef}>
       <table>

@@ -5,6 +5,11 @@ const { PERMISSIONS } = require("../permissions");
 
 const router = express.Router();
 
+async function hasTable(tableName) {
+  const row = await get(`SELECT to_regclass($1) AS regclass`, [`public.${tableName}`]);
+  return Boolean(row?.regclass);
+}
+
 router.use(authenticate);
 
 // Dashboard resumen general
@@ -27,13 +32,97 @@ router.get("/stats", authorizePermissions(PERMISSIONS.DASHBOARD_VIEW), async (re
     }
 
     // Totales de productos y alertas de stock bajo
-    const productosStats = await get(`
-      SELECT 
-        COUNT(*) as total_productos,
-        SUM(CASE WHEN stock_actual <= stock_minimo AND stock_minimo > 0 THEN 1 ELSE 0 END) as stock_bajo,
-        SUM(CASE WHEN stock_actual = 0 THEN 1 ELSE 0 END) as sin_stock
-      FROM producto
-    `);
+    const tableExists = await hasTable('stock_deposito');
+    let productosStats, stockBajo, sinStockList;
+
+    if (tableExists) {
+      productosStats = await get(`
+        SELECT 
+          COUNT(p.id_producto) as total_productos,
+          SUM(CASE WHEN COALESCE(sd.stock_total, 0) <= p.stock_minimo AND p.stock_minimo > 0 THEN 1 ELSE 0 END) as stock_bajo,
+          SUM(CASE WHEN COALESCE(sd.stock_total, 0) = 0 THEN 1 ELSE 0 END) as sin_stock
+        FROM producto p
+        LEFT JOIN (
+          SELECT id_producto, SUM(cantidad) as stock_total 
+          FROM stock_deposito 
+          GROUP BY id_producto
+        ) sd ON p.id_producto = sd.id_producto
+      `);
+
+      stockBajo = await all(`
+        SELECT 
+          p.id_producto as id,
+          p.nombre,
+          COALESCE(sd.stock_total, 0) as stock_actual,
+          p.stock_minimo,
+          c.nombre as categoria
+        FROM producto p
+        LEFT JOIN (
+          SELECT id_producto, SUM(cantidad) as stock_total 
+          FROM stock_deposito 
+          GROUP BY id_producto
+        ) sd ON p.id_producto = sd.id_producto
+        LEFT JOIN categoria c ON p.id_categoria = c.id_categoria
+        WHERE COALESCE(sd.stock_total, 0) <= p.stock_minimo AND p.stock_minimo > 0
+        ORDER BY COALESCE(sd.stock_total, 0) ASC
+        LIMIT 10
+      `);
+
+      sinStockList = await all(`
+        SELECT
+          p.id_producto as id,
+          p.nombre,
+          COALESCE(sd.stock_total, 0) as stock_actual,
+          p.stock_minimo,
+          c.nombre as categoria
+        FROM producto p
+        LEFT JOIN (
+          SELECT id_producto, SUM(cantidad) as stock_total 
+          FROM stock_deposito 
+          GROUP BY id_producto
+        ) sd ON p.id_producto = sd.id_producto
+        LEFT JOIN categoria c ON p.id_categoria = c.id_categoria
+        WHERE COALESCE(sd.stock_total, 0) = 0
+        ORDER BY p.nombre ASC
+        LIMIT 50
+      `);
+    } else {
+      productosStats = await get(`
+        SELECT 
+          COUNT(*) as total_productos,
+          SUM(CASE WHEN stock_actual <= stock_minimo AND stock_minimo > 0 THEN 1 ELSE 0 END) as stock_bajo,
+          SUM(CASE WHEN stock_actual = 0 THEN 1 ELSE 0 END) as sin_stock
+        FROM producto
+      `);
+
+      stockBajo = await all(`
+        SELECT 
+          p.id_producto as id,
+          p.nombre,
+          p.stock_actual,
+          p.stock_minimo,
+          c.nombre as categoria
+        FROM producto p
+        LEFT JOIN categoria c ON p.id_categoria = c.id_categoria
+        WHERE p.stock_actual <= p.stock_minimo AND p.stock_minimo > 0
+        ORDER BY p.stock_actual ASC
+        LIMIT 10
+      `);
+
+      sinStockList = await all(`
+        SELECT
+          p.id_producto as id,
+          p.nombre,
+          p.stock_actual,
+          p.stock_minimo,
+          c.nombre as categoria
+        FROM producto p
+        LEFT JOIN categoria c ON p.id_categoria = c.id_categoria
+        WHERE p.stock_actual = 0
+        ORDER BY p.nombre ASC
+        LIMIT 50
+      `);
+    }
 
     // Total instituciones
     const institucionesStats = await get(`
@@ -55,35 +144,6 @@ router.get("/stats", authorizePermissions(PERMISSIONS.DASHBOARD_VIEW), async (re
         SUM(CASE WHEN tipo = 'devolucion' THEN cantidad ELSE 0 END) as total_devoluciones
       FROM movimiento_stock
       WHERE fecha_movimiento >= date_trunc('month', CURRENT_DATE)
-    `);
-
-    // Productos con stock bajo (lista)
-    const stockBajo = await all(`
-      SELECT 
-        p.id_producto as id,
-        p.nombre,
-        p.stock_actual,
-        p.stock_minimo,
-        c.nombre as categoria
-      FROM producto p
-      LEFT JOIN categoria c ON p.id_categoria = c.id_categoria
-      WHERE p.stock_actual <= p.stock_minimo AND p.stock_minimo > 0
-      ORDER BY p.stock_actual ASC
-      LIMIT 10
-    `);
-
-    const sinStockList = await all(`
-      SELECT
-        p.id_producto as id,
-        p.nombre,
-        p.stock_actual,
-        p.stock_minimo,
-        c.nombre as categoria
-      FROM producto p
-      LEFT JOIN categoria c ON p.id_categoria = c.id_categoria
-      WHERE p.stock_actual = 0
-      ORDER BY p.nombre ASC
-      LIMIT 50
     `);
 
     // Últimos 8 movimientos
