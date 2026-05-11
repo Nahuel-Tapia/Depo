@@ -361,27 +361,23 @@ async function ensureEstadoCancelado() {
         ) THEN
           ALTER TYPE estado_tramite ADD VALUE 'cancelado';
         END IF;
+
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_type t
+          JOIN pg_enum e ON e.enumtypid = t.oid
+          WHERE t.typname = 'estado_tramite'
+            AND e.enumlabel = 'pendiente_director'
+        ) THEN
+          ALTER TYPE estado_tramite ADD VALUE 'pendiente_director';
+        END IF;
       END
       $$;
     `);
-  } catch (_) { /* ya existe o no aplica */ }
+  } catch (_) { /* ya existe o no se puede */ }
 }
-ensureEstadoCancelado();
-ensurePedidosSchema();
 
-async function hasInstitucionColumn(columnName) {
-  const row = await get(
-    `SELECT EXISTS (
-       SELECT 1
-       FROM information_schema.columns
-       WHERE table_schema = 'public'
-         AND table_name = 'institucion'
-         AND column_name = ?
-     ) AS has_column`,
-    [columnName]
-  );
-  return Boolean(row?.has_column);
-}
+ensureEstadoCancelado();
 
 async function getInstitucionPerfil(institucionId) {
   await ensurePedidosSchema();
@@ -488,21 +484,20 @@ async function getDisponibilidadAnual(institucionId, productoId, anio) {
   };
 }
 
-async function getPedidoAnualBloqueante(institucionId, anio) {
+async function getPedidoActivoBloqueante(institucionId) {
   return get(
     `SELECT p.id_pedido AS id,
             CASE WHEN p.estado::text = 'finalizado' THEN 'entregado' ELSE p.estado::text END AS estado,
             p.motivo_supervisor,
             p.respuesta_supervisor_tipo,
+            COALESCE(p.tipo, 'anual') AS tipo,
             p.fecha_creacion AS created_at
      FROM pedido p
      WHERE p.id_institucion = ?
-       AND COALESCE(p.tipo, 'anual') = 'anual'
-       AND EXTRACT(YEAR FROM p.fecha_creacion) = ?
-       AND p.estado::text IN ('aprobado', 'entregado', 'finalizado')
+       AND p.estado::text = 'pendiente'
      ORDER BY p.fecha_creacion DESC
      LIMIT 1`,
-    [institucionId, anio]
+    [institucionId]
   );
 }
 
@@ -1136,16 +1131,16 @@ router.post("/", authorizePermissions(PERMISSIONS.PEDIDOS_CREATE), async (req, r
       return res.status(404).json({ error: "Institución no encontrada" });
     }
 
-    if (req.user.role === "directivo" && tipoValido === "anual") {
-      const anioActual = new Date().getFullYear();
-      const pedidoBloqueante = await getPedidoAnualBloqueante(usuario.id_institucion, anioActual);
+    if (req.user.role === "directivo") {
+      const pedidoBloqueante = await getPedidoActivoBloqueante(usuario.id_institucion);
 
       if (pedidoBloqueante) {
         return res.status(409).json({
-          error: "Tu institución ya tiene una solicitud anual registrada para este año.",
+          error: "Tu institucion ya tiene una solicitud en revision. Vas a poder cargar otra cuando la anterior sea aprobada o rechazada.",
           detalle: {
             pedido_id: Number(pedidoBloqueante.id),
             estado: pedidoBloqueante.estado,
+            tipo: pedidoBloqueante.tipo,
             respuesta_supervisor_tipo: pedidoBloqueante.respuesta_supervisor_tipo || null,
             motivo_supervisor: pedidoBloqueante.motivo_supervisor || null,
             created_at: pedidoBloqueante.created_at

@@ -11,14 +11,13 @@ export default function SolicitudesTable({ solicitudes, onView }) {
         <tr>
           <th>ID</th>
           <th>Escuela</th>
-          <th>Solicitante</th>
-          <th>Producto</th>
-          <th>Cantidad solicitada</th>
-          <th>Matrícula</th>
-          <th>Ratio</th>
-          <th>Fecha</th>
+          <th>Solicitudes</th>
+          <th>Resumen</th>
+          <th>Cantidad total</th>
+          <th>Matricula</th>
+          <th>Ultima fecha</th>
           <th>Estado</th>
-          <th>Acción</th>
+          <th>Accion</th>
         </tr>
       </thead>
       <tbody>

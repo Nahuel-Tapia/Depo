@@ -114,7 +114,12 @@ export default function SolicitudesRetiro({ embedded = false }) {
   const [loading, setLoading] = useState(true)
   const [processingId, setProcessingId] = useState(null)
   const [comprobante, setComprobante] = useState(null)
+  const [historial, setHistorial] = useState([])
+  const [historialLoading, setHistorialLoading] = useState(false)
+  const [historialVisible, setHistorialVisible] = useState(false)
   const printRef = useRef(null)
+  const [operatorPedidos, setOperatorPedidos] = useState([])
+  const [operatorPedidosLoading, setOperatorPedidosLoading] = useState(false)
 
   const isDirectivo = user?.role === 'directivo'
   const isOperador = user?.role === 'operador' || user?.role === 'admin'
@@ -233,6 +238,50 @@ export default function SolicitudesRetiro({ embedded = false }) {
     }
   }
 
+  const handleAccept = async (solicitudId) => {
+    setProcessingId(solicitudId)
+    setMsg({ text: '', type: '' })
+    try {
+      const res = await apiFetch(`/api/entregas/solicitudes/${solicitudId}/aceptar`, {
+        token,
+        method: 'PATCH'
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setMsg({ text: data.error || 'No se pudo aceptar la solicitud', type: 'error' })
+        return
+      }
+      // actualizar estado localmente
+      setSolicitudes(prev => prev.map(s => s.id === solicitudId ? { ...s, estado: 'aceptada', id_usuario_acepta: data.solicitud?.id_usuario_acepta || null } : s))
+      setMsg({ text: `Solicitud #${solicitudId} aceptada.`, type: 'success' })
+    } catch (err) {
+      setMsg({ text: 'Error de conexión al aceptar solicitud', type: 'error' })
+    } finally {
+      setTimeout(() => setMsg({ text: '', type: '' }), 3000)
+      setProcessingId(null)
+    }
+  }
+
+  const handleViewHistory = async (id_pedido) => {
+    setHistorialLoading(true)
+    try {
+      const res = await apiFetch(`/api/entregas/historial/${id_pedido}`, { token })
+      if (res.ok) {
+        const data = await res.json()
+        setHistorial(data.entregas || [])
+        setHistorialVisible(true)
+      } else {
+        setHistorial([])
+        setHistorialVisible(true)
+      }
+    } catch (_) {
+      setHistorial([])
+      setHistorialVisible(true)
+    } finally {
+      setHistorialLoading(false)
+    }
+  }
+
   const printComprobante = () => {
     if (!printRef.current) return
     const printWindow = window.open('', '_blank', 'width=900,height=700')
@@ -304,7 +353,7 @@ export default function SolicitudesRetiro({ embedded = false }) {
                     <tr>
                       <th>Producto</th>
                       <th>Saldo kit</th>
-                      <th>Stock</th>
+                      {!isDirectivo && <th>Stock</th>}
                       <th>Cantidad a retirar</th>
                     </tr>
                   </thead>
@@ -313,12 +362,12 @@ export default function SolicitudesRetiro({ embedded = false }) {
                       <tr key={item.producto_id}>
                         <td>{item.producto_nombre}</td>
                         <td>{item.cantidad_disponible_kit}</td>
-                        <td>{item.stock_actual}</td>
+                        {!isDirectivo && <td>{item.stock_actual}</td>}
                         <td>
                           <input
                             type="number"
                             min="0"
-                            max={item.cantidad_disponible}
+                            max={isDirectivo ? item.cantidad_disponible_kit : (item.cantidad_disponible_kit != null ? Math.min(item.cantidad_disponible_kit, item.stock_actual ?? Infinity) : (item.stock_actual ?? Infinity))}
                             value={cantidades[item.producto_id] || ''}
                             onChange={(event) => handleCantidadChange(item.producto_id, event.target.value)}
                             placeholder="0"
@@ -328,6 +377,8 @@ export default function SolicitudesRetiro({ embedded = false }) {
                     ))}
                   </tbody>
                 </table>
+
+                {/* Historial moved to its own section below */}
               </div>
             )}
 
@@ -371,19 +422,100 @@ export default function SolicitudesRetiro({ embedded = false }) {
             </div>
           </form>
 
+          <h3 style={{ marginTop: 20 }}>Historial de retiros</h3>
+          <div style={{ marginBottom: 12 }}>
+            <label>Seleccionar pedido</label>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <select value={selectedPedidoId} onChange={(e) => setSelectedPedidoId(e.target.value)}>
+                <option value="">Seleccionar pedido...</option>
+                {pedidos.map((pedido) => (
+                  <option key={pedido.id} value={pedido.id}>Pedido #{pedido.id} - {formatDate(pedido.fecha_creacion)}</option>
+                ))}
+              </select>
+              <button type="button" className="secondary" onClick={() => selectedPedidoId && handleViewHistory(selectedPedidoId)}>
+                {historialLoading ? 'Cargando...' : 'Ver historial'}
+              </button>
+            </div>
+          </div>
+
+          {historialVisible && (
+            <div style={{ marginTop: 12 }}>
+              {historialLoading ? (
+                <p style={{ color: 'var(--muted)' }}>Cargando historial...</p>
+              ) : historial.length === 0 ? (
+                <p style={{ color: 'var(--muted)' }}>Sin historial de retiros para este pedido.</p>
+              ) : (
+                <table className="sv-historial-table">
+                  <thead>
+                    <tr><th>Fecha</th><th>Producto</th><th>Cantidad</th><th>Retirado por</th></tr>
+                  </thead>
+                  <tbody>
+                    {historial.map((h, idx) => (
+                      <tr key={idx}>
+                        <td>{h.fecha_entrega ? new Date(h.fecha_entrega).toLocaleDateString('es-AR') : '-'}</td>
+                        <td>{h.producto_nombre || '-'}</td>
+                        <td style={{ textAlign: 'center' }}>{h.cantidad_entregada || '-'}</td>
+                        <td>{h.cargo_retira || h.usuario_nombre || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+
           <h3>Mis solicitudes de retiro</h3>
-          <SolicitudesTable solicitudes={solicitudes} onSelectComprobante={setComprobante} />
+          <SolicitudesTable solicitudes={solicitudes} onSelectComprobante={setComprobante} onViewHistory={(id_pedido) => handleViewHistory(id_pedido)} />
         </>
       )}
 
       {isOperador && (
         <>
           {solicitudes.length === 0 ? (
-            <div className="sv-empty-state">No hay solicitudes de retiro pendientes.</div>
+            <div>
+              <div className="sv-empty-state">No hay solicitudes de retiro pendientes.</div>
+              <div style={{ marginTop: 12 }}>
+                <button type="button" onClick={async () => {
+                  setOperatorPedidosLoading(true)
+                  try {
+                    const res = await apiFetch('/api/entregas/pedidos-disponibles', { token })
+                    if (res.ok) {
+                      const data = await res.json()
+                      setOperatorPedidos(data.pedidos || [])
+                    } else {
+                      setOperatorPedidos([])
+                    }
+                  } catch (_) {
+                    setOperatorPedidos([])
+                  } finally {
+                    setOperatorPedidosLoading(false)
+                  }
+                }}>Ver pedidos con pendientes</button>
+              </div>
+              {operatorPedidosLoading ? (
+                <p style={{ color: 'var(--muted)', marginTop: 12 }}>Cargando pedidos...</p>
+              ) : operatorPedidos.length > 0 ? (
+                <table style={{ marginTop: 12 }}>
+                  <thead><tr><th>Pedido</th><th>Institución</th><th>Fecha</th><th>Items pendientes</th></tr></thead>
+                  <tbody>
+                    {operatorPedidos.map(p => (
+                      <tr key={p.id}>
+                        <td>#{p.id}</td>
+                        <td>{p.institucion_nombre}</td>
+                        <td>{formatDate(p.fecha_creacion)}</td>
+                        <td>{p.items.filter(i => i.cantidad_pendiente > 0).length}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : null}
+            </div>
           ) : (
             <SolicitudesTable
               solicitudes={solicitudes}
               onEntregar={handleEntregar}
+              onAccept={handleAccept}
+              onViewHistory={(id_pedido) => handleViewHistory(id_pedido)}
               processingId={processingId}
               onSelectComprobante={setComprobante}
             />
@@ -406,7 +538,7 @@ export default function SolicitudesRetiro({ embedded = false }) {
   )
 }
 
-function SolicitudesTable({ solicitudes, onEntregar, processingId, onSelectComprobante }) {
+function SolicitudesTable({ solicitudes, onEntregar, onAccept, onViewHistory, processingId, onSelectComprobante }) {
   if (!solicitudes.length) {
     return <div className="sv-empty-state">No hay solicitudes registradas.</div>
   }
@@ -441,13 +573,27 @@ function SolicitudesTable({ solicitudes, onEntregar, processingId, onSelectCompr
             <td><span className={`badge badge-estado-${solicitud.estado}`}>{solicitud.estado}</span></td>
             <td>
               <div className="inline-actions">
-                {onEntregar && solicitud.estado === 'pendiente' && (
+                {onAccept && solicitud.estado === 'pendiente' && (
+                  <button
+                    type="button"
+                    onClick={() => onAccept(solicitud.id)}
+                    disabled={processingId === solicitud.id}
+                  >
+                    {processingId === solicitud.id ? 'Aceptando...' : 'Aceptar solicitud'}
+                  </button>
+                )}
+                {onEntregar && solicitud.estado === 'aceptada' && (
                   <button
                     type="button"
                     onClick={() => onEntregar(solicitud.id)}
                     disabled={processingId === solicitud.id}
                   >
                     {processingId === solicitud.id ? 'Confirmando...' : 'Marcar entrega'}
+                  </button>
+                )}
+                {onViewHistory && (
+                  <button type="button" className="secondary" onClick={() => onViewHistory(solicitud.id_pedido || solicitud.id)}>
+                    Historial
                   </button>
                 )}
                 {solicitud.estado === 'entregado' && (
