@@ -4,6 +4,10 @@ const { ensureRoleTableSeeded } = require("./roles");
 
 let rbacReady = false;
 
+function invalidateRbacCache() {
+  rbacReady = false;
+}
+
 function normalizePermissionCode(code) {
   return String(code || "")
     .trim()
@@ -184,4 +188,5 @@ module.exports = {
   getRolePermissionMatrix,
   getAllPermissions,
   setRolePermissionsByRoleId,
+  invalidateRbacCache,
 };

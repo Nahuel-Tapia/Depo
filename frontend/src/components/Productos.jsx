@@ -12,7 +12,8 @@ export default function Productos() {
   const [editModal, setEditModal] = useState(null)
   const [deleteModal, setDeleteModal] = useState(null)
   const [detailModal, setDetailModal] = useState(null)
-  const [form, setForm] = useState({ nombre: '', unidad_medida: 'unidad', stock_actual: 0, id_categoria: '' })
+  const [form, setForm] = useState({ nombre: '', unidad_medida: 'unidad', stock_minimo: 0, id_categoria: '' })
+  const [vencimientosProximos, setVencimientosProximos] = useState(new Set())
   const canDeleteProductos = hasPermission('productos.delete') || user?.role === 'admin'
 
   const loadCategorias = async () => {
@@ -59,10 +60,22 @@ export default function Productos() {
     } catch { /* ignore */ }
   }
 
+  const loadVencimientos = async () => {
+    try {
+      const res = await apiFetch('/api/depositos/vencimientos-proximos?dias=60', { token })
+      if (res.ok) {
+        const data = await res.json()
+        const ids = new Set((data.alertas || []).map(a => Number(a.id_producto)))
+        setVencimientosProximos(ids)
+      }
+    } catch { /* ignore */ }
+  }
+
   useEffect(() => {
     loadCategorias()
     loadProductos()
     loadStockPorDeposito()
+    loadVencimientos()
   }, [])
 
   const handleCreate = async (e) => {
@@ -72,7 +85,7 @@ export default function Productos() {
     const payload = {
       nombre: form.nombre.trim(),
       unidad_medida: form.unidad_medida.trim() || 'unidad',
-      stock_actual: parseInt(form.stock_actual) || 0,
+      stock_minimo: parseInt(form.stock_minimo) || 0,
       id_categoria: form.id_categoria || null
     }
 
@@ -88,7 +101,7 @@ export default function Productos() {
       return
     }
 
-    setForm({ nombre: '', unidad_medida: 'unidad', stock_actual: 0, id_categoria: '' })
+    setForm({ nombre: '', unidad_medida: 'unidad', stock_minimo: 0, id_categoria: '' })
     setFormOpen(false)
     setMsg({ text: 'Producto creado', type: 'success' })
     loadProductos()
@@ -102,7 +115,7 @@ export default function Productos() {
       id: producto.id,
       nombre: producto.nombre || '',
       unidad_medida: producto.unidad_medida || 'unidad',
-      stock_actual: producto.stock_actual ?? 0,
+      stock_minimo: producto.stock_minimo ?? 0,
       id_categoria: producto.id_categoria || ''
     })
   }
@@ -114,7 +127,7 @@ export default function Productos() {
     const payload = {
       nombre: String(editModal.nombre || '').trim(),
       unidad_medida: String(editModal.unidad_medida || '').trim() || 'unidad',
-      stock_actual: parseInt(editModal.stock_actual, 10) || 0,
+      stock_minimo: parseInt(editModal.stock_minimo, 10) || 0,
       id_categoria: editModal.id_categoria || null
     }
 
@@ -215,10 +228,43 @@ export default function Productos() {
               <td>{p.deposito || '-'}</td>
               <td>{p.categoria_nombre || '-'}</td>
               <td>
-                {(p.stock_actual ?? 0) <= 0
-                  ? <span style={{ color: '#ef4444', fontWeight: 600 }}>⚠ Bajo</span>
-                  : <span style={{ color: '#10b981' }}>OK</span>
-                }
+                {(() => {
+                  const stock = p.stock_total ?? p.stock_actual ?? 0
+                  const minimo = p.stock_minimo ?? 0
+                  const stockBajo = stock <= 0 || (minimo > 0 && stock <= minimo)
+                  const venceProximo = vencimientosProximos.has(Number(p.id))
+                  if (stockBajo) {
+                    return (
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 5,
+                        background: '#fef2f2', color: '#b91c1c', border: '1px solid #fca5a5',
+                        borderRadius: 6, padding: '3px 9px', fontWeight: 600, fontSize: 12
+                      }}>
+                        <span style={{ fontSize: 10 }}>●</span> Stock bajo
+                      </span>
+                    )
+                  }
+                  if (venceProximo) {
+                    return (
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 5,
+                        background: '#fffbeb', color: '#92400e', border: '1px solid #fcd34d',
+                        borderRadius: 6, padding: '3px 9px', fontWeight: 600, fontSize: 12
+                      }}>
+                        <span style={{ fontSize: 10 }}>●</span> Próximo a vencer
+                      </span>
+                    )
+                  }
+                  return (
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 5,
+                      background: '#ecfdf5', color: '#065f46', border: '1px solid #6ee7b7',
+                      borderRadius: 6, padding: '3px 9px', fontWeight: 600, fontSize: 12
+                    }}>
+                      <span style={{ fontSize: 10 }}>●</span> OK
+                    </span>
+                  )
+                })()}
               </td>
               
               <td>
@@ -266,8 +312,8 @@ export default function Productos() {
                 <input type="text" value={form.unidad_medida} onChange={e => setForm({ ...form, unidad_medida: e.target.value })} placeholder="Ej: unidad, kg, litro" />
               </div>
               <div>
-                <label>Stock actual</label>
-                <input type="number" value={form.stock_actual} onChange={e => setForm({ ...form, stock_actual: e.target.value })} placeholder="0" min="0" />
+                <label>Stock mínimo</label>
+                <input type="number" value={form.stock_minimo} onChange={e => setForm({ ...form, stock_minimo: e.target.value })} placeholder="0" min="0" />
               </div>
               <div>
                 <label>Categoría</label>
@@ -315,8 +361,8 @@ export default function Productos() {
                 <input type="text" value={editModal.unidad_medida} onChange={e => setEditModal({ ...editModal, unidad_medida: e.target.value })} placeholder="Ej: unidad, kg, litro" />
               </div>
               <div>
-                <label>Stock actual</label>
-                <input type="number" value={editModal.stock_actual} onChange={e => setEditModal({ ...editModal, stock_actual: e.target.value })} placeholder="0" min="0" />
+                <label>Stock mínimo</label>
+                <input type="number" value={editModal.stock_minimo} onChange={e => setEditModal({ ...editModal, stock_minimo: e.target.value })} placeholder="0" min="0" />
               </div>
               <div>
                 <label>Categoría</label>

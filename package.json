@@ -25,5 +25,8 @@
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.20.0",
     "sequelize": "^6.37.8"
+  },
+  "devDependencies": {
+    "vercel": "^53.3.2"
   }
 }

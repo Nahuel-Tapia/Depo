@@ -2,7 +2,7 @@ const express = require("express");
 const { authenticate, authorizePermissions } = require("../middleware/auth");
 const { PERMISSIONS } = require("../permissions");
 const { getAllRoles, createRole } = require("../services/roles");
-const { getPermissionsForRole, setRolePermissionsByRoleId } = require("../services/rbac");
+const { getPermissionsForRole, setRolePermissionsByRoleId, invalidateRbacCache } = require("../services/rbac");
 
 const router = express.Router();
 
@@ -49,6 +49,7 @@ router.put("/:id/permissions", authorizePermissions(PERMISSIONS.USERS_ROLE_UPDAT
   try {
     const permissions = Array.isArray(req.body?.permissions) ? req.body.permissions : [];
     const updated = await setRolePermissionsByRoleId(req.params.id, permissions);
+    invalidateRbacCache();
     return res.json({ ok: true, permissions: updated });
   } catch (err) {
     const message = err.message || "No se pudo actualizar permisos del rol";

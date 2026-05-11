@@ -629,6 +629,7 @@ async function getVencimientosProximos(req, res) {
     // Buscamos ingresos que tengan fecha de vencimiento próxima
     const rows = await all(`
       SELECT
+        p.id_producto,
         p.nombre as producto,
         p.unidad_medida,
         d.nombre as deposito,

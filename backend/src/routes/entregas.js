@@ -27,6 +27,13 @@ async function ensureEntregasSchema() {
     ADD COLUMN IF NOT EXISTS id_solicitud_retiro INT
   `);
 
+  // Migrate solicitud_retiro: add columns that may be missing from older schema versions
+  await run(`ALTER TABLE solicitud_retiro ADD COLUMN IF NOT EXISTS id_usuario_acepta INT REFERENCES usuario(id_usuario)`);
+  await run(`ALTER TABLE solicitud_retiro ADD COLUMN IF NOT EXISTS fecha_aceptacion TIMESTAMP`);
+  await run(`ALTER TABLE solicitud_retiro ADD COLUMN IF NOT EXISTS id_usuario_entrega INT REFERENCES usuario(id_usuario)`);
+  await run(`ALTER TABLE solicitud_retiro ADD COLUMN IF NOT EXISTS fecha_entrega TIMESTAMP`);
+  await run(`ALTER TABLE solicitud_retiro ADD COLUMN IF NOT EXISTS observaciones TEXT`);
+
   await run(`
     CREATE TABLE IF NOT EXISTS solicitud_retiro (
       id SERIAL PRIMARY KEY,
@@ -573,6 +580,37 @@ router.get("/solicitudes/pendientes", authorizePermissions(PERMISSIONS.MOVIMIENT
   }
 });
 
+// GET /api/entregas/solicitudes/entregadas - Historial de solicitudes ya entregadas
+router.get("/solicitudes/entregadas", authorizePermissions(PERMISSIONS.PEDIDOS_VIEW), async (req, res) => {
+  try {
+    await ensureEntregasSchema();
+
+    let rows;
+    if (req.user.role === "directivo") {
+      rows = await all(
+        "SELECT id FROM solicitud_retiro WHERE id_usuario_solicitante = ? AND estado = 'entregado' ORDER BY fecha_entrega DESC NULLS LAST, created_at DESC",
+        [req.user.sub]
+      );
+    } else {
+      rows = await all(
+        "SELECT id FROM solicitud_retiro WHERE estado = 'entregado' ORDER BY fecha_entrega DESC NULLS LAST, created_at DESC LIMIT 200",
+        []
+      );
+    }
+
+    const solicitudes = [];
+    for (const row of rows) {
+      const sol = await getSolicitudRetiro(row.id);
+      if (sol) solicitudes.push(sol);
+    }
+
+    return res.json({ solicitudes });
+  } catch (err) {
+    console.error("Error al obtener historial de solicitudes entregadas:", err);
+    return res.status(500).json({ error: "No se pudo obtener el historial" });
+  }
+});
+
 // GET /api/entregas/solicitudes/:id/comprobante - Datos imprimibles del comprobante
 router.get("/solicitudes/:id/comprobante", authorizePermissions(PERMISSIONS.PEDIDOS_VIEW), async (req, res) => {
   try {
@@ -701,10 +739,7 @@ router.post("/solicitudes/:id/entregar", authorizePermissions(PERMISSIONS.MOVIMI
       const idMovimiento = movResult.rows[0].id_movimiento;
       movimientosIds.push(idMovimiento);
 
-      await client.query(
-        "UPDATE producto SET stock_actual = COALESCE(stock_actual, 0) - $1 WHERE id_producto = $2",
-        [cantidad, item.producto_id]
-      );
+      // Nota: el trigger trg_movimiento_stock_sync_producto ya actualiza stock_actual al insertar el movimiento
 
       await client.query(`
         INSERT INTO pedido_entrega
@@ -911,11 +946,7 @@ router.post("/retirar", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), as
       const idMovimiento = movResult.rows[0].id_movimiento;
       movimientosIds.push(idMovimiento);
 
-      // Actualizar stock
-      await client.query(
-        "UPDATE producto SET stock_actual = COALESCE(stock_actual, 0) - $1 WHERE id_producto = $2",
-        [cantidad, producto_id]
-      );
+      // Nota: el trigger trg_movimiento_stock_sync_producto ya actualiza stock_actual al insertar el movimiento
 
       // Registrar entrega
       const entregaResult = await client.query(`

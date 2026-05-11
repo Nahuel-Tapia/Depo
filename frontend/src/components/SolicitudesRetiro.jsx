@@ -114,9 +114,7 @@ export default function SolicitudesRetiro({ embedded = false }) {
   const [loading, setLoading] = useState(true)
   const [processingId, setProcessingId] = useState(null)
   const [comprobante, setComprobante] = useState(null)
-  const [historial, setHistorial] = useState([])
-  const [historialLoading, setHistorialLoading] = useState(false)
-  const [historialVisible, setHistorialVisible] = useState(false)
+  const [historialEntregadas, setHistorialEntregadas] = useState([])
   const printRef = useRef(null)
   const [operatorPedidos, setOperatorPedidos] = useState([])
   const [operatorPedidosLoading, setOperatorPedidosLoading] = useState(false)
@@ -146,10 +144,17 @@ export default function SolicitudesRetiro({ embedded = false }) {
           setSolicitudes(data.solicitudes || [])
         }
       } else if (isOperador) {
-        const res = await apiFetch('/api/entregas/solicitudes/pendientes', { token })
-        if (res.ok) {
-          const data = await res.json()
+        const [pendRes, entRes] = await Promise.all([
+          apiFetch('/api/entregas/solicitudes/pendientes', { token }),
+          apiFetch('/api/entregas/solicitudes/entregadas', { token })
+        ])
+        if (pendRes.ok) {
+          const data = await pendRes.json()
           setSolicitudes(data.solicitudes || [])
+        }
+        if (entRes.ok) {
+          const data = await entRes.json()
+          setHistorialEntregadas(data.solicitudes || [])
         }
       }
     } catch {
@@ -262,24 +267,52 @@ export default function SolicitudesRetiro({ embedded = false }) {
     }
   }
 
-  const handleViewHistory = async (id_pedido) => {
-    setHistorialLoading(true)
-    try {
-      const res = await apiFetch(`/api/entregas/historial/${id_pedido}`, { token })
-      if (res.ok) {
-        const data = await res.json()
-        setHistorial(data.entregas || [])
-        setHistorialVisible(true)
-      } else {
-        setHistorial([])
-        setHistorialVisible(true)
-      }
-    } catch (_) {
-      setHistorial([])
-      setHistorialVisible(true)
-    } finally {
-      setHistorialLoading(false)
-    }
+  const printSolicitud = (solicitud) => {
+    const printWindow = window.open('', '_blank', 'width=900,height=700')
+    if (!printWindow) return
+    const retiraLabel = solicitud.retira_tipo === 'otro'
+      ? `${solicitud.retira_nombre || '-'} - DNI ${solicitud.retira_dni || '-'}`
+      : (solicitud.solicitante_nombre || 'Directivo')
+    const fmtDate = v => v ? new Date(v).toLocaleDateString('es-AR') : '-'
+    const itemsHtml = (solicitud.items || []).map(item =>
+      `<tr>
+        <td style="border:1px solid #d1d5db;padding:8px 10px">${item.producto_nombre}</td>
+        <td style="border:1px solid #d1d5db;padding:8px 10px">${item.cantidad_entregada || item.cantidad_solicitada}</td>
+        <td style="border:1px solid #d1d5db;padding:8px 10px">${item.unidad_medida || 'unidad'}</td>
+      </tr>`
+    ).join('')
+    printWindow.document.write(`<!DOCTYPE html><html>
+      <head><title>Comprobante #${solicitud.id}</title>
+      <style>* { box-sizing: border-box; font-family: Arial, sans-serif; } body { margin: 24px; color: #111827; font-size: 13px; }</style>
+      </head><body>
+        <div style="display:flex;justify-content:space-between;border-bottom:2px solid #FF8200;padding-bottom:10px;margin-bottom:16px">
+          <div><strong style="font-size:1.1rem">San Juan Gobierno</strong><br><span style="color:#666">Ministerio de Educaci\u00f3n</span></div>
+          <div style="text-align:right"><strong style="font-size:1.1rem">Comprobante de entrega</strong><br><span style="color:#666">Solicitud #${solicitud.id}</span></div>
+        </div>
+        <p><strong>Pedido anual #${solicitud.id_pedido}</strong></p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+          <div><strong>Institución:</strong> ${solicitud.institucion_nombre}</div>
+          <div><strong>CUE:</strong> ${solicitud.cue || '-'}</div>
+          <div><strong>Fecha solicitada de retiro:</strong> ${fmtDate(solicitud.fecha_retiro)}</div>
+          <div><strong>Fecha de entrega:</strong> ${fmtDate(solicitud.fecha_entrega)}</div>
+          <div style="grid-column:1/-1"><strong>Retira:</strong> ${retiraLabel}</div>
+        </div>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:28px">
+          <thead><tr>
+            <th style="border:1px solid #d1d5db;background:#f3f4f6;padding:8px 10px;text-align:left">Producto</th>
+            <th style="border:1px solid #d1d5db;background:#f3f4f6;padding:8px 10px;text-align:left">Cantidad</th>
+            <th style="border:1px solid #d1d5db;background:#f3f4f6;padding:8px 10px;text-align:left">Unidad</th>
+          </tr></thead>
+          <tbody>${itemsHtml}</tbody>
+        </table>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;margin-top:54px">
+          <div style="border-top:1px solid #111827;padding-top:8px;text-align:center">Firma de quien entrega</div>
+          <div style="border-top:1px solid #111827;padding-top:8px;text-align:center">Firma y sello del directivo</div>
+        </div>
+      </body></html>`)
+    printWindow.document.close()
+    printWindow.focus()
+    setTimeout(() => { printWindow.print(); printWindow.close() }, 250)
   }
 
   const printComprobante = () => {
@@ -422,50 +455,8 @@ export default function SolicitudesRetiro({ embedded = false }) {
             </div>
           </form>
 
-          <h3 style={{ marginTop: 20 }}>Historial de retiros</h3>
-          <div style={{ marginBottom: 12 }}>
-            <label>Seleccionar pedido</label>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <select value={selectedPedidoId} onChange={(e) => setSelectedPedidoId(e.target.value)}>
-                <option value="">Seleccionar pedido...</option>
-                {pedidos.map((pedido) => (
-                  <option key={pedido.id} value={pedido.id}>Pedido #{pedido.id} - {formatDate(pedido.fecha_creacion)}</option>
-                ))}
-              </select>
-              <button type="button" className="secondary" onClick={() => selectedPedidoId && handleViewHistory(selectedPedidoId)}>
-                {historialLoading ? 'Cargando...' : 'Ver historial'}
-              </button>
-            </div>
-          </div>
-
-          {historialVisible && (
-            <div style={{ marginTop: 12 }}>
-              {historialLoading ? (
-                <p style={{ color: 'var(--muted)' }}>Cargando historial...</p>
-              ) : historial.length === 0 ? (
-                <p style={{ color: 'var(--muted)' }}>Sin historial de retiros para este pedido.</p>
-              ) : (
-                <table className="sv-historial-table">
-                  <thead>
-                    <tr><th>Fecha</th><th>Producto</th><th>Cantidad</th><th>Retirado por</th></tr>
-                  </thead>
-                  <tbody>
-                    {historial.map((h, idx) => (
-                      <tr key={idx}>
-                        <td>{h.fecha_entrega ? new Date(h.fecha_entrega).toLocaleDateString('es-AR') : '-'}</td>
-                        <td>{h.producto_nombre || '-'}</td>
-                        <td style={{ textAlign: 'center' }}>{h.cantidad_entregada || '-'}</td>
-                        <td>{h.cargo_retira || h.usuario_nombre || '-'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          )}
-
-          <h3>Mis solicitudes de retiro</h3>
-          <SolicitudesTable solicitudes={solicitudes} onSelectComprobante={setComprobante} onViewHistory={(id_pedido) => handleViewHistory(id_pedido)} />
+          <h3>Mis solicitudes pendientes</h3>
+          <SolicitudesTable solicitudes={solicitudes.filter(s => s.estado !== 'entregado')} onSelectComprobante={setComprobante} />
         </>
       )}
 
@@ -515,13 +506,59 @@ export default function SolicitudesRetiro({ embedded = false }) {
               solicitudes={solicitudes}
               onEntregar={handleEntregar}
               onAccept={handleAccept}
-              onViewHistory={(id_pedido) => handleViewHistory(id_pedido)}
               processingId={processingId}
               onSelectComprobante={setComprobante}
             />
           )}
         </>
       )}
+
+      {/* Historial de solicitudes entregadas */}
+      {(() => {
+        const historial = isDirectivo
+          ? solicitudes.filter(s => s.estado === 'entregado')
+          : historialEntregadas
+        if (!historial.length) return null
+        return (
+          <div style={{ marginTop: 28 }}>
+            <h3 style={{ marginBottom: 12 }}>Historial de solicitudes entregadas</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Institución</th>
+                  <th>Fecha retiro</th>
+                  <th>Fecha entrega</th>
+                  <th>Retira</th>
+                  <th>Productos</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {historial.map(sol => (
+                  <tr key={sol.id}>
+                    <td>#{sol.id}</td>
+                    <td>{sol.institucion_nombre}</td>
+                    <td>{formatDate(sol.fecha_retiro)}</td>
+                    <td>{formatDate(sol.fecha_entrega)}</td>
+                    <td>{buildRetiraLabel(sol)}</td>
+                    <td>
+                      {(sol.items || []).map(item => (
+                        <div key={item.producto_id}>{item.producto_nombre}: {item.cantidad_entregada || item.cantidad_solicitada} {item.unidad_medida || 'unidad'}</div>
+                      ))}
+                    </td>
+                    <td>
+                      <button type="button" className="secondary" onClick={() => printSolicitud(sol)} style={{ width: 'auto', margin: 0 }}>
+                        Imprimir
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      })()}
 
       {comprobante && (
         <div style={{ marginTop: 18, border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
@@ -589,11 +626,6 @@ function SolicitudesTable({ solicitudes, onEntregar, onAccept, onViewHistory, pr
                     disabled={processingId === solicitud.id}
                   >
                     {processingId === solicitud.id ? 'Confirmando...' : 'Marcar entrega'}
-                  </button>
-                )}
-                {onViewHistory && (
-                  <button type="button" className="secondary" onClick={() => onViewHistory(solicitud.id_pedido || solicitud.id)}>
-                    Historial
                   </button>
                 )}
                 {solicitud.estado === 'entregado' && (
