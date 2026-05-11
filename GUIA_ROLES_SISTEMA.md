@@ -48,6 +48,7 @@ Este documento detalla las capacidades y flujos de trabajo para cada rol dentro 
     *   Editar las cantidades finales a licitar y **Cerrar Licitación** para bloquear la edición y habilitar la adjudicación.
 *   **Licitación y Adjudicación**: 
     *   Cargar precios de proveedores y adjudicar productos (mejor oferta).
+    *   *Unificación*: Los productos con el mismo nombre se muestran agrupados para facilitar la adjudicación masiva.
     *   *Flexibilidad*: Permite regresar al paso anterior (reabrir listado) si se necesita corregir cantidades antes de finalizar la adjudicación.
 *   **Gestión de Entregas**: "Enviar a Depósito" la información de las licitaciones cerradas para que el operador sepa qué debe recibir y de qué proveedor.
 *   **Auditoría de Precios**: Único rol (junto al Admin) con acceso a los costos y comparativas económicas.
@@ -61,12 +62,14 @@ Este documento detalla las capacidades y flujos de trabajo para cada rol dentro 
 *   **Recepción de Licitación**: 
     *   Registrar el ingreso de camiones de proveedores.
     *   Cargar fechas de vencimiento y cantidades recibidas (totales o parciales).
+    *   *Consolidación*: Los productos se reciben agrupados por nombre para agilizar la recepción.
     *   *Seguridad*: El operador no ve precios, solo cantidades y productos.
 *   **Distribución a Escuelas**: 
     *   Armar las "salidas" de mercadería hacia cada escuela según lo que se les adjudicó.
     *   Generar remitos virtuales de entrega.
 *   **Control de Inventario**: 
     *   Visualizar stock actual por depósito.
+    *   **Detalle de Stock**: Ver en qué depósitos está distribuida la mercadería y sus fechas de vencimiento desde la lista de productos.
     *   Gestionar movimientos manuales (ajustes por pérdida, rotura, etc.).
 *   **Alertas Tempranas**: Monitorear el widget de vencimientos próximos para evitar desperdicio de alimentos.
 

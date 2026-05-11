@@ -1,5 +1,14 @@
 # Registro de Cambios - Depo
- 
+
+## [1.5.0] - 2026-05-11
+### Añadido
+- **Detalle de Distribución y Vencimiento**: Se agregó un modal en la vista de Productos que permite ver en qué depósitos está distribuida la mercadería y las fechas de vencimiento registradas en los ingresos.
+- **Columna Depósito en Movimientos**: Se añadió la columna "Depósito" en la tabla de historial de movimientos para saber dónde se realizó la acción.
+
+### Mejoras
+- **Unificación de Productos en Adjudicación y Recepción**: Se agruparon los productos por nombre para que se muestren unificados en las vistas de compras y depósitos.
+- **Interfaz de Movimientos**: Se corrigió el diseño de la sección de "Traslado entre depósitos" para evitar espacios en blanco innecesarios.
+
 ## [1.4.0] - 2026-05-08
 ### Añadido
 - **Control de Stock en Licitación**: Se integró la visualización del stock actual del depósito en la vista de "Listado Final a Licitar" para que el rol de Compras tome decisiones informadas.
