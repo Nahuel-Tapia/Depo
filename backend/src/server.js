@@ -1,5 +1,10 @@
 require("dotenv").config();
 
+if (!process.env.JWT_SECRET) {
+  console.error("[ERROR] JWT_SECRET no está definido. Definílo en el archivo .env antes de iniciar.");
+  process.exit(1);
+}
+
 const path = require("path");
 const express = require("express");
 const cors = require("cors");
@@ -25,6 +30,7 @@ const comprasRoutes = require("./routes/compras");
 const directivoRoutes = require("./routes/directivo");
 const depositosRoutes = require("./routes/depositos");
 const patrimonioRoutes = require("./routes/patrimonio");
+const stockInstitucionRoutes = require("./routes/stockInstitucion");
 let zonesRoutes = null;
 let zoneSchoolsRoutes = null;
 let zoneSupervisorsRoutes = null;
@@ -79,6 +85,7 @@ if (zoneSchoolsRoutes) app.use("/api/zones", zoneSchoolsRoutes);
 if (zoneSupervisorsRoutes) app.use("/api/zones", zoneSupervisorsRoutes);
 app.use("/api/entregas", entregasRoutes);
 app.use("/api/depositos", depositosRoutes);
+app.use("/api/stock-institucion", stockInstitucionRoutes);
 
 // Si una ruta /api no existe, devolver JSON en lugar de index.html
 app.use("/api", (req, res) => {

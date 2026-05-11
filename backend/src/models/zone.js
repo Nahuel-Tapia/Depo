@@ -8,4 +8,4 @@ Zone.init({
   director_area_id: { type: DataTypes.INTEGER, allowNull: false }, // usuario que creó la zona
 }, { sequelize, modelName: 'Zone' });
 
-module.exports = Zone;
+module.exports = { Zone };

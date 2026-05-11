@@ -18,7 +18,7 @@ router.get("/", authorizePermissions(PERMISSIONS.AUDITORIA_VIEW), async (req, re
         a.entidad, a.accion, a.id_registro, a.cambios,
         a.created_at
       FROM auditoria a
-      JOIN users u ON a.usuario_id = u.id
+      LEFT JOIN usuario u ON a.usuario_id = u.id_usuario
       WHERE 1 = 1
     `;
     const params = [];
@@ -59,7 +59,7 @@ router.get("/:id", authorizePermissions(PERMISSIONS.AUDITORIA_VIEW), async (req,
         a.entidad, a.accion, a.id_registro, a.cambios,
         a.created_at
       FROM auditoria a
-      JOIN users u ON a.usuario_id = u.id
+      LEFT JOIN usuario u ON a.usuario_id = u.id_usuario
       WHERE a.id = ?`,
       [id]
     );
@@ -85,7 +85,7 @@ router.get("/usuario/:usuario_id", authorizePermissions(PERMISSIONS.AUDITORIA_VI
         a.entidad, a.accion, a.id_registro, a.cambios,
         a.created_at
       FROM auditoria a
-      JOIN users u ON a.usuario_id = u.id
+      LEFT JOIN usuario u ON a.usuario_id = u.id_usuario
       WHERE a.usuario_id = ?
       ORDER BY a.created_at DESC
       LIMIT ? OFFSET ?`,

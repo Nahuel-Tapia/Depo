@@ -21,7 +21,7 @@ import LicitacionesCerradas from '../components/LicitacionesCerradas'
 import RecepcionLicitacion from '../components/RecepcionLicitacion'
 import DistribucionEscuelas from '../components/DistribucionEscuelas'
 
-const LOGO_URL = 'http://prod.eduge.com.ar/assets/logoGobierno-D5M0tUR9.png'
+const LOGO_URL = '/faviconmin.png'
 
 const ROLE_LABELS = {
   admin: 'Administrador',

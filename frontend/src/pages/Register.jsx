@@ -105,7 +105,7 @@ export default function Register() {
       <section className="card auth-card" style={{ width: 'min(480px, 100%)' }}>
         <div className="auth-header">
           <img
-            src="http://prod.eduge.com.ar/assets/logoGobierno-D5M0tUR9.png"
+            src="/faviconmin.png"
             alt="San Juan Gobierno"
             className="auth-logo"
           />

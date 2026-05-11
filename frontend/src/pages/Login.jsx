@@ -48,7 +48,7 @@ export default function Login() {
       <section className="card auth-card">
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
           <img
-            src="http://prod.eduge.com.ar/assets/logoGobierno-D5M0tUR9.png"
+            src="/faviconmin.png"
             alt="San Juan Gobierno"
             style={{ height: 48, width: 'auto', marginBottom: 20 }}
           />

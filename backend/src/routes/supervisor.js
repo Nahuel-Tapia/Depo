@@ -292,7 +292,13 @@ router.get("/instituciones", async (req, res) => {
     await ensureSupervisorSchema();
 
     if (req.user?.role === "supervisor") {
-      if (!(await hasAsignacionesTable())) {
+      const institutionIds = await getSupervisorAssignedInstitutionIds(
+        req.user.sub,
+        req.user.jurisdiccion,
+        req.user.nivel_educativo
+      );
+
+      if (institutionIds.length === 0) {
         return res.json({
           instituciones: [],
           meta: {
@@ -311,7 +317,7 @@ router.get("/instituciones", async (req, res) => {
                 i.cue,
                 ${selectSql.nivelExpr} AS nivel,
                 e.cui,
-                NULLIF(TRIM(d.departamento), '') AS departamento,
+                ${selectSql.departamentoSql.expression} AS departamento,
                 d.latitud,
                 d.longitud,
                 CASE 
@@ -324,13 +330,12 @@ router.get("/instituciones", async (req, res) => {
                   ) THEN 'solicitud_aprobada'
                   ELSE 'solicitud_enviada'
                 END as status
-         FROM supervisor_escuela_asignacion sea
-         JOIN institucion i ON i.id_institucion = sea.institucion_id
+         FROM institucion i
          LEFT JOIN edificio e ON i.id_edificio = e.id_edificio
          LEFT JOIN direccion d ON e.id_direccion = d.id_direccion
-         WHERE sea.supervisor_id = ?
+         WHERE i.id_institucion = ANY($1::int[])
          ORDER BY i.nombre`,
-        [req.user.sub]
+        [institutionIds]
       );
 
       let zonaLabel = "";
@@ -404,6 +409,26 @@ router.get("/dashboard/stats", async (req, res) => {
       return res.status(403).json({ error: "Solo el supervisor puede ver estas estadísticas." });
     }
 
+    const institutionIds = await getSupervisorAssignedInstitutionIds(
+      req.user.sub,
+      req.user.jurisdiccion,
+      req.user.nivel_educativo
+    );
+
+    if (institutionIds.length === 0) {
+      return res.json({
+        totales: {
+          total: 0,
+          sin_kit: 0,
+          sin_solicitud: 0,
+          solicitud_enviada: 0,
+          solicitud_aprobada: 0
+        },
+        pedidos_recientes: [],
+        entregas_recientes: []
+      });
+    }
+
     const stats = await get(`
       WITH escuelas_estado AS (
         SELECT i.id_institucion,
@@ -417,9 +442,8 @@ router.get("/dashboard/stats", async (req, res) => {
                  ) THEN 'solicitud_aprobada'
                  ELSE 'solicitud_enviada'
                END as estado
-        FROM supervisor_escuela_asignacion sea
-        JOIN institucion i ON i.id_institucion = sea.institucion_id
-        WHERE sea.supervisor_id = $1
+        FROM institucion i
+        WHERE i.id_institucion = ANY($1::int[])
       )
       SELECT 
         COUNT(*) as total,
@@ -428,28 +452,26 @@ router.get("/dashboard/stats", async (req, res) => {
         SUM(CASE WHEN estado = 'solicitud_enviada' THEN 1 ELSE 0 END) as solicitud_enviada,
         SUM(CASE WHEN estado = 'solicitud_aprobada' THEN 1 ELSE 0 END) as solicitud_aprobada
       FROM escuelas_estado
-    `, [req.user.sub]);
+    `, [institutionIds]);
 
     const pedidosRecientes = await all(`
       SELECT p.id_pedido as id, p.fecha_creacion as fecha, p.estado, i.nombre as institucion
       FROM pedido p
       JOIN institucion i ON p.id_institucion = i.id_institucion
-      JOIN supervisor_escuela_asignacion sea ON sea.institucion_id = i.id_institucion
-      WHERE sea.supervisor_id = $1
+      WHERE p.id_institucion = ANY($1::int[])
       ORDER BY p.fecha_creacion DESC
       LIMIT 5
-    `, [req.user.sub]);
+    `, [institutionIds]);
 
     const entregasRecientes = await all(`
       SELECT ms.id_movimiento as id, ms.fecha_movimiento as fecha, ms.cantidad, p.nombre as producto, i.nombre as institucion
       FROM movimiento_stock ms
       JOIN producto p ON ms.id_producto = p.id_producto
       JOIN institucion i ON ms.id_institucion = i.id_institucion
-      JOIN supervisor_escuela_asignacion sea ON sea.institucion_id = i.id_institucion
-      WHERE sea.supervisor_id = $1 AND ms.tipo = 'egreso'
+      WHERE ms.id_institucion = ANY($1::int[]) AND ms.tipo = 'egreso'
       ORDER BY ms.fecha_movimiento DESC
       LIMIT 5
-    `, [req.user.sub]);
+    `, [institutionIds]);
 
     return res.json({
       totales: {

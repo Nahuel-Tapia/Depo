@@ -20,8 +20,8 @@ router.get("/", authorizePermissions(PERMISSIONS.AJUSTES_VIEW), async (req, res)
         u.nombre as usuario_nombre, u.email,
         a.created_at
       FROM ajustes a
-      JOIN productos p ON a.producto_id = p.id
-      JOIN users u ON a.usuario_id = u.id
+      LEFT JOIN producto p ON a.producto_id = p.id_producto
+      LEFT JOIN usuario u ON a.usuario_id = u.id_usuario
       WHERE 1 = 1
     `;
     const params = [];
@@ -54,8 +54,8 @@ router.get("/:id", authorizePermissions(PERMISSIONS.AJUSTES_VIEW), async (req, r
         u.nombre as usuario_nombre, u.email,
         a.created_at
       FROM ajustes a
-      JOIN productos p ON a.producto_id = p.id
-      JOIN users u ON a.usuario_id = u.id
+      LEFT JOIN producto p ON a.producto_id = p.id_producto
+      LEFT JOIN usuario u ON a.usuario_id = u.id_usuario
       WHERE a.id = ?`,
       [id]
     );
@@ -73,17 +73,18 @@ router.get("/:id", authorizePermissions(PERMISSIONS.AJUSTES_VIEW), async (req, r
 router.post("/", authorizePermissions(PERMISSIONS.AJUSTES_CREATE), async (req, res) => {
   try {
     const { producto_id, cantidad_nueva, motivo } = req.body;
+    const cantidadNuevaNum = Number.parseInt(cantidad_nueva, 10);
 
     if (!producto_id || cantidad_nueva === undefined || !motivo) {
       return res.status(400).json({ error: "Faltan campos obligatorios" });
     }
 
-    if (cantidad_nueva < 0) {
-      return res.status(400).json({ error: "La cantidad no puede ser negativa" });
+    if (!Number.isInteger(cantidadNuevaNum) || cantidadNuevaNum < 0) {
+      return res.status(400).json({ error: "La cantidad nueva debe ser un numero entero mayor o igual a 0" });
     }
 
     // Obtener producto
-    const producto = await get("SELECT * FROM productos WHERE id = ?", [producto_id]);
+    const producto = await get("SELECT * FROM producto WHERE id_producto = ?", [producto_id]);
     if (!producto) {
       return res.status(404).json({ error: "Producto no encontrado" });
     }
@@ -93,11 +94,11 @@ router.post("/", authorizePermissions(PERMISSIONS.AJUSTES_CREATE), async (req, r
     // Registrar ajuste
     const result = await run(
       "INSERT INTO ajustes (producto_id, cantidad_anterior, cantidad_nueva, motivo, usuario_id) VALUES (?, ?, ?, ?, ?)",
-      [producto_id, cantidad_anterior, cantidad_nueva, motivo, req.user.sub]
+      [producto_id, cantidad_anterior, cantidadNuevaNum, motivo, req.user.sub]
     );
 
     // Actualizar stock del producto
-    await run("UPDATE productos SET stock_actual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", [cantidad_nueva, producto_id]);
+    await run("UPDATE producto SET stock_actual = ?, updated_at = CURRENT_TIMESTAMP WHERE id_producto = ?", [cantidadNuevaNum, producto_id]);
 
     // Auditoría
     const diferencia = cantidad_nueva - cantidad_anterior;
@@ -111,8 +112,8 @@ router.post("/", authorizePermissions(PERMISSIONS.AJUSTES_CREATE), async (req, r
         JSON.stringify({
           producto_id,
           cantidad_anterior,
-          cantidad_nueva,
-          diferencia,
+          cantidad_nueva: cantidadNuevaNum,
+          diferencia: cantidadNuevaNum - cantidad_anterior,
           motivo
         })
       ]

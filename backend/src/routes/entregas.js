@@ -107,7 +107,7 @@ async function getRetiroAvailabilityRows(institucionId = null) {
       SELECT sr.id_pedido, srd.id_producto, SUM(srd.cantidad_solicitada) AS total_reservado
       FROM solicitud_retiro sr
       JOIN solicitud_retiro_detalle srd ON srd.id_solicitud_retiro = sr.id
-      WHERE sr.estado = 'pendiente'
+      WHERE sr.estado IN ('pendiente', 'aceptada')
       GROUP BY sr.id_pedido, srd.id_producto
     ) res ON res.id_pedido = p.id_pedido AND res.id_producto = dp.id_producto
     WHERE p.estado = 'aprobado'
@@ -787,13 +787,29 @@ router.post("/retirar", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), as
     await ensureEntregasSchema();
 
     const { id_pedido, items, cargo_retira, observaciones } = req.body;
+    const pedidoId = parsePositiveInt(id_pedido);
 
-    if (!id_pedido || !items || !Array.isArray(items) || items.length === 0) {
+    if (!pedidoId || !items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: "Faltan campos obligatorios (id_pedido, items)" });
     }
 
     if (!cargo_retira) {
       return res.status(400).json({ error: "El cargo de quien retira es obligatorio" });
+    }
+
+    const parsedItems = items.map((item) => ({
+      producto_id: parsePositiveInt(item?.producto_id),
+      cantidad: parsePositiveInt(item?.cantidad),
+      estado_producto: String(item?.estado_producto || "nuevo").trim() || "nuevo"
+    }));
+
+    if (parsedItems.some((item) => !item.producto_id || !item.cantidad)) {
+      return res.status(400).json({ error: "Todos los items deben tener producto_id y cantidad mayor a cero" });
+    }
+
+    const uniqueProductIds = new Set(parsedItems.map((item) => item.producto_id));
+    if (uniqueProductIds.size !== parsedItems.length) {
+      return res.status(400).json({ error: "No podÃ©s repetir productos en la misma entrega" });
     }
 
     // Verificar que el pedido existe y está aprobado
@@ -805,7 +821,7 @@ router.post("/retirar", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), as
         AND p.estado = 'aprobado'
         AND p.aprobado_director_area = TRUE
         AND COALESCE(p.tipo, 'anual') = 'anual'
-    `, [id_pedido]);
+    `, [pedidoId]);
 
     if (!pedido) {
       return res.status(404).json({ error: "Pedido no encontrado o no está disponible para retirar" });
@@ -816,8 +832,8 @@ router.post("/retirar", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), as
     const movimientosIds = [];
     const entregasData = [];
 
-    for (const item of items) {
-      const { producto_id, cantidad, estado_producto = 'nuevo' } = item;
+    for (const item of parsedItems) {
+      const { producto_id, cantidad, estado_producto } = item;
 
       if (!producto_id || !cantidad || cantidad <= 0) {
         await client.query("ROLLBACK");
@@ -825,10 +841,11 @@ router.post("/retirar", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), as
       }
 
       // Verificar stock actual
-      const producto = await get(
-        "SELECT id_producto, nombre, COALESCE(stock_actual, 0) AS stock_actual FROM producto WHERE id_producto = $1",
+      const productoResult = await client.query(
+        "SELECT id_producto, nombre, COALESCE(stock_actual, 0) AS stock_actual FROM producto WHERE id_producto = $1 FOR UPDATE",
         [producto_id]
       );
+      const producto = productoResult.rows[0];
 
       if (!producto) {
         await client.query("ROLLBACK");
@@ -843,10 +860,11 @@ router.post("/retirar", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), as
       }
 
       // Verificar cantidad pendiente en el pedido
-      const detallePedido = await get(`
+      const detallePedidoResult = await client.query(`
         SELECT cantidad_solicitada FROM detalle_pedido 
         WHERE id_pedido = $1 AND id_producto = $2
-      `, [id_pedido, producto_id]);
+      `, [pedidoId, producto_id]);
+      const detallePedido = detallePedidoResult.rows[0];
 
       if (!detallePedido) {
         await client.query("ROLLBACK");
@@ -854,11 +872,12 @@ router.post("/retirar", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), as
       }
 
       // Calcular cuánto se ha entregado previamente
-      const entregadoPrevio = await get(`
+      const entregadoPrevioResult = await client.query(`
         SELECT COALESCE(SUM(cantidad_entregada), 0) AS total 
         FROM pedido_entrega 
         WHERE id_pedido = $1 AND id_producto = $2
-      `, [id_pedido, producto_id]);
+      `, [pedidoId, producto_id]);
+      const entregadoPrevio = entregadoPrevioResult.rows[0];
 
       const totalEntregado = Number(entregadoPrevio?.total || 0) + cantidad;
       const cantidadSolicitada = Number(detallePedido.cantidad_solicitada);
@@ -886,7 +905,7 @@ router.post("/retirar", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), as
         cargo_retira,
         pedido.id_institucion,
         req.user.sub,
-        observaciones || `Retiro desde pedido anual #${id_pedido}`
+        observaciones || `Retiro desde pedido anual #${pedidoId}`
       ]);
 
       const idMovimiento = movResult.rows[0].id_movimiento;
@@ -904,7 +923,7 @@ router.post("/retirar", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), as
           (id_pedido, id_movimiento, id_producto, cantidad_entregada, id_usuario, observaciones)
         VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING id
-      `, [id_pedido, idMovimiento, producto_id, cantidad, req.user.sub, observaciones || null]);
+      `, [pedidoId, idMovimiento, producto_id, cantidad, req.user.sub, observaciones || null]);
 
       entregasData.push({
         id: entregaResult.rows[0].id,
@@ -914,19 +933,21 @@ router.post("/retirar", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), as
     }
 
     // Verificar si el pedido quedó completamente entregado
-    const itemsTotales = await all(`
+    const itemsTotalesResult = await client.query(`
       SELECT dp.id_producto, dp.cantidad_solicitada
       FROM detalle_pedido dp
       WHERE dp.id_pedido = $1
-    `, [id_pedido]);
+    `, [pedidoId]);
+    const itemsTotales = itemsTotalesResult.rows;
 
     let pedidoCompleto = true;
     for (const itemTotal of itemsTotales) {
-      const entregado = await get(`
+      const entregadoResult = await client.query(`
         SELECT COALESCE(SUM(cantidad_entregada), 0) AS total
         FROM pedido_entrega
         WHERE id_pedido = $1 AND id_producto = $2
-      `, [id_pedido, itemTotal.id_producto]);
+      `, [pedidoId, itemTotal.id_producto]);
+      const entregado = entregadoResult.rows[0];
 
       if (Number(entregado?.total || 0) < Number(itemTotal.cantidad_solicitada)) {
         pedidoCompleto = false;
@@ -940,7 +961,7 @@ router.post("/retirar", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), as
         UPDATE pedido 
         SET estado = 'finalizado' 
         WHERE id_pedido = $1
-      `, [id_pedido]);
+      `, [pedidoId]);
     }
 
     await client.query("COMMIT");
@@ -951,8 +972,8 @@ router.post("/retirar", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), as
       entregas: entregasData,
       pedido_completo: pedidoCompleto,
       mensaje: pedidoCompleto 
-        ? `Pedido #${id_pedido} completado y marcado como finalizado` 
-        : `Entrega registrada para pedido #${id_pedido}`
+        ? `Pedido #${pedidoId} completado y marcado como finalizado` 
+        : `Entrega registrada para pedido #${pedidoId}`
     });
 
   } catch (err) {

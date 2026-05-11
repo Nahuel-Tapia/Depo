@@ -1,33 +1,50 @@
 # Depo Stock
 
-Aplicación web para control básico de stock de depósito.
+Aplicacion web para gestion de stock, pedidos y distribucion para instituciones educativas.
 
-El proyecto incluye autenticación con JWT, administración de usuarios con roles, gestión de productos, registro de movimientos, ajustes de inventario, auditoría y módulos adicionales para pedidos, proveedores e instituciones.
+Hoy el proyecto ya no es una base "simple" de stock: incluye autenticacion JWT, roles y permisos, pedidos anuales y de refuerzo, supervision por niveles, compras, recepcion de licitaciones, depositos, distribucion y modulos operativos por rol.
 
-## Estado del proyecto
+## Stack real
 
-Este repositorio contiene el código fuente y los archivos necesarios para levantar una base de trabajo.
+- Backend: Node.js + Express
+- Base de datos: PostgreSQL
+- Frontend: React + Vite
 
-La base de datos con la que desarrollé y probé el sistema la tengo localmente en mi PC. En este repositorio no incluyo una copia completa de esa base con datos reales. Lo que sí queda incluido es el código de la aplicación, el archivo de ejemplo de variables de entorno y el script SQL base disponible en `backend/base_prueba.sql`.
+## Estructura principal
 
-## Tecnologías
+- `backend/src`: servidor, rutas, middleware y acceso a datos
+- `backend/scripts`: scripts auxiliares de base de datos y usuarios
+- `backend/base_prueba.sql`: esquema base minimo
+- `backend/depo_stock_dump.sql`: dump mas cercano al estado funcional completo
+- `frontend/src`: aplicacion React
+- `frontend/public`: assets publicos
+- `frontend/dist`: build generado para produccion
+
+## Modos de trabajo
+
+### 1. Desarrollo
+
+En desarrollo se usa:
+
+- backend en `http://localhost:4000`
+- frontend Vite en `http://localhost:5173`
+
+El backend y el frontend corren por separado.
+
+### 2. Ejecucion unificada
+
+Cuando existe `frontend/dist`, el backend sirve ese build estatico.
+
+Si `frontend/dist` no existe, el backend cae a `frontend/public`, lo cual solo sirve como fallback minimo y no reemplaza el frontend React completo.
+
+## Requisitos
 
 - Node.js
-- Express
-- PostgreSQL
-- HTML, CSS y JavaScript en frontend estático
-
-## Puesta en marcha
-
-1. Crear el archivo `.env` a partir de `.env.example`.
-2. Completar las credenciales reales de PostgreSQL en ese archivo.
-3. Instalar dependencias con `npm install`.
-4. Crear la base de datos si hace falta con `npm run db:create`.
-5. Cargar la estructura base desde `backend/base_prueba.sql`.
-6. Iniciar el servidor con `npm start`.
-7. Abrir `http://localhost:4000`.
+- PostgreSQL accesible desde la maquina local o la red
 
 ## Variables de entorno
+
+Crear `.env` en la raiz a partir de `.env.example`.
 
 Variables esperadas:
 
@@ -39,40 +56,137 @@ Variables esperadas:
 - `DB_USER`
 - `DB_PASSWORD`
 
+## Instalacion
+
+Instalar dependencias en ambos niveles:
+
+```bash
+npm install
+cd frontend
+npm install
+```
+
+## Base de datos
+
+Hay dos escenarios posibles:
+
+### Escenario A. Esquema base minimo
+
+Usar `backend/base_prueba.sql` si solo se necesita una estructura inicial para desarrollo controlado.
+
+Importante:
+
+- este archivo no representa todo el sistema actual
+- varios modulos reales requieren tablas y columnas adicionales
+- algunas rutas agregan columnas faltantes al iniciar, pero no reemplazan un esquema funcional completo
+
+### Escenario B. Esquema mas completo
+
+Usar `backend/depo_stock_dump.sql` si se necesita un entorno mas cercano al estado funcional real del proyecto.
+
+Recomendacion:
+
+- para revisar todos los modulos, trabajar con el esquema mas completo
+- para pruebas aisladas de backend base, `base_prueba.sql` puede alcanzar
+
+## Puesta en marcha
+
+### Backend
+
+Desde la raiz:
+
+```bash
+npm run dev
+```
+
+o:
+
+```bash
+npm start
+```
+
+### Frontend
+
+Desde `frontend`:
+
+```bash
+npm run dev
+```
+
+### Scripts Windows
+
+En Windows tambien podes usar:
+
+- `INICIAR.bat`
+- `CERRAR.bat`
+- `start-dev.ps1`
+- `stop-dev.ps1`
+
+Los scripts estan pensados para arrancar y detener solo este proyecto.
+
+## URLs
+
+- Backend: `http://localhost:4000`
+- Frontend Vite: `http://localhost:5173`
+- Healthcheck: `http://localhost:4000/api/health`
+
 ## Acceso inicial
 
 Usuario administrador por defecto:
 
 - Email: `admin@depo.local`
-- Contraseña: `Admin123!`
+- Contrasena: `Admin123!`
 
-Si el acceso falla, puede recrearse con `npm run reset-admin`.
+Si el acceso falla:
+
+```bash
+npm run reset-admin
+```
 
 ## Alcance funcional actual
 
-- Login y sesión con JWT
-- Gestión de usuarios y roles
-- Matriz de permisos por acción
-- CRUD de productos
-- Registro de movimientos de stock
-- Ajustes de inventario
-- Auditoría de operaciones
-- Endpoints para pedidos, proveedores e instituciones
+Entre los modulos presentes hoy en el repositorio:
 
-## Notas para revisión
+- Login, registro directivo y sesion con JWT
+- Gestion de usuarios, roles y permisos
+- Productos, movimientos y stock por depositos
+- Pedidos anuales y pedidos de refuerzo
+- Supervisor, Director de Area y gestion de zonas
+- Compras, licitacion y adjudicacion
+- Recepcion de licitaciones y distribucion a escuelas
+- Instituciones, proveedores, auditoria y patrimonio
 
-- El backend sirve el frontend estático desde la misma aplicación Express.
-- La configuración actual del proyecto está orientada a PostgreSQL.
-- No se incluye una exportación de la base de datos de trabajo ni datos productivos dentro del repositorio.
+## Build
 
-## Estructura principal
+Backend:
 
-- `backend/src`: servidor, rutas, middleware y acceso a datos
-- `backend/scripts`: scripts auxiliares de base de datos y usuarios
-- `frontend/public`: archivos estáticos del frontend
+```bash
+npm run build
+```
 
-## Pendientes razonables
+Nota:
 
-- Incorporar pruebas automatizadas
-- Formalizar un proceso de despliegue
-- Completar validaciones y documentación operativa de algunos módulos
+- hoy este comando solo valida sintaxis del backend
+- el build real del frontend se ejecuta dentro de `frontend`
+
+Frontend:
+
+```bash
+cd frontend
+npm run build
+```
+
+## Estado de la documentacion
+
+La documentacion del repositorio esta siendo alineada con el estado real del sistema.
+
+Si estas revisando la API, toma como referencia principal:
+
+- `backend/ENDPOINTS.md`
+- las rutas reales dentro de `backend/src/routes`
+
+## Notas
+
+- El proyecto esta orientado a PostgreSQL.
+- No se incluyen datos productivos reales en el repositorio.
+- Algunas guias funcionales describen el flujo objetivo y no siempre el nivel exacto de implementacion de cada modulo.

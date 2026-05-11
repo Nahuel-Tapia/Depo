@@ -1,5 +1,5 @@
 const express = require("express");
-const { all, get, run } = require("../db.pg");
+const { all, get, run, pool } = require("../db.pg");
 const { authenticate, authorizePermissions } = require("../middleware/auth");
 const { PERMISSIONS } = require("../permissions");
 
@@ -317,7 +317,7 @@ router.get("/:id(\\d+)", authorizePermissions(PERMISSIONS.INSTITUCIONES_VIEW), a
         i.cue,
         i.nombre,
         i.nivel_educativo AS nivel,
-        i.categoria AS tipo,
+        COALESCE(i.tipo, i.categoria) AS tipo,
         i.activo,
       e.cui,
       d.calle AS direccion,
@@ -341,7 +341,7 @@ router.get("/:id(\\d+)", authorizePermissions(PERMISSIONS.INSTITUCIONES_VIEW), a
         a.id, a.producto_id, p.nombre as producto_nombre, p.codigo as producto_codigo,
         a.cantidad_asignada, a.cantidad_entregada, a.periodo
       FROM asignaciones_stock a
-      JOIN productos p ON a.producto_id = p.id
+      JOIN producto p ON a.producto_id = p.id_producto
       WHERE a.institucion_id = ?
       ORDER BY a.periodo DESC, p.nombre ASC
     `, [id]);
@@ -363,7 +363,7 @@ router.get("/cue/:cue", authorizePermissions(PERMISSIONS.INSTITUCIONES_VIEW), as
         i.cue,
         i.nombre,
         i.nivel_educativo AS nivel,
-        i.categoria AS tipo,
+        COALESCE(i.tipo, i.categoria) AS tipo,
         i.activo,
       e.cui,
       d.calle AS direccion,
@@ -423,17 +423,22 @@ router.post("/", authorizePermissions(PERMISSIONS.INSTITUCIONES_CREATE), async (
 
     const result = await run(`
       INSERT INTO institucion (
-        cue, nombre, email, nivel, tipo, matriculados, factor_asignacion, notas
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        cue, nombre, email, telefono, nivel_educativo, nivel, tipo, matriculados, factor_asignacion, notas, direccion, localidad, departamento
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       cueNormalized,
       nombre.trim(),
       email || null,
+      telefono || null,
+      nivel || null,
       nivel || null,
       tipo || "publica",
       matriculadosNum,
       factor,
-      notas || null
+      notas || null,
+      direccion || null,
+      localidad || null,
+      departamento || null
     ]);
 
     // Auditoría
@@ -508,8 +513,10 @@ router.patch("/:id", authorizePermissions(PERMISSIONS.INSTITUCIONES_EDIT), async
         return res.status(400).json({ error: "Nivel inválido" });
       }
       updates.push("nivel = ?");
+      updates.push("nivel_educativo = ?");
       params.push(nivel);
-      cambios.nivel = { antes: institucion.nivel, despues: nivel };
+      params.push(nivel);
+      cambios.nivel = { antes: institucion.nivel || institucion.nivel_educativo, despues: nivel };
     }
     if (tipo !== undefined) {
       if (!TIPOS.includes(tipo)) {
@@ -539,8 +546,8 @@ router.patch("/:id", authorizePermissions(PERMISSIONS.INSTITUCIONES_EDIT), async
     }
     if (activo !== undefined) {
       updates.push("activo = ?");
-      params.push(activo ? 1 : 0);
-      cambios.activo = { antes: institucion.activo, despues: activo ? 1 : 0 };
+      params.push(activo ? true : false);
+      cambios.activo = { antes: institucion.activo, despues: activo ? true : false };
     }
 
     if (updates.length === 0) {
@@ -610,7 +617,7 @@ router.get("/:id/asignaciones", authorizePermissions(PERMISSIONS.INSTITUCIONES_V
         (a.cantidad_asignada - a.cantidad_entregada) as pendiente,
         a.periodo, a.created_at
       FROM asignaciones_stock a
-      JOIN productos p ON a.producto_id = p.id
+      JOIN producto p ON a.producto_id = p.id_producto
       WHERE a.institucion_id = ?
     `;
     const params = [id];
@@ -645,7 +652,7 @@ router.post("/:id/asignar", authorizePermissions(PERMISSIONS.INSTITUCIONES_ASIGN
       return res.status(404).json({ error: "Institución no encontrada" });
     }
 
-    const producto = await get("SELECT * FROM productos WHERE id = ?", [producto_id]);
+    const producto = await get("SELECT * FROM producto WHERE id_producto = ?", [producto_id]);
     if (!producto) {
       return res.status(404).json({ error: "Producto no encontrado" });
     }
@@ -654,6 +661,10 @@ router.post("/:id/asignar", authorizePermissions(PERMISSIONS.INSTITUCIONES_ASIGN
     const cantidadFinal = cantidad === "auto" 
       ? calcularCantidadAsignada(institucion.matriculados)
       : parseInt(cantidad, 10);
+
+    if (!Number.isInteger(cantidadFinal) || cantidadFinal <= 0) {
+      return res.status(400).json({ error: "La cantidad asignada debe ser un numero mayor a 0" });
+    }
 
     // Verificar si ya existe asignación
     const existing = await get(
@@ -690,12 +701,17 @@ router.post("/:id/asignar", authorizePermissions(PERMISSIONS.INSTITUCIONES_ASIGN
 router.post("/asignar-masivo", authorizePermissions(PERMISSIONS.INSTITUCIONES_ASIGNAR), async (req, res) => {
   try {
     const { producto_id, cantidad_base, periodo } = req.body;
+    const cantidadBaseNum = parseInt(cantidad_base, 10);
 
     if (!producto_id || !cantidad_base || !periodo) {
       return res.status(400).json({ error: "producto_id, cantidad_base y periodo son obligatorios" });
     }
 
-    const producto = await get("SELECT * FROM productos WHERE id = ?", [producto_id]);
+    if (!Number.isInteger(cantidadBaseNum) || cantidadBaseNum <= 0) {
+      return res.status(400).json({ error: "cantidad_base debe ser un numero mayor a 0" });
+    }
+
+    const producto = await get("SELECT * FROM producto WHERE id_producto = ?", [producto_id]);
     if (!producto) {
       return res.status(404).json({ error: "Producto no encontrado" });
     }
@@ -706,7 +722,7 @@ router.post("/asignar-masivo", authorizePermissions(PERMISSIONS.INSTITUCIONES_AS
     let totalUnidades = 0;
 
     for (const inst of instituciones) {
-      const cantidad = calcularCantidadAsignada(inst.matriculados, parseInt(cantidad_base, 10));
+      const cantidad = calcularCantidadAsignada(inst.matriculados, cantidadBaseNum);
       
       const existing = await get(
         "SELECT id FROM asignaciones_stock WHERE institucion_id = ? AND producto_id = ? AND periodo = ?",
@@ -750,6 +766,7 @@ router.post("/asignar-masivo", authorizePermissions(PERMISSIONS.INSTITUCIONES_AS
 
 // Registrar entrega de stock
 router.post("/:id/entregar", authorizePermissions(PERMISSIONS.INSTITUCIONES_ASIGNAR), async (req, res) => {
+  const client = await pool.connect();
   try {
     const { id } = req.params;
     const { asignacion_id, cantidad } = req.body;
@@ -758,55 +775,73 @@ router.post("/:id/entregar", authorizePermissions(PERMISSIONS.INSTITUCIONES_ASIG
       return res.status(400).json({ error: "asignacion_id y cantidad son obligatorios" });
     }
 
-    const asignacion = await get(`
-      SELECT a.*, i.nombre as institucion_nombre, i.cue, p.nombre as producto_nombre, p.stock_actual
-      FROM asignaciones_stock a
-      JOIN instituciones i ON a.institucion_id = i.id
-      JOIN productos p ON a.producto_id = p.id
-      WHERE a.id = ? AND a.institucion_id = ?
-    `, [asignacion_id, id]);
-
-    if (!asignacion) {
-      return res.status(404).json({ error: "Asignación no encontrada" });
+    const cantidadNum = parseInt(cantidad, 10);
+    if (!Number.isInteger(cantidadNum) || cantidadNum <= 0) {
+      return res.status(400).json({ error: "La cantidad debe ser un numero mayor a 0" });
     }
 
-    const cantidadNum = parseInt(cantidad, 10);
+    await client.query("BEGIN");
+
+    const asignacionResult = await client.query(
+      `SELECT a.*, i.nombre as institucion_nombre, i.cue, p.nombre as producto_nombre, p.stock_actual
+       FROM asignaciones_stock a
+       JOIN institucion i ON a.institucion_id = i.id_institucion
+       JOIN producto p ON a.producto_id = p.id_producto
+       WHERE a.id = $1 AND a.institucion_id = $2
+       FOR UPDATE`,
+      [asignacion_id, id]
+    );
+    const asignacion = asignacionResult.rows[0];
+    if (!asignacion) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Asignacion no encontrada" });
+    }
+
     const pendiente = asignacion.cantidad_asignada - asignacion.cantidad_entregada;
 
     if (cantidadNum > pendiente) {
+      await client.query("ROLLBACK");
       return res.status(400).json({ error: `Solo hay ${pendiente} unidades pendientes de entregar` });
     }
 
     if (cantidadNum > asignacion.stock_actual) {
+      await client.query("ROLLBACK");
       return res.status(400).json({ error: `Stock insuficiente. Disponible: ${asignacion.stock_actual}` });
     }
 
     // Actualizar asignación
-    await run(
-      "UPDATE asignaciones_stock SET cantidad_entregada = cantidad_entregada + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+    await client.query(
+      "UPDATE asignaciones_stock SET cantidad_entregada = cantidad_entregada + $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2",
       [cantidadNum, asignacion_id]
     );
 
     // Registrar movimiento de salida
-    await run(`
-      INSERT INTO movimientos (producto_id, tipo, cantidad, usuario_id, motivo, cue)
-      VALUES (?, 'salida', ?, ?, ?, ?)
-    `, [asignacion.producto_id, cantidadNum, req.user.sub, 
-        `Entrega a ${asignacion.institucion_nombre} - Periodo ${asignacion.periodo}`, asignacion.cue]);
+    await client.query(
+      `INSERT INTO movimiento_stock (id_producto, tipo, cantidad, id_usuario, motivo, id_institucion, fecha_movimiento)
+       VALUES ($1, 'egreso', $2, $3, $4, $5, NOW())`,
+      [asignacion.producto_id, cantidadNum, req.user.sub, `Entrega a ${asignacion.institucion_nombre} - Periodo ${asignacion.periodo}`, id]
+    );
 
     // Actualizar stock del producto
-    await run(
-      "UPDATE productos SET stock_actual = stock_actual - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+    await client.query(
+      "UPDATE producto SET stock_actual = stock_actual - $1, updated_at = CURRENT_TIMESTAMP WHERE id_producto = $2",
       [cantidadNum, asignacion.producto_id]
     );
+
+    await client.query("COMMIT");
 
     return res.json({ 
       ok: true,
       message: `Entregadas ${cantidadNum} unidades de ${asignacion.producto_nombre} a ${asignacion.institucion_nombre}`
     });
   } catch (err) {
+    try {
+      await client.query("ROLLBACK");
+    } catch (_) {}
     console.error(err);
     return res.status(500).json({ error: "No se pudo registrar la entrega" });
+  } finally {
+    client.release();
   }
 });
 
@@ -817,7 +852,7 @@ router.get("/resumen/:periodo", authorizePermissions(PERMISSIONS.INSTITUCIONES_V
 
     const resumen = await all(`
       SELECT 
-        p.id as producto_id,
+        p.id_producto as producto_id,
         p.codigo,
         p.nombre as producto,
         p.tipo,
@@ -826,9 +861,9 @@ router.get("/resumen/:periodo", authorizePermissions(PERMISSIONS.INSTITUCIONES_V
         SUM(a.cantidad_entregada) as total_entregado,
         SUM(a.cantidad_asignada - a.cantidad_entregada) as total_pendiente,
         COUNT(DISTINCT a.institucion_id) as instituciones
-      FROM productos p
-      LEFT JOIN asignaciones_stock a ON p.id = a.producto_id AND a.periodo = ?
-      GROUP BY p.id
+      FROM producto p
+      LEFT JOIN asignaciones_stock a ON p.id_producto = a.producto_id AND a.periodo = ?
+      GROUP BY p.id_producto
       ORDER BY p.tipo, p.nombre
     `, [periodo]);
 
