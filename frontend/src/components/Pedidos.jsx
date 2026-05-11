@@ -817,30 +817,20 @@ function DirectivoPedidos() {
   const cantidadKits = Math.max(1, parseInt(form.cantidad, 10) || 1)
   const cargandoCupos = false
   const tieneProductosKit = tieneKits
-  const anioActual = new Date().getFullYear()
-  const pedidosAnualesDelAnio = pedidos.filter((pedido) => {
-    if ((pedido.tipo || 'anual') !== 'anual' || !pedido.created_at) return false
-    return new Date(pedido.created_at).getFullYear() === anioActual
-  })
-  const pedidoAnualBloqueante = pedidosAnualesDelAnio.find((pedido) => {
+  const pedidoActivoBloqueante = pedidos.find((pedido) => {
     const estadoVisible = getEstadoVisiblePedido(pedido)
-    return estadoVisible === 'pendiente' || estadoVisible === 'aprobado' || estadoVisible === 'entregado'
+    return estadoVisible === 'pendiente' || estadoVisible === 'aclaracion'
   }) || null
-  const pedidoAnualConAclaracion = pedidosAnualesDelAnio.find(
-    pedido => getEstadoVisiblePedido(pedido) === 'aclaracion'
-  ) || null
-  const puedeCrearAnual = tieneKits && !pedidoAnualBloqueante
-  const puedeCrearRefuerzo = tieneKits
+  const puedeCrearAnual = tieneKits && !pedidoActivoBloqueante
+  const puedeCrearRefuerzo = tieneKits && !pedidoActivoBloqueante
   const kitAsignado = kits.length === 1 ? kits[0] : kitSeleccionado
   const productosKitOrdenados = kits.map((kit) => ({
     id: kit.id,
     nombre: kit.nombre,
     unidad_medida: kit.tipo_escuela_label
   }))
-  const textoBloqueoAnual = pedidoAnualBloqueante
-    ? getEstadoVisiblePedido(pedidoAnualBloqueante) === 'pendiente'
-      ? `Ya enviaste la solicitud anual #${pedidoAnualBloqueante.id}. Vas a poder generar otra si el supervisor la rechaza o te pide una aclaracion.`
-      : `Tu escuela ya tiene una solicitud anual registrada este ano (#${pedidoAnualBloqueante.id}).`
+  const textoBloqueoSolicitud = pedidoActivoBloqueante
+    ? `Ya tenes la solicitud #${pedidoActivoBloqueante.id} en revision. Vas a poder generar otra cuando sea aprobada o rechazada.`
     : ''
 
   const badgeTab = (tipo) => {
@@ -853,22 +843,22 @@ function DirectivoPedidos() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <h2 style={{ margin: 0 }}>Mis Pedidos</h2>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          {((tab === 'refuerzo' && puedeCrearRefuerzo) || (tab === 'anual' && tieneKits)) && (
+          {((tab === 'refuerzo' && tieneKits) || (tab === 'anual' && tieneKits)) && (
             <button
               type="button"
               className="mov-action-btn"
-              disabled={tab === 'anual' && !puedeCrearAnual}
-              title={tab === 'anual' && !puedeCrearAnual ? textoBloqueoAnual : undefined}
+              disabled={(tab === 'anual' && !puedeCrearAnual) || (tab === 'refuerzo' && !puedeCrearRefuerzo)}
+              title={pedidoActivoBloqueante ? textoBloqueoSolicitud : undefined}
               style={{
                 width: 'auto',
                 margin: 0,
                 padding: '14px 22px',
                 fontSize: '1rem',
-                opacity: tab === 'anual' && !puedeCrearAnual ? 0.6 : 1,
-                cursor: tab === 'anual' && !puedeCrearAnual ? 'not-allowed' : 'pointer'
+                opacity: pedidoActivoBloqueante ? 0.6 : 1,
+                cursor: pedidoActivoBloqueante ? 'not-allowed' : 'pointer'
               }}
               onClick={() => {
-                if (tab === 'anual' && !puedeCrearAnual) return
+                if (pedidoActivoBloqueante) return
                 setModalOpen(true)
                 setMsg({ text: '', type: '' })
               }}
@@ -926,20 +916,9 @@ function DirectivoPedidos() {
         </div>
       )}
 
-      {tab === 'anual' && pedidoAnualBloqueante && (
+      {tab !== 'retiro' && pedidoActivoBloqueante && (
         <div className="msg show msg-error">
-          {textoBloqueoAnual}
-        </div>
-      )}
-
-      {tab === 'anual' && !pedidoAnualBloqueante && pedidoAnualConAclaracion && (
-        <div className="msg show" style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', marginTop: 8 }}>
-          El supervisor respondio la solicitud anual #{pedidoAnualConAclaracion.id}. Podes enviar una nueva solicitud anual.
-          {pedidoAnualConAclaracion.motivo_supervisor && (
-            <div style={{ marginTop: 6 }}>
-              <strong>Observacion:</strong> {pedidoAnualConAclaracion.motivo_supervisor}
-            </div>
-          )}
+          {textoBloqueoSolicitud}
         </div>
       )}
 
@@ -987,11 +966,7 @@ function DirectivoPedidos() {
                 </div>
               ))}
           </div>
-          <div style={{ marginTop: 24, textAlign: 'right' }}>
-            <button className="secondary" style={{ borderRadius: 8 }} onClick={() => window.print()}>
-              🖨️ Descargar Comprobante de Retiro
-            </button>
-          </div>
+          {/* El comprobante de retiro se imprime desde la vista de Solicitudes de Retiro una vez que se confirma la entrega. */}
         </div>
       )}
 

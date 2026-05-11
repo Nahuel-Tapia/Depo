@@ -1,51 +1,118 @@
-import { useState } from 'react'
-import { formatRatio, getRatioMeta } from './ratioUtils'
+import { useMemo, useState } from 'react'
 
 function formatEstado(estado) {
   if (estado === 'aclaracion') return 'Aclaracion solicitada'
+  if (estado === 'pendiente_director') return 'Enviado a Director'
   if (estado === 'aprobado') return 'Aprobado'
   if (estado === 'rechazado') return 'Rechazado'
   if (estado === 'cancelado') return 'Cancelado'
   return 'Pendiente'
 }
 
-export default function SolicitudDetalleModal({ solicitud, historial, loadingHistorial, onClose, onApprove, onReject, onRequestClarification, disabled }) {
+export default function SolicitudDetalleModal({
+  solicitud,
+  historial,
+  loadingHistorial,
+  onClose,
+  onApprove,
+  onReject,
+  onRequestClarification,
+  disabled
+}) {
+  const solicitudes = useMemo(() => solicitud.solicitudes || [solicitud], [solicitud])
+  const firstPending = solicitudes.find(item => item.estado === 'pendiente') || solicitudes[0]
+  const [selectedId, setSelectedId] = useState(firstPending?.id)
   const [observacion, setObservacion] = useState('')
-  const ratioMeta = getRatioMeta(solicitud.cantidad, solicitud.matricula)
+
+  const selected = solicitudes.find(item => item.id === selectedId) || firstPending
+  const canAct = selected.estado === 'pendiente'
 
   const submitReject = () => {
-    onReject(observacion.trim())
+    onReject(observacion.trim(), selected)
   }
 
   const submitClarification = () => {
-    onRequestClarification(observacion.trim())
+    onRequestClarification(observacion.trim(), selected)
   }
 
   return (
     <div className="sv-modal-overlay" onClick={onClose}>
       <aside className="sv-modal-panel" onClick={e => e.stopPropagation()}>
         <div className="sv-modal-header">
-          <h3>Solicitud #{solicitud.id}</h3>
+          <div>
+            <h3 style={{ marginBottom: 4 }}>{solicitud.escuela}</h3>
+            <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.85rem' }}>
+              {solicitudes.length} solicitud{solicitudes.length === 1 ? '' : 'es'} para revisar
+            </p>
+          </div>
           <button className="secondary" onClick={onClose}>Cerrar</button>
         </div>
 
-        <div className="sv-detalle-grid">
-          <div><strong>Escuela:</strong> {solicitud.escuela}</div>
-          <div><strong>Solicitante:</strong> {solicitud.solicitante || '-'}</div>
-          <div><strong>Matricula:</strong> {solicitud.matricula}</div>
-          <div><strong>Producto:</strong> {solicitud.producto || '-'}</div>
-          <div><strong>Cantidad solicitada:</strong> {solicitud.cantidad}</div>
+        <div className="sv-modal-body-scroll">
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 0.9fr) 1.4fr', gap: 18 }}>
           <div>
-            <strong>Ratio:</strong>{' '}
-            <span className={`sv-ratio-pill ${ratioMeta.className}`}>
-              {formatRatio(ratioMeta.ratio)}
-            </span>
+            <h4 style={{ marginTop: 0 }}>Solicitudes</h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {solicitudes.map(item => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={item.id === selected.id ? 'primary' : 'secondary'}
+                  onClick={() => {
+                    setSelectedId(item.id)
+                    setObservacion('')
+                  }}
+                  style={{ textAlign: 'left', justifyContent: 'space-between' }}
+                >
+                  <span>#{item.id} - {item.producto || 'Solicitud'}</span>
+                  <span style={{ fontSize: '0.75rem', opacity: 0.8 }}>{formatEstado(item.estado)}</span>
+                </button>
+              ))}
+            </div>
           </div>
-          <div><strong>Estado:</strong> {formatEstado(solicitud.estado)}</div>
-          <div><strong>Fecha:</strong> {solicitud.fecha ? new Date(solicitud.fecha).toLocaleDateString('es-AR') : '-'}</div>
+
+          <div>
+            <div className="sv-detalle-grid">
+              <div><strong>Solicitud:</strong> #{selected.id}</div>
+              <div><strong>Solicitante:</strong> {selected.solicitante || '-'}</div>
+              <div><strong>Matricula:</strong> {selected.matricula}</div>
+              <div><strong>Tipo:</strong> {selected.tipo || 'anual'}</div>
+              <div><strong>Cantidad solicitada:</strong> {selected.cantidad}</div>
+              <div><strong>Estado:</strong> {formatEstado(selected.estado)}</div>
+              <div><strong>Fecha:</strong> {selected.fecha ? new Date(selected.fecha).toLocaleDateString('es-AR') : '-'}</div>
+            </div>
+
+            <h4 style={{ marginTop: 16 }}>Detalle del pedido</h4>
+            {selected.items?.length > 0 ? (
+              <table className="sv-historial-table">
+                <thead>
+                  <tr>
+                    <th>Producto</th>
+                    <th>Cantidad</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selected.items.map((item, idx) => (
+                    <tr key={`${item.producto || 'producto'}-${idx}`}>
+                      <td>{item.producto || '-'}</td>
+                      <td style={{ textAlign: 'center' }}>{item.cantidad || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p style={{ color: 'var(--muted)' }}>{selected.producto || 'Sin detalle de productos.'}</p>
+            )}
+
+            {selected.notas && (
+              <div className="msg show" style={{ marginTop: 12, background: '#f8fafc', color: '#334155', border: '1px solid #e2e8f0' }}>
+                <strong>Notas de la escuela:</strong> {selected.notas}
+              </div>
+            )}
+          </div>
         </div>
 
-        <div style={{ marginTop: 12 }}>
+        <div style={{ marginTop: 16 }}>
           <label htmlFor="sv-observacion" style={{ marginTop: 0 }}>Observacion</label>
           <textarea
             id="sv-observacion"
@@ -57,9 +124,9 @@ export default function SolicitudDetalleModal({ solicitud, historial, loadingHis
           />
         </div>
 
-        {solicitud.motivo_supervisor && (
+        {selected.motivo_supervisor && (
           <div className="msg show" style={{ marginTop: 12, background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>
-            <strong>Ultima observacion del supervisor:</strong> {solicitud.motivo_supervisor}
+            <strong>Ultima observacion del supervisor:</strong> {selected.motivo_supervisor}
           </div>
         )}
 
@@ -90,11 +157,12 @@ export default function SolicitudDetalleModal({ solicitud, historial, loadingHis
             </tbody>
           </table>
         )}
+        </div>
 
-        <div className="inline-actions" style={{ marginTop: 12 }}>
-          <button disabled={disabled || solicitud.estado !== 'pendiente'} onClick={onApprove}>Aprobar solicitud</button>
-          <button disabled={disabled || solicitud.estado !== 'pendiente'} className="sv-btn-rechazar" onClick={submitReject}>Rechazar solicitud</button>
-          <button disabled={disabled || solicitud.estado !== 'pendiente'} className="sv-btn-reparar" onClick={submitClarification}>Pedir aclaracion</button>
+        <div className="inline-actions sv-modal-actions">
+          <button disabled={disabled || !canAct} onClick={() => onApprove(selected)}>Aceptar solicitud</button>
+          <button disabled={disabled || !canAct} className="sv-btn-rechazar" onClick={submitReject}>Rechazar solicitud</button>
+          <button disabled={disabled || !canAct} className="sv-btn-reparar" onClick={submitClarification}>Pedir aclaracion</button>
         </div>
       </aside>
     </div>

@@ -3,7 +3,6 @@ import { useAuth } from '../../context/AuthContext'
 import { apiFetch } from '../../api'
 import SolicitudesTable from './SolicitudesTable'
 import SolicitudDetalleModal from './SolicitudDetalleModal'
-import { calculateRatio } from './ratioUtils'
 
 function normalizeEstado(estado, respuestaSupervisorTipo) {
   if (estado === 'pendiente' && respuestaSupervisorTipo === 'aclaracion') return 'aclaracion'
@@ -62,6 +61,9 @@ export default function SupervisorSolicitudes() {
         institucion_id: item.institucion_id,
         solicitante: item.solicitante,
         producto: item.producto,
+        items: item.items || [],
+        notas: item.notas || '',
+        tipo: item.tipo || 'anual',
         cantidad: Number(item.cantidad) || 0,
         matricula: Number(item.matricula) || 0,
         fecha: item.fecha,
@@ -106,17 +108,27 @@ export default function SupervisorSolicitudes() {
 
   const updateEstadoLocal = (id, changes) => {
     setSolicitudes(prev => prev.map(item => (item.id === id ? { ...item, ...changes } : item)))
-    setSelected(prev => (prev && prev.id === id ? { ...prev, ...changes } : prev))
+    setSelected(prev => {
+      if (!prev) return prev
+      if (prev.solicitudes) {
+        return {
+          ...prev,
+          solicitudes: prev.solicitudes.map(item => (item.id === id ? { ...item, ...changes } : item))
+        }
+      }
+      return prev.id === id ? { ...prev, ...changes } : prev
+    })
   }
 
-  const processEstado = async (nuevoEstado, observacion = '') => {
-    if (!selected) return
+  const processEstado = async (nuevoEstado, observacion = '', solicitudObjetivo = null) => {
+    const target = solicitudObjetivo || selected
+    if (!target) return
     setUpdating(true)
     try {
       const payload = { estado: nuevoEstado }
       if (observacion) payload.motivo = observacion
 
-      const res = await apiFetch(`/api/pedidos/${selected.id}/estado`, {
+      const res = await apiFetch(`/api/pedidos/${target.id}/estado`, {
         token,
         method: 'PATCH',
         body: JSON.stringify(payload)
@@ -128,7 +140,9 @@ export default function SupervisorSolicitudes() {
       }
 
       const resData = await res.json()
-      const serverEstado = resData.estado || nuevoEstado
+      const serverEstado = resData.respuesta_supervisor_tipo === 'aclaracion'
+        ? 'aclaracion'
+        : (resData.estado || nuevoEstado)
 
       const nextChanges = serverEstado === 'aclaracion'
         ? {
@@ -142,11 +156,11 @@ export default function SupervisorSolicitudes() {
             motivo_supervisor: serverEstado === 'rechazado' ? (observacion || null) : null
           }
 
-      updateEstadoLocal(selected.id, nextChanges)
+      updateEstadoLocal(target.id, nextChanges)
       setMsg({
         text: serverEstado === 'aclaracion'
-          ? `Se pidió aclaración para la solicitud #${selected.id}.`
-          : `Solicitud #${selected.id} actualizada a ${serverEstado}.`,
+          ? `Se pidió aclaración para la solicitud #${target.id}.`
+          : `Solicitud #${target.id} actualizada a ${serverEstado}.`,
         type: 'success'
       })
     } catch (err) {
@@ -156,8 +170,8 @@ export default function SupervisorSolicitudes() {
     }
   }
 
-  const handleClarification = async (nota) => {
-    await processEstado('aclaracion', nota)
+  const handleClarification = async (nota, solicitudObjetivo) => {
+    await processEstado('aclaracion', nota, solicitudObjetivo)
   }
 
   const solicitudesVista = useMemo(() => {
@@ -165,19 +179,39 @@ export default function SupervisorSolicitudes() {
       ? [...solicitudes]
       : solicitudes.filter(item => item.estado === filtroEstado)
 
-    return filtered.sort((a, b) => {
+    const sorted = filtered.sort((a, b) => {
       if (orden === 'fecha_asc') return new Date(a.fecha) - new Date(b.fecha)
       if (orden === 'fecha_desc') return new Date(b.fecha) - new Date(a.fecha)
 
-      const ratioA = calculateRatio(a.cantidad, a.matricula)
-      const ratioB = calculateRatio(b.cantidad, b.matricula)
-
-      if (orden === 'ratio_asc') return ratioA - ratioB
-      return ratioB - ratioA
+      return 0
     })
-  }, [solicitudes, filtroEstado, orden])
 
-  const sospechosas = solicitudes.filter(s => calculateRatio(s.cantidad, s.matricula) >= 0.2).length
+    const grupos = new Map()
+    sorted.forEach(item => {
+      const key = item.institucion_id || item.escuela
+      const current = grupos.get(key)
+
+      if (!current) {
+        grupos.set(key, {
+          ...item,
+          id: `escuela-${key}`,
+          solicitudes: [item],
+          cantidad_solicitudes: 1,
+          cantidad_total: item.cantidad,
+          cantidad: item.cantidad
+        })
+        return
+      }
+
+      current.solicitudes.push(item)
+      current.cantidad_solicitudes += 1
+      current.cantidad_total += item.cantidad
+      current.cantidad = current.cantidad_total
+      current.producto = `${current.cantidad_solicitudes} solicitudes`
+    })
+
+    return Array.from(grupos.values())
+  }, [solicitudes, filtroEstado, orden])
 
   return (
     <div className="supervisor-dashboard fade-in">
@@ -188,9 +222,6 @@ export default function SupervisorSolicitudes() {
             Revisión por coherencia con matrícula.
           </p>
         </div>
-        <span className="badge-premium" style={{ background: '#fff7ed', color: '#9a3412', border: '1px solid #ffedd5' }}>
-          {sospechosas} solicitudes con ratio alto
-        </span>
       </div>
 
       {msg.text && <div className={`msg show ${msg.type === 'success' ? 'msg-success' : 'msg-error'}`}>{msg.text}</div>}
@@ -240,8 +271,6 @@ export default function SupervisorSolicitudes() {
           <select value={orden} onChange={e => setOrden(e.target.value)}>
             <option value="fecha_desc">Fecha (más reciente)</option>
             <option value="fecha_asc">Fecha (más antigua)</option>
-            <option value="ratio_desc">Ratio (alto a bajo)</option>
-            <option value="ratio_asc">Ratio (bajo a alto)</option>
           </select>
         </div>
       </div>
@@ -261,8 +290,8 @@ export default function SupervisorSolicitudes() {
           loadingHistorial={loadingHistorial}
           disabled={updating}
           onClose={() => setSelected(null)}
-          onApprove={() => processEstado('aprobado')}
-          onReject={motivo => processEstado('rechazado', motivo)}
+          onApprove={solicitudObjetivo => processEstado('aprobado', '', solicitudObjetivo)}
+          onReject={(motivo, solicitudObjetivo) => processEstado('rechazado', motivo, solicitudObjetivo)}
           onRequestClarification={handleClarification}
         />
       )}

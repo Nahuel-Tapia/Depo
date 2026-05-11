@@ -38,6 +38,8 @@ async function ensureEntregasSchema() {
       retira_nombre VARCHAR(180),
       retira_dni VARCHAR(30),
       estado VARCHAR(20) NOT NULL DEFAULT 'pendiente',
+      id_usuario_acepta INT REFERENCES usuario(id_usuario),
+      fecha_aceptacion TIMESTAMP,
       id_usuario_entrega INT REFERENCES usuario(id_usuario),
       fecha_entrega TIMESTAMP,
       observaciones TEXT,
@@ -174,6 +176,8 @@ async function getSolicitudRetiro(id, client = null) {
       i.cue,
       sr.id_usuario_solicitante,
       us.nombre AS solicitante_nombre,
+      sr.id_usuario_acepta,
+      ua.nombre AS acepta_usuario_nombre,
       sr.fecha_retiro,
       sr.retira_tipo,
       sr.retira_nombre,
@@ -195,6 +199,7 @@ async function getSolicitudRetiro(id, client = null) {
     JOIN institucion i ON i.id_institucion = sr.id_institucion
     JOIN usuario us ON us.id_usuario = sr.id_usuario_solicitante
     LEFT JOIN usuario ue ON ue.id_usuario = sr.id_usuario_entrega
+    LEFT JOIN usuario ua ON ua.id_usuario = sr.id_usuario_acepta
     JOIN solicitud_retiro_detalle srd ON srd.id_solicitud_retiro = sr.id
     JOIN producto pr ON pr.id_producto = srd.id_producto
     WHERE sr.id = $1
@@ -217,6 +222,8 @@ async function getSolicitudRetiro(id, client = null) {
     retira_nombre: first.retira_nombre,
     retira_dni: first.retira_dni,
     estado: first.estado,
+    id_usuario_acepta: first.id_usuario_acepta ? Number(first.id_usuario_acepta) : null,
+    acepta_usuario_nombre: first.acepta_usuario_nombre || null,
     id_usuario_entrega: first.id_usuario_entrega ? Number(first.id_usuario_entrega) : null,
     entrega_usuario_nombre: first.entrega_usuario_nombre || null,
     fecha_entrega: first.fecha_entrega,
@@ -516,6 +523,31 @@ router.post("/solicitudes", authorizePermissions(PERMISSIONS.PEDIDOS_CREATE), as
   }
 });
 
+// PATCH /api/entregas/solicitudes/:id/aceptar - Operador acepta la solicitud para proceder con la entrega
+router.patch("/solicitudes/:id/aceptar", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), async (req, res) => {
+  try {
+    await ensureEntregasSchema();
+
+    const solicitudId = parsePositiveInt(req.params.id);
+    if (!solicitudId) return res.status(400).json({ error: "Solicitud inválida" });
+
+    const solicitud = await getSolicitudRetiro(solicitudId);
+    if (!solicitud) return res.status(404).json({ error: "Solicitud de retiro no encontrada" });
+
+    if (solicitud.estado !== 'pendiente') {
+      return res.status(400).json({ error: 'Solo se pueden aceptar solicitudes pendientes' });
+    }
+
+    await run(`UPDATE solicitud_retiro SET estado = 'aceptada', id_usuario_acepta = ?, fecha_aceptacion = NOW() WHERE id = ?`, [req.user.sub, solicitudId]);
+
+    const updated = await getSolicitudRetiro(solicitudId);
+    return res.json({ ok: true, estado: 'aceptada', solicitud: updated });
+  } catch (err) {
+    console.error('Error al aceptar solicitud de retiro:', err);
+    return res.status(500).json({ error: 'No se pudo aceptar la solicitud' });
+  }
+});
+
 // GET /api/entregas/solicitudes/pendientes - Bandeja del operador
 router.get("/solicitudes/pendientes", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), async (req, res) => {
   try {
@@ -524,7 +556,7 @@ router.get("/solicitudes/pendientes", authorizePermissions(PERMISSIONS.MOVIMIENT
     const rows = await all(`
       SELECT id
       FROM solicitud_retiro
-      WHERE estado = 'pendiente'
+      WHERE estado IN ('pendiente', 'aceptada')
       ORDER BY fecha_retiro ASC, created_at ASC
     `);
 
@@ -581,7 +613,7 @@ router.post("/solicitudes/:id/entregar", authorizePermissions(PERMISSIONS.MOVIMI
       return res.status(404).json({ error: "Solicitud de retiro no encontrada" });
     }
 
-    if (solicitud.estado !== "pendiente") {
+    if (!(solicitud.estado === "pendiente" || solicitud.estado === "aceptada")) {
       await client.query("ROLLBACK");
       return res.status(400).json({ error: "La solicitud ya fue procesada" });
     }
@@ -935,11 +967,22 @@ router.post("/retirar", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), as
 });
 
 // GET /api/entregas/historial/:id_pedido - Historial de entregas de un pedido
-router.get("/historial/:id_pedido", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW), async (req, res) => {
+router.get("/historial/:id_pedido", authorizePermissions(PERMISSIONS.PEDIDOS_VIEW), async (req, res) => {
   try {
     await ensureEntregasSchema();
 
     const { id_pedido } = req.params;
+
+    // Si el usuario es directivo, verificar que el pedido pertenezca a su institución
+    if (req.user && String(req.user.role || '').toLowerCase() === 'directivo') {
+      const pedidoRow = await get('SELECT id_institucion FROM pedido WHERE id_pedido = ?', [id_pedido]);
+      if (!pedidoRow) return res.status(404).json({ error: 'Pedido no encontrado' });
+
+      const usuarioRow = await get('SELECT id_institucion FROM usuario WHERE id_usuario = ?', [req.user.sub]);
+      if (!usuarioRow || usuarioRow.id_institucion !== pedidoRow.id_institucion) {
+        return res.status(403).json({ error: 'No tenés acceso a este historial' });
+      }
+    }
 
     const entregas = await all(`
       SELECT 
