@@ -851,6 +851,11 @@ router.get("/", authorizePermissions(PERMISSIONS.PEDIDOS_VIEW), async (req, res)
       params.push(req.user.sub);
     }
 
+    if (req.user.role === "director_area") {
+      query += " AND LOWER(TRIM(i.nivel_educativo)) = LOWER(TRIM(?))";
+      params.push(req.user.nivel_educativo || '');
+    }
+
     query += " ORDER BY p.fecha_creacion DESC, pr.nombre ASC";
     const pedidoRows = await all(query, params);
     const grouped = groupPedidos(pedidoRows);
@@ -1014,12 +1019,14 @@ router.get("/institucion/:institucion", authorizePermissions(PERMISSIONS.PEDIDOS
       FROM movimiento_stock ms
       LEFT JOIN producto pr ON ms.id_producto = pr.id_producto
       LEFT JOIN usuario u ON ms.id_usuario = u.id_usuario
+      JOIN institucion i ON ms.id_institucion = i.id_institucion
       WHERE ms.id_institucion = ?
         AND ms.tipo = 'egreso'
+        AND (? != 'director_area' OR LOWER(TRIM(i.nivel_educativo)) = LOWER(TRIM(?)))
       ORDER BY ms.fecha_movimiento DESC, ms.id_movimiento DESC
       LIMIT 5
       `,
-      [institucion]
+      [institucion, req.user.role, req.user.nivel_educativo || '']
     );
 
     return res.json({ pedidos });

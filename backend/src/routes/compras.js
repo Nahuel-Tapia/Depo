@@ -511,22 +511,28 @@ router.get("/planillas/:id", authorizePermissions(PERMISSIONS.PLANILLA_VIEW), as
     }
 
     const detalles = await all(
-      `SELECT d.id,
-              d.cantidad,
-              d.notas,
-              i.nombre AS institucion,
-              COALESCE(i.cue, '') AS cue,
-              COALESCE(i.${nivelColumn}, 'Sin nivel') AS nivel,
-              pr.nombre AS producto,
-              pr.unidad_medida,
-              ped.id_pedido AS pedido_id
-       FROM planilla_pedido_anual_detalle d
-       JOIN institucion i ON i.id_institucion = d.id_institucion
-       JOIN producto pr ON pr.id_producto = d.id_producto
-       JOIN pedido ped ON ped.id_pedido = d.id_pedido
-       WHERE d.planilla_id = $1
-       ORDER BY i.nombre, pr.nombre`,
-      [id]
+      `SELECT 
+        dp.id_producto AS producto_id,
+        pr.nombre AS producto,
+        COALESCE(pr.unidad_medida, 'unidad') AS unidad_medida,
+        SUM(dp.cantidad_solicitada)::numeric AS cantidad,
+        i.nombre AS institucion,
+        COALESCE(i.cue, '') AS cue,
+        u.nivel_educativo AS nivel
+      FROM pedido p
+      JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido
+      JOIN producto pr ON pr.id_producto = dp.id_producto
+      JOIN institucion i ON i.id_institucion = p.id_institucion
+      JOIN supervisor_escuela_asignacion sea ON sea.institucion_id = p.id_institucion
+      JOIN usuario u ON u.id_usuario = sea.director_area_id
+      WHERE sea.director_area_id = $1
+        AND COALESCE(p.tipo, 'anual') = 'anual'
+        AND p.estado = 'aprobado'
+        AND p.aprobado_director_area IS TRUE
+        AND EXTRACT(YEAR FROM p.fecha_creacion) = $2
+      GROUP BY dp.id_producto, pr.nombre, pr.unidad_medida, i.nombre, i.cue, u.nivel_educativo
+      ORDER BY i.nombre, pr.nombre`,
+      [planilla.director_area_id, planilla.anio]
     );
 
     const validacion_cobertura = await getPlanillaCoverage(id, planilla.director_area_id);

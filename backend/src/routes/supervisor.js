@@ -306,19 +306,28 @@ router.get("/instituciones", async (req, res) => {
       const selectSql = await getInstitucionSelectSql();
       const institucionesAsignadas = await all(
         `SELECT i.id_institucion AS id,
+                i.id_edificio AS edificio_id,
                 i.nombre,
                 i.cue,
-                ${selectSql.departamentoSql.expression} AS departamento,
                 ${selectSql.nivelExpr} AS nivel,
-                ${selectSql.tipoEscuelaExpr} AS tipo_escuela,
-                ${selectSql.kitIdExpr} AS kit_id,
-                ${selectSql.kitNombreExpr} AS kit_nombre,
-                ${selectSql.tipoExpr} AS tipo,
-                ${selectSql.categoriaExpr} AS categoria
+                e.cui,
+                NULLIF(TRIM(d.departamento), '') AS departamento,
+                d.latitud,
+                d.longitud,
+                CASE 
+                  WHEN i.kit_id IS NULL THEN 'sin_kit'
+                  WHEN NOT EXISTS (
+                    SELECT 1 FROM pedido p WHERE p.id_institucion = i.id_institucion AND COALESCE(p.tipo, 'anual') = 'anual'
+                  ) THEN 'sin_solicitud'
+                  WHEN EXISTS (
+                    SELECT 1 FROM pedido p WHERE p.id_institucion = i.id_institucion AND COALESCE(p.tipo, 'anual') = 'anual' AND p.estado::text IN ('aprobado', 'entregado', 'finalizado')
+                  ) THEN 'solicitud_aprobada'
+                  ELSE 'solicitud_enviada'
+                END as status
          FROM supervisor_escuela_asignacion sea
          JOIN institucion i ON i.id_institucion = sea.institucion_id
-         ${selectSql.departamentoSql.joins}
-         ${selectSql.kitJoin}
+         LEFT JOIN edificio e ON i.id_edificio = e.id_edificio
+         LEFT JOIN direccion d ON e.id_direccion = d.id_direccion
          WHERE sea.supervisor_id = ?
          ORDER BY i.nombre`,
         [req.user.sub]
@@ -382,7 +391,80 @@ router.get("/instituciones", async (req, res) => {
     res.json({ instituciones });
   } catch (err) {
     console.error("Error al obtener instituciones del supervisor:", err);
-    res.status(500).json({ error: "Error interno del servidor" });
+    res.status(500).json({ error: "Error interno del servidor", details: err.message });
+  }
+});
+
+// Dashboard stats para el supervisor
+router.get("/dashboard/stats", async (req, res) => {
+  try {
+    await ensureSupervisorSchema();
+
+    if (req.user?.role !== "supervisor") {
+      return res.status(403).json({ error: "Solo el supervisor puede ver estas estadísticas." });
+    }
+
+    const stats = await get(`
+      WITH escuelas_estado AS (
+        SELECT i.id_institucion,
+               CASE 
+                 WHEN i.kit_id IS NULL THEN 'sin_kit'
+                 WHEN NOT EXISTS (
+                   SELECT 1 FROM pedido p WHERE p.id_institucion = i.id_institucion AND COALESCE(p.tipo, 'anual') = 'anual'
+                 ) THEN 'sin_solicitud'
+                 WHEN EXISTS (
+                   SELECT 1 FROM pedido p WHERE p.id_institucion = i.id_institucion AND COALESCE(p.tipo, 'anual') = 'anual' AND p.estado::text IN ('aprobado', 'entregado', 'finalizado')
+                 ) THEN 'solicitud_aprobada'
+                 ELSE 'solicitud_enviada'
+               END as estado
+        FROM supervisor_escuela_asignacion sea
+        JOIN institucion i ON i.id_institucion = sea.institucion_id
+        WHERE sea.supervisor_id = $1
+      )
+      SELECT 
+        COUNT(*) as total,
+        SUM(CASE WHEN estado = 'sin_kit' THEN 1 ELSE 0 END) as sin_kit,
+        SUM(CASE WHEN estado = 'sin_solicitud' THEN 1 ELSE 0 END) as sin_solicitud,
+        SUM(CASE WHEN estado = 'solicitud_enviada' THEN 1 ELSE 0 END) as solicitud_enviada,
+        SUM(CASE WHEN estado = 'solicitud_aprobada' THEN 1 ELSE 0 END) as solicitud_aprobada
+      FROM escuelas_estado
+    `, [req.user.sub]);
+
+    const pedidosRecientes = await all(`
+      SELECT p.id_pedido as id, p.fecha_creacion as fecha, p.estado, i.nombre as institucion
+      FROM pedido p
+      JOIN institucion i ON p.id_institucion = i.id_institucion
+      JOIN supervisor_escuela_asignacion sea ON sea.institucion_id = i.id_institucion
+      WHERE sea.supervisor_id = $1
+      ORDER BY p.fecha_creacion DESC
+      LIMIT 5
+    `, [req.user.sub]);
+
+    const entregasRecientes = await all(`
+      SELECT ms.id_movimiento as id, ms.fecha_movimiento as fecha, ms.cantidad, p.nombre as producto, i.nombre as institucion
+      FROM movimiento_stock ms
+      JOIN producto p ON ms.id_producto = p.id_producto
+      JOIN institucion i ON ms.id_institucion = i.id_institucion
+      JOIN supervisor_escuela_asignacion sea ON sea.institucion_id = i.id_institucion
+      WHERE sea.supervisor_id = $1 AND ms.tipo = 'egreso'
+      ORDER BY ms.fecha_movimiento DESC
+      LIMIT 5
+    `, [req.user.sub]);
+
+    return res.json({
+      totales: {
+        total: parseInt(stats.total) || 0,
+        sin_kit: parseInt(stats.sin_kit) || 0,
+        sin_solicitud: parseInt(stats.sin_solicitud) || 0,
+        solicitud_enviada: parseInt(stats.solicitud_enviada) || 0,
+        solicitud_aprobada: parseInt(stats.solicitud_aprobada) || 0
+      },
+      pedidos_recientes: pedidosRecientes,
+      entregas_recientes: entregasRecientes
+    });
+  } catch (err) {
+    console.error("Error al obtener stats del dashboard del supervisor:", err);
+    return res.status(500).json({ error: "No se pudo obtener el resumen", details: err.message });
   }
 });
 
