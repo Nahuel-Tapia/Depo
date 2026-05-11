@@ -260,6 +260,7 @@ async function buildPlanillasQuery({ role, userId, directorAreaId, estado, nivel
            u.id_usuario AS director_area_id,
            u.nombre AS director_nombre,
            u.apellido AS director_apellido,
+           u.nivel_educativo,
            (
              SELECT COUNT(DISTINCT sea.institucion_id)
              FROM supervisor_escuela_asignacion sea
@@ -412,7 +413,6 @@ async function getConsolidadoRealTime({ anio }) {
 }
 
 async function getEstadoDirectores({ anio }) {
-  // Simplificamos la consulta para descartar errores de sintaxis complejos
   const query = `
     SELECT 
       u.id_usuario,
@@ -421,13 +421,10 @@ async function getEstadoDirectores({ anio }) {
       u.nivel_educativo,
       (
         SELECT COUNT(*) > 0
-        FROM pedido p
-        JOIN supervisor_escuela_asignacion sea ON sea.institucion_id = p.id_institucion
-        WHERE sea.director_area_id = u.id_usuario
-          AND COALESCE(p.tipo, 'anual') = 'anual'
-          AND p.estado = 'aprobado'
-          AND p.aprobado_director_area IS TRUE
-          AND EXTRACT(YEAR FROM p.fecha_creacion) = ?
+        FROM planilla_pedido_anual ppa
+        WHERE ppa.director_area_id = u.id_usuario
+          AND ppa.anio = ?
+          AND ppa.estado IN ('enviada', 'aceptada', 'adjudicada', 'cerrada')
       ) AS enviado
     FROM usuario u
     WHERE u.role = 'director_area'
@@ -1043,16 +1040,16 @@ router.get("/adjudicacion", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), a
       const rawItems = typeof publicada.items === 'string' ? JSON.parse(publicada.items) : publicada.items;
       const consolidadoMap = {};
       rawItems.forEach(item => {
-        const pid = item.producto_id;
-        if (!consolidadoMap[pid]) {
-          consolidadoMap[pid] = {
-            producto_id: pid,
+        const key = item.producto.trim().toLowerCase();
+        if (!consolidadoMap[key]) {
+          consolidadoMap[key] = {
+            producto_id: item.producto_id,
             producto: item.producto,
             unidad_medida: item.unidad_medida,
             cantidad_total: 0
           };
         }
-        consolidadoMap[pid].cantidad_total += Number(item.cantidad_a_licitar || item.cantidad_solicitada || 0);
+        consolidadoMap[key].cantidad_total += Number(item.cantidad_a_licitar || item.cantidad_solicitada || 0);
       });
       items = Object.values(consolidadoMap);
     } else {
@@ -1145,15 +1142,29 @@ router.post("/adjudicacion", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), 
         throw new Error("Uno de los proveedores seleccionados no existe o está inactivo.");
       }
 
-      await client.query(
-        `INSERT INTO compra_precio_historico (anio, id_producto, id_proveedor, precio_compra_real, updated_at)
-         VALUES ($1, $2, $3, $4, NOW())
-         ON CONFLICT (anio, id_producto)
-         DO UPDATE SET id_proveedor = EXCLUDED.id_proveedor,
-                       precio_compra_real = EXCLUDED.precio_compra_real,
-                       updated_at = NOW()`,
-        [anio, productoId, proveedorId, precio]
+      // Buscar el nombre del producto para aplicar la adjudicación a todos los productos con el mismo nombre
+      const prodResult = await client.query("SELECT nombre FROM producto WHERE id_producto = $1", [productoId]);
+      if (prodResult.rowCount === 0) {
+        throw new Error(`Producto con ID ${productoId} no encontrado.`);
+      }
+      const prodNombre = prodResult.rows[0].nombre;
+
+      const allProds = await client.query(
+        "SELECT id_producto FROM producto WHERE LOWER(TRIM(nombre)) = LOWER(TRIM($1))",
+        [prodNombre]
       );
+
+      for (const p of allProds.rows) {
+        await client.query(
+          `INSERT INTO compra_precio_historico (anio, id_producto, id_proveedor, precio_compra_real, updated_at)
+           VALUES ($1, $2, $3, $4, NOW())
+           ON CONFLICT (anio, id_producto)
+           DO UPDATE SET id_proveedor = EXCLUDED.id_proveedor,
+                         precio_compra_real = EXCLUDED.precio_compra_real,
+                         updated_at = NOW()`,
+          [anio, p.id_producto, proveedorId, precio]
+        );
+      }
     }
 
     await client.query(

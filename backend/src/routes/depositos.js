@@ -378,29 +378,30 @@ async function getDetalleRecepcion(req, res) {
     const row = await get(`SELECT id, items, anio FROM licitacion_publicada WHERE id = $1`, [id]);
     if (!row) return res.status(404).json({ error: "Licitación no encontrada" });
 
-    // Consolidar por producto_id - El operador no necesita ver qué escuela pidió cada cosa
+    // Consolidar por nombre de producto - El operador no necesita ver qué escuela pidió cada cosa
     const items = typeof row.items === 'string' ? JSON.parse(row.items) : row.items;
     const consolidatedMap = {};
     items.forEach(item => {
-      const pid = item.producto_id;
-      if (!consolidatedMap[pid]) {
-        consolidatedMap[pid] = {
-          producto_id: pid,
+      const key = item.producto.trim().toLowerCase();
+      if (!consolidatedMap[key]) {
+        consolidatedMap[key] = {
+          producto_id: item.producto_id,
           producto: item.producto,
           unidad_medida: item.unidad_medida,
           cantidad_total: 0
         };
       }
-      consolidatedMap[pid].cantidad_total += Number(item.cantidad_a_licitar || 0);
+      consolidatedMap[key].cantidad_total += Number(item.cantidad_a_licitar || 0);
     });
     const cleanItems = Object.values(consolidatedMap);
 
-    // Obtener lo ya recibido
+    // Obtener lo ya recibido agrupado por nombre de producto
     const recibidos = await all(
-      `SELECT producto_id, SUM(cantidad_recibida) as total_recibida
-       FROM recepcion_licitacion
-       WHERE licitacion_id = $1
-       GROUP BY producto_id`,
+      `SELECT pr.nombre AS producto, SUM(rl.cantidad_recibida) as total_recibida
+       FROM recepcion_licitacion rl
+       JOIN producto pr ON pr.id_producto = rl.producto_id
+       WHERE rl.licitacion_id = $1
+       GROUP BY pr.nombre`,
       [id]
     );
 

@@ -190,7 +190,7 @@ export default function RecepcionLicitacion() {
             </thead>
             <tbody>
               {detalle.items.map(item => {
-                const yaRecibido = detalle.recibidos?.find(r => r.producto_id === item.producto_id)?.total_recibida || 0
+                const yaRecibido = detalle.recibidos?.find(r => r.producto?.trim().toLowerCase() === item.producto?.trim().toLowerCase())?.total_recibida || 0
                 const pendiente = Number(item.cantidad_total) - Number(yaRecibido)
                 const currentIngreso = ingresos[item.producto_id] || {}
                 

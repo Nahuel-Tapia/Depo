@@ -751,7 +751,7 @@ export default function Movimientos() {
       )}
 
       {/* Traslado entre depósitos */}
-      <section className="card" style={{ marginTop: 20 }}>
+      <section className="card" style={{ marginTop: 20, minHeight: 'auto' }}>
         <h3>Traslado entre depósitos</h3>
         <div className="grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
           <select value={transfer.productoId} onChange={e => setTransfer({ ...transfer, productoId: e.target.value })}>
@@ -785,6 +785,7 @@ export default function Movimientos() {
             <th>Tipo</th>
             <th>Cantidad</th>
             <th>Estado</th>
+            <th>Depósito</th>
             <th>Institución/Cargo</th>
             <th>Motivo</th>
             <th>Registrado por</th>
@@ -828,6 +829,7 @@ export default function Movimientos() {
                   <td><span className={`badge badge-${first.tipo}`}>{first.tipo}</span></td>
                   <td>{isMulti ? totalCantidad : first.cantidad}</td>
                   <td>{isMulti ? 'Varios' : (first.estado_producto || '-')}</td>
+                  <td>{first.deposito_nombre || '-'}</td>
                   <td>{institucionCargo}</td>
                   <td>{first.motivo || '-'}</td>
                   <td>{first.usuario_nombre || '-'}</td>

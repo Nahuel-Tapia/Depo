@@ -11,6 +11,7 @@ export default function Productos() {
   const [formOpen, setFormOpen] = useState(false)
   const [editModal, setEditModal] = useState(null)
   const [deleteModal, setDeleteModal] = useState(null)
+  const [detailModal, setDetailModal] = useState(null)
   const [form, setForm] = useState({ nombre: '', unidad_medida: 'unidad', stock_actual: 0, id_categoria: '' })
   const canDeleteProductos = hasPermission('productos.delete') || user?.role === 'admin'
 
@@ -43,6 +44,17 @@ export default function Productos() {
       if (res.ok) {
         const data = await res.json()
         setStockPorDeposito(data.productos || [])
+      }
+    } catch { /* ignore */ }
+  }
+
+  const loadDetail = async (id) => {
+    try {
+      const res = await apiFetch(`/api/productos/${id}/stock-detalle`, { token })
+      if (res.ok) {
+        const data = await res.json()
+        const prod = productos.find(p => p.id === id)
+        setDetailModal({ ...data, producto_nombre: prod?.nombre || 'Producto' })
       }
     } catch { /* ignore */ }
   }
@@ -211,6 +223,7 @@ export default function Productos() {
               
               <td>
                 <div className="inline-actions">
+                  <button onClick={() => loadDetail(p.id)} style={{ background: '#e0f2fe', color: '#0369a1' }}>Detalle</button>
                   {hasPermission('productos.edit') && (
                     <button onClick={() => handleEdit(p.id)}>Editar</button>
                   )}
@@ -348,6 +361,77 @@ export default function Productos() {
               <button type="button" className="secondary" onClick={() => setDeleteModal(null)}>No</button>
               <button type="button" onClick={confirmDelete} style={{ width: 'auto', margin: 0, padding: '10px 18px' }}>Sí</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {detailModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: 16
+          }}
+          onClick={e => {
+            if (e.target === e.currentTarget) setDetailModal(null)
+          }}
+        >
+          <div style={{ background: '#f9fafb', padding: 24, borderRadius: 10, width: 'min(720px, 100%)', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ margin: 0 }}>Ubicación y Vencimientos — {detailModal.producto_nombre}</h3>
+              <button className="secondary" onClick={() => setDetailModal(null)} style={{ margin: 0, padding: '6px 12px' }}>✕</button>
+            </div>
+
+            <h4>📦 Distribución por Depósito</h4>
+            {detailModal.depositos?.length === 0 ? (
+              <p style={{ color: 'var(--muted)' }}>No hay stock registrado en ningún depósito.</p>
+            ) : (
+              <table style={{ marginBottom: 20 }}>
+                <thead>
+                  <tr style={{ background: '#f1f5f9' }}>
+                    <th>Depósito</th>
+                    <th style={{ textAlign: 'right' }}>Cantidad</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detailModal.depositos.map((d, idx) => (
+                    <tr key={idx}>
+                      <td>{d.deposito}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 700 }}>{d.cantidad}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+
+            <h4>📅 Fechas de Vencimiento</h4>
+            {detailModal.vencimientos?.length === 0 ? (
+              <p style={{ color: 'var(--muted)' }}>No hay fechas de vencimiento registradas.</p>
+            ) : (
+              <table>
+                <thead>
+                  <tr style={{ background: '#f1f5f9' }}>
+                    <th>Depósito</th>
+                    <th>Fecha Vencimiento</th>
+                    <th style={{ textAlign: 'right' }}>Cantidad Ingresada</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detailModal.vencimientos.map((v, idx) => (
+                    <tr key={idx}>
+                      <td>{v.deposito}</td>
+                      <td>{new Date(v.fecha_vencimiento).toLocaleDateString()}</td>
+                      <td style={{ textAlign: 'right' }}>{v.cantidad}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
       )}

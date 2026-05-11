@@ -29,12 +29,15 @@ router.get("/", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW), async (req, 
         m.motivo,
         u.nombre as usuario_nombre,
         u.email as usuario_email,
-        m.fecha_movimiento as created_at
+        m.fecha_movimiento as created_at,
+        m.id_deposito,
+        d.nombre as deposito_nombre
       FROM movimiento_stock m
       LEFT JOIN producto p ON m.id_producto = p.id_producto
       LEFT JOIN usuario u ON m.id_usuario = u.id_usuario
       LEFT JOIN institucion i ON m.id_institucion = i.id_institucion
       LEFT JOIN proveedor pr ON m.id_proveedor = pr.id_proveedor
+      LEFT JOIN deposito d ON m.id_deposito = d.id_deposito
       WHERE 1 = 1
     `;
     const params = [];

@@ -113,6 +113,35 @@ router.get("/:id", authorizePermissions(PERMISSIONS.PRODUCTOS_VIEW), async (req,
   }
 });
 
+// Obtener detalle de stock y vencimientos de un producto
+router.get("/:id/stock-detalle", authorizePermissions(PERMISSIONS.PRODUCTOS_VIEW), async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // 1. Distribución en depósitos
+    const depositos = await all(`
+      SELECT d.nombre as deposito, sd.cantidad
+      FROM stock_deposito sd
+      JOIN deposito d ON d.id_deposito = sd.id_deposito
+      WHERE sd.id_producto = $1 AND sd.cantidad > 0
+    `, [id]);
+
+    // 2. Vencimientos
+    const vencimientos = await all(`
+      SELECT d.nombre as deposito, ms.fecha_vencimiento, ms.cantidad
+      FROM movimiento_stock ms
+      JOIN deposito d ON d.id_deposito = ms.id_deposito
+      WHERE ms.id_producto = $1 AND ms.tipo = 'ingreso' AND ms.fecha_vencimiento IS NOT NULL
+      ORDER BY ms.fecha_vencimiento ASC
+    `, [id]);
+
+    return res.json({ depositos, vencimientos });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "No se pudo obtener el detalle de stock" });
+  }
+});
+
 // Crear producto
 router.post("/", authorizePermissions(PERMISSIONS.PRODUCTOS_CREATE), async (req, res) => {
   const client = await pool.connect();

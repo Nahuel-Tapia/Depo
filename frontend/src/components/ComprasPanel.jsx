@@ -430,7 +430,7 @@ export default function ComprasPanel({ section = 'pedidos' }) {
           <div>
             <section className="card" style={{ padding: 24, marginBottom: 24, minHeight: 'auto' }}>
               <h3 style={{ marginTop: 0, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: '1.5rem' }}>🚦</span> Sección B — Estado de envío por Director de Área
+                <span style={{ fontSize: '1.5rem' }}>🚦</span> Estado de envío por Director de Área
               </h3>
               <table style={{ marginBottom: 0 }}>
                 <thead>
@@ -479,6 +479,7 @@ export default function ComprasPanel({ section = 'pedidos' }) {
                   <tr style={{ background: '#f8fafc' }}>
                     <th>AÑO</th>
                     <th>DIRECTOR DE ÁREA</th>
+                    <th>NIVEL</th>
                     <th>ESTADO</th>
                     <th>FECHA ENVÍO</th>
                     <th>ACCIONES</th>
@@ -487,7 +488,7 @@ export default function ComprasPanel({ section = 'pedidos' }) {
                 <tbody>
                   {planillas.length === 0 ? (
                     <tr>
-                      <td colSpan={5} style={{ textAlign: 'center', padding: 20, color: 'var(--muted)' }}>
+                      <td colSpan={6} style={{ textAlign: 'center', padding: 20, color: 'var(--muted)' }}>
                         No hay resúmenes enviados aún.
                       </td>
                     </tr>
@@ -496,6 +497,7 @@ export default function ComprasPanel({ section = 'pedidos' }) {
                       <tr key={p.id}>
                         <td>{p.anio}</td>
                         <td>{`${p.director_nombre || ''} ${p.director_apellido || ''}`.trim()}</td>
+                        <td>{p.nivel_educativo || '-'}</td>
                         <td>
                           <span className={`badge badge-${ESTADO_BADGE[p.estado] || 'pendiente'}`}>
                             {p.estado}
@@ -530,7 +532,7 @@ export default function ComprasPanel({ section = 'pedidos' }) {
                   </thead>
                   <tbody>
                     {detalle.detalles.map((det) => (
-                      <tr key={det.id}>
+                      <tr key={`${det.producto_id}-${det.cue}`}>
                         <td style={{ fontWeight: 600 }}>{det.producto}</td>
                         <td style={{ textAlign: 'center', fontWeight: 700 }}>{det.cantidad}</td>
                         <td style={{ color: 'var(--muted)' }}>{det.unidad_medida}</td>
@@ -545,7 +547,7 @@ export default function ComprasPanel({ section = 'pedidos' }) {
             <section className="card" style={{ padding: 24, minHeight: 'auto' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                 <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontSize: '1.5rem' }}>📋</span> Sección A — Consolidado general
+                  <span style={{ fontSize: '1.5rem' }}>📋</span> Consolidado general
                 </h3>
                 <button className="secondary" onClick={handleExportCSV} disabled={!consolidado.length}>
                   📥 Exportar Consolidado (CSV)
