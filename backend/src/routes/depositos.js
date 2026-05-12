@@ -19,8 +19,9 @@ async function ensureDepositosSchema() {
 
   schemaPromise = (async () => {
     try {
-      // Agregar fecha_vencimiento a movimiento_stock
+      // Agregar fecha_vencimiento e id_deposito a movimiento_stock
       await run(`ALTER TABLE movimiento_stock ADD COLUMN IF NOT EXISTS fecha_vencimiento DATE`);
+      await run(`ALTER TABLE movimiento_stock ADD COLUMN IF NOT EXISTS id_deposito INT`);
       
       // Asegurar tablas de licitación y distribución
       await run(`
@@ -226,13 +227,13 @@ router.post("/mover", authorizePermissions(PERMISSIONS.STOCK_MOVEMENT_CREATE), a
     const mot = (motivo || `Traslado ${id_producto} ${origen_id}→${destino_id}`)
     // Log egreso de origen
     await client.query(
-      `INSERT INTO movimiento_stock (id_producto, tipo, cantidad, motivo, id_usuario, id_deposito) VALUES ($1, 'egreso', $2, $3, NULL, $4)`,
-      [id_producto, cantidad, mot, origen_id]
+      `INSERT INTO movimiento_stock (id_producto, tipo, cantidad, motivo, id_usuario, id_deposito) VALUES ($1, 'egreso', $2, $3, $5, $4)`,
+      [id_producto, cantidad, mot, origen_id, req.user.sub]
     )
     // Log ingreso a destino
     await client.query(
-      `INSERT INTO movimiento_stock (id_producto, tipo, cantidad, motivo, id_usuario, id_deposito) VALUES ($1, 'ingreso', $2, $3, NULL, $4)`,
-      [id_producto, cantidad, mot, destino_id]
+      `INSERT INTO movimiento_stock (id_producto, tipo, cantidad, motivo, id_usuario, id_deposito) VALUES ($1, 'ingreso', $2, $3, $5, $4)`,
+      [id_producto, cantidad, mot, destino_id, req.user.sub]
     )
     await client.query("COMMIT")
     res.json({ ok: true, moved: true })
@@ -245,11 +246,45 @@ router.post("/mover", authorizePermissions(PERMISSIONS.STOCK_MOVEMENT_CREATE), a
   }
 })
 
+// Obtener historial de traslados
+router.get("/traslados", authorizePermissions(PERMISSIONS.STOCK_MOVEMENT_VIEW), async (req, res) => {
+  try {
+    const traslados = await all(`
+      SELECT 
+        m1.id_movimiento,
+        m1.id_producto,
+        p.nombre as producto_nombre,
+        m1.cantidad,
+        m1.motivo,
+        m1.fecha_movimiento as created_at,
+        m1.id_deposito as origen_id,
+        d1.nombre as origen_nombre,
+        m2.id_deposito as destino_id,
+        d2.nombre as destino_nombre,
+        u.nombre as usuario_nombre
+      FROM movimiento_stock m1
+      JOIN movimiento_stock m2 ON m1.motivo = m2.motivo AND m1.id_producto = m2.id_producto AND m1.cantidad = m2.cantidad AND m1.fecha_movimiento = m2.fecha_movimiento
+      JOIN producto p ON p.id_producto = m1.id_producto
+      JOIN deposito d1 ON d1.id_deposito = m1.id_deposito
+      JOIN deposito d2 ON d2.id_deposito = m2.id_deposito
+      LEFT JOIN usuario u ON u.id_usuario = m1.id_usuario
+      WHERE m1.tipo = 'egreso' AND m2.tipo = 'ingreso'
+        AND m1.id_deposito != m2.id_deposito
+      ORDER BY m1.fecha_movimiento DESC
+    `);
+    return res.json({ traslados });
+  } catch (err) {
+    console.error("Error obteniendo traslados:", err);
+    return res.status(500).json({ error: "No se pudo obtener el historial de traslados" });
+  }
+})
+
 // Crear movimiento de ingreso a depósito
 router.post("/:id/ingreso", authorizePermissions(PERMISSIONS.STOCK_MOVEMENT_CREATE), async (req, res) => {
   try {
+    await ensureDepositosSchema();
     const { id } = req.params;
-    const { id_producto, cantidad, id_proveedor, motivo } = req.body;
+    const { id_producto, cantidad, id_proveedor, motivo, fecha_vencimiento } = req.body;
 
     if (!id_producto || !cantidad) {
       return res.status(400).json({ error: "Producto y cantidad requeridos" });
@@ -272,12 +307,12 @@ router.post("/:id/ingreso", authorizePermissions(PERMISSIONS.STOCK_MOVEMENT_CREA
 
     // Insertar movimiento
     const movimiento = await run(`
-      INSERT INTO movimiento_stock (id_producto, cantidad, tipo, id_proveedor, motivo, id_usuario, id_deposito)
-      VALUES ($1, $2, 'ingreso', $3, $4, $5, $6)
-    `, [id_producto, cantidad, id_proveedor || null, motivo || "Ingreso a depósito", req.user.sub, id]);
+      INSERT INTO movimiento_stock (id_producto, cantidad, tipo, id_proveedor, motivo, id_usuario, id_deposito, fecha_vencimiento)
+      VALUES ($1, $2, 'ingreso', $3, $4, $5, $6, $7)
+    `, [id_producto, cantidad, id_proveedor || null, motivo || "Ingreso a depósito", req.user.sub, id, fecha_vencimiento || null]);
 
     // Actualizar stock
-    await run(`
+    await pool.query(`
       INSERT INTO stock_deposito (id_deposito, id_producto, cantidad)
       VALUES ($1, $2, $3)
       ON CONFLICT (id_deposito, id_producto) 
@@ -300,6 +335,7 @@ router.post("/:id/ingreso", authorizePermissions(PERMISSIONS.STOCK_MOVEMENT_CREA
 // Crear movimiento de egreso desde depósito
 router.post("/:id/egreso", authorizePermissions(PERMISSIONS.STOCK_MOVEMENT_CREATE), async (req, res) => {
   try {
+    await ensureDepositosSchema();
     const { id } = req.params;
     const { id_producto, cantidad, id_institucion, motivo } = req.body;
 

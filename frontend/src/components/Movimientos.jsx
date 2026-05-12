@@ -30,7 +30,8 @@ export default function Movimientos() {
   // Ingreso state
   const [ingresoMotivo, setIngresoMotivo] = useState('')
   const [loteIngreso, setLoteIngreso] = useState([])
-  const [ingresoItem, setIngresoItem] = useState({ productoId: '', cantidad: '', estado: 'nuevo' })
+  const [ingresoItem, setIngresoItem] = useState({ productoId: '', cantidad: '', estado: 'nuevo', fechaVencimiento: '', proveedorId: '' })
+  const [proveedores, setProveedores] = useState([])
 
   // Depositos
   const [ingresoDeposito, setIngresoDeposito] = useState('')
@@ -76,11 +77,22 @@ export default function Movimientos() {
     } catch { /* ignore */ }
   }
 
+  const loadProveedores = async () => {
+    try {
+      const res = await apiFetch('/api/proveedores', { token })
+      if (res.ok) {
+        const data = await res.json()
+        setProveedores(data.proveedores || [])
+      }
+    } catch { /* ignore */ }
+  }
+
   useEffect(() => {
     loadProductos()
     loadMovimientos()
     loadInstituciones()
     loadDepositos()
+    loadProveedores()
   }, [])
 
   useEffect(() => {
@@ -203,9 +215,11 @@ export default function Movimientos() {
       producto_id: producto.id,
       nombre: producto.nombre,
       cantidad,
-      estado: ingresoItem.estado
+      estado: ingresoItem.estado,
+      fecha_vencimiento: ingresoItem.fechaVencimiento || null,
+      proveedor_id: ingresoItem.proveedorId || null
     }])
-    setIngresoItem({ productoId: '', cantidad: '', estado: 'nuevo' })
+    setIngresoItem({ productoId: '', cantidad: '', estado: 'nuevo', fechaVencimiento: '', proveedorId: '' })
     setMsg({ text: '', type: '' })
   }
 
@@ -231,7 +245,9 @@ export default function Movimientos() {
           body: JSON.stringify({
             id_producto: item.producto_id,
             cantidad: item.cantidad,
-            motivo: ingresoMotivo.trim() || null
+            motivo: ingresoMotivo.trim() || null,
+            fecha_vencimiento: item.fecha_vencimiento,
+            id_proveedor: item.proveedor_id
           })
         })
         if (!res.ok) {
@@ -297,7 +313,7 @@ export default function Movimientos() {
       ? new Date(primer.created_at).toLocaleString('es-AR')
       : '-'
 
-    const rowsHTML = movs.map(m => `<tr><td>${m.producto_nombre || '-'}</td><td>${m.cantidad ?? '-'}</td><td>${m.estado_producto || '-'}</td></tr>`).join('');
+    const rowsHTML = movs.map(m => `<tr><td>${m.producto_nombre || '-'}</td><td>${m.cantidad ?? '-'}</td><td>${m.estado_producto || '-'}</td><td>${m.proveedor_nombre || '-'}</td></tr>`).join('');
 
     printWindow.document.write(`
       <!DOCTYPE html>
@@ -305,42 +321,55 @@ export default function Movimientos() {
       <head>
         <title>Movimiento #${primer.id || ''}</title>
         <style>
-          @import url('https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;500;700&display=swap');
-          * { box-sizing: border-box; font-family: 'Ubuntu', sans-serif; }
-          body { margin: 24px; color: #1D252D; }
-          .print-header { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
-          .print-header img { height: 36px; width: auto; object-fit: contain; }
-          h2 { margin: 0 0 14px; font-size: 20px; }
-          table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+          * { box-sizing: border-box; font-family: Arial, sans-serif; }
+          body { margin: 24px; color: #111827; font-size: 13px; }
+          .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #FF8200; padding-bottom: 10px; margin-bottom: 16px; }
+          .header-left { display: flex; align-items: center; gap: 12px; }
+          .header-left img { height: 40px; width: auto; }
+          .header-right { text-align: right; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 28px; }
           th, td { border: 1px solid #d1d5db; padding: 8px 10px; text-align: left; }
-          th { background: #f3f4f6; width: 220px; font-size: 12px; text-transform: uppercase; }
-          .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 700; color: #111827; background: #e5e7eb; }
-          .footer { margin-top: 14px; color: #6b7280; font-size: 12px; }
-          .product-table th { width: auto; }
+          th { background: #f3f4f6; }
+          .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 36px; margin-top: 54px; }
+          .signature { border-top: 1px solid #111827; padding-top: 8px; text-align: center; }
         </style>
       </head>
       <body>
-        <div class="print-header">
-          <img src="${MINISTERIO_LOGO_URL}" alt="Logo Ministerio" />
-          <h2>Detalle de Movimiento</h2>
+        <div class="header">
+          <div class="header-left">
+            <img src="/faviconmin.png" alt="Logo San Juan" />
+            <div>
+              <div style="font-weight: bold; font-size: 1.1rem;">San Juan Gobierno</div>
+              <div style="font-size: 0.9rem; color: #666;">Ministerio de Educación</div>
+            </div>
+          </div>
+          <div class="header-right">
+            <div style="font-weight: bold; font-size: 1.1rem;">Comprobante de Movimiento</div>
+            <div style="font-size: 0.9rem; color: #666;">Tipo: ${primer.tipo || '-'}</div>
+          </div>
         </div>
-        <table>
-          <tr><th>Tipo</th><td><span class="badge">${primer.tipo || '-'}</span></td></tr>
-          <tr><th>Institucion/Cargo</th><td>${institucionCargo}</td></tr>
-          <tr><th>Motivo</th><td>${primer.motivo || '-'}</td></tr>
-          <tr><th>Registrado por</th><td>${primer.usuario_nombre || '-'}</td></tr>
-          <tr><th>Fecha</th><td>${fecha}</td></tr>
-        </table>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px;">
+          <div><strong>Institución/Cargo:</strong> ${institucionCargo}</div>
+          <div><strong>Motivo:</strong> ${primer.motivo || '-'}</div>
+          <div><strong>Registrado por:</strong> ${primer.usuario_nombre || '-'}</div>
+          <div><strong>Fecha:</strong> ${fecha}</div>
+        </div>
+
         <h4>Productos</h4>
-        <table class="product-table">
+        <table>
           <thead>
-            <tr><th>Producto</th><th>Cantidad</th><th>Estado</th></tr>
+            <tr><th>Producto</th><th>Cantidad</th><th>Estado</th><th>Proveedor</th></tr>
           </thead>
           <tbody>
             ${rowsHTML}
           </tbody>
         </table>
-        <div class="footer">Impreso: ${new Date().toLocaleString('es-AR')}</div>
+
+        <div class="signatures">
+          <div class="signature">Firma de quien entrega</div>
+          <div class="signature">Firma y sello del directivo</div>
+        </div>
       </body>
       </html>
     `)
@@ -630,6 +659,18 @@ export default function Movimientos() {
                         </select>
                       </div>
                       <div>
+                        <label>Proveedor</label>
+                        <select
+                          value={ingresoItem.proveedorId}
+                          onChange={e => setIngresoItem({ ...ingresoItem, proveedorId: e.target.value })}
+                        >
+                          <option value="">Seleccionar proveedor...</option>
+                          {proveedores.map(prov => (
+                            <option key={prov.id} value={prov.id}>{prov.nombre}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
                         <label>Cantidad</label>
                         <input
                           type="number"
@@ -646,6 +687,14 @@ export default function Movimientos() {
                             <option key={est} value={est}>{est.charAt(0).toUpperCase() + est.slice(1)}</option>
                           ))}
                         </select>
+                      </div>
+                      <div>
+                        <label>Fecha de Vencimiento</label>
+                        <input
+                          type="date"
+                          value={ingresoItem.fechaVencimiento || ''}
+                          onChange={e => setIngresoItem({ ...ingresoItem, fechaVencimiento: e.target.value })}
+                        />
                       </div>
                       <div style={{ alignSelf: 'end' }}>
                         <button type="button" onClick={addToIngreso}>Agregar al Ingreso</button>
@@ -786,6 +835,7 @@ export default function Movimientos() {
             <th>Tipo</th>
             <th>Cantidad</th>
             <th>Estado</th>
+            <th>Proveedor</th>
             <th>Depósito</th>
             <th>Institución/Cargo</th>
             <th>Motivo</th>
@@ -830,6 +880,7 @@ export default function Movimientos() {
                   <td><span className={`badge badge-${first.tipo}`}>{first.tipo}</span></td>
                   <td>{isMulti ? totalCantidad : first.cantidad}</td>
                   <td>{isMulti ? 'Varios' : (first.estado_producto || '-')}</td>
+                  <td>{isMulti ? 'Varios' : (first.proveedor_nombre || '-')}</td>
                   <td>{first.deposito_nombre || '-'}</td>
                   <td>{institucionCargo}</td>
                   <td>{first.motivo || '-'}</td>

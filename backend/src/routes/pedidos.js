@@ -379,6 +379,20 @@ async function ensureEstadoCancelado() {
 
 ensureEstadoCancelado();
 
+async function hasInstitucionColumn(columnName) {
+  try {
+    const res = await get(`
+      SELECT EXISTS (
+        SELECT 1 
+        FROM information_schema.columns 
+        WHERE table_name = 'institucion' AND column_name = ?
+      ) AS exists`, [columnName]);
+    return res.exists;
+  } catch {
+    return false;
+  }
+}
+
 async function getInstitucionPerfil(institucionId) {
   await ensurePedidosSchema();
 

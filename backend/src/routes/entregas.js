@@ -482,11 +482,6 @@ router.post("/solicitudes", authorizePermissions(PERMISSIONS.PEDIDOS_CREATE), as
           error: `La cantidad solicitada para ${disponible.producto_nombre} supera el saldo del kit anual`
         });
       }
-      if (item.cantidad > disponible.stock_actual) {
-        return res.status(400).json({
-          error: `Stock insuficiente para ${disponible.producto_nombre}. Disponible: ${disponible.stock_actual}`
-        });
-      }
     }
 
     await client.query("BEGIN");
@@ -687,6 +682,13 @@ router.post("/solicitudes/:id/entregar", authorizePermissions(PERMISSIONS.MOVIMI
         return res.status(404).json({ error: `Producto ${item.producto_id} no encontrado` });
       }
 
+      // Verificar stock en depósito 1 (Central)
+      const stockDepRes = await client.query(
+        "SELECT cantidad FROM stock_deposito WHERE id_deposito = 1 AND id_producto = $1 FOR UPDATE",
+        [item.producto_id]
+      );
+      const stockDep = stockDepRes.rows[0]?.cantidad || 0;
+
       const detalleRes = await client.query(`
         SELECT cantidad_solicitada
         FROM detalle_pedido
@@ -715,17 +717,30 @@ router.post("/solicitudes/:id/entregar", authorizePermissions(PERMISSIONS.MOVIMI
         });
       }
 
-      if (Number(producto.stock_actual) < cantidad) {
+      // Revisar si se pasa del stock del depósito
+      if (Number(stockDep) < cantidad) {
         await client.query("ROLLBACK");
         return res.status(400).json({
-          error: `Stock insuficiente para ${producto.nombre}. Disponible: ${producto.stock_actual}, solicitado: ${cantidad}`
+          error: `Stock insuficiente en Depósito Central para ${producto.nombre}. Disponible: ${stockDep}, solicitado: ${cantidad}`
         });
       }
 
+      // Restar stock del depósito
+      await client.query(
+        "UPDATE stock_deposito SET cantidad = cantidad - $1 WHERE id_deposito = 1 AND id_producto = $2",
+        [cantidad, item.producto_id]
+      );
+
+      // Restar stock global
+      await client.query(
+        "UPDATE producto SET stock_actual = stock_actual - $1 WHERE id_producto = $2",
+        [cantidad, item.producto_id]
+      );
+
       const movResult = await client.query(`
         INSERT INTO movimiento_stock
-          (id_producto, tipo, cantidad, estado_producto, cargo_retira, id_institucion, id_usuario, motivo, fecha_movimiento)
-        VALUES ($1, 'egreso', $2, 'nuevo', $3, $4, $5, $6, NOW())
+          (id_producto, tipo, cantidad, estado_producto, cargo_retira, id_institucion, id_usuario, motivo, fecha_movimiento, id_deposito)
+        VALUES ($1, 'egreso', $2, 'nuevo', $3, $4, $5, $6, NOW(), 1)
         RETURNING id_movimiento
       `, [
         item.producto_id,

@@ -548,7 +548,7 @@ export default function SolicitudesRetiro({ embedded = false }) {
                       ))}
                     </td>
                     <td>
-                      <button type="button" className="secondary" onClick={() => printSolicitud(sol)} style={{ width: 'auto', margin: 0 }}>
+                      <button type="button" className="secondary" onClick={() => setComprobante(sol)} style={{ width: 'auto', margin: 0 }}>
                         Imprimir
                       </button>
                     </td>

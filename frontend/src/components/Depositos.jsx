@@ -8,6 +8,7 @@ export default function Depositos() {
   const [depositoSeleccionado, setDepositoSeleccionado] = useState(null)
   const [stock, setStock] = useState([])
   const [movimientos, setMovimientos] = useState([])
+  const [traslados, setTraslados] = useState([])
   const [loading, setLoading] = useState(false)
   const [msg, setMsg] = useState({ text: '', type: '' })
   
@@ -45,9 +46,10 @@ export default function Depositos() {
     if (!depositoSeleccionado?.id) return
     setLoading(true)
     try {
-      const [stockRes, movRes] = await Promise.all([
+      const [stockRes, movRes, trasladosRes] = await Promise.all([
         apiFetch(`/api/depositos/${depositoSeleccionado.id}/stock`, { token }),
-        apiFetch(`/api/movimientos?id_deposito=${depositoSeleccionado.id}&limit=10`, { token })
+        apiFetch(`/api/movimientos?id_deposito=${depositoSeleccionado.id}&limit=10`, { token }),
+        apiFetch(`/api/depositos/traslados`, { token })
       ])
       
       if (stockRes.ok) {
@@ -58,6 +60,11 @@ export default function Depositos() {
       if (movRes.ok) {
         const data = await movRes.json()
         setMovimientos(data.movimientos || [])
+      }
+
+      if (trasladosRes.ok) {
+        const data = await trasladosRes.json()
+        setTraslados(data.traslados || [])
       }
     } catch (err) {
       console.error('Error loading stock/movimientos:', err)
@@ -129,6 +136,136 @@ export default function Depositos() {
     } catch {
       setMsg({ text: 'Error de conexión', type: 'error' })
     }
+  }
+
+  const handlePrintTraslados = () => {
+    const printWindow = window.open('', '_blank', 'width=800,height=600')
+    if (!printWindow) return
+
+    const rowsHTML = traslados.map(t => `
+      <tr>
+        <td>${t.producto_nombre}</td>
+        <td>${t.cantidad}</td>
+        <td>${t.origen_nombre}</td>
+        <td>${t.destino_nombre}</td>
+        <td>${t.motivo}</td>
+        <td>${t.usuario_nombre || '-'}</td>
+        <td>${new Date(t.created_at).toLocaleDateString()}</td>
+      </tr>
+    `).join('')
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Historial de Traslados</title>
+        <style>
+          * { box-sizing: border-box; font-family: Arial, sans-serif; }
+          body { margin: 24px; color: #111827; font-size: 13px; }
+          .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #FF8200; padding-bottom: 10px; margin-bottom: 16px; }
+          .header-left { display: flex; align-items: center; gap: 12px; }
+          .header-left img { height: 40px; width: auto; }
+          .header-right { text-align: right; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 28px; }
+          th, td { border: 1px solid #d1d5db; padding: 8px 10px; text-align: left; }
+          th { background: #f3f4f6; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div class="header-left">
+            <img src="/faviconmin.png" alt="Logo San Juan" />
+            <div>
+              <div style="font-weight: bold; font-size: 1.1rem;">San Juan Gobierno</div>
+              <div style="font-size: 0.9rem; color: #666;">Ministerio de Educación</div>
+            </div>
+          </div>
+          <div class="header-right">
+            <div style="font-weight: bold; font-size: 1.1rem;">Historial de Traslados</div>
+            <div style="font-size: 0.9rem; color: #666;">Entre Depósitos</div>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th>Cantidad</th>
+              <th>Origen</th>
+              <th>Destino</th>
+              <th>Motivo</th>
+              <th>Registrado por</th>
+              <th>Fecha</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHTML}
+          </tbody>
+        </table>
+      </body>
+      </html>
+    `)
+    printWindow.document.close()
+    printWindow.print()
+  }
+
+  const handlePrintSingleTraslado = (t) => {
+    const printWindow = window.open('', '_blank', 'width=600,height=400')
+    if (!printWindow) return
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Comprobante de Traslado</title>
+        <style>
+          * { box-sizing: border-box; font-family: Arial, sans-serif; }
+          body { margin: 24px; color: #111827; font-size: 13px; }
+          .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #FF8200; padding-bottom: 10px; margin-bottom: 16px; }
+          .header-left { display: flex; align-items: center; gap: 12px; }
+          .header-left img { height: 40px; width: auto; }
+          .header-right { text-align: right; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 28px; }
+          th, td { border: 1px solid #d1d5db; padding: 8px 10px; text-align: left; }
+          th { background: #f3f4f6; width: 150px; }
+          .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 36px; margin-top: 54px; }
+          .signature { border-top: 1px solid #111827; padding-top: 8px; text-align: center; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div class="header-left">
+            <img src="/faviconmin.png" alt="Logo San Juan" />
+            <div>
+              <div style="font-weight: bold; font-size: 1.1rem;">San Juan Gobierno</div>
+              <div style="font-size: 0.9rem; color: #666;">Ministerio de Educación</div>
+            </div>
+          </div>
+          <div class="header-right">
+            <div style="font-weight: bold; font-size: 1.1rem;">Comprobante de Traslado</div>
+            <div style="font-size: 0.9rem; color: #666;">Entre Depósitos</div>
+          </div>
+        </div>
+
+        <table>
+          <tr><th>Producto</th><td>${t.producto_nombre}</td></tr>
+          <tr><th>Cantidad</th><td>${t.cantidad}</td></tr>
+          <tr><th>Origen</th><td>${t.origen_nombre}</td></tr>
+          <tr><th>Destino</th><td>${t.destino_nombre}</td></tr>
+          <tr><th>Motivo</th><td>${t.motivo}</td></tr>
+          <tr><th>Registrado por</th><td>${t.usuario_nombre || '-'}</td></tr>
+          <tr><th>Fecha</th><td>${new Date(t.created_at).toLocaleString()}</td></tr>
+        </table>
+
+        <div class="signatures">
+          <div class="signature">Firma de quien entrega</div>
+          <div class="signature">Firma y sello del directivo</div>
+        </div>
+      </body>
+      </html>
+    `)
+    printWindow.document.close()
+    printWindow.print()
   }
 
   const getTipoLabel = (tipo) => {
@@ -292,6 +429,51 @@ export default function Depositos() {
           </div>
         </div>
       )}
+
+      {/* Historial de Traslados */}
+      <div className="card" style={{ padding: '24px', marginTop: '24px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <h3 style={{ margin: 0 }}>Historial de Traslados</h3>
+          <button type="button" className="secondary" onClick={handlePrintTraslados}>🖨️ Imprimir Historial</button>
+        </div>
+        <div className="table-responsive">
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid #f1f5f9', textAlign: 'left' }}>
+                <th style={{ padding: '12px 8px' }}>Producto</th>
+                <th style={{ padding: '12px 8px' }}>Cantidad</th>
+                <th style={{ padding: '12px 8px' }}>Origen</th>
+                <th style={{ padding: '12px 8px' }}>Destino</th>
+                <th style={{ padding: '12px 8px' }}>Motivo</th>
+                <th style={{ padding: '12px 8px' }}>Registrado por</th>
+                <th style={{ padding: '12px 8px' }}>Fecha</th>
+                <th style={{ padding: '12px 8px', textAlign: 'center' }}>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {traslados.map(t => (
+                <tr key={t.id_movimiento} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                  <td style={{ padding: '12px 8px' }}>{t.producto_nombre}</td>
+                  <td style={{ padding: '12px 8px' }}>{t.cantidad}</td>
+                  <td style={{ padding: '12px 8px' }}>{t.origen_nombre}</td>
+                  <td style={{ padding: '12px 8px' }}>{t.destino_nombre}</td>
+                  <td style={{ padding: '12px 8px' }}>{t.motivo}</td>
+                  <td style={{ padding: '12px 8px' }}>{t.usuario_nombre || '-'}</td>
+                  <td style={{ padding: '12px 8px' }}>{new Date(t.created_at).toLocaleDateString()}</td>
+                  <td style={{ padding: '12px 8px', textAlign: 'center' }}>
+                    <button type="button" className="secondary" onClick={() => handlePrintSingleTraslado(t)} style={{ padding: '4px 8px', fontSize: '0.8rem' }}>🖨️</button>
+                  </td>
+                </tr>
+              ))}
+              {traslados.length === 0 && (
+                <tr>
+                  <td colSpan={8} style={{ textAlign: 'center', padding: '20px', color: 'var(--muted)' }}>No hay traslados registrados.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       {/* Modal Unificado de Movimientos */}
       {modalType && (
