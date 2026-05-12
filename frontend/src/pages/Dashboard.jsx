@@ -21,7 +21,7 @@ import LicitacionesCerradas from '../components/LicitacionesCerradas'
 import RecepcionLicitacion from '../components/RecepcionLicitacion'
 import DistribucionEscuelas from '../components/DistribucionEscuelas'
 
-const LOGO_URL = '/faviconmin.png'
+const LOGO_URL = '/logo-sidebar.png'
 
 const ROLE_LABELS = {
   admin: 'Administrador',
