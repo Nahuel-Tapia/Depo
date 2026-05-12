@@ -38,12 +38,20 @@ export default function Usuarios() {
   const [cueLoading, setCueLoading] = useState(false)
 
   const isDirectorArea = user?.role === 'director_area'
-  const nivelesDisponibles = [...new Set([
-    ...instituciones.map((inst) => normalizeText(inst.nivel_educativo)),
-    ...users.map((u) => normalizeText(u.nivel_educativo)),
-    normalizeText(user?.nivel_educativo),
-    ...FALLBACK_NIVELES
-  ].filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'))
+  const nivelesDisponibles = (() => {
+    const raw = [
+      ...instituciones.map((inst) => normalizeText(inst.nivel_educativo)),
+      ...users.map((u) => normalizeText(u.nivel_educativo)),
+      normalizeText(user?.nivel_educativo),
+      ...FALLBACK_NIVELES
+    ].filter(Boolean)
+    const seen = new Map()
+    for (const nivel of raw) {
+      const key = nivel.toUpperCase()
+      if (!seen.has(key)) seen.set(key, nivel)
+    }
+    return [...seen.values()].sort((a, b) => a.localeCompare(b, 'es'))
+  })()
   const jurisdiccionesDisponibles = [...new Set(instituciones.map((inst) => String(inst.departamento || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'))
   const directorAreas = users.filter((u) => String(u.role || '').toLowerCase() === 'director_area' && u.activo)
 
