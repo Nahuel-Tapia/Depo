@@ -30,7 +30,7 @@ router.use(authenticate);
 // Listar movimientos
 router.get("/", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW), async (req, res) => {
   try {
-    const { producto_id, id_deposito, tipo, limit = 50, offset = 0 } = req.query;
+    const { producto_id, id_deposito, tipo, desde, hasta, usuario, limit = 50, offset = 0 } = req.query;
 
     let query = `
       SELECT 
@@ -73,6 +73,30 @@ router.get("/", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW), async (req, 
     if (id_deposito) {
       query += ` AND m.id_deposito = $${paramIndex++}`;
       params.push(id_deposito);
+    }
+
+    // Fecha desde/hasta (espera formatos YYYY-MM-DD o ISO)
+    if (desde) {
+      query += ` AND m.fecha_movimiento >= $${paramIndex++}`;
+      params.push(desde);
+    }
+    if (hasta) {
+      // incluir hasta 23:59:59 para cubrir el día completo si viene solo YYYY-MM-DD
+      const hastaVal = hasta.length === 10 ? `${hasta} 23:59:59` : hasta;
+      query += ` AND m.fecha_movimiento <= $${paramIndex++}`;
+      params.push(hastaVal);
+    }
+
+    // Filtrar por usuario (acepta id numérico o fragmento de nombre)
+    if (usuario) {
+      const onlyDigits = /^\d+$/.test(usuario);
+      if (onlyDigits) {
+        query += ` AND m.id_usuario = $${paramIndex++}`;
+        params.push(usuario);
+      } else {
+        query += ` AND u.nombre ILIKE $${paramIndex++}`;
+        params.push(`%${usuario}%`);
+      }
     }
 
     query += ` ORDER BY m.fecha_movimiento DESC LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
