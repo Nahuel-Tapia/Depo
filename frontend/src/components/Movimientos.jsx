@@ -129,8 +129,10 @@ export default function Movimientos() {
     setMsg({ text: '', type: '' })
     if (loteEgreso.length === 0) { setMsg({ text: 'Agregue al menos un producto al egreso', type: 'error' }); return }
 
-    // Si hay deposito seleccionado, usar la API de depositos
-    if (egresoDeposito) {
+    // Si hay deposito seleccionado y NO es un traslado (es para institución), usar la API de depositos
+    const destDeposito = depositos.find(d => d.nombre.toLowerCase() === egresoInst.trim().toLowerCase())
+    
+    if (egresoDeposito && !destDeposito) {
       const instMatch = instituciones.find(i => i.nombre.toLowerCase() === egresoInst.trim().toLowerCase())
       if (!instMatch || !egresoCargo) {
         setMsg({ text: 'Seleccione institucion y cargo', type: 'error' })
@@ -161,6 +163,38 @@ export default function Movimientos() {
       setEgresoDeposito('')
       setEgresoModalOpen(false)
       setMsg({ text: 'Egreso registrado correctamente', type: 'success' })
+      loadMovimientos()
+      loadProductos()
+      return
+    }
+
+    // Detectar si el destino es un depósito (Traslado)
+    if (destDeposito) {
+      if (!egresoDeposito || destDeposito.id == egresoDeposito) {
+        setMsg({ text: 'Seleccione un depósito de origen válido y distinto al destino', type: 'error' })
+        return
+      }
+      for (const item of loteEgreso) {
+        const payload = {
+          id_producto: item.producto_id,
+          cantidad: item.cantidad,
+          origen_id: parseInt(egresoDeposito, 10),
+          destino_id: destDeposito.id,
+          motivo: egresoMotivo.trim() || 'Traslado entre depósitos'
+        }
+        const res = await apiFetch('/api/depositos/mover', { token, method: 'POST', body: JSON.stringify(payload) })
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
+          setMsg({ text: data.error || 'Error en traslado', type: 'error' })
+          return
+        }
+      }
+      setEgresoInst('')
+      setEgresoMotivo('')
+      setLoteEgreso([])
+      setEgresoDeposito('')
+      setEgresoModalOpen(false)
+      setMsg({ text: 'Traslado registrado correctamente', type: 'success' })
       loadMovimientos()
       loadProductos()
       return
@@ -236,8 +270,12 @@ export default function Movimientos() {
       return
     }
 
-    // Si hay depósito seleccionado, usar la API de depósitos
-    if (ingresoDeposito) {
+    // Detectar si el origen es un depósito (Traslado)
+    const origenDepId = parseInt(ingresoItem.proveedorId, 10)
+    const isTransfer = depositos.some(d => d.id === origenDepId)
+
+    // Si hay depósito seleccionado y es desde proveedor, usar la API de depósitos
+    if (ingresoDeposito && !isTransfer) {
       for (const item of loteIngreso) {
         const res = await apiFetch(`/api/depositos/${ingresoDeposito}/ingreso`, {
           token,
@@ -261,6 +299,36 @@ export default function Movimientos() {
       setIngresoDeposito('')
       setIngresoModalOpen(false)
       setMsg({ text: 'Ingreso registrado correctamente', type: 'success' })
+      loadMovimientos()
+      loadProductos()
+      return
+    }
+
+    // Detectar si el origen es un depósito (Traslado)
+    if (isTransfer) {
+      if (!ingresoDeposito || origenDepId == ingresoDeposito) {
+        setMsg({ text: 'Seleccione un depósito de origen distinto al destino', type: 'error' })
+        return
+      }
+      for (const item of loteIngreso) {
+        const payload = {
+          id_producto: item.producto_id,
+          cantidad: item.cantidad,
+          origen_id: origenDepId,
+          destino_id: parseInt(ingresoDeposito, 10),
+          motivo: ingresoMotivo.trim() || 'Traslado entre depósitos'
+        }
+        const res = await apiFetch('/api/depositos/mover', { token, method: 'POST', body: JSON.stringify(payload) })
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
+          setMsg({ text: data.error || 'Error en traslado', type: 'error' })
+          return
+        }
+      }
+      setLoteIngreso([])
+      setIngresoDeposito('')
+      setIngresoModalOpen(false)
+      setMsg({ text: 'Traslado registrado correctamente', type: 'success' })
       loadMovimientos()
       loadProductos()
       return
@@ -482,12 +550,12 @@ export default function Movimientos() {
                 </div>
                 <form onSubmit={handleEgresoSubmit} className="grid">
                   <div>
-                    <label>Institución</label>
+                    <label>Institución o Depósito Destino</label>
                     <input
                       list="egresoInstitucionList"
                       value={egresoInst}
                       onChange={e => setEgresoInst(e.target.value)}
-                      placeholder="Escriba para buscar institución..."
+                      placeholder="Busque escuela o depósito (ej: Centro Cívico)..."
                       autoComplete="off"
                       required
                     />
@@ -495,29 +563,35 @@ export default function Movimientos() {
                       {instituciones.map(i => (
                         <option key={i.id} value={i.nombre} />
                       ))}
+                      {depositos.filter(d => d.id != egresoDeposito).map(d => (
+                        <option key={`dep-${d.id}`} value={d.nombre}>{d.nombre} (Depósito)</option>
+                      ))}
                     </datalist>
                   </div>
-                  <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                    <div>
-                      <label>Cargo de quien retira</label>
-                      <select value={egresoCargo} onChange={e => setEgresoCargo(e.target.value)} required>
-                        <option value="">Seleccionar cargo...</option>
-                        {CARGOS.map(c => (
-                          <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label>Nivel Educativo</label>
-                      <input
-                        type="text"
-                        value={egresoNivel}
-                        placeholder="Se cargará automáticamente"
-                        readOnly
-                        disabled
-                      />
-                    </div>
-                  </div>
+                      <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                        <div>
+                          <label>Cargo de quien retira</label>
+                          <select value={egresoCargo} onChange={e => {
+                            setEgresoCargo(e.target.value);
+                            // Si es un deposito, no forzar cargo pero dejarlo opcional
+                          }} required={!depositos.some(d => d.nombre.toLowerCase() === egresoInst.trim().toLowerCase())}>
+                            <option value="">Seleccionar cargo...</option>
+                            {CARGOS.map(c => (
+                              <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label>Nivel Educativo</label>
+                          <input
+                            type="text"
+                            value={egresoNivel}
+                            placeholder="Se cargará automáticamente"
+                            readOnly
+                            disabled
+                          />
+                        </div>
+                      </div>
 
                   <div style={{ gridColumn: '1 / -1' }}>
                     <h4>Productos a egresar</h4>
@@ -643,64 +717,72 @@ export default function Movimientos() {
                   )}
                 </div>
                 <form onSubmit={handleIngresoSubmit} className="grid">
-                  <div style={{ gridColumn: '1 / -1' }}>
-                    <h4>Productos a ingresar</h4>
-                    <div className="grid" style={{ marginBottom: 16 }}>
-                      <div>
-                        <label>Producto</label>
-                        <select
-                          value={ingresoItem.productoId}
-                          onChange={e => setIngresoItem({ ...ingresoItem, productoId: e.target.value })}
-                        >
-                          <option value="">Seleccionar producto...</option>
-                          {productos.map(p => (
-                            <option key={p.id} value={p.id}>{p.nombre} ({p.unidad_medida || 'unidad'})</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label>Proveedor</label>
-                        <select
-                          value={ingresoItem.proveedorId}
-                          onChange={e => setIngresoItem({ ...ingresoItem, proveedorId: e.target.value })}
-                        >
-                          <option value="">Seleccionar proveedor...</option>
-                          {proveedores.map(prov => (
-                            <option key={prov.id} value={prov.id}>{prov.nombre}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label>Cantidad</label>
-                        <input
-                          type="number"
-                          value={ingresoItem.cantidad}
-                          onChange={e => setIngresoItem({ ...ingresoItem, cantidad: e.target.value })}
-                          placeholder="0"
-                          min="1"
-                        />
-                      </div>
-                      <div>
-                        <label>Estado del producto</label>
-                        <select value={ingresoItem.estado} onChange={e => setIngresoItem({ ...ingresoItem, estado: e.target.value })}>
-                          {ESTADOS_PRODUCTO.map(est => (
-                            <option key={est} value={est}>{est.charAt(0).toUpperCase() + est.slice(1)}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label>Fecha de Vencimiento</label>
-                        <input
-                          type="date"
-                          value={ingresoItem.fechaVencimiento || ''}
-                          onChange={e => setIngresoItem({ ...ingresoItem, fechaVencimiento: e.target.value })}
-                        />
-                      </div>
-                      <div style={{ alignSelf: 'end' }}>
-                        <button type="button" onClick={addToIngreso}>Agregar al Ingreso</button>
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <h4>Productos a ingresar</h4>
+                      <div className="grid" style={{ marginBottom: 16 }}>
+                        <div>
+                          <label>Producto</label>
+                          <select
+                            value={ingresoItem.productoId}
+                            onChange={e => setIngresoItem({ ...ingresoItem, productoId: e.target.value })}
+                          >
+                            <option value="">Seleccionar producto...</option>
+                            {productos.map(p => (
+                              <option key={p.id} value={p.id}>{p.nombre} ({p.unidad_medida || 'unidad'})</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label>Origen (Proveedor o Depósito)</label>
+                          <select
+                            value={ingresoItem.proveedorId}
+                            onChange={e => setIngresoItem({ ...ingresoItem, proveedorId: e.target.value })}
+                          >
+                            <option value="">Seleccionar origen...</option>
+                            <optgroup label="Proveedores">
+                              {proveedores.length === 0 && <option disabled>No hay proveedores registrados</option>}
+                              {proveedores.map(prov => (
+                                <option key={prov.id} value={prov.id}>{prov.nombre}</option>
+                              ))}
+                            </optgroup>
+                            <optgroup label="Depósitos (Traslado)">
+                              {depositos.filter(d => String(d.id) !== String(ingresoDeposito)).map(d => (
+                                <option key={`dep-${d.id}`} value={d.id}>{d.nombre}</option>
+                              ))}
+                            </optgroup>
+                          </select>
+                        </div>
+                        <div>
+                          <label>Cantidad</label>
+                          <input
+                            type="number"
+                            value={ingresoItem.cantidad}
+                            onChange={e => setIngresoItem({ ...ingresoItem, cantidad: e.target.value })}
+                            placeholder="0"
+                            min="1"
+                          />
+                        </div>
+                        <div>
+                          <label>Estado del producto</label>
+                          <select value={ingresoItem.estado} onChange={e => setIngresoItem({ ...ingresoItem, estado: e.target.value })}>
+                            {ESTADOS_PRODUCTO.map(est => (
+                              <option key={est} value={est}>{est.charAt(0).toUpperCase() + est.slice(1)}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label>Fecha de Vencimiento</label>
+                          <input
+                            type="date"
+                            value={ingresoItem.fechaVencimiento || ''}
+                            onChange={e => setIngresoItem({ ...ingresoItem, fechaVencimiento: e.target.value })}
+                          />
+                        </div>
+                        <div style={{ alignSelf: 'end' }}>
+                          <button type="button" onClick={addToIngreso}>Agregar al Ingreso</button>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
                   {loteIngreso.length > 0 && (
                     <div style={{ gridColumn: '1 / -1' }}>
@@ -798,33 +880,6 @@ export default function Movimientos() {
           {msg.text}
         </div>
       )}
-
-      {/* Traslado entre depósitos */}
-      <section style={{ marginTop: 20, background: 'var(--card)', borderRadius: '10px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', padding: '24px' }}>
-        <h3>Traslado entre depósitos</h3>
-        <div className="grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
-          <select value={transfer.productoId} onChange={e => setTransfer({ ...transfer, productoId: e.target.value })}>
-            <option value="">Producto</option>
-            {productos.map(p => (
-              <option key={p.id} value={p.id}>{p.nombre}</option>
-            ))}
-          </select>
-          <select value={transfer.origenId} onChange={e => setTransfer({ ...transfer, origenId: e.target.value })}>
-            <option value="">Origen</option>
-            {depositos.map(d => (
-              <option key={d.id} value={d.id}>{d.nombre} ({d.tipo})</option>
-            ))}
-          </select>
-          <select value={transfer.destinoId} onChange={e => setTransfer({ ...transfer, destinoId: e.target.value })}>
-            <option value="">Destino</option>
-            {depositos.map(d => (
-              <option key={d.id} value={d.id}>{d.nombre} ({d.tipo})</option>
-            ))}
-          </select>
-          <input type="number" min="1" placeholder="Cantidad" value={transfer.cantidad} onChange={e => setTransfer({ ...transfer, cantidad: e.target.value })} />
-        </div>
-        <button type="button" className="primary" onClick={handleTransferSubmit} style={{ marginTop: 8 }}>Trasladar</button>
-      </section>
 
       <div ref={printRef} style={{ marginTop: 20, overflowX: 'auto' }}>
       <h3>Lista de Movimientos</h3>

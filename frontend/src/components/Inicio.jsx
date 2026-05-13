@@ -9,6 +9,7 @@ const ROLE_LABELS = {
   director_area: 'Director de Area',
   directivo: 'Directivo',
   operador: 'Operador',
+  operador_escolar: 'Operador Escolar',
   consulta: 'Consulta',
   control_ministerio: 'Control Ministerio',
   area_compras: 'Area Compras',

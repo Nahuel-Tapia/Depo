@@ -85,7 +85,8 @@ async function ensureDepositosSchema() {
  router.get("/", authorizePermissions(PERMISSIONS.STOCK_VIEW), async (req, res) => {
   try {
     await ensureDepositosSchema();
-    const depositos = await all(`
+      const isEscolar = req.user.role === "operador_escolar";
+    let query = `
       SELECT 
         d.id_deposito as id,
         d.nombre,
@@ -98,8 +99,15 @@ async function ensureDepositosSchema() {
       FROM deposito d
       LEFT JOIN deposito dp ON dp.id_deposito = d.deposito_padre_id
       WHERE d.activo = TRUE
-      ORDER BY d.tipo, d.id_deposito
-    `);
+    `;
+    
+    if (isEscolar) {
+      query += " AND d.id_deposito IN (1, 2)";
+    }
+    
+    query += " ORDER BY d.tipo, d.id_deposito";
+    
+    const depositos = await all(query);
     return res.json({ depositos });
   } catch (err) {
     console.error("Error listando depósitos:", err);
@@ -127,21 +135,23 @@ router.get("/:id/productos", authorizePermissions(PERMISSIONS.STOCK_VIEW), async
 // Listar stock por producto en todos los depósitos
 router.get("/stock-por-producto", authorizePermissions(PERMISSIONS.STOCK_VIEW), async (req, res) => {
   try {
-    const productos = await all(`
-      SELECT 
-        p.id_producto as id,
-        p.nombre,
-        p.unidad_medida,
-        p.stock_actual,
-        COALESCE(SUM(CASE WHEN d.tipo = 'central' THEN sd.cantidad ELSE 0 END), 0) as stock_central,
-        COALESCE(SUM(CASE WHEN d.tipo = 'centro_civico' THEN sd.cantidad ELSE 0 END), 0) as stock_centro_civico,
-        COALESCE(SUM(CASE WHEN d.tipo = 'capsula' THEN sd.cantidad ELSE 0 END), 0) as stock_capsula
-      FROM producto p
-      LEFT JOIN stock_deposito sd ON sd.id_producto = p.id_producto
-      LEFT JOIN deposito d ON d.id_deposito = sd.id_deposito
-      GROUP BY p.id_producto, p.nombre, p.unidad_medida, p.stock_actual
-      ORDER BY p.nombre
-    `);
+      const isEscolar = req.user.role === "operador_escolar";
+      const productos = await all(`
+        SELECT 
+          p.id_producto as id,
+          p.nombre,
+          p.unidad_medida,
+          p.stock_actual,
+          COALESCE(SUM(CASE WHEN d.tipo = 'central' THEN sd.cantidad ELSE 0 END), 0) as stock_central,
+          COALESCE(SUM(CASE WHEN d.tipo = 'centro_civico' THEN sd.cantidad ELSE 0 END), 0) as stock_centro_civico,
+          COALESCE(SUM(CASE WHEN d.tipo = 'capsula' THEN sd.cantidad ELSE 0 END), 0) as stock_capsula
+        FROM producto p
+        LEFT JOIN stock_deposito sd ON sd.id_producto = p.id_producto
+        LEFT JOIN deposito d ON d.id_deposito = sd.id_deposito
+        WHERE 1=1 ${isEscolar ? 'AND (p.requiere_autorizacion = FALSE OR p.requiere_autorizacion IS NULL)' : ''}
+        GROUP BY p.id_producto, p.nombre, p.unidad_medida, p.stock_actual
+        ORDER BY p.nombre
+      `);
     return res.json({ productos });
   } catch (err) {
     console.error("Error listando stock:", err);
@@ -153,9 +163,14 @@ router.get("/stock-por-producto", authorizePermissions(PERMISSIONS.STOCK_VIEW), 
 router.get("/:id/stock", authorizePermissions(PERMISSIONS.STOCK_VIEW), async (req, res) => {
   try {
     const { id } = req.params;
+    const isEscolar = req.user.role === "operador_escolar";
     const deposito = await get("SELECT * FROM deposito WHERE id_deposito = $1", [id]);
     if (!deposito) {
       return res.status(404).json({ error: "Depósito no encontrado" });
+    }
+
+    if (isEscolar && deposito.tipo === "capsula") {
+      return res.status(403).json({ error: "No tenés acceso a la cápsula de seguridad" });
     }
 
     // Si tiene hijos (capsula dentro de central), mostrar ambos stocks
@@ -203,6 +218,21 @@ router.post("/mover", authorizePermissions(PERMISSIONS.STOCK_MOVEMENT_CREATE), a
   if (!id_producto || !cantidad || !origen_id || !destino_id) {
     return res.status(400).json({ error: "Faltan campos obligatorios" })
   }
+
+  // Restricciones para operador_escolar
+  if (req.user.role === "operador_escolar") {
+    const ALLOWED_DEPOSIT_IDS = [1, 2]; // Central (1), Centro Civico (2)
+    if (!ALLOWED_DEPOSIT_IDS.includes(Number(origen_id)) || !ALLOWED_DEPOSIT_IDS.includes(Number(destino_id))) {
+      return res.status(403).json({ error: "Solo tenés permiso para realizar traslados entre Depósito Central y Centro Cívico" });
+    }
+
+    // Verificar si el producto requiere autorización
+    const producto = await get("SELECT requiere_autorizacion FROM producto WHERE id_producto = $1", [id_producto]);
+    if (producto && producto.requiere_autorizacion) {
+      return res.status(403).json({ error: "No tenés permiso para trasladar productos de la cápsula de seguridad" });
+    }
+  }
+
   const client = await pool.connect()
   try {
     await client.query("BEGIN")
@@ -290,15 +320,23 @@ router.post("/:id/ingreso", authorizePermissions(PERMISSIONS.STOCK_MOVEMENT_CREA
       return res.status(400).json({ error: "Producto y cantidad requeridos" });
     }
 
-    const deposito = await get("SELECT * FROM deposito WHERE id_deposito = $1", [id]);
+    const productoIdNum = parseInt(id_producto, 10);
+    const cantidadNum = parseInt(cantidad, 10);
+    const depositoIdNum = parseInt(id, 10);
+    const proveedorIdNum = id_proveedor ? parseInt(id_proveedor, 10) : null;
+
+    const deposito = await get("SELECT * FROM deposito WHERE id_deposito = $1", [depositoIdNum]);
     if (!deposito) {
       return res.status(404).json({ error: "Depósito no encontrado" });
     }
 
     // Verificar si producto requiere autorización y el usuario tiene permiso
-    const producto = await get("SELECT * FROM producto WHERE id_producto = $1", [id_producto]);
+    const producto = await get("SELECT * FROM producto WHERE id_producto = $1", [productoIdNum]);
+    if (!producto) {
+      return res.status(404).json({ error: "Producto no encontrado" });
+    }
+
     if (producto.requiere_autorizacion) {
-      // Solo admin puede meter items a capsula directamente
       const esCapsula = deposito.tipo === "capsula";
       if (esCapsula && req.user.role !== "admin") {
         return res.status(403).json({ error: "Requiere autorización para ingresos a Cápsula" });
@@ -306,23 +344,23 @@ router.post("/:id/ingreso", authorizePermissions(PERMISSIONS.STOCK_MOVEMENT_CREA
     }
 
     // Insertar movimiento
-    const movimiento = await run(`
+    await run(`
       INSERT INTO movimiento_stock (id_producto, cantidad, tipo, id_proveedor, motivo, id_usuario, id_deposito, fecha_vencimiento)
       VALUES ($1, $2, 'ingreso', $3, $4, $5, $6, $7)
-    `, [id_producto, cantidad, id_proveedor || null, motivo || "Ingreso a depósito", req.user.sub, id, fecha_vencimiento || null]);
+    `, [productoIdNum, cantidadNum, proveedorIdNum, motivo || "Ingreso a depósito", req.user.sub, depositoIdNum, fecha_vencimiento || null]);
 
-    // Actualizar stock
+    // Actualizar stock en depósito
     await pool.query(`
       INSERT INTO stock_deposito (id_deposito, id_producto, cantidad)
       VALUES ($1, $2, $3)
       ON CONFLICT (id_deposito, id_producto) 
       DO UPDATE SET cantidad = stock_deposito.cantidad + $3
-    `, [id, id_producto, cantidad]);
+    `, [depositoIdNum, productoIdNum, cantidadNum]);
 
     // Actualizar stock global
     await pool.query(
-      "UPDATE producto SET stock_actual = stock_actual + $1 WHERE id_producto = $2",
-      [cantidad, id_producto]
+      "UPDATE producto SET stock_actual = COALESCE(stock_actual, 0) + $1 WHERE id_producto = $2",
+      [cantidadNum, productoIdNum]
     );
 
     return res.json({ ok: true, message: "Ingreso registrado" });
@@ -343,7 +381,12 @@ router.post("/:id/egreso", authorizePermissions(PERMISSIONS.STOCK_MOVEMENT_CREAT
       return res.status(400).json({ error: "Producto y cantidad requeridos" });
     }
 
-    const deposito = await get("SELECT * FROM deposito WHERE id_deposito = $1", [id]);
+    const productoIdNum = parseInt(id_producto, 10);
+    const cantidadNum = parseInt(cantidad, 10);
+    const depositoIdNum = parseInt(id, 10);
+    const institucionIdNum = id_institucion ? parseInt(id_institucion, 10) : null;
+
+    const deposito = await get("SELECT * FROM deposito WHERE id_deposito = $1", [depositoIdNum]);
     if (!deposito) {
       return res.status(404).json({ error: "Depósito no encontrado" });
     }
@@ -351,15 +394,15 @@ router.post("/:id/egreso", authorizePermissions(PERMISSIONS.STOCK_MOVEMENT_CREAT
     // Verificar stock disponible
     const stockDep = await get(
       "SELECT cantidad FROM stock_deposito WHERE id_deposito = $1 AND id_producto = $2",
-      [id, id_producto]
+      [depositoIdNum, productoIdNum]
     );
     const stockDisp = stockDep?.cantidad || 0;
-    if (stockDisp < cantidad) {
+    if (stockDisp < cantidadNum) {
       return res.status(400).json({ error: `Stock insuficiente. Disponible: ${stockDisp}` });
     }
 
     // Verificar si producto requiere autorización
-    const producto = await get("SELECT requiere_autorizacion FROM producto WHERE id_producto = $1", [id_producto]);
+    const producto = await get("SELECT requiere_autorizacion FROM producto WHERE id_producto = $1", [productoIdNum]);
     if (producto.requiere_autorizacion) {
       const esCapsula = deposito.tipo === "capsula";
       if (esCapsula && req.user.role !== "admin") {
@@ -371,18 +414,18 @@ router.post("/:id/egreso", authorizePermissions(PERMISSIONS.STOCK_MOVEMENT_CREAT
     await run(`
       INSERT INTO movimiento_stock (id_producto, cantidad, tipo, id_institucion, motivo, id_usuario, id_deposito)
       VALUES ($1, $2, 'egreso', $3, $4, $5, $6)
-    `, [id_producto, cantidad, id_institucion || null, motivo || "Egreso de depósito", req.user.sub, id]);
+    `, [productoIdNum, cantidadNum, institucionIdNum, motivo || "Egreso de depósito", req.user.sub, depositoIdNum]);
 
-    // Actualizar stock
+    // Actualizar stock en depósito
     await run(
       "UPDATE stock_deposito SET cantidad = cantidad - $1 WHERE id_deposito = $2 AND id_producto = $3",
-      [cantidad, id, id_producto]
+      [cantidadNum, depositoIdNum, productoIdNum]
     );
 
     // Actualizar stock global
     await pool.query(
-      "UPDATE producto SET stock_actual = stock_actual - $1 WHERE id_producto = $2",
-      [cantidad, id_producto]
+      "UPDATE producto SET stock_actual = COALESCE(stock_actual, 0) - $1 WHERE id_producto = $2",
+      [cantidadNum, productoIdNum]
     );
 
     return res.json({ ok: true, message: "Egreso registrado" });

@@ -15,6 +15,7 @@ async function hasTable(tableName) {
 // Listar productos (con ubicación de depósito)
 router.get("/", authorizePermissions(PERMISSIONS.PRODUCTOS_VIEW), async (req, res) => {
   try {
+    const isEscolar = req.user.role === "operador_escolar";
     const [hasStockDeposito, hasDeposito] = await Promise.all([
       hasTable('stock_deposito'),
       hasTable('deposito')
@@ -22,7 +23,7 @@ router.get("/", authorizePermissions(PERMISSIONS.PRODUCTOS_VIEW), async (req, re
 
     let productos;
     if (hasStockDeposito && hasDeposito) {
-      productos = await all(`
+      let query = `
         SELECT
           p.id_producto as id,
           p.nombre,
@@ -45,11 +46,22 @@ router.get("/", authorizePermissions(PERMISSIONS.PRODUCTOS_VIEW), async (req, re
         LEFT JOIN stock_deposito sd ON sd.id_producto = p.id_producto
         LEFT JOIN deposito d ON d.id_deposito = sd.id_deposito
         LEFT JOIN categoria c ON p.id_categoria = c.id_categoria
+        WHERE 1=1
+      `;
+      
+      const params = [];
+      if (isEscolar) {
+        query += " AND (p.requiere_autorizacion = FALSE OR p.requiere_autorizacion IS NULL)";
+      }
+
+      query += `
         GROUP BY p.id_producto, p.nombre, p.unidad_medida, p.stock_actual, p.stock_minimo, p.id_categoria, c.nombre
         ORDER BY p.id_producto DESC
-      `);
+      `;
+      
+      productos = await all(query, params);
     } else {
-      productos = await all(`
+      let query = `
         SELECT
           p.id_producto as id,
           p.nombre,
@@ -64,8 +76,16 @@ router.get("/", authorizePermissions(PERMISSIONS.PRODUCTOS_VIEW), async (req, re
           'Depósito Central' as deposito
         FROM producto p
         LEFT JOIN categoria c ON p.id_categoria = c.id_categoria
-        ORDER BY p.id_producto DESC
-      `);
+        WHERE 1=1
+      `;
+      
+      if (isEscolar) {
+        query += " AND (p.requiere_autorizacion = FALSE OR p.requiere_autorizacion IS NULL)";
+      }
+      
+      query += " ORDER BY p.id_producto DESC";
+      
+      productos = await all(query);
     }
 
     return res.json({ productos });
@@ -90,6 +110,8 @@ router.get("/categorias", authorizePermissions(PERMISSIONS.PRODUCTOS_VIEW), asyn
 router.get("/:id", authorizePermissions(PERMISSIONS.PRODUCTOS_VIEW), async (req, res) => {
   try {
     const { id } = req.params;
+    const isEscolar = req.user.role === "operador_escolar";
+
     const producto = await get(`
       SELECT 
         p.id_producto as id,
@@ -98,6 +120,7 @@ router.get("/:id", authorizePermissions(PERMISSIONS.PRODUCTOS_VIEW), async (req,
         p.stock_actual,
         p.stock_minimo,
         p.id_categoria,
+        p.requiere_autorizacion,
         c.nombre as categoria_nombre
       FROM producto p
       LEFT JOIN categoria c ON p.id_categoria = c.id_categoria
@@ -106,6 +129,11 @@ router.get("/:id", authorizePermissions(PERMISSIONS.PRODUCTOS_VIEW), async (req,
     if (!producto) {
       return res.status(404).json({ error: "Producto no encontrado" });
     }
+
+    if (isEscolar && producto.requiere_autorizacion) {
+      return res.status(403).json({ error: "No tenés acceso a productos de la cápsula de seguridad" });
+    }
+
     return res.json({ producto });
   } catch (err) {
     console.error(err);
@@ -117,6 +145,14 @@ router.get("/:id", authorizePermissions(PERMISSIONS.PRODUCTOS_VIEW), async (req,
 router.get("/:id/stock-detalle", authorizePermissions(PERMISSIONS.PRODUCTOS_VIEW), async (req, res) => {
   try {
     const { id } = req.params;
+    const isEscolar = req.user.role === "operador_escolar";
+
+    const producto = await get("SELECT requiere_autorizacion FROM producto WHERE id_producto = ?", [id]);
+    if (!producto) return res.status(404).json({ error: "Producto no encontrado" });
+
+    if (isEscolar && producto.requiere_autorizacion) {
+      return res.status(403).json({ error: "No tenés acceso a este producto" });
+    }
     
     // 1. Distribución en depósitos
     const depositos = await all(`

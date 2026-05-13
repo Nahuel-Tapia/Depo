@@ -58,6 +58,11 @@ router.get("/", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW), async (req, 
       params.push(id_deposito);
     }
 
+    if (req.user.role === "operador_escolar") {
+      query += ` AND m.id_usuario = $${paramIndex++}`;
+      params.push(req.user.sub);
+    }
+
     query += ` ORDER BY m.fecha_movimiento DESC LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
     params.push(parseInt(limit), parseInt(offset));
 
@@ -107,6 +112,9 @@ router.get("/:id", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW), async (re
 
 // Crear movimiento
 router.post("/", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), async (req, res) => {
+  if (req.user.role === "operador_escolar") {
+    return res.status(403).json({ error: "No tenés permisos para realizar movimientos manuales" });
+  }
   try {
     const { producto_id, tipo, cantidad, motivo } = req.body;
 
@@ -144,6 +152,9 @@ router.post("/", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), async (re
 
 // Crear lote de movimientos
 router.post("/lote", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), async (req, res) => {
+  if (req.user.role === "operador_escolar") {
+    return res.status(403).json({ error: "No tenés permisos para realizar movimientos manuales" });
+  }
   try {
     const { tipo, motivo, movimientos } = req.body;
 
@@ -190,6 +201,9 @@ router.post("/lote", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), async
 
 // Crear movimiento directo (egreso/ingreso)
 router.post("/directo", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), async (req, res) => {
+  if (req.user.role === "operador_escolar") {
+    return res.status(403).json({ error: "No tenés permisos para realizar movimientos manuales" });
+  }
   const client = await pool.connect();
   try {
     const { tipo, institucion_id, cargo_retira, proveedor_id, motivo, productos, id_deposito } = req.body;
