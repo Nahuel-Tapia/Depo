@@ -1,13 +1,17 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../api'
 import PrintButton from './PrintButton'
+import FilterSortButton from './FilterSortButton'
 
 export default function Proveedores() {
   const { token, hasPermission } = useAuth()
   const [proveedores, setProveedores] = useState([])
   const [msg, setMsg] = useState({ text: '', type: '' })
   const [formOpen, setFormOpen] = useState(false)
+  const [searchText, setSearchText] = useState('')
+  const [filterRubro, setFilterRubro] = useState('')
+  const [sortBy, setSortBy] = useState('nombre_asc')
   const initialForm = { 
     nombre: '', cuit: '', contacto: '', telefono: '', email: '', categoria: '',
     razon_social: '', direccion: '', rubro: '', email_secundario: '', sitio_web: '', observaciones: ''
@@ -142,11 +146,77 @@ export default function Proveedores() {
 
   const printRef = useRef(null)
 
+  const rubros = useMemo(() => Array.from(new Set(
+    proveedores
+      .map((proveedor) => String(proveedor.rubro || proveedor.categoria || '').trim())
+      .filter(Boolean)
+  )).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' })), [proveedores])
+
+  const proveedoresVista = useMemo(() => {
+    const search = searchText.trim().toLowerCase()
+
+    return [...proveedores]
+      .filter((proveedor) => {
+        const rubro = String(proveedor.rubro || proveedor.categoria || '').trim()
+        const matchesSearch = !search || [
+          proveedor.nombre,
+          proveedor.razon_social,
+          proveedor.cuit,
+          proveedor.contacto,
+          proveedor.email,
+          proveedor.telefono,
+          proveedor.rubro,
+          proveedor.categoria,
+        ].some((value) => String(value || '').toLowerCase().includes(search))
+
+        return matchesSearch && (!filterRubro || rubro === filterRubro)
+      })
+      .sort((a, b) => {
+        if (sortBy === 'rubro_asc') return String(a.rubro || a.categoria || '').localeCompare(String(b.rubro || b.categoria || ''), 'es', { sensitivity: 'base' })
+        if (sortBy === 'contacto_asc') return String(a.contacto || '').localeCompare(String(b.contacto || ''), 'es', { sensitivity: 'base' })
+        if (sortBy === 'cuit_asc') return String(a.cuit || '').localeCompare(String(b.cuit || ''), 'es', { sensitivity: 'base', numeric: true })
+        return String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es', { sensitivity: 'base' })
+      })
+  }, [proveedores, searchText, filterRubro, sortBy])
+
+  const filtrosActivos = [searchText.trim(), filterRubro].filter(Boolean).length
+
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <h2>Proveedores</h2>
-        <PrintButton targetRef={printRef} title="Listado de Proveedores" />
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <FilterSortButton
+            searchValue={searchText}
+            searchPlaceholder="Buscar proveedor, CUIT o contacto..."
+            onSearchChange={setSearchText}
+            filters={[
+              {
+                key: 'rubro',
+                label: 'Rubro',
+                value: filterRubro,
+                onChange: setFilterRubro,
+                emptyLabel: 'Todos',
+                options: rubros.map((rubro) => ({ value: rubro, label: rubro })),
+              },
+            ]}
+            sortValue={sortBy}
+            sortOptions={[
+              { value: 'nombre_asc', label: 'Empresa (A-Z)' },
+              { value: 'rubro_asc', label: 'Rubro / categoria' },
+              { value: 'contacto_asc', label: 'Contacto' },
+              { value: 'cuit_asc', label: 'CUIT' },
+            ]}
+            onSortChange={setSortBy}
+            onClear={() => {
+              setSearchText('')
+              setFilterRubro('')
+              setSortBy('nombre_asc')
+            }}
+            activeCount={filtrosActivos}
+          />
+          <PrintButton targetRef={printRef} title="Listado de Proveedores" />
+        </div>
       </div>
 
       {msg.text && (
@@ -180,12 +250,12 @@ export default function Proveedores() {
             </tr>
           </thead>
           <tbody>
-            {proveedores.length === 0 ? (
+            {proveedoresVista.length === 0 ? (
               <tr>
                 <td colSpan={6} style={{ textAlign: 'center', color: '#9ca3af', padding: 32 }}>No hay proveedores registrados</td>
               </tr>
             ) : (
-              proveedores.map(p => (
+              proveedoresVista.map(p => (
                 <tr key={p.id}>
                   <td>
                     <strong>{p.nombre}</strong>

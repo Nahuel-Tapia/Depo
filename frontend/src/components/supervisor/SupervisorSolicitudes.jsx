@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { apiFetch } from '../../api'
+import FilterSortButton from '../FilterSortButton'
 import SolicitudesTable from './SolicitudesTable'
 import SolicitudDetalleModal from './SolicitudDetalleModal'
 
@@ -38,6 +39,8 @@ export default function SupervisorSolicitudes() {
   const [msg, setMsg] = useState({ text: '', type: '' })
   const [loading, setLoading] = useState(true)
   const [filtroEstado, setFiltroEstado] = useState('pendiente')
+  const [busqueda, setBusqueda] = useState('')
+  const [filtroTipo, setFiltroTipo] = useState('')
   const [orden, setOrden] = useState('fecha_desc')
 
   const [selected, setSelected] = useState(null)
@@ -175,13 +178,26 @@ export default function SupervisorSolicitudes() {
   }
 
   const solicitudesVista = useMemo(() => {
-    const filtered = filtroEstado === 'todos'
-      ? [...solicitudes]
-      : solicitudes.filter(item => item.estado === filtroEstado)
+    const search = busqueda.trim().toLowerCase()
+    const filtered = solicitudes.filter((item) => {
+      if (filtroEstado !== 'todos' && item.estado !== filtroEstado) return false
+      if (filtroTipo && (item.tipo || 'anual') !== filtroTipo) return false
+      if (!search) return true
+
+      return [
+        item.escuela,
+        item.solicitante,
+        item.producto,
+        item.notas,
+      ].some((value) => String(value || '').toLowerCase().includes(search))
+    })
 
     const sorted = filtered.sort((a, b) => {
       if (orden === 'fecha_asc') return new Date(a.fecha) - new Date(b.fecha)
       if (orden === 'fecha_desc') return new Date(b.fecha) - new Date(a.fecha)
+      if (orden === 'escuela_asc') return String(a.escuela || '').localeCompare(String(b.escuela || ''), 'es', { sensitivity: 'base' })
+      if (orden === 'cantidad_desc') return Number(b.cantidad || 0) - Number(a.cantidad || 0)
+      if (orden === 'cantidad_asc') return Number(a.cantidad || 0) - Number(b.cantidad || 0)
 
       return 0
     })
@@ -211,7 +227,9 @@ export default function SupervisorSolicitudes() {
     })
 
     return Array.from(grupos.values())
-  }, [solicitudes, filtroEstado, orden])
+  }, [solicitudes, filtroEstado, filtroTipo, busqueda, orden])
+
+  const filtrosActivos = [busqueda.trim(), filtroTipo].filter(Boolean).length
 
   return (
     <div className="supervisor-dashboard fade-in">
@@ -222,6 +240,39 @@ export default function SupervisorSolicitudes() {
             Revisión por coherencia con matrícula.
           </p>
         </div>
+        <FilterSortButton
+          searchValue={busqueda}
+          searchPlaceholder="Buscar escuela, producto o solicitante..."
+          onSearchChange={setBusqueda}
+          filters={[
+            {
+              key: 'tipo',
+              label: 'Tipo',
+              value: filtroTipo,
+              onChange: setFiltroTipo,
+              emptyLabel: 'Todos',
+              options: [
+                { value: 'anual', label: 'Anual' },
+                { value: 'refuerzo', label: 'Refuerzo' },
+              ],
+            },
+          ]}
+          sortValue={orden}
+          sortOptions={[
+            { value: 'fecha_desc', label: 'Fecha (mas reciente)' },
+            { value: 'fecha_asc', label: 'Fecha (mas antigua)' },
+            { value: 'escuela_asc', label: 'Escuela (A-Z)' },
+            { value: 'cantidad_desc', label: 'Cantidad mayor' },
+            { value: 'cantidad_asc', label: 'Cantidad menor' },
+          ]}
+          onSortChange={setOrden}
+          onClear={() => {
+            setBusqueda('')
+            setFiltroTipo('')
+            setOrden('fecha_desc')
+          }}
+          activeCount={filtrosActivos}
+        />
       </div>
 
       {msg.text && <div className={`msg show ${msg.type === 'success' ? 'msg-success' : 'msg-error'}`}>{msg.text}</div>}
@@ -263,16 +314,6 @@ export default function SupervisorSolicitudes() {
         >
           Todos
         </button>
-      </div>
-
-      <div className="sv-solicitudes-filtros" style={{ marginBottom: 20, display: 'flex', gap: 16 }}>
-        <div style={{ flex: 1 }}>
-          <label style={{ fontSize: '0.75rem' }}>Ordenar por</label>
-          <select value={orden} onChange={e => setOrden(e.target.value)}>
-            <option value="fecha_desc">Fecha (más reciente)</option>
-            <option value="fecha_asc">Fecha (más antigua)</option>
-          </select>
-        </div>
       </div>
 
       {loading ? (

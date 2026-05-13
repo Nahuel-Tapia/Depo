@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
 import { apiFetch } from '../api.js'
 import { useAuth } from '../context/AuthContext'
+import FilterSortButton from './FilterSortButton'
 import 'leaflet/dist/leaflet.css'
 import 'leaflet.markercluster/dist/MarkerCluster.css'
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
@@ -24,9 +25,11 @@ export default function Instituciones({ supervisorMode = false }) {
   const [searchNombre, setSearchNombre] = useState('')
   const [searchCUE, setSearchCUE] = useState('')
   const [searchCUI, setSearchCUI] = useState('')
+  const [searchText, setSearchText] = useState('')
   const [filterDepartamento, setFilterDepartamento] = useState('')
   const [filterNivel, setFilterNivel] = useState('')
   const [filterPedido, setFilterPedido] = useState('')
+  const [sortBy, setSortBy] = useState('nombre_asc')
   const [selectedEdificioKey, setSelectedEdificioKey] = useState(null)
   const [expandedInstitucionId, setExpandedInstitucionId] = useState(null)
   const [pedidosByInstitucion, setPedidosByInstitucion] = useState({})
@@ -78,14 +81,37 @@ export default function Instituciones({ supervisorMode = false }) {
   )).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }))
 
   // Filtrar instituciones
-  const filteredInstituciones = instituciones.filter(inst =>
-    String(inst.nombre || '').toLowerCase().includes(searchNombre.toLowerCase()) &&
-    String(inst.cue || '').toLowerCase().includes(searchCUE.toLowerCase()) &&
-    (inst.cui || '').toLowerCase().includes(searchCUI.toLowerCase()) &&
-    (!filterDepartamento || String(inst.departamento || '').trim() === filterDepartamento) &&
-    (!filterNivel || String(inst.nivel || '').trim() === filterNivel) &&
-    (!filterPedido || inst.pedido_status === filterPedido)
-  )
+  const filteredInstituciones = useMemo(() => {
+    const search = searchText.trim().toLowerCase()
+
+    return [...instituciones]
+      .filter(inst => {
+        const matchesSearch = !search || [
+          inst.nombre,
+          inst.cue,
+          inst.cui,
+          inst.departamento,
+          inst.nivel,
+        ].some((value) => String(value || '').toLowerCase().includes(search))
+
+        return matchesSearch &&
+          String(inst.nombre || '').toLowerCase().includes(searchNombre.toLowerCase()) &&
+          String(inst.cue || '').toLowerCase().includes(searchCUE.toLowerCase()) &&
+          (inst.cui || '').toLowerCase().includes(searchCUI.toLowerCase()) &&
+          (!filterDepartamento || String(inst.departamento || '').trim() === filterDepartamento) &&
+          (!filterNivel || String(inst.nivel || '').trim() === filterNivel) &&
+          (!filterPedido || inst.pedido_status === filterPedido)
+      })
+      .sort((a, b) => {
+        if (sortBy === 'departamento_asc') return String(a.departamento || '').localeCompare(String(b.departamento || ''), 'es', { sensitivity: 'base' })
+        if (sortBy === 'nivel_asc') return String(a.nivel || '').localeCompare(String(b.nivel || ''), 'es', { sensitivity: 'base' })
+        if (sortBy === 'cue_asc') return String(a.cue || '').localeCompare(String(b.cue || ''), 'es', { sensitivity: 'base', numeric: true })
+        if (sortBy === 'cui_asc') return String(a.cui || '').localeCompare(String(b.cui || ''), 'es', { sensitivity: 'base', numeric: true })
+        return String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es', { sensitivity: 'base' })
+      })
+  }, [instituciones, searchText, searchNombre, searchCUE, searchCUI, filterDepartamento, filterNivel, filterPedido, sortBy])
+
+  const filtrosActivos = [searchText.trim(), searchNombre.trim(), searchCUE.trim(), searchCUI.trim(), filterDepartamento, filterNivel, filterPedido].filter(Boolean).length
 
   const validInstituciones = filteredInstituciones.filter(inst =>
     Number.isFinite(Number(inst.latitud)) && Number.isFinite(Number(inst.longitud))
@@ -184,57 +210,57 @@ export default function Instituciones({ supervisorMode = false }) {
 
   return (
     <div>
-      <h2>{supervisorMode ? 'Mis Escuelas' : 'Mapa de Instituciones - San Juan'}</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <h2>{supervisorMode ? 'Mis Escuelas' : 'Mapa de Instituciones - San Juan'}</h2>
+        <FilterSortButton
+          searchValue={searchText}
+          searchPlaceholder="Buscar nombre, CUE, CUI o departamento..."
+          onSearchChange={setSearchText}
+          filters={[
+            {
+              key: 'departamento',
+              label: 'Departamento',
+              value: filterDepartamento,
+              onChange: setFilterDepartamento,
+              emptyLabel: 'Todos',
+              options: departamentos.map((dep) => ({ value: dep, label: dep })),
+            },
+            {
+              key: 'nivel',
+              label: 'Nivel',
+              value: filterNivel,
+              onChange: setFilterNivel,
+              emptyLabel: 'Todos',
+              options: niveles.map((nivel) => ({ value: nivel, label: nivel })),
+            },
+          ]}
+          sortValue={sortBy}
+          sortOptions={[
+            { value: 'nombre_asc', label: 'Nombre (A-Z)' },
+            { value: 'departamento_asc', label: 'Departamento' },
+            { value: 'nivel_asc', label: 'Nivel educativo' },
+            { value: 'cue_asc', label: 'CUE' },
+            { value: 'cui_asc', label: 'CUI' },
+          ]}
+          onSortChange={setSortBy}
+          onClear={() => {
+            setSearchText('')
+            setSearchNombre('')
+            setSearchCUE('')
+            setSearchCUI('')
+            setFilterDepartamento('')
+            setFilterNivel('')
+            setFilterPedido('')
+            setSortBy('nombre_asc')
+          }}
+          activeCount={filtrosActivos}
+        />
+      </div>
 
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
         <span className="badge">Instituciones cargadas: {filteredInstituciones.length}</span>
         <span className="badge">Con coordenadas: {validInstituciones.length}</span>
         <span className="badge">Edificios en mapa: {Object.keys(groupedByEdificio).length}</span>
-      </div>
-      
-      {/* Filtros */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px', marginBottom: '20px' }}>
-        <input
-          type="text"
-          placeholder="Buscar por Nombre"
-          value={searchNombre}
-          onChange={(e) => setSearchNombre(e.target.value)}
-          style={{ flex: 1, padding: '8px' }}
-        />
-        <input
-          type="text"
-          placeholder="Buscar por CUE"
-          value={searchCUE}
-          onChange={(e) => setSearchCUE(e.target.value)}
-          style={{ flex: 1, padding: '8px' }}
-        />
-        <input
-          type="text"
-          placeholder="Buscar por CUI"
-          value={searchCUI}
-          onChange={(e) => setSearchCUI(e.target.value)}
-          style={{ flex: 1, padding: '8px' }}
-        />
-        <select
-          value={filterDepartamento}
-          onChange={(e) => setFilterDepartamento(e.target.value)}
-          style={{ padding: '8px' }}
-        >
-          <option value="">Todos los departamentos</option>
-          {departamentos.map(dep => (
-            <option key={dep} value={dep}>{dep}</option>
-          ))}
-        </select>
-        <select
-          value={filterNivel}
-          onChange={(e) => setFilterNivel(e.target.value)}
-          style={{ padding: '8px' }}
-        >
-          <option value="">Todos los niveles</option>
-          {niveles.map(niv => (
-            <option key={niv} value={niv}>{niv}</option>
-          ))}
-        </select>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.5fr) minmax(320px, 1fr)', gap: 16, alignItems: 'start' }}>
