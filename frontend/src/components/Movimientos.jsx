@@ -39,6 +39,11 @@ export default function Movimientos() {
   const [loteIngreso, setLoteIngreso] = useState([])
   const [ingresoItem, setIngresoItem] = useState({ productoId: '', cantidad: '', estado: 'nuevo', fechaVencimiento: '', proveedorId: '' })
   const [proveedores, setProveedores] = useState([])
+  // Filtros para la lista de movimientos
+  const [filterDesde, setFilterDesde] = useState('')
+  const [filterHasta, setFilterHasta] = useState('')
+  const [filterTipo, setFilterTipo] = useState('')
+  const [filterUsuario, setFilterUsuario] = useState('')
 
   // Depositos
   const [ingresoDeposito, setIngresoDeposito] = useState('')
@@ -54,14 +59,26 @@ export default function Movimientos() {
     } catch { /* ignore */ }
   }
 
-  const loadMovimientos = async () => {
+  const loadMovimientos = async (opts = {}) => {
     try {
-      const res = await apiFetch('/api/movimientos', { token })
+      const q = new URLSearchParams()
+      const tipoVal = opts.tipo ?? filterTipo
+      const desdeVal = opts.desde ?? filterDesde
+      const hastaVal = opts.hasta ?? filterHasta
+      const usuarioVal = opts.usuario ?? filterUsuario
+
+      if (tipoVal) q.append('tipo', tipoVal)
+      if (desdeVal) q.append('desde', desdeVal)
+      if (hastaVal) q.append('hasta', hastaVal)
+      if (usuarioVal) q.append('usuario', usuarioVal)
+
+      const qs = q.toString() ? `?${q.toString()}` : ''
+      const res = await apiFetch(`/api/movimientos${qs}`, { token })
       if (res.ok) {
         const data = await res.json()
         setMovimientos(data.movimientos || [])
       }
-    } catch { /* ignore */ }
+    } catch (err) { /* ignore */ }
   }
 
   const loadInstituciones = async () => {
@@ -933,10 +950,38 @@ export default function Movimientos() {
 
       <div ref={printRef} style={{ marginTop: 20, overflowX: 'auto' }}>
       <h3>Lista de Movimientos</h3>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
+        <div>
+          <label style={{ display: 'block', fontSize: '0.8rem' }}>Desde</label>
+          <input type="date" value={filterDesde} onChange={e => setFilterDesde(e.target.value)} />
+        </div>
+        <div>
+          <label style={{ display: 'block', fontSize: '0.8rem' }}>Hasta</label>
+          <input type="date" value={filterHasta} onChange={e => setFilterHasta(e.target.value)} />
+        </div>
+        <div>
+          <label style={{ display: 'block', fontSize: '0.8rem' }}>Tipo</label>
+          <select value={filterTipo} onChange={e => setFilterTipo(e.target.value)}>
+            <option value="">Todos</option>
+            <option value="ingreso">Ingreso</option>
+            <option value="egreso">Egreso</option>
+            <option value="ajuste">Ajuste</option>
+            <option value="devolucion">Devolución</option>
+          </select>
+        </div>
+        <div>
+          <label style={{ display: 'block', fontSize: '0.8rem' }}>Usuario</label>
+          <input placeholder="Nombre o id" value={filterUsuario} onChange={e => setFilterUsuario(e.target.value)} />
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+          <button type="button" onClick={() => loadMovimientos()}>Buscar</button>
+          <button type="button" onClick={() => { setFilterDesde(''); setFilterHasta(''); setFilterTipo(''); setFilterUsuario(''); loadMovimientos({}) }} className="secondary">Limpiar</button>
+        </div>
+      </div>
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead>
           <tr>
-            <th>Producto</th>
+            <th>Nº Movimiento</th>
             <th>Tipo</th>
             <th>Cantidad</th>
             <th>Estado</th>
@@ -978,13 +1023,13 @@ export default function Movimientos() {
               
               return (
                 <tr key={first.id || i}>
-                  <td style={{ maxWidth: 250 }}>{productSummary}</td>
+                  <td>{`#${first.id}`}</td>
                   <td><span className={`badge badge-${first.tipo}`}>{first.tipo}</span></td>
                   <td>{isMulti ? totalCantidad : first.cantidad}</td>
                   <td>{isMulti ? 'Varios' : (first.estado_producto || '-')}</td>
                   <td>{first.motivo || '-'}</td>
                   <td>{first.usuario_nombre || '-'}</td>
-                  <td>{new Date(first.created_at).toLocaleDateString()}</td>
+                  <td>{first.created_at ? new Date(first.created_at).toLocaleDateString() : '-'}</td>
                   <td style={{ textAlign: 'center' }}>
                     <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
                       <button
