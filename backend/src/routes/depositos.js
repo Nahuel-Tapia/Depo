@@ -22,6 +22,9 @@ async function ensureDepositosSchema() {
       // Agregar fecha_vencimiento e id_deposito a movimiento_stock
       await run(`ALTER TABLE movimiento_stock ADD COLUMN IF NOT EXISTS fecha_vencimiento DATE`);
       await run(`ALTER TABLE movimiento_stock ADD COLUMN IF NOT EXISTS id_deposito INT`);
+      await run(`ALTER TABLE movimiento_stock ADD COLUMN IF NOT EXISTS id_deposito_destino INT`);
+      // Agregar 'traslado' al enum si no existe
+      await run(`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid WHERE t.typname = 'tipo_movimiento' AND e.enumlabel = 'traslado') THEN ALTER TYPE tipo_movimiento ADD VALUE 'traslado'; END IF; END $$`);
       
       // Asegurar tablas de licitación y distribución
       await run(`
@@ -41,6 +44,18 @@ async function ensureDepositosSchema() {
       await run(`ALTER TABLE licitacion_publicada ADD COLUMN IF NOT EXISTS estado VARCHAR(30) NOT NULL DEFAULT 'publicada'`);
 
       await run(`
+        CREATE TABLE IF NOT EXISTS remito_licitacion (
+          id SERIAL PRIMARY KEY,
+          numero VARCHAR(30) NOT NULL UNIQUE,
+          licitacion_id INT NOT NULL,
+          id_deposito INT,
+          usuario_id INT,
+          observaciones TEXT,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+
+      await run(`
         CREATE TABLE IF NOT EXISTS recepcion_licitacion (
           id SERIAL PRIMARY KEY,
           licitacion_id INT NOT NULL,
@@ -50,6 +65,21 @@ async function ensureDepositosSchema() {
           id_deposito INT,
           fecha_vencimiento DATE,
           observaciones TEXT,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+      await run(`ALTER TABLE recepcion_licitacion ADD COLUMN IF NOT EXISTS remito_id INT REFERENCES remito_licitacion(id)`);
+      await run(`ALTER TABLE recepcion_licitacion ADD COLUMN IF NOT EXISTS cantidad_danada NUMERIC(12,2) NOT NULL DEFAULT 0`);
+      await run(`ALTER TABLE recepcion_licitacion ADD COLUMN IF NOT EXISTS obs_danio TEXT`);
+
+      await run(`
+        CREATE TABLE IF NOT EXISTS recepcion_danio_imagen (
+          id SERIAL PRIMARY KEY,
+          remito_id INT NOT NULL REFERENCES remito_licitacion(id),
+          producto_id INT,
+          nombre VARCHAR(255),
+          mime_type VARCHAR(80),
+          datos TEXT NOT NULL,
           created_at TIMESTAMP DEFAULT NOW()
         )
       `);
@@ -203,6 +233,7 @@ router.post("/mover", authorizePermissions(PERMISSIONS.STOCK_MOVEMENT_CREATE), a
   if (!id_producto || !cantidad || !origen_id || !destino_id) {
     return res.status(400).json({ error: "Faltan campos obligatorios" })
   }
+  await ensureDepositosSchema()
   const client = await pool.connect()
   try {
     await client.query("BEGIN")
@@ -225,15 +256,11 @@ router.post("/mover", authorizePermissions(PERMISSIONS.STOCK_MOVEMENT_CREATE), a
       [destino_id, id_producto, cantidad]
     )
     const mot = (motivo || `Traslado ${id_producto} ${origen_id}→${destino_id}`)
-    // Log egreso de origen
+    // Log traslado unificado (un solo registro)
     await client.query(
-      `INSERT INTO movimiento_stock (id_producto, tipo, cantidad, motivo, id_usuario, id_deposito) VALUES ($1, 'egreso', $2, $3, $5, $4)`,
-      [id_producto, cantidad, mot, origen_id, req.user.sub]
-    )
-    // Log ingreso a destino
-    await client.query(
-      `INSERT INTO movimiento_stock (id_producto, tipo, cantidad, motivo, id_usuario, id_deposito) VALUES ($1, 'ingreso', $2, $3, $5, $4)`,
-      [id_producto, cantidad, mot, destino_id, req.user.sub]
+      `INSERT INTO movimiento_stock (id_producto, tipo, cantidad, motivo, id_usuario, id_deposito, id_deposito_destino)
+       VALUES ($1, 'traslado', $2, $3, $4, $5, $6)`,
+      [id_producto, cantidad, mot, req.user.sub, origen_id, destino_id]
     )
     await client.query("COMMIT")
     res.json({ ok: true, moved: true })
@@ -250,27 +277,25 @@ router.post("/mover", authorizePermissions(PERMISSIONS.STOCK_MOVEMENT_CREATE), a
 router.get("/traslados", authorizePermissions(PERMISSIONS.STOCK_MOVEMENT_VIEW), async (req, res) => {
   try {
     const traslados = await all(`
-      SELECT 
-        m1.id_movimiento,
-        m1.id_producto,
-        p.nombre as producto_nombre,
-        m1.cantidad,
-        m1.motivo,
-        m1.fecha_movimiento as created_at,
-        m1.id_deposito as origen_id,
-        d1.nombre as origen_nombre,
-        m2.id_deposito as destino_id,
-        d2.nombre as destino_nombre,
-        u.nombre as usuario_nombre
-      FROM movimiento_stock m1
-      JOIN movimiento_stock m2 ON m1.motivo = m2.motivo AND m1.id_producto = m2.id_producto AND m1.cantidad = m2.cantidad AND m1.fecha_movimiento = m2.fecha_movimiento
-      JOIN producto p ON p.id_producto = m1.id_producto
-      JOIN deposito d1 ON d1.id_deposito = m1.id_deposito
-      JOIN deposito d2 ON d2.id_deposito = m2.id_deposito
-      LEFT JOIN usuario u ON u.id_usuario = m1.id_usuario
-      WHERE m1.tipo = 'egreso' AND m2.tipo = 'ingreso'
-        AND m1.id_deposito != m2.id_deposito
-      ORDER BY m1.fecha_movimiento DESC
+      SELECT
+        m.id_movimiento,
+        m.id_producto,
+        p.nombre AS producto_nombre,
+        m.cantidad,
+        m.motivo,
+        m.fecha_movimiento AS created_at,
+        m.id_deposito AS origen_id,
+        d1.nombre AS origen_nombre,
+        m.id_deposito_destino AS destino_id,
+        d2.nombre AS destino_nombre,
+        u.nombre AS usuario_nombre
+      FROM movimiento_stock m
+      JOIN producto p ON p.id_producto = m.id_producto
+      JOIN deposito d1 ON d1.id_deposito = m.id_deposito
+      JOIN deposito d2 ON d2.id_deposito = m.id_deposito_destino
+      LEFT JOIN usuario u ON u.id_usuario = m.id_usuario
+      WHERE m.tipo = 'traslado'
+      ORDER BY m.fecha_movimiento DESC
     `);
     return res.json({ traslados });
   } catch (err) {
@@ -456,44 +481,93 @@ async function registrarIngresoLicitacion(req, res) {
     }
 
     await ensureDepositosSchema();
+
+    const ingresosValidos = ingresos.filter(
+      ing => Number(ing.cantidad) > 0 || Number(ing.cantidad_danada) > 0
+    );
+    if (ingresosValidos.length === 0) {
+      return res.status(400).json({ error: "Cargue al menos una cantidad recibida o dañada mayor a 0" });
+    }
+
     await client.query("BEGIN");
 
-    for (const ing of ingresos) {
-      const { producto_id, cantidad, fecha_vencimiento } = ing;
-      if (!cantidad || cantidad <= 0) continue;
+    // Obtener año de la licitación para el número de remito
+    const licRow = await client.query(
+      `SELECT anio FROM licitacion_publicada WHERE id = $1`,
+      [licitacion_id]
+    );
+    if (!licRow.rowCount) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Licitación no encontrada" });
+    }
+    const anio = licRow.rows[0].anio;
 
-      // 1. Registrar en recepcion_licitacion
+    // Generar número de remito secuencial por año: REMITO-YYYY-NNN
+    const countRow = await client.query(
+      `SELECT COUNT(*) AS total FROM remito_licitacion
+       WHERE licitacion_id IN (SELECT id FROM licitacion_publicada WHERE anio = $1)`,
+      [anio]
+    );
+    const seq = String(Number(countRow.rows[0].total) + 1).padStart(3, '0');
+    const numero = `REMITO-${anio}-${seq}`;
+
+    // Crear el remito
+    const remitoRes = await client.query(
+      `INSERT INTO remito_licitacion (numero, licitacion_id, id_deposito, usuario_id, observaciones)
+       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+      [numero, licitacion_id, id_deposito, req.user.sub, observaciones || null]
+    );
+    const remito_id = remitoRes.rows[0].id;
+
+    for (const ing of ingresosValidos) {
+      const { producto_id, cantidad, cantidad_danada, obs_danio, fecha_vencimiento } = ing;
+      const cantidadBuena = Number(cantidad) || 0;
+      const cantidadDanada = Number(cantidad_danada) || 0;
+
+      if (cantidadBuena < 0 || cantidadDanada < 0) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ error: "Las cantidades no pueden ser negativas" });
+      }
+
+      // 1. Registrar en recepcion_licitacion con remito_id
       await client.query(
-        `INSERT INTO recepcion_licitacion (licitacion_id, producto_id, cantidad_recibida, usuario_id, observaciones, fecha_vencimiento, id_deposito)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [licitacion_id, producto_id, cantidad, req.user.sub, observaciones, fecha_vencimiento || null, id_deposito]
+        `INSERT INTO recepcion_licitacion (licitacion_id, producto_id, cantidad_recibida, usuario_id, observaciones, fecha_vencimiento, id_deposito, remito_id, cantidad_danada, obs_danio)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        [
+          licitacion_id,
+          producto_id,
+          cantidadBuena,
+          req.user.sub,
+          observaciones || null,
+          fecha_vencimiento || null,
+          id_deposito,
+          remito_id,
+          cantidadDanada,
+          obs_danio || null,
+        ]
       );
 
-      // 2. Actualizar stock en depósito
-      await client.query(
-        `INSERT INTO stock_deposito (id_deposito, id_producto, cantidad)
-         VALUES ($1, $2, $3)
-         ON CONFLICT (id_deposito, id_producto) 
-         DO UPDATE SET cantidad = stock_deposito.cantidad + $3`,
-        [id_deposito, producto_id, cantidad]
-      );
+      // 2. Actualizar stock y movimiento solo con mercadería en buen estado.
+      if (cantidadBuena > 0) {
+        await client.query(
+          `INSERT INTO stock_deposito (id_deposito, id_producto, cantidad)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (id_deposito, id_producto)
+           DO UPDATE SET cantidad = stock_deposito.cantidad + $3`,
+          [id_deposito, producto_id, cantidadBuena]
+        );
 
-      // 3. Actualizar stock global
-      await client.query(
-        "UPDATE producto SET stock_actual = stock_actual + $1 WHERE id_producto = $2",
-        [cantidad, producto_id]
-      );
-
-      // 4. Registrar movimiento de stock
-      await client.query(
-        `INSERT INTO movimiento_stock (id_producto, cantidad, tipo, motivo, id_usuario, id_deposito, fecha_vencimiento)
-         VALUES ($1, $2, 'ingreso', $3, $4, $5, $6)`,
-        [producto_id, cantidad, `Ingreso por Licitación #${licitacion_id}`, req.user.sub, id_deposito, fecha_vencimiento || null]
-      );
+        // El trigger de movimiento_stock actualiza stock_actual automáticamente.
+        await client.query(
+          `INSERT INTO movimiento_stock (id_producto, cantidad, tipo, motivo, id_usuario, id_deposito, fecha_vencimiento)
+           VALUES ($1, $2, 'ingreso', $3, $4, $5, $6)`,
+          [producto_id, cantidadBuena, `Ingreso por Licitación #${licitacion_id} — ${numero}`, req.user.sub, id_deposito, fecha_vencimiento || null]
+        );
+      }
     }
 
     await client.query("COMMIT");
-    res.json({ ok: true, message: "Mercadería ingresada con éxito" });
+    res.json({ ok: true, message: "Mercadería ingresada con éxito", numero_remito: numero, remito_id });
   } catch (err) {
     await client.query("ROLLBACK");
     console.error("Error al registrar ingreso licitación:", err);
@@ -506,6 +580,169 @@ async function registrarIngresoLicitacion(req, res) {
 router.get("/licitacion/recepciones", authorizePermissions(PERMISSIONS.STOCK_VIEW), getRecepcionesLicitacion);
 router.get("/licitacion/recepciones/:id", authorizePermissions(PERMISSIONS.STOCK_VIEW), getDetalleRecepcion);
 router.post("/licitacion/registrar-ingreso", authorizePermissions(PERMISSIONS.STOCK_MOVEMENT_CREATE), registrarIngresoLicitacion);
+
+// POST /licitacion/danio/imagen — adjuntar evidencia de daño al remito
+router.post("/licitacion/danio/imagen", authorizePermissions(PERMISSIONS.STOCK_MOVEMENT_CREATE), async (req, res) => {
+  try {
+    await ensureDepositosSchema();
+    const { remito_id, producto_id, nombre, mime_type, datos } = req.body;
+
+    if (!remito_id || !datos) {
+      return res.status(400).json({ error: "remito_id y datos son obligatorios" });
+    }
+
+    const remito = await get(`SELECT id FROM remito_licitacion WHERE id = $1`, [remito_id]);
+    if (!remito) {
+      return res.status(404).json({ error: "Remito no encontrado" });
+    }
+
+    await run(
+      `INSERT INTO recepcion_danio_imagen (remito_id, producto_id, nombre, mime_type, datos)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [remito_id, producto_id || null, nombre || null, mime_type || null, datos]
+    );
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Error guardando imagen de daño:", err);
+    res.status(500).json({ error: "No se pudo guardar la imagen de daño" });
+  }
+});
+
+// GET /licitacion/recepciones/:id/remitos — historial de remitos de una licitación
+router.get("/licitacion/recepciones/:id/remitos", authorizePermissions(PERMISSIONS.STOCK_VIEW), async (req, res) => {
+  try {
+    await ensureDepositosSchema();
+    const { id } = req.params;
+
+    // Obtener año de la licitación para buscar proveedor en historial
+    const licRow = await get(`SELECT anio FROM licitacion_publicada WHERE id = $1`, [id]);
+    if (!licRow) return res.status(404).json({ error: "Licitación no encontrada" });
+    const anio = licRow.anio;
+
+    const remitos = await all(
+      `SELECT r.id, r.numero, r.created_at, r.observaciones,
+              d.nombre AS deposito_nombre,
+              u.nombre AS usuario_nombre
+       FROM remito_licitacion r
+       LEFT JOIN deposito d ON d.id_deposito = r.id_deposito
+       LEFT JOIN usuario u ON u.id_usuario = r.usuario_id
+       WHERE r.licitacion_id = $1
+       ORDER BY r.created_at DESC`,
+      [id]
+    );
+
+    // Para cada remito, traer los items + proveedor desde historial de precios
+    for (const remito of remitos) {
+      remito.items = await all(
+        `SELECT rl.id, rl.producto_id, p.nombre AS producto_nombre, p.unidad_medida,
+                rl.cantidad_recibida, rl.cantidad_danada, rl.obs_danio, rl.fecha_vencimiento,
+                pr.nombre AS proveedor_nombre
+         FROM recepcion_licitacion rl
+         JOIN producto p ON p.id_producto = rl.producto_id
+         LEFT JOIN compra_precio_historico cph ON cph.id_producto = rl.producto_id AND cph.anio = $2
+         LEFT JOIN proveedor pr ON pr.id_proveedor = cph.id_proveedor
+         WHERE rl.remito_id = $1
+         ORDER BY p.nombre`,
+        [remito.id, anio]
+      );
+
+      remito.imagenes = await all(
+        `SELECT id, producto_id, nombre, mime_type, datos, created_at
+         FROM recepcion_danio_imagen
+         WHERE remito_id = $1
+         ORDER BY created_at DESC`,
+        [remito.id]
+      );
+    }
+
+    res.json({ remitos });
+  } catch (err) {
+    console.error("Error obteniendo remitos:", err);
+    res.status(500).json({ error: "No se pudo obtener el historial de remitos" });
+  }
+});
+
+// GET /licitacion/remito-general/:id — remito general (solo si licitación completada)
+router.get("/licitacion/remito-general/:id", authorizePermissions(PERMISSIONS.STOCK_VIEW), async (req, res) => {
+  try {
+    await ensureDepositosSchema();
+    const { id } = req.params;
+
+    const lic = await get(`SELECT id, anio, estado, items FROM licitacion_publicada WHERE id = $1`, [id]);
+    if (!lic) return res.status(404).json({ error: "Licitación no encontrada" });
+    if (lic.estado !== 'completada') {
+      return res.status(400).json({ error: "El Remito General solo está disponible cuando la licitación está completada" });
+    }
+
+    const anio = lic.anio;
+    const rawItems = typeof lic.items === 'string' ? JSON.parse(lic.items) : lic.items;
+
+    // Consolidar adjudicado por producto_id
+    const adjudicadoMap = {};
+    rawItems.forEach(item => {
+      const pid = item.producto_id;
+      if (!adjudicadoMap[pid]) {
+        adjudicadoMap[pid] = { producto_id: pid, producto: item.producto, unidad_medida: item.unidad_medida, cantidad_adjudicada: 0 };
+      }
+      adjudicadoMap[pid].cantidad_adjudicada += Number(item.cantidad_a_licitar || 0);
+    });
+
+    // Total recibido por producto
+    const recibidos = await all(
+      `SELECT rl.producto_id, SUM(rl.cantidad_recibida) AS total_recibido
+       FROM recepcion_licitacion rl WHERE rl.licitacion_id = $1
+       GROUP BY rl.producto_id`,
+      [id]
+    );
+    const recibidoMap = {};
+    recibidos.forEach(r => { recibidoMap[r.producto_id] = Number(r.total_recibido); });
+
+    const danados = await all(
+      `SELECT rl.producto_id, SUM(rl.cantidad_danada) AS total_danado
+       FROM recepcion_licitacion rl WHERE rl.licitacion_id = $1
+       GROUP BY rl.producto_id`,
+      [id]
+    );
+    const danadoMap = {};
+    danados.forEach(d => { danadoMap[d.producto_id] = Number(d.total_danado); });
+
+    // Proveedores desde historial de precios
+    const proveedores = await all(
+      `SELECT cph.id_producto, pr.nombre AS proveedor_nombre, cph.precio_compra_real
+       FROM compra_precio_historico cph
+       JOIN proveedor pr ON pr.id_proveedor = cph.id_proveedor
+       WHERE cph.anio = $1`,
+      [anio]
+    );
+    const proveedorMap = {};
+    proveedores.forEach(p => { proveedorMap[p.id_producto] = { nombre: p.proveedor_nombre, precio: p.precio_compra_real }; });
+
+    const items = Object.values(adjudicadoMap).map(item => ({
+      ...item,
+      total_recibido: recibidoMap[item.producto_id] || 0,
+      total_danado: danadoMap[item.producto_id] || 0,
+      diferencia: (recibidoMap[item.producto_id] || 0) - item.cantidad_adjudicada,
+      proveedor_nombre: proveedorMap[item.producto_id]?.nombre || '-',
+      precio_unitario: proveedorMap[item.producto_id]?.precio || null,
+    }));
+
+    // Lista de remitos que componen este general
+    const remitos = await all(
+      `SELECT r.numero, r.created_at, u.nombre AS usuario_nombre, d.nombre AS deposito_nombre
+       FROM remito_licitacion r
+       LEFT JOIN usuario u ON u.id_usuario = r.usuario_id
+       LEFT JOIN deposito d ON d.id_deposito = r.id_deposito
+       WHERE r.licitacion_id = $1 ORDER BY r.created_at`,
+      [id]
+    );
+
+    res.json({ licitacion_id: lic.id, anio, estado: lic.estado, items, remitos });
+  } catch (err) {
+    console.error("Error generando remito general:", err);
+    res.status(500).json({ error: "No se pudo generar el remito general" });
+  }
+});
 
 async function getPendientesDistribucion(req, res) {
   try {
