@@ -131,6 +131,23 @@ export default function Instituciones({ supervisorMode = false }) {
   const selectedInstituciones = selectedEdificioKey ? (groupedByEdificio[selectedEdificioKey] || []) : []
   const cuesDelEdificio = Array.from(new Set(selectedInstituciones.map(i => String(i.cue || '').trim()).filter(Boolean))).sort()
 
+  const pinLegendItems = useMemo(() => {
+    if (supervisorMode) {
+      return [
+        { color: '#e74c3c', label: 'Rojo: sin kit' },
+        { color: '#f1c40f', label: 'Amarillo: sin solicitud' },
+        { color: '#f39c12', label: 'Naranja: solicitud enviada' },
+        { color: '#2ecc71', label: 'Verde: solicitud aprobada' },
+      ]
+    }
+
+    return [
+      { color: '#2ecc71', label: 'Verde: retiraron mercaderia' },
+      { color: '#f1c40f', label: 'Amarillo: con pedido' },
+      { color: '#e74c3c', label: 'Rojo: sin retiro / pendiente' },
+    ]
+  }, [supervisorMode])
+
   const handleSelectEdificio = (buildingKey) => {
     setSelectedEdificioKey(buildingKey)
     setExpandedInstitucionId(null)
@@ -261,6 +278,18 @@ export default function Instituciones({ supervisorMode = false }) {
         <span className="badge">Instituciones cargadas: {filteredInstituciones.length}</span>
         <span className="badge">Con coordenadas: {validInstituciones.length}</span>
         <span className="badge">Edificios en mapa: {Object.keys(groupedByEdificio).length}</span>
+      </div>
+
+      <div style={{ border: '1px solid var(--border)', borderRadius: 8, background: '#fff', padding: 12, marginBottom: 16 }}>
+        <div style={{ fontWeight: 700, color: 'var(--dark)', marginBottom: 8 }}>Referencia de colores del pin</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+          {pinLegendItems.map((item) => (
+            <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 8, border: '1px solid #e5e7eb', borderRadius: 999, padding: '6px 10px', background: '#fafafa' }}>
+              <span style={{ width: 10, height: 10, borderRadius: '50%', background: item.color, display: 'inline-block' }} />
+              <span style={{ fontSize: '0.85rem', color: 'var(--dark)' }}>{item.label}</span>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.5fr) minmax(320px, 1fr)', gap: 16, alignItems: 'start' }}>

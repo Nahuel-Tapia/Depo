@@ -10,6 +10,10 @@ function normalizeKey(value) {
   return normalizeText(value).toUpperCase()
 }
 
+function normalizeSearch(value) {
+  return normalizeText(value).toLowerCase()
+}
+
 function getZoneLabel(zone) {
   const zoneName = normalizeText(zone?.name)
   const departamento = normalizeText(zone?.departamento)
@@ -66,6 +70,7 @@ export default function DirectorAreaZonas({ nivelEducativo }) {
   const [success, setSuccess] = useState('')
   const [nivelActivo, setNivelActivo] = useState('')
   const [departamentoSeleccionado, setDepartamentoSeleccionado] = useState('')
+  const [busquedaEscuela, setBusquedaEscuela] = useState('')
   const [nombreZona, setNombreZona] = useState('')
   const [editingZoneId, setEditingZoneId] = useState(null)
   const [creando, setCreando] = useState(false)
@@ -140,6 +145,7 @@ export default function DirectorAreaZonas({ nivelEducativo }) {
   const resetForm = () => {
     setNombreZona('')
     setDepartamentoSeleccionado('')
+    setBusquedaEscuela('')
     setInstitucionesSeleccionadas([])
     setEditingZoneId(null)
   }
@@ -148,6 +154,7 @@ export default function DirectorAreaZonas({ nivelEducativo }) {
     setEditingZoneId(zona.id)
     setNombreZona(zona.name || '')
     setDepartamentoSeleccionado('')
+    setBusquedaEscuela('')
     setInstitucionesSeleccionadas((zona.instituciones || []).map((institucion) => institucion.id))
     setError('')
     setSuccess('')
@@ -301,6 +308,19 @@ export default function DirectorAreaZonas({ nivelEducativo }) {
     (!departamentoSeleccionado || normalizeKey(institucion.departamento) === normalizeKey(departamentoSeleccionado))
   ))
 
+  const terminoBusquedaEscuela = normalizeSearch(busquedaEscuela)
+  const institucionesBuscadas = terminoBusquedaEscuela
+    ? institucionesFiltradas
+      .filter((institucion) => {
+        const nombre = normalizeSearch(institucion.nombre)
+        const cue = normalizeSearch(institucion.cue)
+        return (nombre.includes(terminoBusquedaEscuela) || cue.includes(terminoBusquedaEscuela))
+          && !institucionesSeleccionadas.includes(institucion.id)
+      })
+      .sort((a, b) => normalizeText(a.nombre).localeCompare(normalizeText(b.nombre), 'es'))
+      .slice(0, 25)
+    : []
+
   const institucionesSeleccionadasDetalle = institucionesDisponibles
     .filter((institucion) => institucionesSeleccionadas.includes(institucion.id))
     .sort((a, b) => normalizeText(a.nombre).localeCompare(normalizeText(b.nombre), 'es'))
@@ -343,44 +363,71 @@ export default function DirectorAreaZonas({ nivelEducativo }) {
             </div>
           </div>
         )}
+
+        <div style={{ marginBottom: 10 }}>
+          <label style={{ display: 'block', marginBottom: 6 }}>Buscar por CUE o nombre</label>
+          <input
+            type="text"
+            value={busquedaEscuela}
+            onChange={(e) => setBusquedaEscuela(e.target.value)}
+            placeholder="Ej: 700057900 o Escuela Tecnica"
+          />
+          <div style={{ fontSize: '0.8rem', color: '#6b7280', marginTop: 6 }}>
+            Los resultados se actualizan mientras escribis
+          </div>
+        </div>
+
         {institucionesFiltradas.length === 0 ? (
           <p style={{ color: '#888' }}>
             {departamentoSeleccionado
               ? 'No hay instituciones disponibles de tu nivel para el filtro seleccionado'
               : 'No hay instituciones disponibles de tu nivel'}
           </p>
+        ) : !terminoBusquedaEscuela ? (
+          <p style={{ color: '#6b7280' }}>Escribi en el buscador para ver coincidencias.</p>
+        ) : institucionesBuscadas.length === 0 ? (
+          <p style={{ color: '#888' }}>No se encontraron escuelas con ese CUE o nombre.</p>
         ) : (
           <div
             style={{
-              border: '1px solid #ddd',
+              border: '1px solid var(--border)',
               borderRadius: 8,
               padding: 12,
               display: 'grid',
-              gap: 8
+              gap: 8,
+              background: '#fcfcfd'
             }}
           >
-            {institucionesFiltradas.map((institucion) => (
-              <label
+            {institucionesBuscadas.map((institucion) => (
+              <div
                 key={institucion.id}
                 style={{
-                  display: 'grid',
-                  gridTemplateColumns: '20px minmax(0, 1fr)',
-                  alignItems: 'start',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
                   gap: 10,
-                  padding: '2px 0'
+                  padding: '8px 10px',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: 8,
+                  background: '#fff'
                 }}
               >
-                <input
-                  type="checkbox"
-                  checked={institucionesSeleccionadas.includes(institucion.id)}
-                  onChange={() => toggleInstitucion(institucion.id)}
-                  style={{ marginTop: 2 }}
-                />
-                <span style={{ lineHeight: 1.35 }}>
-                  {getInstitutionOptionLabel(institucion)}
-                </span>
-              </label>
+                <span style={{ lineHeight: 1.35 }}>{getInstitutionOptionLabel(institucion)}</span>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => toggleInstitucion(institucion.id)}
+                  style={{ margin: 0, minHeight: 'auto', padding: '6px 10px', whiteSpace: 'nowrap' }}
+                >
+                  Agregar
+                </button>
+              </div>
             ))}
+            {terminoBusquedaEscuela && institucionesBuscadas.length === 25 && (
+              <div style={{ fontSize: '0.8rem', color: '#6b7280' }}>
+                Mostrando los primeros 25 resultados. Segui escribiendo para acotar.
+              </div>
+            )}
           </div>
         )}
       </div>
