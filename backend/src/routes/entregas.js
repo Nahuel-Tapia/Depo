@@ -731,11 +731,7 @@ router.post("/solicitudes/:id/entregar", authorizePermissions(PERMISSIONS.MOVIMI
         [cantidad, item.producto_id]
       );
 
-      // Restar stock global
-      await client.query(
-        "UPDATE producto SET stock_actual = stock_actual - $1 WHERE id_producto = $2",
-        [cantidad, item.producto_id]
-      );
+      // Nota: stock_actual lo actualiza el trigger trg_movimiento_stock_sync_producto al insertar el movimiento
 
       const movResult = await client.query(`
         INSERT INTO movimiento_stock
