@@ -22,6 +22,9 @@ export default function Movimientos() {
   // Baja (daño) state
   const [bajaModalOpen, setBajaModalOpen] = useState(false)
   const [bajaItem, setBajaItem] = useState({ productoId: '', cantidad: 1, motivo: '', fotoFile: null })
+  // Detalle modal
+  const [detalleModalOpen, setDetalleModalOpen] = useState(false)
+  const [detalleData, setDetalleData] = useState(null)
 
   // Egreso state
   const [egresoInst, setEgresoInst] = useState('')
@@ -937,13 +940,10 @@ export default function Movimientos() {
             <th>Tipo</th>
             <th>Cantidad</th>
             <th>Estado</th>
-            <th>Proveedor</th>
-            <th>Depósito</th>
-            <th>Institución/Cargo</th>
             <th>Motivo</th>
             <th>Registrado por</th>
             <th>Fecha</th>
-            <th style={{ textAlign: 'center' }}>Imprimir</th>
+            <th style={{ textAlign: 'center' }}>Acciones</th>
           </tr>
         </thead>
         <tbody>
@@ -982,24 +982,33 @@ export default function Movimientos() {
                   <td><span className={`badge badge-${first.tipo}`}>{first.tipo}</span></td>
                   <td>{isMulti ? totalCantidad : first.cantidad}</td>
                   <td>{isMulti ? 'Varios' : (first.estado_producto || '-')}</td>
-                  <td>{isMulti ? 'Varios' : (first.proveedor_nombre || '-')}</td>
-                  <td>{first.deposito_nombre || '-'}</td>
-                  <td>{institucionCargo}</td>
                   <td>{first.motivo || '-'}</td>
                   <td>{first.usuario_nombre || '-'}</td>
                   <td>{new Date(first.created_at).toLocaleDateString()}</td>
                   <td style={{ textAlign: 'center' }}>
-                    <button
-                      type="button"
-                      className="secondary"
-                      onClick={() => handlePrintMovimiento(group.items)}
-                      title="Imprimir movimiento"
-                    aria-label="Imprimir movimiento"
-                    style={{ width: 'auto', margin: 0, minWidth: 36, padding: '6px 10px' }}
-                  >
-                    🖨️
-                  </button>
-                </td>
+                    <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={() => handlePrintMovimiento(group.items)}
+                        title="Imprimir movimiento"
+                        aria-label="Imprimir movimiento"
+                        style={{ width: 'auto', margin: 0, minWidth: 36, padding: '6px 10px' }}
+                      >
+                        🖨️
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={() => { setDetalleData({ proveedor: first.proveedor_nombre, deposito: first.deposito_nombre, institucion: institucionCargo, productos: group.items }); setDetalleModalOpen(true) }}
+                        title="Ver detalle"
+                        aria-label="Ver detalle"
+                        style={{ width: 'auto', margin: 0, minWidth: 36, padding: '6px 10px' }}
+                      >
+                        🔍
+                      </button>
+                    </div>
+                  </td>
               </tr>
             )
           }) // closes map
@@ -1007,6 +1016,33 @@ export default function Movimientos() {
         </tbody>
       </table>
       </div>
+      {/* Detalle modal */}
+      {detalleModalOpen && detalleData && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100 }}
+          onClick={e => { if (e.target === e.currentTarget) setDetalleModalOpen(false) }}
+        >
+          <div style={{ background: '#fff', padding: 20, borderRadius: 8, width: 'min(720px, 100%)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <h3 style={{ margin: 0 }}>Detalle del Movimiento</h3>
+              <button type="button" className="secondary" onClick={() => setDetalleModalOpen(false)}>✕ Cerrar</button>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+              <div><strong>Proveedor:</strong><div>{detalleData.proveedor || '-'}</div></div>
+              <div><strong>Depósito:</strong><div>{detalleData.deposito || '-'}</div></div>
+              <div style={{ gridColumn: '1 / -1' }}><strong>Institución / Cargo:</strong><div>{detalleData.institucion || '-'}</div></div>
+            </div>
+            <div>
+              <h4 style={{ marginTop: 0 }}>Productos</h4>
+              <ul>
+                {detalleData.productos.map((p, idx) => (
+                  <li key={idx}>{p.producto_nombre || '-'} — Cantidad: {p.cantidad}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
