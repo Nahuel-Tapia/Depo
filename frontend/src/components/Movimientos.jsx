@@ -19,6 +19,13 @@ export default function Movimientos() {
   const [egresoModalOpen, setEgresoModalOpen] = useState(false)
   const [retirarPedidoModalOpen, setRetirarPedidoModalOpen] = useState(false)
 
+  // Baja (daño) state
+  const [bajaModalOpen, setBajaModalOpen] = useState(false)
+  const [bajaItem, setBajaItem] = useState({ productoId: '', cantidad: 1, motivo: '', fotoFile: null })
+  // Detalle modal
+  const [detalleModalOpen, setDetalleModalOpen] = useState(false)
+  const [detalleData, setDetalleData] = useState(null)
+
   // Egreso state
   const [egresoInst, setEgresoInst] = useState('')
   const [egresoCargo, setEgresoCargo] = useState('')
@@ -32,6 +39,11 @@ export default function Movimientos() {
   const [loteIngreso, setLoteIngreso] = useState([])
   const [ingresoItem, setIngresoItem] = useState({ productoId: '', cantidad: '', estado: 'nuevo', fechaVencimiento: '', proveedorId: '' })
   const [proveedores, setProveedores] = useState([])
+  // Filtros para la lista de movimientos
+  const [filterDesde, setFilterDesde] = useState('')
+  const [filterHasta, setFilterHasta] = useState('')
+  const [filterTipo, setFilterTipo] = useState('')
+  const [filterUsuario, setFilterUsuario] = useState('')
 
   // Depositos
   const [ingresoDeposito, setIngresoDeposito] = useState('')
@@ -47,14 +59,26 @@ export default function Movimientos() {
     } catch { /* ignore */ }
   }
 
-  const loadMovimientos = async () => {
+  const loadMovimientos = async (opts = {}) => {
     try {
-      const res = await apiFetch('/api/movimientos', { token })
+      const q = new URLSearchParams()
+      const tipoVal = opts.tipo ?? filterTipo
+      const desdeVal = opts.desde ?? filterDesde
+      const hastaVal = opts.hasta ?? filterHasta
+      const usuarioVal = opts.usuario ?? filterUsuario
+
+      if (tipoVal) q.append('tipo', tipoVal)
+      if (desdeVal) q.append('desde', desdeVal)
+      if (hastaVal) q.append('hasta', hastaVal)
+      if (usuarioVal) q.append('usuario', usuarioVal)
+
+      const qs = q.toString() ? `?${q.toString()}` : ''
+      const res = await apiFetch(`/api/movimientos${qs}`, { token })
       if (res.ok) {
         const data = await res.json()
         setMovimientos(data.movimientos || [])
       }
-    } catch { /* ignore */ }
+    } catch (err) { /* ignore */ }
   }
 
   const loadInstituciones = async () => {
@@ -361,6 +385,47 @@ export default function Movimientos() {
     loadProductos()
   }
 
+  // Baja handlers
+  const handleBajaFileChange = (e) => {
+    setBajaItem(prev => ({ ...prev, fotoFile: e.target.files?.[0] || null }));
+  }
+
+  const handleBajaSubmit = async (e) => {
+    e.preventDefault()
+    setMsg({ text: '', type: '' })
+    if (!bajaItem.productoId) { setMsg({ text: 'Seleccione un producto para la baja', type: 'error' }); return }
+    const fd = new FormData()
+    fd.append('producto_id', bajaItem.productoId)
+    fd.append('cantidad', bajaItem.cantidad || 1)
+    fd.append('motivo', bajaItem.motivo || '')
+    if (bajaItem.fotoFile) fd.append('foto', bajaItem.fotoFile)
+
+    if (!token) { setMsg({ text: 'No autenticado: token no disponible', type: 'error' }); return }
+
+    const apiBase = import.meta.env.VITE_API_BASE || ''
+    const url = apiBase ? `${apiBase.replace(/\/$/, '')}/api/movimientos/baja` : '/api/movimientos/baja'
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`
+      },
+      body: fd
+    })
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      setMsg({ text: data.error || 'Error al registrar la baja', type: 'error' })
+      return
+    }
+
+    setBajaModalOpen(false)
+    setBajaItem({ productoId: '', cantidad: 1, motivo: '', fotoFile: null })
+    setMsg({ text: 'Baja registrada correctamente', type: 'success' })
+    loadMovimientos()
+    loadProductos()
+  }
+
   const canCreate = hasPermission('movimientos.create')
 
   const printRef = useRef(null)
@@ -511,6 +576,15 @@ export default function Movimientos() {
               >
                 <span aria-hidden="true" style={{ marginRight: 8, fontSize: '1.2rem' }}>📋📦</span>
                 Retirar Pedido Anual
+              </button>
+              <button
+                type="button"
+                className="mov-action-btn"
+                style={{ width: 'auto', margin: 0, padding: '14px 22px', fontSize: '1rem' }}
+                onClick={() => { setBajaModalOpen(true); setMsg({ text: '', type: '' }) }}
+              >
+                <span aria-hidden="true" style={{ marginRight: 8, fontSize: '1.2rem' }}>🔻📸</span>
+                Baja
               </button>
             </>
           )}
@@ -832,6 +906,54 @@ export default function Movimientos() {
             </div>
           )}
 
+          {/* BAJA */}
+          {bajaModalOpen && (
+            <div
+              style={{
+                position: 'fixed',
+                inset: 0,
+                background: 'rgba(0, 0, 0, 0.45)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 1000,
+                padding: 16
+              }}
+              onClick={e => { if (e.target === e.currentTarget) setBajaModalOpen(false) }}
+            >
+              <div style={{ background: '#fff7f7', padding: 24, borderRadius: 10, width: 'min(640px, 100%)' }}>
+                <h3>Baja de Mercadería (dañada)</h3>
+                <form onSubmit={handleBajaSubmit} className="grid">
+                  <div>
+                    <label>Producto</label>
+                    <select value={bajaItem.productoId} onChange={e => setBajaItem({ ...bajaItem, productoId: e.target.value })}>
+                      <option value="">Seleccionar producto...</option>
+                      {productos.map(p => (
+                        <option key={p.id} value={p.id}>{p.nombre} ({p.unidad_medida || 'unidad'})</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label>Cantidad</label>
+                    <input type="number" min="1" value={bajaItem.cantidad} onChange={e => setBajaItem({ ...bajaItem, cantidad: e.target.value })} />
+                  </div>
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <label>Detalle / Motivo</label>
+                    <textarea value={bajaItem.motivo} onChange={e => setBajaItem({ ...bajaItem, motivo: e.target.value })} rows={3} />
+                  </div>
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <label>Foto (opcional)</label>
+                    <input type="file" accept="image/*" onChange={handleBajaFileChange} />
+                  </div>
+                  <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                    <button type="button" className="secondary" onClick={() => setBajaModalOpen(false)}>Cancelar</button>
+                    <button type="submit">Registrar Baja</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
           {/* RETIRAR PEDIDO ANUAL */}
           {retirarPedidoModalOpen && (
             <div
@@ -883,20 +1005,45 @@ export default function Movimientos() {
 
       <div ref={printRef} style={{ marginTop: 20, overflowX: 'auto' }}>
       <h3>Lista de Movimientos</h3>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
+        <div>
+          <label style={{ display: 'block', fontSize: '0.8rem' }}>Desde</label>
+          <input type="date" value={filterDesde} onChange={e => setFilterDesde(e.target.value)} />
+        </div>
+        <div>
+          <label style={{ display: 'block', fontSize: '0.8rem' }}>Hasta</label>
+          <input type="date" value={filterHasta} onChange={e => setFilterHasta(e.target.value)} />
+        </div>
+        <div>
+          <label style={{ display: 'block', fontSize: '0.8rem' }}>Tipo</label>
+          <select value={filterTipo} onChange={e => setFilterTipo(e.target.value)}>
+            <option value="">Todos</option>
+            <option value="ingreso">Ingreso</option>
+            <option value="egreso">Egreso</option>
+            <option value="ajuste">Ajuste</option>
+            <option value="devolucion">Devolución</option>
+          </select>
+        </div>
+        <div>
+          <label style={{ display: 'block', fontSize: '0.8rem' }}>Usuario</label>
+          <input placeholder="Nombre o id" value={filterUsuario} onChange={e => setFilterUsuario(e.target.value)} />
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+          <button type="button" onClick={() => loadMovimientos()}>Buscar</button>
+          <button type="button" onClick={() => { setFilterDesde(''); setFilterHasta(''); setFilterTipo(''); setFilterUsuario(''); loadMovimientos({}) }} className="secondary">Limpiar</button>
+        </div>
+      </div>
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead>
           <tr>
-            <th>Producto</th>
+            <th>Nº Movimiento</th>
             <th>Tipo</th>
             <th>Cantidad</th>
             <th>Estado</th>
-            <th>Proveedor</th>
-            <th>Depósito</th>
-            <th>Institución/Cargo</th>
             <th>Motivo</th>
             <th>Registrado por</th>
             <th>Fecha</th>
-            <th style={{ textAlign: 'center' }}>Imprimir</th>
+            <th style={{ textAlign: 'center' }}>Acciones</th>
           </tr>
         </thead>
         <tbody>
@@ -931,28 +1078,37 @@ export default function Movimientos() {
               
               return (
                 <tr key={first.id || i}>
-                  <td style={{ maxWidth: 250 }}>{productSummary}</td>
+                  <td>{`#${first.id}`}</td>
                   <td><span className={`badge badge-${first.tipo}`}>{first.tipo}</span></td>
                   <td>{isMulti ? totalCantidad : first.cantidad}</td>
                   <td>{isMulti ? 'Varios' : (first.estado_producto || '-')}</td>
-                  <td>{isMulti ? 'Varios' : (first.proveedor_nombre || '-')}</td>
-                  <td>{first.deposito_nombre || '-'}</td>
-                  <td>{institucionCargo}</td>
                   <td>{first.motivo || '-'}</td>
                   <td>{first.usuario_nombre || '-'}</td>
-                  <td>{new Date(first.created_at).toLocaleDateString()}</td>
+                  <td>{first.created_at ? new Date(first.created_at).toLocaleDateString() : '-'}</td>
                   <td style={{ textAlign: 'center' }}>
-                    <button
-                      type="button"
-                      className="secondary"
-                      onClick={() => handlePrintMovimiento(group.items)}
-                      title="Imprimir movimiento"
-                    aria-label="Imprimir movimiento"
-                    style={{ width: 'auto', margin: 0, minWidth: 36, padding: '6px 10px' }}
-                  >
-                    🖨️
-                  </button>
-                </td>
+                    <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={() => handlePrintMovimiento(group.items)}
+                        title="Imprimir movimiento"
+                        aria-label="Imprimir movimiento"
+                        style={{ width: 'auto', margin: 0, minWidth: 36, padding: '6px 10px' }}
+                      >
+                        🖨️
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={() => { setDetalleData({ proveedor: first.proveedor_nombre, deposito: first.deposito_nombre, institucion: institucionCargo, productos: group.items }); setDetalleModalOpen(true) }}
+                        title="Ver detalle"
+                        aria-label="Ver detalle"
+                        style={{ width: 'auto', margin: 0, minWidth: 36, padding: '6px 10px' }}
+                      >
+                        🔍
+                      </button>
+                    </div>
+                  </td>
               </tr>
             )
           }) // closes map
@@ -960,6 +1116,33 @@ export default function Movimientos() {
         </tbody>
       </table>
       </div>
+      {/* Detalle modal */}
+      {detalleModalOpen && detalleData && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100 }}
+          onClick={e => { if (e.target === e.currentTarget) setDetalleModalOpen(false) }}
+        >
+          <div style={{ background: '#fff', padding: 20, borderRadius: 8, width: 'min(720px, 100%)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <h3 style={{ margin: 0 }}>Detalle del Movimiento</h3>
+              <button type="button" className="secondary" onClick={() => setDetalleModalOpen(false)}>✕ Cerrar</button>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+              <div><strong>Proveedor:</strong><div>{detalleData.proveedor || '-'}</div></div>
+              <div><strong>Depósito:</strong><div>{detalleData.deposito || '-'}</div></div>
+              <div style={{ gridColumn: '1 / -1' }}><strong>Institución / Cargo:</strong><div>{detalleData.institucion || '-'}</div></div>
+            </div>
+            <div>
+              <h4 style={{ marginTop: 0 }}>Productos</h4>
+              <ul>
+                {detalleData.productos.map((p, idx) => (
+                  <li key={idx}>{p.producto_nombre || '-'} — Cantidad: {p.cantidad}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
