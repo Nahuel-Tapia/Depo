@@ -55,7 +55,7 @@ function getInstitutionOptionLabel(institucion) {
 }
 
 export default function DirectorAreaZonas({ nivelEducativo }) {
-  const { token } = useAuth()
+  const { token, withMasterDirector } = useAuth()
   const [departamentos, setDepartamentos] = useState([])
   const [zonas, setZonas] = useState([])
   const [institucionesDisponibles, setInstitucionesDisponibles] = useState([])
@@ -85,18 +85,18 @@ export default function DirectorAreaZonas({ nivelEducativo }) {
 
   useEffect(() => {
     loadData()
-  }, [])
+  }, [token, withMasterDirector])
 
   useEffect(() => {
     if (modalOpen) {
       fetchModalSupervisores()
     }
-  }, [modalOpen])
+  }, [modalOpen, token, withMasterDirector])
 
   const fetchModalSupervisores = async () => {
     setModalLoading(true)
     try {
-      const res = await apiFetch('/api/director-area/catalogo', { token })
+      const res = await apiFetch(withMasterDirector('/api/director-area/catalogo'), { token })
       const data = await res.json().catch(() => ({}))
       setModalSupervisores(data.supervisores || [])
     } catch {
@@ -112,7 +112,7 @@ export default function DirectorAreaZonas({ nivelEducativo }) {
     setError('')
 
     try {
-      const res = await apiFetch('/api/director-area/zonas-edificio', { token })
+      const res = await apiFetch(withMasterDirector('/api/director-area/zonas-edificio'), { token })
       const data = await res.json().catch(() => ({}))
 
       if (!res.ok) {
@@ -188,16 +188,19 @@ export default function DirectorAreaZonas({ nivelEducativo }) {
 
     try {
       const isEditing = Boolean(editingZoneId)
-      const res = await apiFetch(isEditing ? `/api/director-area/zonas/${editingZoneId}` : '/api/director-area/zonas', {
-        token,
-        method: isEditing ? 'PATCH' : 'POST',
-        body: JSON.stringify({
-          name: normalizeText(nombreZona),
-          departamento: null,
-          nivel_educativo: miNivel,
-          institucionIds: institucionesSeleccionadas
-        })
-      })
+      const res = await apiFetch(
+        withMasterDirector(isEditing ? `/api/director-area/zonas/${editingZoneId}` : '/api/director-area/zonas'),
+        {
+          token,
+          method: isEditing ? 'PATCH' : 'POST',
+          body: JSON.stringify({
+            name: normalizeText(nombreZona),
+            departamento: null,
+            nivel_educativo: miNivel,
+            institucionIds: institucionesSeleccionadas
+          })
+        }
+      )
 
       const data = await res.json().catch(() => ({}))
 
@@ -238,7 +241,7 @@ export default function DirectorAreaZonas({ nivelEducativo }) {
     if (!zonaIdCreada) return
 
     try {
-      const res = await apiFetch(`/api/director-area/zonas/${zonaIdCreada}/supervisores`, {
+      const res = await apiFetch(withMasterDirector(`/api/director-area/zonas/${zonaIdCreada}/supervisores`), {
         token,
         method: 'POST',
         body: JSON.stringify({ supervisorIds: selectedSupervisores })
@@ -271,7 +274,7 @@ export default function DirectorAreaZonas({ nivelEducativo }) {
     setSuccess('')
 
     try {
-      const res = await apiFetch(`/api/director-area/zonas/${zona.id}`, {
+      const res = await apiFetch(withMasterDirector(`/api/director-area/zonas/${zona.id}`), {
         token,
         method: 'DELETE'
       })

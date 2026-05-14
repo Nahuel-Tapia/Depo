@@ -70,7 +70,7 @@ function Filters({ filters, setFilters, directores, compact = false }) {
 }
 
 export default function ComprasPanel({ section = 'pedidos' }) {
-  const { token } = useAuth()
+  const { token, user, masterDirectorAreaId } = useAuth()
   const printRef = useRef(null)
 
   const [filters, setFilters] = useState({ director_area_id: '', nivel: '', estado: '' })
@@ -90,6 +90,14 @@ export default function ComprasPanel({ section = 'pedidos' }) {
   const [publicacionStatus, setPublicacionStatus] = useState({ publicada: false, data: null })
   const [editQty, setEditQty] = useState({})
   const [showConfirmPublicar, setShowConfirmPublicar] = useState(false)
+
+  useEffect(() => {
+    if (user?.role === 'master' && masterDirectorAreaId) {
+      setFilters((prev) =>
+        prev.director_area_id === masterDirectorAreaId ? prev : { ...prev, director_area_id: masterDirectorAreaId }
+      )
+    }
+  }, [user?.role, masterDirectorAreaId])
 
   const loadCatalogData = async () => {
     const proveedoresRes = await apiFetch('/api/proveedores', { token })

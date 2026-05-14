@@ -11,6 +11,11 @@ const { authenticate } = require("../middleware/auth");
 const router = express.Router();
 router.use(authenticate);
 
+async function getMasterInstitutionIds() {
+  const rows = await all(`SELECT id_institucion FROM institucion ORDER BY id_institucion ASC`);
+  return rows.map((r) => Number(r.id_institucion)).filter((id) => Number.isInteger(id) && id > 0);
+}
+
 async function hasTable(tableName) {
   const row = await get(`SELECT to_regclass($1) AS regclass`, [tableName]);
   return Boolean(row?.regclass);
@@ -291,12 +296,15 @@ router.get("/instituciones", async (req, res) => {
   try {
     await ensureSupervisorSchema();
 
-    if (req.user?.role === "supervisor") {
-      const institutionIds = await getSupervisorAssignedInstitutionIds(
-        req.user.sub,
-        req.user.jurisdiccion,
-        req.user.nivel_educativo
-      );
+    if (req.user?.role === "supervisor" || req.user?.role === "master") {
+      const institutionIds =
+        req.user.role === "master"
+          ? await getMasterInstitutionIds()
+          : await getSupervisorAssignedInstitutionIds(
+              req.user.sub,
+              req.user.jurisdiccion,
+              req.user.nivel_educativo
+            );
 
       if (institutionIds.length === 0) {
         return res.json({
@@ -343,7 +351,7 @@ router.get("/instituciones", async (req, res) => {
       const hasZonesTables =
         (await tableExists("zona_supervisor")) && (await tableExists("zona"));
 
-      if (hasZonesTables) {
+      if (hasZonesTables && req.user.role === "supervisor") {
         const zonas = await all(
           `SELECT DISTINCT z.id, z.name
            FROM zona_supervisor zs
@@ -405,15 +413,18 @@ router.get("/dashboard/stats", async (req, res) => {
   try {
     await ensureSupervisorSchema();
 
-    if (req.user?.role !== "supervisor") {
+    if (req.user?.role !== "supervisor" && req.user?.role !== "master") {
       return res.status(403).json({ error: "Solo el supervisor puede ver estas estadísticas." });
     }
 
-    const institutionIds = await getSupervisorAssignedInstitutionIds(
-      req.user.sub,
-      req.user.jurisdiccion,
-      req.user.nivel_educativo
-    );
+    const institutionIds =
+      req.user.role === "master"
+        ? await getMasterInstitutionIds()
+        : await getSupervisorAssignedInstitutionIds(
+            req.user.sub,
+            req.user.jurisdiccion,
+            req.user.nivel_educativo
+          );
 
     if (institutionIds.length === 0) {
       return res.json({
@@ -494,7 +505,7 @@ router.patch("/instituciones/:id/tipo-kit", async (req, res) => {
   try {
     await ensureSupervisorSchema();
 
-    if (req.user?.role !== "supervisor") {
+    if (req.user?.role !== "supervisor" && req.user?.role !== "master") {
       return res.status(403).json({ error: "Solo el supervisor puede asignar kit." });
     }
 
@@ -544,12 +555,15 @@ router.get("/pedidos-pendientes", async (req, res) => {
   try {
     await ensureSupervisorSchema();
 
-    if (req.user?.role === "supervisor") {
-      const institutionIds = await getSupervisorAssignedInstitutionIds(
-        req.user.sub,
-        req.user.jurisdiccion,
-        req.user.nivel_educativo
-      );
+    if (req.user?.role === "supervisor" || req.user?.role === "master") {
+      const institutionIds =
+        req.user.role === "master"
+          ? await getMasterInstitutionIds()
+          : await getSupervisorAssignedInstitutionIds(
+              req.user.sub,
+              req.user.jurisdiccion,
+              req.user.nivel_educativo
+            );
       if (institutionIds.length === 0) {
         return res.json({ pedidos: [] });
       }
@@ -656,7 +670,7 @@ router.get("/solicitudes", async (req, res) => {
   try {
     await ensureSupervisorSchema();
 
-    if (req.user?.role === "supervisor" || req.user?.role === "director_area") {
+    if (req.user?.role === "supervisor" || req.user?.role === "director_area" || req.user?.role === "master") {
       let institutionIds = [];
       if (req.user.role === "supervisor") {
         institutionIds = await getSupervisorAssignedInstitutionIds(
@@ -664,6 +678,8 @@ router.get("/solicitudes", async (req, res) => {
           req.user.jurisdiccion,
           req.user.nivel_educativo
         );
+      } else if (req.user.role === "master") {
+        institutionIds = await getMasterInstitutionIds();
       } else {
         institutionIds = await getDirectorAreaAssignedInstitutionIds(req.user.sub);
       }

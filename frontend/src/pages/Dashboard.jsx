@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { apiFetch } from '../api'
 import Inicio from '../components/Inicio'
 import Productos from '../components/Productos'
 import Movimientos from '../components/Movimientos'
@@ -63,10 +64,14 @@ const TABS = [
 ]
 
 export default function Dashboard() {
-  const { user, logout, hasPermission } = useAuth()
+  const { user, logout, hasPermission, token, masterDirectorAreaId, setMasterDirectorAreaId } = useAuth()
   const [activeTab, setActiveTab] = useState('inicio')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [currentDate, setCurrentDate] = useState(() => new Date())
+  const [directoresMaster, setDirectoresMaster] = useState([])
+  const masterDirectorIdRef = useRef(masterDirectorAreaId)
+
+  masterDirectorIdRef.current = masterDirectorAreaId
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -75,6 +80,35 @@ export default function Dashboard() {
 
     return () => window.clearInterval(intervalId)
   }, [])
+
+  useEffect(() => {
+    if (user?.role !== 'master' || !token) {
+      setDirectoresMaster([])
+      return
+    }
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await apiFetch('/api/users', { token })
+        if (!res.ok || cancelled) return
+        const data = await res.json()
+        const dirs = (data.users || []).filter(
+          (u) => String(u.role || '').toLowerCase() === 'director_area' && u.activo !== false
+        )
+        if (cancelled) return
+        setDirectoresMaster(dirs)
+        const valid = new Set(dirs.map((d) => String(d.id)))
+        const prev = String(masterDirectorIdRef.current || '')
+        const next = prev && valid.has(prev) ? prev : dirs[0] ? String(dirs[0].id) : ''
+        if (next !== prev) setMasterDirectorAreaId(next)
+      } catch {
+        if (!cancelled) setDirectoresMaster([])
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [user?.role, token, setMasterDirectorAreaId])
 
   const visibleTabs = useMemo(() => {
     if (!user) return []
@@ -126,7 +160,7 @@ export default function Dashboard() {
       ].includes(tab.key))
     }
 
-    if (user.role === 'admin') {
+    if (user.role === 'admin' || user.role === 'master') {
       return TABS.filter((tab) => !tab.roleFor || tab.roleFor === 'admin' || tab.roleFor === 'common' && tab.key !== 'mis-escuelas')
     }
 
@@ -310,6 +344,51 @@ export default function Dashboard() {
               </button>
             </div>
           </header>
+
+          {user?.role === 'master' && (
+            <div
+              className="dashboard-master-context"
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                gap: '12px 20px',
+                padding: '12px 20px',
+                margin: '0 20px',
+                background: 'linear-gradient(90deg, #f0f7ff 0%, #fff 100%)',
+                border: '1px solid #cfe2ff',
+                borderRadius: 12,
+                fontSize: '0.95rem',
+              }}
+            >
+              <label htmlFor="master-director-select" style={{ fontWeight: 600, color: '#1e3a5f' }}>
+                Director de area (contexto de prueba)
+              </label>
+              <select
+                id="master-director-select"
+                value={masterDirectorAreaId}
+                onChange={(e) => setMasterDirectorAreaId(e.target.value)}
+                disabled={directoresMaster.length === 0}
+                style={{ minWidth: 260, padding: '8px 10px', borderRadius: 8, border: '1px solid #94a3b8' }}
+              >
+                {directoresMaster.length === 0 ? (
+                  <option value="">Sin directores en el sistema</option>
+                ) : (
+                  directoresMaster.map((d) => (
+                    <option key={d.id} value={String(d.id)}>
+                      {[d.nombre, d.apellido].filter(Boolean).join(' ')}
+                      {d.nivel_educativo ? ` — ${d.nivel_educativo}` : ''}
+                    </option>
+                  ))
+                )}
+              </select>
+              {directoresMaster.length === 0 && (
+                <span style={{ color: '#b45309', fontSize: '0.85rem' }}>
+                  Creá un usuario con rol Director de area para usar los paneles de direccion y planillas.
+                </span>
+              )}
+            </div>
+          )}
 
           <div className="dashboard-content">
             <div className="dashboard-view-frame">

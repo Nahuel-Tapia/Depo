@@ -19,7 +19,7 @@ export default function Productos() {
   const [sortBy, setSortBy] = useState('nombre_asc')
   const [form, setForm] = useState({ nombre: '', unidad_medida: 'unidad', stock_minimo: 0, id_categoria: '' })
   const [vencimientosProximos, setVencimientosProximos] = useState(new Set())
-  const canDeleteProductos = hasPermission('productos.delete') || user?.role === 'admin'
+  const canDeleteProductos = hasPermission('productos.delete') || user?.role === 'admin' || user?.role === 'master'
 
   const loadCategorias = async () => {
     try {

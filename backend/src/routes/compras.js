@@ -1,6 +1,6 @@
 const express = require("express");
 const { all, get, run, pool } = require("../db.pg");
-const { authenticate, authorizePermissions } = require("../middleware/auth");
+const { authenticate, authorizePermissions, isAdminLikeRole } = require("../middleware/auth");
 const { PERMISSIONS } = require("../permissions");
 
 const router = express.Router();
@@ -34,6 +34,28 @@ async function getDirectorAreaNivel(userId) {
     [userId]
   );
   return row?.nivel_educativo || null;
+}
+
+async function resolvePlanillaDirectorUserId(req) {
+  const role = String(req.user?.role || "").toLowerCase();
+  if (role === "director_area") {
+    return Number(req.user.sub);
+  }
+  if (isAdminLikeRole(role)) {
+    const pick = Number(req.body?.director_area_id || req.query?.director_area_id || 0);
+    if (Number.isInteger(pick) && pick > 0) {
+      const row = await get(
+        `SELECT id_usuario FROM usuario WHERE id_usuario = ? AND role = 'director_area' AND (activo IS NULL OR activo = TRUE)`,
+        [pick]
+      );
+      if (row?.id_usuario) return Number(row.id_usuario);
+    }
+    const first = await get(
+      `SELECT id_usuario FROM usuario WHERE role = 'director_area' AND (activo IS NULL OR activo = TRUE) ORDER BY id_usuario ASC LIMIT 1`
+    );
+    return first?.id_usuario ? Number(first.id_usuario) : null;
+  }
+  return Number(req.user.sub);
 }
 
 function normalizeEstadoPlanilla(estado) {
@@ -215,7 +237,7 @@ async function buildPlanillasQuery({ role, userId, directorAreaId, estado, nivel
   const params = [];
   const where = [];
 
-  if (role === "area_compras" || role === "admin") {
+  if (role === "area_compras" || isAdminLikeRole(role)) {
     where.push("p.estado IN ('enviada', 'aceptada', 'adjudicada', 'cerrada')");
   } else {
     params.push(userId);
@@ -503,7 +525,7 @@ router.get("/planillas/:id", authorizePermissions(PERMISSIONS.PLANILLA_VIEW), as
       return res.status(403).json({ error: "No tenés acceso a esta planilla" });
     }
 
-    if (req.user.role !== "area_compras" && req.user.role !== "admin" && Number(planilla.director_area_id) !== Number(req.user.sub)) {
+    if (!isAdminLikeRole(req.user.role) && req.user.role !== "area_compras" && Number(planilla.director_area_id) !== Number(req.user.sub)) {
       return res.status(403).json({ error: "No tenés acceso a esta planilla" });
     }
 
@@ -547,7 +569,13 @@ router.post("/planillas", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), asy
     const { observaciones } = req.body;
     const anio = new Date().getFullYear();
     const nivelColumn = await getInstitucionNivelColumn();
-    const directorNivel = await getDirectorAreaNivel(req.user.sub);
+    const directorUserId = await resolvePlanillaDirectorUserId(req);
+    if (!directorUserId) {
+      return res.status(400).json({
+        error: "No hay un Director de Area activo en el sistema. Creá uno o pasá director_area_id para generar la planilla."
+      });
+    }
+    const directorNivel = await getDirectorAreaNivel(directorUserId);
 
     if (!nivelColumn) {
       return res.status(500).json({ error: "No se encontro la columna de nivel educativo en instituciones" });
@@ -562,7 +590,7 @@ router.post("/planillas", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), asy
        WHERE director_area_id = $1
          AND anio = $2
          AND estado != 'cerrada'`,
-      [req.user.sub, anio]
+      [directorUserId, anio]
     );
 
     if (existente) {
@@ -592,7 +620,7 @@ router.post("/planillas", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), asy
          AND EXTRACT(YEAR FROM p.fecha_creacion) = $2
          AND sea.director_area_id = $3
        GROUP BY p.id_institucion, dp.id_producto`,
-      [directorNivel, anio, req.user.sub]
+      [directorNivel, anio, directorUserId]
     );
 
     if (solicitudes.length === 0) {
@@ -609,7 +637,7 @@ router.post("/planillas", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), asy
         `INSERT INTO planilla_pedido_anual (director_area_id, anio, estado, observaciones)
          VALUES ($1, $2, 'borrador', $3)
          RETURNING id`,
-        [req.user.sub, anio, observaciones || null]
+        [directorUserId, anio, observaciones || null]
       );
 
       const planillaId = Number(planillaRes.rows[0].id);
@@ -648,7 +676,10 @@ router.patch("/planillas/:id/enviar", authorizePermissions(PERMISSIONS.PLANILLA_
     );
 
     if (!planilla) return res.status(404).json({ error: "Planilla no encontrada" });
-    if (Number(planilla.director_area_id) !== Number(req.user.sub)) {
+    if (
+      !isAdminLikeRole(req.user.role) &&
+      Number(planilla.director_area_id) !== Number(req.user.sub)
+    ) {
       return res.status(403).json({ error: "No tenés acceso a esta planilla" });
     }
     if (planilla.estado !== "borrador") {
@@ -673,7 +704,7 @@ async function aceptarPlanilla(req, res) {
   try {
     await ensureTables();
 
-    if (req.user.role !== "area_compras" && req.user.role !== "admin") {
+    if (req.user.role !== "area_compras" && !isAdminLikeRole(req.user.role)) {
       return res.status(403).json({ error: "Solo el Área de Compras puede aceptar planillas" });
     }
 
@@ -711,11 +742,15 @@ async function getEnviadaStatus(req, res) {
   try {
     await ensureTables();
     const anio = Number(req.query.anio || new Date().getFullYear());
+    const directorUserId = await resolvePlanillaDirectorUserId(req);
+    if (!directorUserId) {
+      return res.json({ sent: false, planilla: null });
+    }
     const planilla = await get(
       `SELECT id, estado, enviada_at, aceptada_at
        FROM planilla_pedido_anual
        WHERE director_area_id = $1 AND anio = $2`,
-      [req.user.sub, anio]
+      [directorUserId, anio]
     );
     res.json({ sent: !!planilla && (planilla.estado === 'enviada' || planilla.estado === 'aceptada'), planilla });
   } catch (err) {
@@ -728,17 +763,18 @@ async function getEscuelasPendientes(req, res) {
   try {
     await ensureTables();
     const anio = Number(req.query.anio || new Date().getFullYear());
-    
-    const coverage = await getPlanillaCoverage(null, req.user.sub);
-    // getPlanillaCoverage(null, ...) should be adapted or we use its logic here.
-    
+    const directorUserId = await resolvePlanillaDirectorUserId(req);
+    if (!directorUserId) {
+      return res.json({ pendientes: [] });
+    }
+
     const assigned = await all(
       `SELECT DISTINCT i.id_institucion AS id, i.nombre, COALESCE(i.cue, '') AS cue
        FROM supervisor_escuela_asignacion sea
        JOIN institucion i ON i.id_institucion = sea.institucion_id
        WHERE sea.director_area_id = $1
        ORDER BY i.nombre ASC`,
-      [req.user.sub]
+      [directorUserId]
     );
 
     const approved = await all(
@@ -768,9 +804,16 @@ async function enviarLicitacionFinal(req, res) {
     await client.query("BEGIN");
 
     const anio = new Date().getFullYear();
+    const directorUserId = await resolvePlanillaDirectorUserId(req);
+    if (!directorUserId) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({
+        error: "No hay un Director de Area activo. Creá uno o pasá director_area_id."
+      });
+    }
     const existing = await client.query(
       `SELECT id, estado FROM planilla_pedido_anual WHERE director_area_id = $1 AND anio = $2`,
-      [req.user.sub, anio]
+      [directorUserId, anio]
     );
 
     if (existing.rowCount > 0 && (existing.rows[0].estado === 'enviada' || existing.rows[0].estado === 'aceptada')) {
@@ -788,7 +831,7 @@ async function enviarLicitacionFinal(req, res) {
       const resIns = await client.query(
         `INSERT INTO planilla_pedido_anual (director_area_id, anio, estado, enviada_at)
          VALUES ($1, $2, 'enviada', NOW()) RETURNING id`,
-        [req.user.sub, anio]
+        [directorUserId, anio]
       );
       planillaId = resIns.rows[0].id;
     }
@@ -821,7 +864,10 @@ router.delete("/planillas/:id", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE
     );
 
     if (!planilla) return res.status(404).json({ error: "Planilla no encontrada" });
-    if (Number(planilla.director_area_id) !== Number(req.user.sub)) {
+    if (
+      !isAdminLikeRole(req.user.role) &&
+      Number(planilla.director_area_id) !== Number(req.user.sub)
+    ) {
       return res.status(403).json({ error: "No tenés acceso a esta planilla" });
     }
     if (planilla.estado !== "borrador") {

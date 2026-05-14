@@ -3,7 +3,7 @@ import { apiFetch } from '../api'
 import { useAuth } from '../context/AuthContext'
 
 export default function DirectorAreaResumenAnual({ solicitudes, submissionStatus, onSent }) {
-  const { token } = useAuth()
+  const { token, withMasterDirector } = useAuth()
   const [filtroEscuela, setFiltroEscuela] = useState('')
   const [loading, setLoading] = useState(false)
   const [pendientes, setPendientes] = useState([])
@@ -14,7 +14,7 @@ export default function DirectorAreaResumenAnual({ solicitudes, submissionStatus
 
   const loadPendientes = async () => {
     try {
-      const pendRes = await apiFetch(`/api/compras/licitacion/anual/escuelas-pendientes?anio=${anioActual}`, { token })
+      const pendRes = await apiFetch(withMasterDirector(`/api/compras/licitacion/anual/escuelas-pendientes?anio=${anioActual}`), { token })
       if (pendRes.ok) {
         const data = await pendRes.json()
         setPendientes(data.pendientes || [])
@@ -24,7 +24,7 @@ export default function DirectorAreaResumenAnual({ solicitudes, submissionStatus
 
   useEffect(() => {
     loadPendientes()
-  }, [token])
+  }, [token, withMasterDirector])
   
   // Solo solicitudes anuales que ya fueron aprobadas por el director
   const solicitudesAprobadas = useMemo(() => {
@@ -78,7 +78,7 @@ export default function DirectorAreaResumenAnual({ solicitudes, submissionStatus
     setError(null)
     setShowModal(false)
     try {
-      const res = await apiFetch('/api/compras/licitacion/anual/enviar-final', {
+      const res = await apiFetch(withMasterDirector('/api/compras/licitacion/anual/enviar-final'), {
         token,
         method: 'POST'
       })
