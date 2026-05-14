@@ -118,8 +118,10 @@ async function getRetiroAvailabilityRows(institucionId = null) {
       GROUP BY sr.id_pedido, srd.id_producto
     ) res ON res.id_pedido = p.id_pedido AND res.id_producto = dp.id_producto
     WHERE p.estado = 'aprobado'
-      AND p.aprobado_director_area = TRUE
-      AND COALESCE(p.tipo, 'anual') = 'anual'
+      AND (
+        (COALESCE(p.tipo, 'anual') = 'anual' AND p.aprobado_director_area = TRUE)
+        OR (COALESCE(p.tipo, 'anual') = 'refuerzo')
+      )
       ${institucionSql}
     ORDER BY p.fecha_creacion DESC, pr.nombre ASC
   `, params);
