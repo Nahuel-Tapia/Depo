@@ -102,6 +102,18 @@ export default function Dashboard() {
       ].includes(tab.key))
     }
 
+    if (user.role === 'operador_escolar') {
+      return TABS.filter((tab) => [
+        'inicio',
+        'mi-cuenta',
+        'productos',
+        'movimientos',
+        'proveedores',
+        'pedidos',
+        'instituciones'
+      ].includes(tab.key))
+    }
+
     if (user.role === 'area_compras') {
       return TABS.filter((tab) => [
         'inicio',
