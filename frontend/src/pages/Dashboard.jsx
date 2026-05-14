@@ -32,32 +32,33 @@ const ROLE_LABELS = {
   area_compras: 'Area Compras',
   consulta: 'Consulta',
   control_ministerio: 'Control Ministerio',
+  master: 'Master',
 }
 
 const TABS = [
   { key: 'inicio', label: 'Inicio', permission: null, icon: GridIcon },
-  { key: 'zonas', label: 'Gestion de Zonas', permission: 'supervision.manage', role: 'director_area', icon: BuildingIcon },
-  { key: 'solicitud_anual', label: 'Solicitud Anual', permission: 'supervision.manage', role: 'director_area', icon: ClipboardIcon },
-  { key: 'resumen', label: 'Resumen Solicitud Anual', permission: 'supervision.manage', role: 'director_area', icon: ListIcon },
-  { key: 'compras-licitacion', label: 'Licitacion Anual', permission: 'planilla.view', role: 'area_compras', icon: DocumentIcon },
-  { key: 'compras-listado-final', label: 'Listado Final a Licitar', permission: 'planilla.view', role: 'area_compras', icon: ListIcon },
-  { key: 'compras-adjudicacion', label: 'Adjudicacion y Cierre', permission: 'planilla.manage', role: 'area_compras', icon: ShieldIcon },
-  { key: 'compras-entregas', label: 'Gestion de Entregas', permission: 'planilla.view', role: 'area_compras', icon: TruckIcon },
-  { key: 'deposito-recepcion', label: 'Recepcion Licitacion', permission: 'stock.movement.create', role: 'operador', icon: DocumentIcon },
-  { key: 'deposito-distribucion', label: 'Distribucion a Escuelas', permission: 'stock.movement.create', role: 'operador', icon: TruckIcon },
-  { key: 'solicitudes-retiro', label: 'Retiros Escolares', permission: 'stock.movement.create', role: 'operador', icon: ClipboardIcon },
-  { key: 'supervisor', label: 'Patrimonio Escolar', permission: 'pedidos.manage', role: 'supervisor', icon: ActivityIcon },
-  { key: 'asignar-kit', label: 'Asignar Kit', permission: 'pedidos.manage', role: 'supervisor', icon: BoxIcon },
-  { key: 'mis-escuelas', label: 'Mis Escuelas', permission: 'instituciones.view', role: 'supervisor', hideForRoles: ['admin'], icon: BuildingIcon },
-  { key: 'productos', label: 'Productos', permission: 'productos.view', hideForRoles: ['supervisor', 'director_area'], icon: BoxIcon },
-  { key: 'movimientos', label: 'Movimientos', permission: 'movimientos.view', hideForRoles: ['supervisor', 'director_area'], icon: ActivityIcon },
-  { key: 'pedidos', label: 'Pedidos', permission: 'pedidos.view', hideForRoles: ['admin'], icon: ClipboardIcon },
-  { key: 'instituciones', label: 'Instituciones', permission: 'instituciones.view', hideForRoles: ['supervisor'], icon: BuildingIcon },
-  { key: 'historial', label: 'Historial', permission: 'instituciones.view', hideForRoles: ['supervisor', 'director_area'], icon: ListIcon },
-  { key: 'proveedores', label: 'Proveedores', permission: 'proveedores.view', hideForRoles: ['supervisor', 'director_area'], icon: TruckIcon },
-  { key: 'usuarios', label: 'Usuarios', permission: 'users.read', icon: UserIcon },
-  { key: 'kits', label: 'Kits de Productos', permission: 'supervision.manage', role: 'director_area', icon: BoxIcon },
-  { key: 'depositos', label: 'Depositos', permission: 'stock.view', icon: BuildingIcon },
+  { key: 'zonas', label: 'Gestion de Zonas', permission: 'supervision.manage', roleFor: 'director_area', icon: BuildingIcon },
+  { key: 'solicitud_anual', label: 'Solicitud Anual', permission: 'supervision.manage', roleFor: 'director_area', icon: ClipboardIcon },
+  { key: 'resumen', label: 'Resumen Solicitud Anual', permission: 'supervision.manage', roleFor: 'director_area', icon: ListIcon },
+  { key: 'compras-licitacion', label: 'Licitacion Anual', permission: 'planilla.view', roleFor: 'area_compras', icon: DocumentIcon },
+  { key: 'compras-listado-final', label: 'Listado Final a Licitar', permission: 'planilla.view', roleFor: 'area_compras', icon: ListIcon },
+  { key: 'compras-adjudicacion', label: 'Adjudicacion y Cierre', permission: 'planilla.manage', roleFor: 'area_compras', icon: ShieldIcon },
+  { key: 'compras-entregas', label: 'Gestion de Entregas', permission: 'planilla.view', roleFor: 'area_compras', icon: TruckIcon },
+  { key: 'deposito-recepcion', label: 'Recepcion Licitacion', permission: 'stock.movement.create', roleFor: 'operador', icon: DocumentIcon },
+  { key: 'deposito-distribucion', label: 'Distribucion a Escuelas', permission: 'stock.movement.create', roleFor: 'operador', icon: TruckIcon },
+  { key: 'solicitudes-retiro', label: 'Retiros Escolares', permission: 'stock.movement.create', roleFor: 'operador', icon: ClipboardIcon },
+  { key: 'supervisor', label: 'Patrimonio Escolar', permission: 'pedidos.manage', roleFor: 'supervisor', icon: ActivityIcon },
+  { key: 'asignar-kit', label: 'Asignar Kit', permission: 'pedidos.manage', roleFor: 'supervisor', icon: BoxIcon },
+  { key: 'mis-escuelas', label: 'Mis Escuelas', permission: 'instituciones.view', roleFor: 'supervisor', hideForRoles: ['admin'], icon: BuildingIcon },
+  { key: 'productos', label: 'Productos', permission: 'productos.view', hideForRoles: ['supervisor', 'director_area'], roleFor: 'admin', icon: BoxIcon },
+  { key: 'movimientos', label: 'Movimientos', permission: 'movimientos.view', hideForRoles: ['supervisor', 'director_area'], roleFor: 'admin', icon: ActivityIcon },
+  { key: 'pedidos', label: 'Pedidos', permission: 'pedidos.view', hideForRoles: ['admin'], roleFor: 'common', icon: ClipboardIcon },
+  { key: 'instituciones', label: 'Instituciones', permission: 'instituciones.view', hideForRoles: ['supervisor'], roleFor: 'admin', icon: BuildingIcon },
+  { key: 'historial', label: 'Historial', permission: 'instituciones.view', hideForRoles: ['supervisor', 'director_area'], roleFor: 'admin', icon: ListIcon },
+  { key: 'proveedores', label: 'Proveedores', permission: 'proveedores.view', hideForRoles: ['supervisor', 'director_area'], roleFor: 'admin', icon: TruckIcon },
+  { key: 'usuarios', label: 'Usuarios', permission: 'users.read', roleFor: 'admin', icon: UserIcon },
+  { key: 'kits', label: 'Kits de Productos', permission: 'supervision.manage', roleFor: 'director_area', icon: BoxIcon },
+  { key: 'depositos', label: 'Depositos', permission: 'stock.view', roleFor: 'admin', icon: BuildingIcon },
   { key: 'mi-cuenta', label: 'Mi cuenta', permission: null, icon: UserIcon },
 ]
 
@@ -77,6 +78,11 @@ export default function Dashboard() {
 
   const visibleTabs = useMemo(() => {
     if (!user) return []
+
+    // Master role sees all tabs with role labels
+    if (user.role === 'master') {
+      return TABS
+    }
 
     if (user.role === 'directivo') {
       return TABS.filter((tab) => ['inicio', 'pedidos', 'mi-cuenta'].includes(tab.key))
@@ -109,13 +115,13 @@ export default function Dashboard() {
     }
 
     if (user.role === 'admin') {
-      return TABS.filter((tab) => !tab.role && tab.key !== 'mis-escuelas')
+      return TABS.filter((tab) => !tab.roleFor || tab.roleFor === 'admin' || tab.roleFor === 'common' && tab.key !== 'mis-escuelas')
     }
 
     return TABS.filter((tab) => {
       if (tab.hideForRole && tab.hideForRole === user.role) return false
       if (tab.hideForRoles && tab.hideForRoles.includes(user.role)) return false
-      if (tab.role && tab.role !== user.role) return false
+      if (tab.roleFor && tab.roleFor !== user.role && tab.roleFor !== 'common') return false
       return !tab.permission || hasPermission(tab.permission)
     })
   }, [hasPermission, user])
@@ -226,6 +232,7 @@ export default function Dashboard() {
               const Icon = tab.icon || GridIcon
               const isActive = activeTab === tab.key
               const label = tab.key === 'usuarios' && user?.role === 'director_area' ? 'Supervisores' : tab.label
+              const roleLabel = user?.role === 'master' && tab.roleFor ? tab.roleFor : null
 
               return (
                 <button
@@ -236,12 +243,14 @@ export default function Dashboard() {
                     setActiveTab(tab.key)
                     closeSidebar()
                   }}
+                  title={roleLabel ? `Rol: ${roleLabel}` : ''}
                 >
                   <span className="dashboard-nav-icon" aria-hidden="true">
                     <Icon />
                   </span>
                   <span className="dashboard-nav-copy">
                     <span className="dashboard-nav-label">{label}</span>
+                    {roleLabel && <span className="dashboard-nav-role">{roleLabel}</span>}
                   </span>
                 </button>
               )
