@@ -375,7 +375,7 @@ router.post("/:id/ingreso", authorizePermissions(PERMISSIONS.STOCK_MOVEMENT_CREA
     return res.json({ ok: true, message: "Ingreso registrado" });
   } catch (err) {
     console.error("Error en ingreso:", err);
-    return res.status(500).json({ error: "No se pudo registrar ingreso" });
+    return res.status(500).json({ error: "No se pudo registrar ingreso", details: err.message });
   }
 });
 
