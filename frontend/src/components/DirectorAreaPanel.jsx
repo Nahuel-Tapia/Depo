@@ -8,7 +8,7 @@ import DirectorAreaResumenAnual from './DirectorAreaResumenAnual'
 import DirectorAreaDashboard from './DirectorAreaDashboard'
 
 export default function DirectorAreaPanel({ initialSection }) {
-  const { token, user } = useAuth()
+  const { token, user, withMasterDirector } = useAuth()
   const [activeSection, setActiveSection] = useState(initialSection || 'dashboard')
   const [supervisores, setSupervisores] = useState([])
   const [escuelas, setEscuelas] = useState([])
@@ -43,8 +43,8 @@ export default function DirectorAreaPanel({ initialSection }) {
   const loadAll = async () => {
     try {
       const [catalogoRes, asigRes] = await Promise.all([
-        apiFetch('/api/director-area/catalogo', { token }),
-        apiFetch('/api/director-area/asignaciones', { token })
+        apiFetch(withMasterDirector('/api/director-area/catalogo'), { token }),
+        apiFetch(withMasterDirector('/api/director-area/asignaciones'), { token })
       ])
 
       if (catalogoRes.ok) {
@@ -59,7 +59,7 @@ export default function DirectorAreaPanel({ initialSection }) {
         setAsignaciones(asignacionesData.asignaciones || [])
       }
       
-      const statusRes = await apiFetch(`/api/compras/licitacion/anual/enviada-status?anio=${anioActual}`, { token })
+      const statusRes = await apiFetch(withMasterDirector(`/api/compras/licitacion/anual/enviada-status?anio=${anioActual}`), { token })
       if (statusRes.ok) {
         const data = await statusRes.json()
         setSubmissionStatus(data)
@@ -71,7 +71,7 @@ export default function DirectorAreaPanel({ initialSection }) {
 
   useEffect(() => {
     loadAll()
-  }, [token])
+  }, [token, user?.role, withMasterDirector])
 
   const supervisorMap = useMemo(() => {
     const map = {}
@@ -83,7 +83,7 @@ export default function DirectorAreaPanel({ initialSection }) {
 
   const handleAsignar = async (form) => {
     try {
-      const res = await apiFetch('/api/director-area/asignaciones', {
+      const res = await apiFetch(withMasterDirector('/api/director-area/asignaciones'), {
         token,
         method: 'POST',
         body: JSON.stringify(form)

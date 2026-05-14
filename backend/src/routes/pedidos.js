@@ -1,6 +1,6 @@
 const express = require("express");
 const { all, get, run, pool } = require("../db.pg");
-const { authenticate, authorizePermissions } = require("../middleware/auth");
+const { authenticate, authorizePermissions, isAdminLikeRole } = require("../middleware/auth");
 const { PERMISSIONS } = require("../permissions");
 
 const router = express.Router();
@@ -605,7 +605,7 @@ async function getKitById(kitId, { includeInactive = false } = {}) {
 }
 
 function canManageKits(req) {
-  return req.user?.role === "admin" || req.user?.role === "director_area";
+  return req.user?.role === "admin" || req.user?.role === "master" || req.user?.role === "director_area";
 }
 
 function requireKitManager(req, res, next) {
@@ -1289,11 +1289,15 @@ router.patch("/:id/estado", authorizePermissions(PERMISSIONS.PEDIDOS_MANAGE), as
     const transicionSupervisor = solicitaAclaracion || estadoObjetivoDb === "aprobado" || estadoObjetivoDb === "rechazado";
 
     if (transicionSupervisor) {
-      if (req.user.role !== "supervisor") {
+      const isSupervisorFlow = req.user.role === "supervisor" || req.user.role === "master";
+      if (!isSupervisorFlow) {
         return res.status(403).json({ error: "Solo un supervisor puede aprobar o rechazar pedidos" });
       }
 
-      if (!(await supervisorHasAssignedInstitution(req.user.sub, pedido.id_institucion))) {
+      if (
+        req.user.role === "supervisor" &&
+        !(await supervisorHasAssignedInstitution(req.user.sub, pedido.id_institucion))
+      ) {
         return res.status(403).json({ error: "El pedido no pertenece a una escuela asignada a este supervisor" });
       }
 
@@ -1462,7 +1466,7 @@ router.patch("/:id/cancelar", authorizePermissions(PERMISSIONS.PEDIDOS_CREATE), 
 // Aprobación final del Director de Área
 router.patch("/:id/aprobar-director", authorizePermissions(PERMISSIONS.SUPERVISION_MANAGE), async (req, res) => {
   try {
-    if (req.user.role !== "director_area") {
+    if (req.user.role !== "director_area" && !isAdminLikeRole(req.user.role)) {
       return res.status(403).json({ error: "Solo el Director de Área puede realizar esta aprobación." });
     }
 

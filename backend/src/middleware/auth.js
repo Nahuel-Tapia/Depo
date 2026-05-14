@@ -18,6 +18,11 @@ function authenticate(req, res, next) {
   }
 }
 
+function isAdminLikeRole(role) {
+  const r = String(role || "").toLowerCase();
+  return r === "admin" || r === "master";
+}
+
 function authorizeRoles(...roles) {
   return (req, res, next) => {
     if (!req.user || !roles.includes(req.user.role)) {
@@ -33,7 +38,7 @@ function authorizePermissions(...permissions) {
       return res.status(401).json({ error: "No autenticado" });
     }
 
-    if (String(req.user.role || "").toLowerCase() === "admin") {
+    if (isAdminLikeRole(req.user.role)) {
       return next();
     }
 
@@ -55,5 +60,6 @@ function authorizePermissions(...permissions) {
 module.exports = {
   authenticate,
   authorizeRoles,
-  authorizePermissions
+  authorizePermissions,
+  isAdminLikeRole
 };

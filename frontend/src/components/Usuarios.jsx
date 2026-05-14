@@ -280,9 +280,9 @@ export default function Usuarios() {
 
   const canChangeRole = hasPermission('users.role.update')
   const canToggleStatus = hasPermission('users.status.update')
-  const canDeleteUser = hasPermission('users.delete') && user?.role === 'admin'
+  const canDeleteUser = hasPermission('users.delete') && (user?.role === 'admin' || user?.role === 'master')
   const canCreateUsers = hasPermission('users.create') || isDirectorArea
-  const canEditUsers = user?.role === 'admin' || isDirectorArea
+  const canEditUsers = user?.role === 'admin' || user?.role === 'master' || isDirectorArea
   const canChangeRoleForCurrentUser = canChangeRole && !isDirectorArea
 
   const openEditModal = (targetUser) => {
@@ -423,7 +423,7 @@ export default function Usuarios() {
     }
   }
 
-  if (user?.role !== 'admin' && user?.role !== 'director_area') {
+  if (user?.role !== 'admin' && user?.role !== 'master' && user?.role !== 'director_area') {
     return (
       <div>
         <h2>{isDirectorArea ? 'Gestion de Supervisores' : 'Gestion de Usuarios'}</h2>

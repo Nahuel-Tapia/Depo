@@ -120,6 +120,10 @@ function toPositiveIntArray(values) {
 async function getDirectorAreaLevelFromRequest(req) {
   const tokenLevel = normalizeText(req?.user?.nivel_educativo || req?.user?.nivel);
   if (tokenLevel) return tokenLevel;
+  const acting = Number(req.directorAreaActingId);
+  if (Number.isFinite(acting) && acting > 0) {
+    return getDirectorAreaNivel(acting);
+  }
   return getDirectorAreaNivel(req?.user?.sub);
 }
 
@@ -246,7 +250,7 @@ async function validateZonePayload({ req, name, departamento, nivel_educativo, i
        AND z.activo = TRUE
        AND z.director_area_id = $2
        AND ($3::int IS NULL OR z.id <> $3)`,
-    [institutionIds, req.user.sub, currentZoneId]
+    [institutionIds, req.directorAreaActingId, currentZoneId]
   );
 
   if (conflictingAssignments.length > 0) {
@@ -431,6 +435,53 @@ async function ensureTables() {
 router.use(authenticate);
 router.use(authorizePermissions(PERMISSIONS.SUPERVISION_MANAGE));
 
+async function attachDirectorAreaActingContext(req, res, next) {
+  try {
+    const role = String(req.user?.role || "").toLowerCase();
+
+    if (role === "master") {
+      const pick = Number(req.query.director_area_id || req.body?.director_area_id || 0);
+      if (Number.isInteger(pick) && pick > 0) {
+        const row = await get(
+          `SELECT id_usuario, NULLIF(BTRIM(jurisdiccion), '') AS jurisdiccion
+           FROM usuario
+           WHERE id_usuario = ? AND role = 'director_area' AND (activo IS NULL OR activo = TRUE)`,
+          [pick]
+        );
+        if (row?.id_usuario) {
+          req.directorAreaActingId = Number(row.id_usuario);
+          req.directorAreaActingJurisdiccion = row.jurisdiccion || null;
+          return next();
+        }
+      }
+      const first = await get(
+        `SELECT id_usuario, NULLIF(BTRIM(jurisdiccion), '') AS jurisdiccion
+         FROM usuario
+         WHERE role = 'director_area' AND (activo IS NULL OR activo = TRUE)
+         ORDER BY id_usuario ASC
+         LIMIT 1`
+      );
+      if (!first?.id_usuario) {
+        return res.status(400).json({
+          error:
+            "Como usuario master necesitás al menos un Director de Área en el sistema, o pasá director_area_id en query o body."
+        });
+      }
+      req.directorAreaActingId = Number(first.id_usuario);
+      req.directorAreaActingJurisdiccion = first.jurisdiccion || null;
+      return next();
+    }
+
+    req.directorAreaActingId = Number(req.user.sub);
+    req.directorAreaActingJurisdiccion = req.user.jurisdiccion || null;
+    return next();
+  } catch (err) {
+    return next(err);
+  }
+}
+
+router.use(attachDirectorAreaActingContext);
+
 router.get("/catalogo", async (req, res) => {
   try {
     await ensureTables();
@@ -458,7 +509,7 @@ router.get("/catalogo", async (req, res) => {
          AND LOWER(COALESCE(nivel_educativo, '')) = LOWER($2)
          AND director_area_id = $1
        ORDER BY nombre, apellido`,
-      [req.user.sub, directorNivel]
+      [req.directorAreaActingId, directorNivel]
     );
 
     const escuelas = await all(
@@ -495,7 +546,7 @@ router.get("/asignaciones", async (req, res) => {
        JOIN institucion i ON i.id_institucion = a.institucion_id
        WHERE a.director_area_id = $1
        ORDER BY a.created_at DESC`,
-      [req.user.sub]
+      [req.directorAreaActingId]
     );
 
     res.json({ asignaciones });
@@ -510,7 +561,7 @@ router.delete("/asignacion/:id", async (req, res) => {
     await ensureTables();
     const { id } = req.params;
 
-    await run("DELETE FROM supervisor_escuela_asignacion WHERE id = $1 AND director_area_id = $2", [id, req.user.sub]);
+    await run("DELETE FROM supervisor_escuela_asignacion WHERE id = $1 AND director_area_id = $2", [id, req.directorAreaActingId]);
     res.json({ ok: true });
   } catch (err) {
     console.error("Error al eliminar asignacion:", err);
@@ -569,7 +620,7 @@ router.post("/asignar", async (req, res) => {
       `INSERT INTO supervisor_escuela_asignacion (supervisor_id, institucion_id, director_area_id)
        VALUES ($1, $2, $3)
        ON CONFLICT DO NOTHING`,
-      [supervisorId, institucionId, req.user.sub]
+      [supervisorId, institucionId, req.directorAreaActingId]
     );
 
     res.json({ ok: true });
@@ -591,7 +642,7 @@ router.delete("/desasignar", async (req, res) => {
 
     await run(
       "DELETE FROM supervisor_escuela_asignacion WHERE supervisor_id = $1 AND institucion_id = $2 AND director_area_id = $3",
-      [supervisorId, institucionId, req.user.sub]
+      [supervisorId, institucionId, req.directorAreaActingId]
     );
 
     res.json({ ok: true });
@@ -617,7 +668,7 @@ router.get("/supervisores", async (req, res) => {
          AND LOWER(COALESCE(nivel_educativo, '')) = LOWER($1)
          AND director_area_id = $2
        ORDER BY nombre, apellido`,
-      [directorNivel, req.user.sub]
+      [directorNivel, req.directorAreaActingId]
     );
 
     res.json({ supervisores });
@@ -646,7 +697,7 @@ router.post("/supervisores", async (req, res) => {
       `INSERT INTO usuario (nombre, apellido, email, dni, password, role, activo, nivel_educativo, director_area_id, jurisdiccion)
        VALUES ($1, $2, $3, $4, $5, 'supervisor', TRUE, $6, $7, $8)
        RETURNING id_usuario`,
-      [nombre, apellido, email, dni, hash, directorNivel, req.user.sub, req.user.jurisdiccion || null]
+      [nombre, apellido, email, dni, hash, directorNivel, req.directorAreaActingId, req.directorAreaActingJurisdiccion || req.user.jurisdiccion || null]
     );
 
     res.status(201).json({ id: result.lastID, nombre, apellido, email, role: "supervisor" });
@@ -666,7 +717,7 @@ router.get("/edificios", async (req, res) => {
     await ensureTables();
 
     const nivelColumn = await getInstitucionNivelColumn();
-    const directorNivel = await getDirectorAreaNivel(req.user.sub);
+    const directorNivel = await getDirectorAreaNivel(req.directorAreaActingId);
 
     if (!nivelColumn) {
       return res.status(500).json({ error: "No se encontro la columna de nivel educativo en instituciones" });
@@ -710,7 +761,7 @@ router.get("/edificio/:edificioId/escuelas", async (req, res) => {
 
     const { edificioId } = req.params;
     const nivelColumn = await getInstitucionNivelColumn();
-    const directorNivel = await getDirectorAreaNivel(req.user.sub);
+    const directorNivel = await getDirectorAreaNivel(req.directorAreaActingId);
 
     if (!nivelColumn) {
       return res.status(500).json({ error: "No se encontro la columna de nivel educativo" });
@@ -757,7 +808,7 @@ router.get("/zonas-edificio", async (req, res) => {
     }
     const departamentoSql = await getDepartamentoSql();
     if (!departamentoSql.hasDepartamento) {
-      const zonas = await getDirectorAreaZones(req.user.sub, nivelColumn);
+      const zonas = await getDirectorAreaZones(req.directorAreaActingId, nivelColumn);
       return res.json({
         departamentos: [],
         nivel_educativo: directorNivel,
@@ -782,7 +833,7 @@ router.get("/zonas-edificio", async (req, res) => {
       ORDER BY departamento, i.nombre
     `, [directorNivel]);
 
-    const zonas = await getDirectorAreaZones(req.user.sub, nivelColumn);
+    const zonas = await getDirectorAreaZones(req.directorAreaActingId, nivelColumn);
 
     const deptos = Array.from(
       new Set(
@@ -826,7 +877,7 @@ router.get("/solicitudes", async (req, res) => {
   try {
     await ensureTables();
     // For now return an empty list; backend can be extended to fetch real data
-    const directorAreaId = req.user.sub;
+    const directorAreaId = req.directorAreaActingId;
     const solicitudes = await all(`
       SELECT p.id_pedido AS id,
              p.fecha_creacion AS fecha,
@@ -880,7 +931,7 @@ router.post("/zonas", async (req, res) => {
       `INSERT INTO zona (name, nivel_educativo, departamento, director_area_id, activo, created_at)
        VALUES (?, ?, ?, ?, TRUE, NOW())
        RETURNING id`,
-      [zoneName, requestedLevel, departamentoFinal, req.user.sub]
+      [zoneName, requestedLevel, departamentoFinal, req.directorAreaActingId]
     );
 
     const zonaId = result.lastID || result.rows?.[0]?.id || null;
@@ -889,7 +940,7 @@ router.post("/zonas", async (req, res) => {
     }
 
     await replaceZoneInstitutions(zonaId, institutionIds);
-    const zone = await getDirectorAreaZoneById(req.user.sub, zonaId, nivelColumn);
+    const zone = await getDirectorAreaZoneById(req.directorAreaActingId, zonaId, nivelColumn);
 
     return res.status(201).json({ id: zonaId, zone });
   } catch (err) {
@@ -907,7 +958,7 @@ router.patch("/zonas/:zonaId", async (req, res) => {
       `SELECT id
        FROM zona
        WHERE id = ? AND director_area_id = ?`,
-      [parsedZoneId, req.user.sub]
+      [parsedZoneId, req.directorAreaActingId]
     );
 
     if (!zona) {
@@ -925,12 +976,12 @@ router.patch("/zonas/:zonaId", async (req, res) => {
       `UPDATE zona
        SET name = ?, departamento = ?, nivel_educativo = ?
        WHERE id = ? AND director_area_id = ?`,
-      [zoneName, departamentoFinal, requestedLevel, parsedZoneId, req.user.sub]
+      [zoneName, departamentoFinal, requestedLevel, parsedZoneId, req.directorAreaActingId]
     );
 
     await replaceZoneInstitutions(parsedZoneId, institutionIds);
-    await syncSupervisorAssignmentsForDirector(req.user.sub);
-    const zone = await getDirectorAreaZoneById(req.user.sub, parsedZoneId, nivelColumn);
+    await syncSupervisorAssignmentsForDirector(req.directorAreaActingId);
+    const zone = await getDirectorAreaZoneById(req.directorAreaActingId, parsedZoneId, nivelColumn);
 
     return res.json({ ok: true, zone });
   } catch (err) {
@@ -948,15 +999,15 @@ router.delete("/zonas/:zonaId", async (req, res) => {
       `SELECT id
        FROM zona
        WHERE id = ? AND director_area_id = ?`,
-      [parsedZoneId, req.user.sub]
+      [parsedZoneId, req.directorAreaActingId]
     );
 
     if (!zona) {
       return res.status(404).json({ error: "Zona no encontrada o no autorizada" });
     }
 
-    await run("DELETE FROM zona WHERE id = ? AND director_area_id = ?", [parsedZoneId, req.user.sub]);
-    await syncSupervisorAssignmentsForDirector(req.user.sub);
+    await run("DELETE FROM zona WHERE id = ? AND director_area_id = ?", [parsedZoneId, req.directorAreaActingId]);
+    await syncSupervisorAssignmentsForDirector(req.directorAreaActingId);
     return res.json({ ok: true, id: parsedZoneId });
   } catch (err) {
     console.error("Error al eliminar zona:", err);
@@ -976,7 +1027,7 @@ router.post("/zonas/:zonaId/supervisores", async (req, res) => {
       `SELECT id, director_area_id, nivel_educativo
        FROM zona
        WHERE id = ? AND director_area_id = ?`,
-      [parsedZoneId, req.user.sub]
+      [parsedZoneId, req.directorAreaActingId]
     );
 
     if (!zona) {
@@ -1002,7 +1053,7 @@ router.post("/zonas/:zonaId/supervisores", async (req, res) => {
       if (
         supervisor.role !== "supervisor" ||
         supervisor.activo !== true ||
-        supervisor.director_area_id !== req.user.sub ||
+        supervisor.director_area_id !== req.directorAreaActingId ||
         normalizeLevel(supervisor.nivel_educativo) !== normalizeLevel(zona.nivel_educativo)
       ) {
         return res.status(400).json({ error: "Solo puedes asignar supervisores activos de tu nivel y direccion de area" });
@@ -1010,8 +1061,8 @@ router.post("/zonas/:zonaId/supervisores", async (req, res) => {
     }
 
     await replaceZoneSupervisors(parsedZoneId, uniqueSupervisorIds);
-    await syncSupervisorAssignmentsForDirector(req.user.sub);
-    const zone = await getDirectorAreaZoneById(req.user.sub, parsedZoneId, await getInstitucionNivelColumn());
+    await syncSupervisorAssignmentsForDirector(req.directorAreaActingId);
+    const zone = await getDirectorAreaZoneById(req.directorAreaActingId, parsedZoneId, await getInstitucionNivelColumn());
 
     return res.json({ ok: true, zone });
   } catch (err) {
