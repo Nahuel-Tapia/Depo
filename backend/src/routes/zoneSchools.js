@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { authenticate } = require('../middleware/auth');
+const { authenticate, isAdminLikeRole } = require('../middleware/auth');
 const { all, run, get } = require('../db.pg');
 
 router.use(authenticate);
@@ -15,7 +15,10 @@ router.post('/:zoneId/escuelas', async (req, res) => {
     }
     const zone = await get('SELECT id, nivel_educativo, director_area_id FROM zona WHERE id = $1', [zoneId]);
     if (!zone) return res.status(404).json({ error: 'Zona no encontrada.' });
-    if (req.user.role !== 'director_area' || req.user.sub !== zone.director_area_id) {
+    const ownsOrElevated =
+      isAdminLikeRole(req.user?.role) ||
+      (req.user.role === 'director_area' && req.user.sub === zone.director_area_id);
+    if (!ownsOrElevated) {
       return res.status(403).json({ error: 'No autorizado.' });
     }
     const placeholders = escuelaIds.map((_, i) => `$${i + 1}`).join(',');

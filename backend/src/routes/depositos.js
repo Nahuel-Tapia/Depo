@@ -1,6 +1,6 @@
 const express = require("express");
 const { all, get, run, pool } = require("../db.pg");
-const { authenticate, authorizePermissions } = require("../middleware/auth");
+const { authenticate, authorizePermissions, isAdminLikeRole } = require("../middleware/auth");
 const { PERMISSIONS } = require("../permissions");
 
 const router = express.Router();
@@ -347,7 +347,7 @@ router.post("/:id/ingreso", authorizePermissions(PERMISSIONS.STOCK_MOVEMENT_CREA
 
     if (producto.requiere_autorizacion) {
       const esCapsula = deposito.tipo === "capsula";
-      if (esCapsula && req.user.role !== "admin") {
+      if (esCapsula && !isAdminLikeRole(req.user.role)) {
         return res.status(403).json({ error: "Requiere autorización para ingresos a Cápsula" });
       }
     }
@@ -414,7 +414,7 @@ router.post("/:id/egreso", authorizePermissions(PERMISSIONS.STOCK_MOVEMENT_CREAT
     const producto = await get("SELECT requiere_autorizacion FROM producto WHERE id_producto = $1", [productoIdNum]);
     if (producto.requiere_autorizacion) {
       const esCapsula = deposito.tipo === "capsula";
-      if (esCapsula && req.user.role !== "admin") {
+      if (esCapsula && !isAdminLikeRole(req.user.role)) {
         return res.status(403).json({ error: "Requiere autorización para egresar de Cápsula" });
       }
     }

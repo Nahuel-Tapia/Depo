@@ -17,8 +17,8 @@ export default function Depositos() {
   const [productos, setProductos] = useState([])
   const [form, setForm] = useState({ id_producto: '', cantidad: '', destino_id: '', motivo: '' })
 
-  const canMove = hasPermission('stock.movement.create') || user?.role === 'admin'
-  const esAdmin = user?.role === 'admin'
+  const canMove = hasPermission('stock.movement.create') || user?.role === 'admin' || user?.role === 'master'
+  const esAdmin = user?.role === 'admin' || user?.role === 'master'
   const depositosMostrar = depositos
 
   const loadData = useCallback(async () => {

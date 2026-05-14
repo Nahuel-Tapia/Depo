@@ -1,7 +1,7 @@
 const express = require("express");
 const bcrypt = require("bcryptjs");
 const { all, get, run } = require("../db.pg");
-const { authenticate, authorizePermissions } = require("../middleware/auth");
+const { authenticate, authorizePermissions, isAdminLikeRole } = require("../middleware/auth");
 const { PERMISSIONS } = require("../permissions");
 const { roleExists, normalizeRoleName } = require("../services/roles");
 
@@ -115,7 +115,7 @@ async function getManagedSupervisorForDirector(req, targetUserId) {
 async function ensureUserAccessForUpdate(req, targetUserId) {
   const authRole = String(req?.user?.role || "").toLowerCase();
 
-  if (authRole === "admin") {
+  if (isAdminLikeRole(authRole)) {
     const existing = await get(
       "SELECT id_usuario, role, id_institucion, nivel_educativo, director_area_id, jurisdiccion FROM usuario WHERE id_usuario = ?",
       [targetUserId]

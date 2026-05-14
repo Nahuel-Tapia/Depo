@@ -1,12 +1,17 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
-import { apiFetch } from '../api'
+import { apiFetch, withDirectorAreaQuery } from '../api'
 
 const AuthContext = createContext(null)
+
+const MASTER_DIRECTOR_STORAGE_KEY = 'depo_master_director_area_id'
 
 export function AuthProvider({ children }) {
   const [token, setToken] = useState(() => localStorage.getItem('token') || null)
   const [user, setUser] = useState(() => JSON.parse(localStorage.getItem('user') || 'null'))
   const [permissions, setPermissions] = useState([])
+  const [masterDirectorAreaId, setMasterDirectorAreaIdState] = useState(() =>
+    typeof window !== 'undefined' ? localStorage.getItem(MASTER_DIRECTOR_STORAGE_KEY) || '' : ''
+  )
 
   const login = useCallback((newToken, newUser) => {
     setToken(newToken)
@@ -19,13 +24,34 @@ export function AuthProvider({ children }) {
     setToken(null)
     setUser(null)
     setPermissions([])
+    setMasterDirectorAreaIdState('')
     localStorage.removeItem('token')
     localStorage.removeItem('user')
+    localStorage.removeItem(MASTER_DIRECTOR_STORAGE_KEY)
   }, [])
 
-  const hasPermission = useCallback((perm) => {
-    return permissions.includes(perm)
-  }, [permissions])
+  const hasPermission = useCallback(
+    (perm) => {
+      if (user?.role === 'master') return true
+      return permissions.includes(perm)
+    },
+    [permissions, user]
+  )
+
+  const setMasterDirectorAreaId = useCallback((id) => {
+    const v = id == null || id === '' ? '' : String(id)
+    setMasterDirectorAreaIdState(v)
+    if (v) localStorage.setItem(MASTER_DIRECTOR_STORAGE_KEY, v)
+    else localStorage.removeItem(MASTER_DIRECTOR_STORAGE_KEY)
+  }, [])
+
+  const withMasterDirector = useCallback(
+    (url) => {
+      if (user?.role !== 'master' || !masterDirectorAreaId) return url
+      return withDirectorAreaQuery(url, masterDirectorAreaId)
+    },
+    [user?.role, masterDirectorAreaId]
+  )
 
   const loadPermissions = useCallback(async () => {
     if (!token) {
@@ -54,7 +80,20 @@ export function AuthProvider({ children }) {
   }, [token, loadPermissions])
 
   return (
-    <AuthContext.Provider value={{ token, user, permissions, login, logout, hasPermission, loadPermissions }}>
+    <AuthContext.Provider
+      value={{
+        token,
+        user,
+        permissions,
+        login,
+        logout,
+        hasPermission,
+        loadPermissions,
+        masterDirectorAreaId,
+        setMasterDirectorAreaId,
+        withMasterDirector,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   )

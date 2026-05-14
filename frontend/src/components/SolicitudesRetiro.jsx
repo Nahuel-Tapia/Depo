@@ -120,7 +120,7 @@ export default function SolicitudesRetiro({ embedded = false }) {
   const [operatorPedidosLoading, setOperatorPedidosLoading] = useState(false)
 
   const isDirectivo = user?.role === 'directivo'
-  const isOperador = user?.role === 'operador' || user?.role === 'admin'
+  const isOperador = user?.role === 'operador' || user?.role === 'admin' || user?.role === 'master'
 
   const selectedPedido = useMemo(
     () => pedidos.find((pedido) => Number(pedido.id) === Number(selectedPedidoId)) || null,
