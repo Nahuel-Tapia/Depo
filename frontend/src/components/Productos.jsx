@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../api'
 import PrintButton from './PrintButton'
+import FilterSortButton from './FilterSortButton'
 
 export default function Productos() {
   const { token, user, hasPermission } = useAuth()
@@ -12,6 +13,10 @@ export default function Productos() {
   const [editModal, setEditModal] = useState(null)
   const [deleteModal, setDeleteModal] = useState(null)
   const [detailModal, setDetailModal] = useState(null)
+  const [searchText, setSearchText] = useState('')
+  const [filterCategoria, setFilterCategoria] = useState('')
+  const [filterEstado, setFilterEstado] = useState('')
+  const [sortBy, setSortBy] = useState('nombre_asc')
   const [form, setForm] = useState({ nombre: '', unidad_medida: 'unidad', stock_minimo: 0, id_categoria: '' })
   const [vencimientosProximos, setVencimientosProximos] = useState(new Set())
   const canDeleteProductos = hasPermission('productos.delete') || user?.role === 'admin'
@@ -180,11 +185,91 @@ export default function Productos() {
 
   const printRef = useRef(null)
 
+  const getProductoEstado = (producto) => {
+    const stock = producto.stock_total ?? producto.stock_actual ?? 0
+    const minimo = producto.stock_minimo ?? 0
+    if (stock <= 0 || (minimo > 0 && stock <= minimo)) return 'stock_bajo'
+    if (vencimientosProximos.has(Number(producto.id))) return 'vence_proximo'
+    return 'ok'
+  }
+
+  const productosVista = useMemo(() => {
+    const search = searchText.trim().toLowerCase()
+
+    return [...productos]
+      .filter((producto) => {
+        const matchesSearch = !search || [
+          producto.nombre,
+          producto.unidad_medida,
+          producto.deposito,
+          producto.categoria_nombre,
+        ].some((value) => String(value || '').toLowerCase().includes(search))
+
+        return matchesSearch &&
+          (!filterCategoria || String(producto.categoria_nombre || '') === filterCategoria) &&
+          (!filterEstado || getProductoEstado(producto) === filterEstado)
+      })
+      .sort((a, b) => {
+        if (sortBy === 'stock_desc') return Number(b.stock_total ?? b.stock_actual ?? 0) - Number(a.stock_total ?? a.stock_actual ?? 0)
+        if (sortBy === 'stock_asc') return Number(a.stock_total ?? a.stock_actual ?? 0) - Number(b.stock_total ?? b.stock_actual ?? 0)
+        if (sortBy === 'categoria_asc') return String(a.categoria_nombre || '').localeCompare(String(b.categoria_nombre || ''), 'es', { sensitivity: 'base' })
+        if (sortBy === 'deposito_asc') return String(a.deposito || '').localeCompare(String(b.deposito || ''), 'es', { sensitivity: 'base' })
+        return String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es', { sensitivity: 'base' })
+      })
+  }, [productos, searchText, filterCategoria, filterEstado, sortBy, vencimientosProximos])
+
+  const productoFilterCount = [searchText.trim(), filterCategoria, filterEstado].filter(Boolean).length
+
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <h2>Gestión de Productos</h2>
-        <PrintButton targetRef={printRef} title="Inventario de Productos" />
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <FilterSortButton
+            searchValue={searchText}
+            searchPlaceholder="Buscar producto, deposito o categoria..."
+            onSearchChange={setSearchText}
+            filters={[
+              {
+                key: 'categoria',
+                label: 'Categoria',
+                value: filterCategoria,
+                onChange: setFilterCategoria,
+                emptyLabel: 'Todas',
+                options: categorias.map((cat) => ({ value: String(cat.nombre), label: cat.nombre })),
+              },
+              {
+                key: 'estado',
+                label: 'Estado',
+                value: filterEstado,
+                onChange: setFilterEstado,
+                emptyLabel: 'Todos',
+                options: [
+                  { value: 'ok', label: 'OK' },
+                  { value: 'stock_bajo', label: 'Stock bajo' },
+                  { value: 'vence_proximo', label: 'Proximo a vencer' },
+                ],
+              },
+            ]}
+            sortValue={sortBy}
+            sortOptions={[
+              { value: 'nombre_asc', label: 'Nombre (A-Z)' },
+              { value: 'categoria_asc', label: 'Categoria' },
+              { value: 'deposito_asc', label: 'Deposito' },
+              { value: 'stock_desc', label: 'Stock mayor' },
+              { value: 'stock_asc', label: 'Stock menor' },
+            ]}
+            onSortChange={setSortBy}
+            onClear={() => {
+              setSearchText('')
+              setFilterCategoria('')
+              setFilterEstado('')
+              setSortBy('nombre_asc')
+            }}
+            activeCount={productoFilterCount}
+          />
+          <PrintButton targetRef={printRef} title="Inventario de Productos" />
+        </div>
       </div>
 
       {hasPermission('productos.create') && (
@@ -219,7 +304,7 @@ export default function Productos() {
             </tr>
           </thead>
         <tbody>
-          {productos.map(p => (
+          {productosVista.map(p => (
             <tr key={p.id}>
               <td>{p.id}</td>
               <td>{p.nombre}</td>

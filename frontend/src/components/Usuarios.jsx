@@ -122,7 +122,7 @@ export default function Usuarios() {
     loadRoles()
   }, [])
 
-  let availableRoles = roles.length ? roles : ['consulta', 'operador', 'supervisor', 'director_area', 'directivo', 'admin']
+  let availableRoles = roles.length ? roles : ['consulta', 'operador', 'operador_escolar', 'supervisor', 'director_area', 'directivo', 'admin']
   if (isDirectorArea) {
     availableRoles = ['supervisor']
   }
@@ -158,6 +158,7 @@ export default function Usuarios() {
       director_area: 'Director de Area',
       directivo: 'Directivo',
       operador: 'Operador',
+      operador_escolar: 'Operador Escolar',
       consulta: 'Consulta'
     }
     return labels[normalized] || normalized.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())

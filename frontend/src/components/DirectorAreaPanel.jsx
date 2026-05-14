@@ -118,6 +118,7 @@ export default function DirectorAreaPanel({ initialSection }) {
               solicitudes={solicitudes}
               submissionStatus={submissionStatus}
               nivelEducativo={nivelEducativo}
+              asignaciones={asignaciones}
               onNavigate={setActiveSection}
             />
           </section>

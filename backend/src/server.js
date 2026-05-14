@@ -50,7 +50,8 @@ const app = express();
 const PORT = process.env.PORT || 4000;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Servir el build de React (frontend/dist)
 const frontendDistPath = path.join(__dirname, "..", "..", "frontend", "dist");
@@ -58,6 +59,13 @@ const frontendPublicPath = path.join(__dirname, "..", "..", "frontend", "public"
 const fs = require("fs");
 const staticPath = fs.existsSync(frontendDistPath) ? frontendDistPath : frontendPublicPath;
 app.use(express.static(staticPath));
+
+// Servir fotos/evidencias subidas (uploads)
+const uploadsPath = path.join(__dirname, '..', '..', 'uploads');
+if (!fs.existsSync(uploadsPath)) {
+  fs.mkdirSync(uploadsPath, { recursive: true });
+}
+app.use('/uploads', express.static(uploadsPath));
 
 app.get("/api/health", (req, res) => {
   res.json({ ok: true });

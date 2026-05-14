@@ -2,6 +2,23 @@ const express = require("express");
 const { all, get, run, pool } = require("../db.pg");
 const { authenticate, authorizePermissions } = require("../middleware/auth");
 const { PERMISSIONS } = require("../permissions");
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+
+const uploadsDir = path.join(__dirname, '..', '..', 'uploads');
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+    cb(null, uploadsDir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname) || '';
+    const name = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${ext}`;
+    cb(null, name);
+  }
+});
+const upload = multer({ storage });
 
 const router = express.Router();
 
@@ -13,7 +30,7 @@ router.use(authenticate);
 // Listar movimientos
 router.get("/", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW), async (req, res) => {
   try {
-    const { producto_id, id_deposito, tipo, limit = 50, offset = 0 } = req.query;
+    const { producto_id, id_deposito, tipo, desde, hasta, usuario, limit = 50, offset = 0 } = req.query;
 
     let query = `
       SELECT 
@@ -94,7 +111,7 @@ router.get("/:id", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW), async (re
       LEFT JOIN proveedor pr ON m.id_proveedor = pr.id_proveedor
       WHERE m.id_movimiento = ?
     `, [id]);
-    
+
     if (!movimiento) {
       return res.status(404).json({ error: "Movimiento no encontrado" });
     }
@@ -107,6 +124,9 @@ router.get("/:id", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW), async (re
 
 // Crear movimiento
 router.post("/", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), async (req, res) => {
+  if (req.user.role === "operador_escolar") {
+    return res.status(403).json({ error: "No tenés permisos para realizar movimientos manuales" });
+  }
   try {
     const { producto_id, tipo, cantidad, motivo } = req.body;
 
@@ -144,6 +164,9 @@ router.post("/", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), async (re
 
 // Crear lote de movimientos
 router.post("/lote", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), async (req, res) => {
+  if (req.user.role === "operador_escolar") {
+    return res.status(403).json({ error: "No tenés permisos para realizar movimientos manuales" });
+  }
   try {
     const { tipo, motivo, movimientos } = req.body;
 
@@ -190,6 +213,9 @@ router.post("/lote", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), async
 
 // Crear movimiento directo (egreso/ingreso)
 router.post("/directo", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), async (req, res) => {
+  if (req.user.role === "operador_escolar") {
+    return res.status(403).json({ error: "No tenés permisos para realizar movimientos manuales" });
+  }
   const client = await pool.connect();
   try {
     const { tipo, institucion_id, cargo_retira, proveedor_id, motivo, productos, id_deposito } = req.body;
@@ -316,5 +342,86 @@ router.get("/stats/resumen", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW),
     return res.status(500).json({ error: "No se pudo obtener estadísticas" });
   }
 });
+
+// Registrar baja por daño (subir foto opcional)
+router.post(
+  "/baja",
+  authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE),
+  upload.single('foto'),
+  async (req, res) => {
+    const client = await pool.connect();
+    try {
+      // Asegurarse de que la tabla de bajas exista (por compatibilidad si no se corrieron migraciones)
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS public.baja_movimientos (
+          id SERIAL PRIMARY KEY,
+          id_producto INTEGER NOT NULL,
+          cantidad INTEGER NOT NULL DEFAULT 1,
+          motivo TEXT,
+          foto_path VARCHAR(255),
+          id_usuario INTEGER NOT NULL,
+          "createdAt" TIMESTAMP,
+          "updatedAt" TIMESTAMP
+        )
+      `);
+
+      const chk = await client.query("SELECT to_regclass('public.baja_movimientos') as exists");
+      console.log('baja_movimientos exists check:', chk.rows[0]);
+
+      const { producto_id, cantidad = 1, motivo } = req.body;
+      const cantidadNum = parseInt(cantidad, 10) || 1;
+
+      if (!producto_id) {
+        client.release();
+        return res.status(400).json({ error: 'Falta producto_id' });
+      }
+
+      const prodRes = await client.query(
+        'SELECT id_producto, nombre, COALESCE(stock_actual, 0) AS stock_actual FROM producto WHERE id_producto = $1',
+        [producto_id]
+      );
+      if (prodRes.rowCount === 0) {
+        client.release();
+        return res.status(404).json({ error: 'Producto no encontrado' });
+      }
+      const producto = prodRes.rows[0];
+
+      if (Number(producto.stock_actual) < cantidadNum) {
+        client.release();
+        return res.status(400).json({ error: 'Stock insuficiente para dar de baja' });
+      }
+
+      await client.query('BEGIN');
+
+      const fotoPath = req.file ? `/uploads/${req.file.filename}` : null;
+
+      const bajaRes = await client.query(
+        'INSERT INTO baja_movimientos (id_producto, cantidad, motivo, foto_path, id_usuario) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+        [producto_id, cantidadNum, motivo || null, fotoPath, req.user.sub]
+      );
+
+      const movRes = await client.query(
+        `INSERT INTO movimiento_stock (id_producto, tipo, cantidad, estado_producto, id_usuario, motivo, fecha_movimiento)
+         VALUES ($1, $2, $3, $4, $5, $6, NOW()) RETURNING id_movimiento`,
+        [producto_id, 'ajuste', cantidadNum, 'dañado', req.user.sub, motivo ? `Baja: ${motivo}` : 'Baja de mercadería']
+      );
+
+      await client.query(
+        'UPDATE producto SET stock_actual = COALESCE(stock_actual, 0) - $1 WHERE id_producto = $2',
+        [cantidadNum, producto_id]
+      );
+
+      await client.query('COMMIT');
+
+      return res.status(201).json({ baja_id: bajaRes.rows[0].id, movimiento_id: movRes.rows[0].id_movimiento });
+    } catch (err) {
+      try { await client.query('ROLLBACK'); } catch (_) { }
+      console.error('Error registrando baja:', err);
+      return res.status(500).json({ error: 'No se pudo registrar la baja' });
+    } finally {
+      client.release();
+    }
+  }
+);
 
 module.exports = router;
