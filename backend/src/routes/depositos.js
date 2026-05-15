@@ -9,6 +9,73 @@ router.use(authenticate);
 
 let schemaReady = false;
 let schemaPromise = null;
+const columnExistsCache = new Map();
+
+async function columnExists(tableName, columnName) {
+  const cacheKey = `${tableName}.${columnName}`;
+  if (columnExistsCache.has(cacheKey)) return columnExistsCache.get(cacheKey);
+
+  const row = await get(
+    `SELECT EXISTS (
+       SELECT 1
+       FROM information_schema.columns
+       WHERE table_schema = 'public'
+         AND table_name = $1
+         AND column_name = $2
+     ) AS column_exists`,
+    [tableName, columnName]
+  );
+
+  const exists = Boolean(row?.column_exists);
+  columnExistsCache.set(cacheKey, exists);
+  return exists;
+}
+
+async function tableExists(tableName) {
+  const row = await get(`SELECT to_regclass($1) AS regclass`, [`public.${tableName}`]);
+  return Boolean(row?.regclass);
+}
+
+async function getInstitucionNivelExpr(alias = "i") {
+  if (await columnExists("institucion", "direccion_area")) return `${alias}.direccion_area`;
+  if (await columnExists("institucion", "nivel_educativo")) return `${alias}.nivel_educativo`;
+  if (await columnExists("institucion", "nivel")) return `${alias}.nivel`;
+  return "NULL::text";
+}
+
+async function getDepartamentoSql(alias = "i") {
+  const [
+    institucionDepartamento,
+    edificioDepartamento,
+    edificioDireccionId,
+    direccionDepartamento,
+  ] = await Promise.all([
+    columnExists("institucion", "departamento"),
+    columnExists("edificio", "departamento"),
+    columnExists("edificio", "id_direccion"),
+    columnExists("direccion", "departamento"),
+  ]);
+
+  const joins = [];
+  const sources = [];
+  joins.push(`LEFT JOIN edificio e ON ${alias}.id_edificio = e.id_edificio`);
+
+  if (institucionDepartamento) {
+    sources.push(`NULLIF(TRIM(${alias}.departamento), '')`);
+  }
+  if (edificioDireccionId && direccionDepartamento) {
+    joins.push("LEFT JOIN direccion d ON e.id_direccion = d.id_direccion");
+    sources.push("NULLIF(TRIM(d.departamento), '')");
+  }
+  if (edificioDepartamento) {
+    sources.push("NULLIF(TRIM(e.departamento), '')");
+  }
+
+  return {
+    joins: joins.join("\n"),
+    expression: sources.length > 0 ? `COALESCE(${sources.join(", ")})` : "NULL::text",
+  };
+}
 
 async function ensureDepositosSchema() {
   if (schemaReady) return;
@@ -42,6 +109,8 @@ async function ensureDepositosSchema() {
       await run(`ALTER TABLE licitacion_publicada ADD COLUMN IF NOT EXISTS items JSONB NOT NULL DEFAULT '[]'::jsonb`);
       await run(`ALTER TABLE licitacion_publicada ADD COLUMN IF NOT EXISTS fecha_publicacion TIMESTAMP DEFAULT NOW()`);
       await run(`ALTER TABLE licitacion_publicada ADD COLUMN IF NOT EXISTS estado VARCHAR(30) NOT NULL DEFAULT 'publicada'`);
+      await run(`ALTER TABLE licitacion_publicada ADD COLUMN IF NOT EXISTS titulo VARCHAR(255)`);
+      await run(`ALTER TABLE licitacion_publicada ADD COLUMN IF NOT EXISTS motivo TEXT`);
 
       await run(`
         CREATE TABLE IF NOT EXISTS remito_licitacion (
@@ -95,6 +164,38 @@ async function ensureDepositosSchema() {
           id_usuario INT,
           observaciones TEXT,
           created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+
+      await run(`
+        CREATE TABLE IF NOT EXISTS distribucion_lote (
+          id SERIAL PRIMARY KEY,
+          anio INT NOT NULL,
+          zona_id INT,
+          id_deposito INT NOT NULL,
+          estado VARCHAR(30) NOT NULL DEFAULT 'en_transito',
+          observaciones TEXT,
+          usuario_id INT,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+
+      await run(`
+        CREATE TABLE IF NOT EXISTS distribucion_lote_item (
+          id SERIAL PRIMARY KEY,
+          lote_id INT NOT NULL REFERENCES distribucion_lote(id) ON DELETE CASCADE,
+          id_institucion INT NOT NULL,
+          id_producto INT NOT NULL,
+          cantidad_planificada NUMERIC(12,2) NOT NULL,
+          cantidad_recibida NUMERIC(12,2),
+          estado_recepcion VARCHAR(20) NOT NULL DEFAULT 'pendiente',
+          observaciones_directivo TEXT,
+          reclamo_directivo TEXT,
+          directivo_usuario_id INT,
+          recibido_at TIMESTAMP,
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW(),
+          UNIQUE (lote_id, id_institucion, id_producto)
         )
       `);
 
@@ -445,10 +546,28 @@ async function getRecepcionesLicitacion(req, res) {
   try {
     await ensureDepositosSchema();
     const rows = await all(
-      `SELECT id, anio, fecha_publicacion, estado
-       FROM licitacion_publicada
-       WHERE estado IN ('en_deposito', 'completada')
-       ORDER BY fecha_publicacion DESC`
+      `SELECT lp.id,
+              lp.anio,
+              lp.fecha_publicacion,
+              lp.estado,
+              lp.titulo,
+              lp.motivo,
+              COALESCE(NULLIF(BTRIM(lp.motivo), ''), NULLIF(BTRIM(lp.titulo), ''), 'Licitación Anual ' || lp.anio::text) AS titulo_display,
+              COALESCE(prov_data.proveedores, 'Sin proveedor asignado') AS proveedores
+       FROM licitacion_publicada lp
+       LEFT JOIN LATERAL (
+         SELECT string_agg(DISTINCT pr.nombre, ', ' ORDER BY pr.nombre) AS proveedores
+         FROM jsonb_array_elements(lp.items) it
+         LEFT JOIN compra_precio_historico cph
+           ON cph.anio = lp.anio
+          AND cph.id_producto = CASE
+            WHEN (it->>'producto_id') ~ '^\\d+$' THEN (it->>'producto_id')::INT
+            ELSE NULL
+          END
+         LEFT JOIN proveedor pr ON pr.id_proveedor = cph.id_proveedor
+       ) prov_data ON TRUE
+       WHERE lp.estado IN ('en_deposito', 'completada')
+       ORDER BY lp.fecha_publicacion DESC`
     );
     res.json({ licitaciones: rows });
   } catch (err) {
@@ -460,7 +579,13 @@ async function getDetalleRecepcion(req, res) {
   try {
     await ensureDepositosSchema();
     const { id } = req.params;
-    const row = await get(`SELECT id, items, anio FROM licitacion_publicada WHERE id = $1`, [id]);
+    const row = await get(
+      `SELECT id, items, anio, titulo, motivo,
+              COALESCE(NULLIF(BTRIM(motivo), ''), NULLIF(BTRIM(titulo), ''), 'Licitación Anual ' || anio::text) AS titulo_display
+       FROM licitacion_publicada
+       WHERE id = $1`,
+      [id]
+    );
     if (!row) return res.status(404).json({ error: "Licitación no encontrada" });
 
     // Consolidar por nombre de producto - El operador no necesita ver qué escuela pidió cada cosa
@@ -480,6 +605,27 @@ async function getDetalleRecepcion(req, res) {
     });
     const cleanItems = Object.values(consolidatedMap);
 
+    // Proveedor por producto desde historial de compras para el año de la licitación.
+    const proveedoresRows = await all(
+      `SELECT cph.id_producto, cph.id_proveedor, pr.nombre AS proveedor_nombre
+       FROM compra_precio_historico cph
+       LEFT JOIN proveedor pr ON pr.id_proveedor = cph.id_proveedor
+       WHERE cph.anio = $1`,
+      [row.anio]
+    );
+    const proveedorPorProducto = new Map(
+      proveedoresRows.map((r) => [Number(r.id_producto), { id: r.id_proveedor, nombre: r.proveedor_nombre }])
+    );
+
+    const itemsEnriquecidos = cleanItems.map((item) => {
+      const proveedor = proveedorPorProducto.get(Number(item.producto_id));
+      return {
+        ...item,
+        proveedor_id: proveedor?.id || null,
+        proveedor_nombre: proveedor?.nombre || 'Sin proveedor asignado',
+      };
+    });
+
     // Obtener lo ya recibido agrupado por nombre de producto
     const recibidos = await all(
       `SELECT pr.nombre AS producto, SUM(rl.cantidad_recibida) as total_recibida
@@ -490,7 +636,15 @@ async function getDetalleRecepcion(req, res) {
       [id]
     );
 
-    res.json({ id: row.id, anio: row.anio, items: cleanItems, recibidos });
+    res.json({
+      id: row.id,
+      anio: row.anio,
+      titulo: row.titulo || null,
+      motivo: row.motivo || null,
+      titulo_display: row.titulo_display,
+      items: itemsEnriquecidos,
+      recibidos,
+    });
   } catch (err) {
     res.status(500).json({ error: "Error al obtener detalle" });
   }
@@ -525,6 +679,18 @@ async function registrarIngresoLicitacion(req, res) {
       return res.status(404).json({ error: "Licitación no encontrada" });
     }
     const anio = licRow.rows[0].anio;
+
+    // Mapa proveedor por producto para esta licitación (año).
+    const proveedoresPorProductoRows = await client.query(
+      `SELECT cph.id_producto, MIN(cph.id_proveedor) AS id_proveedor
+       FROM compra_precio_historico cph
+       WHERE cph.anio = $1
+       GROUP BY cph.id_producto`,
+      [anio]
+    );
+    const proveedorPorProducto = new Map(
+      proveedoresPorProductoRows.rows.map((r) => [Number(r.id_producto), Number(r.id_proveedor)])
+    );
 
     // Generar número de remito secuencial por año: REMITO-YYYY-NNN
     const countRow = await client.query(
@@ -573,6 +739,8 @@ async function registrarIngresoLicitacion(req, res) {
 
       // 2. Actualizar stock y movimiento solo con mercadería en buen estado.
       if (cantidadBuena > 0) {
+        const proveedorId = proveedorPorProducto.get(Number(producto_id)) || null;
+
         await client.query(
           `INSERT INTO stock_deposito (id_deposito, id_producto, cantidad)
            VALUES ($1, $2, $3)
@@ -583,9 +751,17 @@ async function registrarIngresoLicitacion(req, res) {
 
         // El trigger de movimiento_stock actualiza stock_actual automáticamente.
         await client.query(
-          `INSERT INTO movimiento_stock (id_producto, cantidad, tipo, motivo, id_usuario, id_deposito, fecha_vencimiento)
-           VALUES ($1, $2, 'ingreso', $3, $4, $5, $6)`,
-          [producto_id, cantidadBuena, `Ingreso por Licitación #${licitacion_id} — ${numero}`, req.user.sub, id_deposito, fecha_vencimiento || null]
+          `INSERT INTO movimiento_stock (id_producto, cantidad, tipo, motivo, id_usuario, id_deposito, fecha_vencimiento, id_proveedor)
+           VALUES ($1, $2, 'ingreso', $3, $4, $5, $6, $7)`,
+          [
+            producto_id,
+            cantidadBuena,
+            `Ingreso por Licitación #${licitacion_id} — ${numero}`,
+            req.user.sub,
+            id_deposito,
+            fecha_vencimiento || null,
+            proveedorId,
+          ]
         );
       }
     }
@@ -693,7 +869,13 @@ router.get("/licitacion/remito-general/:id", authorizePermissions(PERMISSIONS.ST
     await ensureDepositosSchema();
     const { id } = req.params;
 
-    const lic = await get(`SELECT id, anio, estado, items FROM licitacion_publicada WHERE id = $1`, [id]);
+    const lic = await get(
+      `SELECT id, anio, estado, items, titulo, motivo,
+              COALESCE(NULLIF(BTRIM(motivo), ''), NULLIF(BTRIM(titulo), ''), 'Licitación Anual ' || anio::text) AS titulo_display
+       FROM licitacion_publicada
+       WHERE id = $1`,
+      [id]
+    );
     if (!lic) return res.status(404).json({ error: "Licitación no encontrada" });
     if (lic.estado !== 'completada') {
       return res.status(400).json({ error: "El Remito General solo está disponible cuando la licitación está completada" });
@@ -761,7 +943,16 @@ router.get("/licitacion/remito-general/:id", authorizePermissions(PERMISSIONS.ST
       [id]
     );
 
-    res.json({ licitacion_id: lic.id, anio, estado: lic.estado, items, remitos });
+    res.json({
+      licitacion_id: lic.id,
+      anio,
+      estado: lic.estado,
+      titulo: lic.titulo || null,
+      motivo: lic.motivo || null,
+      titulo_display: lic.titulo_display,
+      items,
+      remitos,
+    });
   } catch (err) {
     console.error("Error generando remito general:", err);
     res.status(500).json({ error: "No se pudo generar el remito general" });
@@ -907,6 +1098,357 @@ async function registrarSalidaDistribucion(req, res) {
   }
 }
 
+async function getDistribucionZonasPendientes(req, res) {
+  try {
+    await ensureDepositosSchema();
+    const anio = Number(req.query.anio || new Date().getFullYear());
+
+    const hasZonas = (await tableExists("zona")) && (await tableExists("zona_institucion"));
+    if (!hasZonas) {
+      return res.status(400).json({ error: "No existe configuración de zonas para distribución" });
+    }
+
+    const rows = await all(
+      `WITH pendientes_por_escuela AS (
+         SELECT
+           pad.id_institucion,
+           COUNT(*) FILTER (WHERE GREATEST(pad.cantidad - COALESCE(e.entregado, 0), 0) > 0) AS productos_pendientes,
+           SUM(GREATEST(pad.cantidad - COALESCE(e.entregado, 0), 0)) AS cantidad_pendiente_total
+         FROM planilla_pedido_anual_detalle pad
+         JOIN planilla_pedido_anual pa ON pa.id = pad.planilla_id
+         LEFT JOIN (
+           SELECT id_institucion, id_producto, SUM(cantidad_entregada) AS entregado
+           FROM entrega_anual
+           WHERE anio = $1
+           GROUP BY id_institucion, id_producto
+         ) e ON e.id_institucion = pad.id_institucion AND e.id_producto = pad.id_producto
+         WHERE pa.anio = $1
+           AND pa.estado = 'adjudicada'
+         GROUP BY pad.id_institucion
+       )
+       SELECT
+         z.id AS zona_id,
+         z.name AS zona_nombre,
+         COUNT(*) FILTER (WHERE COALESCE(ppe.productos_pendientes, 0) > 0) AS escuelas_pendientes,
+         COALESCE(SUM(COALESCE(ppe.productos_pendientes, 0)), 0) AS productos_pendientes,
+         COALESCE(SUM(COALESCE(ppe.cantidad_pendiente_total, 0)), 0) AS cantidad_pendiente_total
+       FROM zona z
+       JOIN zona_institucion zi ON zi.zona_id = z.id
+       LEFT JOIN pendientes_por_escuela ppe ON ppe.id_institucion = zi.institucion_id
+       WHERE z.activo = TRUE
+       GROUP BY z.id, z.name
+       HAVING COALESCE(SUM(COALESCE(ppe.productos_pendientes, 0)), 0) > 0
+       ORDER BY z.name ASC`,
+      [anio]
+    );
+
+    res.json({ zonas: rows, anio });
+  } catch (err) {
+    console.error("Error al obtener zonas pendientes:", err);
+    res.status(500).json({ error: "Error al obtener zonas pendientes" });
+  }
+}
+
+async function getDistribucionZonaDetalle(req, res) {
+  try {
+    await ensureDepositosSchema();
+    const anio = Number(req.query.anio || new Date().getFullYear());
+    const zonaId = Number(req.params.id);
+
+    if (!zonaId) return res.status(400).json({ error: "Zona inválida" });
+
+    const hasZonas = (await tableExists("zona")) && (await tableExists("zona_institucion"));
+    if (!hasZonas) {
+      return res.status(400).json({ error: "No existe configuración de zonas para distribución" });
+    }
+
+    const zona = await get(`SELECT id, name AS nombre FROM zona WHERE id = $1`, [zonaId]);
+    if (!zona) return res.status(404).json({ error: "Zona no encontrada" });
+
+    const nivelExpr = await getInstitucionNivelExpr("i");
+    const departamentoSql = await getDepartamentoSql("i");
+
+    const escuelas = await all(
+      `WITH pendientes_por_escuela AS (
+         SELECT
+           pad.id_institucion,
+           COUNT(*) FILTER (WHERE GREATEST(pad.cantidad - COALESCE(e.entregado, 0), 0) > 0) AS productos_pendientes,
+           SUM(GREATEST(pad.cantidad - COALESCE(e.entregado, 0), 0)) AS cantidad_pendiente_total
+         FROM planilla_pedido_anual_detalle pad
+         JOIN planilla_pedido_anual pa ON pa.id = pad.planilla_id
+         LEFT JOIN (
+           SELECT id_institucion, id_producto, SUM(cantidad_entregada) AS entregado
+           FROM entrega_anual
+           WHERE anio = $1
+           GROUP BY id_institucion, id_producto
+         ) e ON e.id_institucion = pad.id_institucion AND e.id_producto = pad.id_producto
+         WHERE pa.anio = $1
+           AND pa.estado = 'adjudicada'
+         GROUP BY pad.id_institucion
+       )
+       SELECT
+         i.id_institucion AS id,
+         i.nombre,
+         i.cue,
+         ${nivelExpr} AS nivel,
+         ${departamentoSql.expression} AS ubicacion,
+         COALESCE(ppe.productos_pendientes, 0) AS productos_pendientes,
+         COALESCE(ppe.cantidad_pendiente_total, 0) AS cantidad_pendiente_total
+       FROM zona_institucion zi
+       JOIN institucion i ON i.id_institucion = zi.institucion_id
+       ${departamentoSql.joins}
+       LEFT JOIN pendientes_por_escuela ppe ON ppe.id_institucion = i.id_institucion
+       WHERE zi.zona_id = $2
+         AND i.activo = TRUE
+         AND COALESCE(ppe.productos_pendientes, 0) > 0
+       ORDER BY i.nombre ASC`,
+      [anio, zonaId]
+    );
+
+    const escuelaIds = escuelas.map((e) => Number(e.id)).filter((id) => Number.isInteger(id) && id > 0);
+    const itemsPorEscuela = new Map();
+    if (escuelaIds.length > 0) {
+      const items = await all(
+        `SELECT
+           pad.id_institucion,
+           p.id_producto AS id,
+           p.nombre AS producto,
+           p.unidad_medida,
+           pad.cantidad AS cantidad_adjudicada,
+           COALESCE(e.entregado, 0) AS cantidad_entregada,
+           GREATEST(pad.cantidad - COALESCE(e.entregado, 0), 0) AS cantidad_pendiente
+         FROM planilla_pedido_anual_detalle pad
+         JOIN planilla_pedido_anual pa ON pa.id = pad.planilla_id
+         JOIN producto p ON p.id_producto = pad.id_producto
+         LEFT JOIN (
+           SELECT id_institucion, id_producto, SUM(cantidad_entregada) AS entregado
+           FROM entrega_anual
+           WHERE anio = $1
+           GROUP BY id_institucion, id_producto
+         ) e ON e.id_institucion = pad.id_institucion AND e.id_producto = pad.id_producto
+         WHERE pa.anio = $1
+           AND pa.estado = 'adjudicada'
+           AND pad.id_institucion = ANY($2::int[])
+           AND GREATEST(pad.cantidad - COALESCE(e.entregado, 0), 0) > 0
+         ORDER BY pad.id_institucion, p.nombre`,
+        [anio, escuelaIds]
+      );
+
+      for (const item of items) {
+        const key = Number(item.id_institucion);
+        if (!itemsPorEscuela.has(key)) itemsPorEscuela.set(key, []);
+        itemsPorEscuela.get(key).push(item);
+      }
+    }
+
+    const escuelasConItems = escuelas.map((escuela) => ({
+      ...escuela,
+      items: itemsPorEscuela.get(Number(escuela.id)) || [],
+    }));
+
+    res.json({ zona, anio, escuelas: escuelasConItems });
+  } catch (err) {
+    console.error("Error al obtener detalle zonal:", err);
+    res.status(500).json({ error: "Error al obtener detalle de zona" });
+  }
+}
+
+async function registrarEgresoMultipleZona(req, res) {
+  const client = await pool.connect();
+  try {
+    await ensureDepositosSchema();
+    const {
+      zona_id,
+      anio = new Date().getFullYear(),
+      id_deposito,
+      observaciones,
+      entregas,
+    } = req.body;
+
+    if (!zona_id || !id_deposito || !Array.isArray(entregas) || entregas.length === 0) {
+      return res.status(400).json({ error: "Faltan datos obligatorios para egreso múltiple" });
+    }
+
+    const zonaId = Number(zona_id);
+    const depositoId = Number(id_deposito);
+    const anioNum = Number(anio);
+
+    const hasZonas = (await tableExists("zona")) && (await tableExists("zona_institucion"));
+    if (!hasZonas) {
+      return res.status(400).json({ error: "No existe configuración de zonas para distribución" });
+    }
+
+    const zona = await client.query(`SELECT id, name AS nombre FROM zona WHERE id = $1`, [zonaId]);
+    if (!zona.rowCount) return res.status(404).json({ error: "Zona no encontrada" });
+    const zonaNombre = zona.rows[0].nombre;
+
+    const institucionesSolicitadas = [];
+    const porInstitucion = new Map();
+    const totalPorProducto = new Map();
+
+    for (const entregaEscuela of entregas) {
+      const institucionId = Number(entregaEscuela.id_institucion);
+      const items = Array.isArray(entregaEscuela.items) ? entregaEscuela.items : [];
+      if (!institucionId || items.length === 0) continue;
+
+      institucionesSolicitadas.push(institucionId);
+      if (!porInstitucion.has(institucionId)) porInstitucion.set(institucionId, []);
+
+      for (const item of items) {
+        const productoId = Number(item.id_producto);
+        const cantidad = Number(item.cantidad);
+        if (!productoId || !cantidad || cantidad <= 0) continue;
+
+        porInstitucion.get(institucionId).push({ id_producto: productoId, cantidad });
+        totalPorProducto.set(productoId, (totalPorProducto.get(productoId) || 0) + cantidad);
+      }
+    }
+
+    const institucionesUnicas = [...new Set(institucionesSolicitadas)];
+    if (institucionesUnicas.length === 0) {
+      return res.status(400).json({ error: "No hay entregas válidas para procesar" });
+    }
+
+    await client.query("BEGIN");
+
+    // Validar pertenencia de instituciones a la zona.
+    const institucionesZona = await client.query(
+      `SELECT institucion_id
+       FROM zona_institucion
+       WHERE zona_id = $1
+         AND institucion_id = ANY($2::int[])`,
+      [zonaId, institucionesUnicas]
+    );
+    const permitidas = new Set(institucionesZona.rows.map((r) => Number(r.institucion_id)));
+    const fueraDeZona = institucionesUnicas.filter((id) => !permitidas.has(id));
+    if (fueraDeZona.length > 0) {
+      throw new Error(`Hay instituciones fuera de la zona seleccionada: ${fueraDeZona.join(', ')}`);
+    }
+
+    // Validar pendientes por institución/producto.
+    const pendientesRows = await client.query(
+      `SELECT
+         pad.id_institucion,
+         pad.id_producto,
+         GREATEST(pad.cantidad - COALESCE(e.entregado, 0), 0) AS cantidad_pendiente
+       FROM planilla_pedido_anual_detalle pad
+       JOIN planilla_pedido_anual pa ON pa.id = pad.planilla_id
+       LEFT JOIN (
+         SELECT id_institucion, id_producto, SUM(cantidad_entregada) AS entregado
+         FROM entrega_anual
+         WHERE anio = $1
+         GROUP BY id_institucion, id_producto
+       ) e ON e.id_institucion = pad.id_institucion AND e.id_producto = pad.id_producto
+       WHERE pa.anio = $1
+         AND pa.estado = 'adjudicada'
+         AND pad.id_institucion = ANY($2::int[])
+         AND pad.id_producto = ANY($3::int[])`,
+      [anioNum, institucionesUnicas, [...totalPorProducto.keys()]]
+    );
+
+    const pendienteMap = new Map();
+    for (const row of pendientesRows.rows) {
+      pendienteMap.set(`${row.id_institucion}:${row.id_producto}`, Number(row.cantidad_pendiente || 0));
+    }
+
+    for (const [institucionId, items] of porInstitucion.entries()) {
+      for (const item of items) {
+        const key = `${institucionId}:${item.id_producto}`;
+        const pendiente = Number(pendienteMap.get(key) || 0);
+        if (item.cantidad > pendiente) {
+          throw new Error(`La cantidad para institución ${institucionId}, producto ${item.id_producto} supera pendiente (${pendiente})`);
+        }
+      }
+    }
+
+    // Validar stock agrupado por producto.
+    const stockRows = await client.query(
+      `SELECT id_producto, cantidad
+       FROM stock_deposito
+       WHERE id_deposito = $1
+         AND id_producto = ANY($2::int[])
+       FOR UPDATE`,
+      [depositoId, [...totalPorProducto.keys()]]
+    );
+    const stockMap = new Map(stockRows.rows.map((r) => [Number(r.id_producto), Number(r.cantidad || 0)]));
+
+    for (const [productoId, total] of totalPorProducto.entries()) {
+      const disponible = Number(stockMap.get(productoId) || 0);
+      if (disponible < total) {
+        throw new Error(`Stock insuficiente para producto ${productoId}. Disponible: ${disponible}`);
+      }
+    }
+
+    // Crear lote.
+    const loteRes = await client.query(
+      `INSERT INTO distribucion_lote (anio, zona_id, id_deposito, estado, observaciones, usuario_id)
+       VALUES ($1, $2, $3, 'en_transito', $4, $5)
+       RETURNING id`,
+      [anioNum, zonaId, depositoId, observaciones || null, req.user.sub]
+    );
+    const loteId = Number(loteRes.rows[0].id);
+
+    // Aplicar salidas y registrar trazabilidad por institución.
+    for (const [institucionId, items] of porInstitucion.entries()) {
+      for (const item of items) {
+        await client.query(
+          `INSERT INTO entrega_anual (id_institucion, anio, id_producto, cantidad_entregada, id_deposito, id_usuario, observaciones)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [institucionId, anioNum, item.id_producto, item.cantidad, depositoId, req.user.sub, observaciones || null]
+        );
+
+        await client.query(
+          `INSERT INTO movimiento_stock (id_producto, cantidad, tipo, motivo, id_usuario, id_deposito, id_institucion)
+           VALUES ($1, $2, 'egreso', $3, $4, $5, $6)`,
+          [
+            item.id_producto,
+            item.cantidad,
+            `Distribución Zonal #${loteId} (${zonaNombre})`,
+            req.user.sub,
+            depositoId,
+            institucionId,
+          ]
+        );
+
+        await client.query(
+          `INSERT INTO distribucion_lote_item (lote_id, id_institucion, id_producto, cantidad_planificada)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (lote_id, id_institucion, id_producto)
+           DO UPDATE SET cantidad_planificada = EXCLUDED.cantidad_planificada, updated_at = NOW()`,
+          [loteId, institucionId, item.id_producto, item.cantidad]
+        );
+      }
+    }
+
+    // Descontar stock físico del depósito por producto (una sola vez por producto).
+    for (const [productoId, total] of totalPorProducto.entries()) {
+      await client.query(
+        `UPDATE stock_deposito
+         SET cantidad = cantidad - $1
+         WHERE id_deposito = $2
+           AND id_producto = $3`,
+        [total, depositoId, productoId]
+      );
+    }
+
+    await client.query("COMMIT");
+    res.json({
+      ok: true,
+      lote_id: loteId,
+      zona: zonaNombre,
+      escuelas: institucionesUnicas.length,
+      productos: [...totalPorProducto.keys()].length,
+      message: "Egreso múltiple zonal registrado con éxito",
+    });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("Error en egreso múltiple zonal:", err);
+    res.status(500).json({ error: err.message || "No se pudo registrar el egreso múltiple" });
+  } finally {
+    client.release();
+  }
+}
+
 async function getVencimientosProximos(req, res) {
   try {
     await ensureDepositosSchema();
@@ -953,6 +1495,9 @@ async function getVencimientosProximos(req, res) {
 }
 
 router.get("/vencimientos-proximos", authorizePermissions(PERMISSIONS.STOCK_VIEW), getVencimientosProximos);
+router.get("/distribucion/zonas-pendientes", authorizePermissions(PERMISSIONS.STOCK_VIEW), getDistribucionZonasPendientes);
+router.get("/distribucion/zonas/:id/detalle", authorizePermissions(PERMISSIONS.STOCK_VIEW), getDistribucionZonaDetalle);
+router.post("/distribucion/egreso-multiple", authorizePermissions(PERMISSIONS.STOCK_MOVEMENT_CREATE), registrarEgresoMultipleZona);
 router.get("/distribucion/pendientes", authorizePermissions(PERMISSIONS.STOCK_VIEW), getPendientesDistribucion);
 router.get("/distribucion/pendientes/:id", authorizePermissions(PERMISSIONS.STOCK_VIEW), getDetalleDistribucionEscuela);
 router.post("/distribucion/registrar-salida", authorizePermissions(PERMISSIONS.STOCK_MOVEMENT_CREATE), registrarSalidaDistribucion);

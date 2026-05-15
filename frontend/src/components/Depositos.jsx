@@ -417,6 +417,11 @@ export default function Depositos() {
                       <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
                         {m.tipo === 'ingreso' ? 'Ingreso' : 'Egreso'} de {m.cantidad} unidades
                       </div>
+                      {m.proveedor_nombre && (
+                        <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '2px' }}>
+                          Proveedor: {m.proveedor_nombre}
+                        </div>
+                      )}
                       <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '2px' }}>
                         {new Date(m.created_at).toLocaleDateString('es-AR')}
                       </div>

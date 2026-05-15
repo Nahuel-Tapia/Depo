@@ -1,5 +1,16 @@
 # Plan de Mejoras para el Sistema de Depósito
 
+## Actualizacion rapida (2026-05-15)
+
+Implementado en sistema y documentacion:
+
+- Solicitud de retiro con opcion de solicitar envio.
+- Distribucion operativa por departamento para solicitudes con envio.
+- Detalle por departamento con faltantes por solicitar retiro.
+- Normalizacion de errores funcionales de egreso multiple como `400`.
+
+Este documento mantiene los pendientes de mediano y largo plazo.
+
 Este documento resume y organiza las notas proporcionadas para futuras implementaciones y optimizaciones del sistema.
 
 ---

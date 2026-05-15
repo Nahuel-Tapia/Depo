@@ -183,6 +183,16 @@ async function ensureTables() {
     `);
 
       await client.query(`
+      ALTER TABLE licitacion_publicada
+      ADD COLUMN IF NOT EXISTS titulo VARCHAR(255)
+    `);
+
+      await client.query(`
+      ALTER TABLE licitacion_publicada
+      ADD COLUMN IF NOT EXISTS motivo TEXT
+    `);
+
+      await client.query(`
       UPDATE planilla_pedido_anual
       SET estado = 'aceptada'
       WHERE estado = 'procesada'
@@ -973,19 +983,26 @@ async function publicarLicitacion(req, res) {
   const client = await pool.connect();
   try {
     await ensureTables();
-    const { anio, items } = req.body;
+    const { anio, items, titulo, motivo } = req.body;
     if (!anio || !items || !items.length) {
       return res.status(400).json({ error: "Datos insuficientes para publicar" });
     }
+
+    const motivoSanitizado = String(motivo || titulo || `Licitación Anual ${anio}`).trim();
+    const tituloSanitizado = String(titulo || motivoSanitizado).trim();
 
     await client.query("BEGIN");
     
     // Snapshot en licitacion_publicada
     await client.query(
-      `INSERT INTO licitacion_publicada (anio, usuario_id, items)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (anio) DO UPDATE SET items = $3, fecha_publicacion = NOW()`,
-      [anio, req.user.sub, JSON.stringify(items)]
+      `INSERT INTO licitacion_publicada (anio, usuario_id, items, titulo, motivo)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (anio) DO UPDATE
+       SET items = $3,
+           titulo = $4,
+           motivo = $5,
+           fecha_publicacion = NOW()`,
+      [anio, req.user.sub, JSON.stringify(items), tituloSanitizado || null, motivoSanitizado || null]
     );
 
     await client.query("COMMIT");
@@ -1027,7 +1044,7 @@ async function getPublicadaStatus(req, res) {
   try {
     const anio = Number(req.query.anio || new Date().getFullYear());
     const row = await get(
-      `SELECT lp.id, lp.fecha_publicacion, lp.items, u.nombre, u.apellido
+      `SELECT lp.id, lp.fecha_publicacion, lp.items, lp.titulo, lp.motivo, u.nombre, u.apellido
        FROM licitacion_publicada lp
        LEFT JOIN usuario u ON u.id_usuario = lp.usuario_id
        WHERE lp.anio = $1`,

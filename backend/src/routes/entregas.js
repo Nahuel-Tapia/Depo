@@ -6,6 +6,166 @@ const { PERMISSIONS } = require("../permissions");
 const router = express.Router();
 router.use(authenticate);
 
+const columnExistsCache = new Map();
+
+async function columnExists(tableName, columnName) {
+  const cacheKey = `${tableName}.${columnName}`;
+  if (columnExistsCache.has(cacheKey)) return columnExistsCache.get(cacheKey);
+
+  const row = await get(
+    `SELECT EXISTS (
+       SELECT 1
+       FROM information_schema.columns
+       WHERE table_schema = 'public'
+         AND table_name = $1
+         AND column_name = $2
+     ) AS column_exists`,
+    [tableName, columnName]
+  );
+
+  const exists = Boolean(row?.column_exists);
+  columnExistsCache.set(cacheKey, exists);
+  return exists;
+}
+
+async function getDepartamentoSql(alias = "i") {
+  const [
+    institucionDepartamento,
+    edificioDepartamento,
+    edificioDireccionId,
+    direccionDepartamento,
+  ] = await Promise.all([
+    columnExists("institucion", "departamento"),
+    columnExists("edificio", "departamento"),
+    columnExists("edificio", "id_direccion"),
+    columnExists("direccion", "departamento"),
+  ]);
+
+  const joins = [];
+  const sources = [];
+  joins.push(`LEFT JOIN edificio e ON ${alias}.id_edificio = e.id_edificio`);
+
+  if (institucionDepartamento) {
+    sources.push(`NULLIF(TRIM(${alias}.departamento), '')`);
+  }
+  if (edificioDireccionId && direccionDepartamento) {
+    joins.push("LEFT JOIN direccion d ON e.id_direccion = d.id_direccion");
+    sources.push("NULLIF(TRIM(d.departamento), '')");
+  }
+  if (edificioDepartamento) {
+    sources.push("NULLIF(TRIM(e.departamento), '')");
+  }
+
+  return {
+    joins: joins.join("\n"),
+    expression: sources.length > 0 ? `COALESCE(${sources.join(", ")})` : "NULL::text",
+  };
+}
+
+async function resolveInstitucionDepartamento(institucionId, client = null) {
+  const departamentoSql = await getDepartamentoSql("i");
+  const query = `
+    SELECT ${departamentoSql.expression} AS departamento
+    FROM institucion i
+    ${departamentoSql.joins}
+    WHERE i.id_institucion = $1
+  `;
+
+  let row = null;
+  if (client) {
+    const result = await client.query(query, [institucionId]);
+    row = result.rows[0] || null;
+  } else {
+    row = await get(query, [institucionId]);
+  }
+
+  const departamento = String(row?.departamento || "").trim();
+  return departamento || null;
+}
+
+async function getInstitucionesFaltantesSolicitudPorDepartamento(departamento, anio) {
+  const departamentoSql = await getDepartamentoSql("i");
+
+  const rows = await all(
+    `WITH pedidos_objetivo AS (
+       SELECT p.id_pedido, p.id_institucion
+       FROM pedido p
+       WHERE COALESCE(p.tipo, 'anual') = 'anual'
+         AND p.estado = 'aprobado'
+         AND p.aprobado_director_area = TRUE
+     ),
+     saldo_por_institucion AS (
+       SELECT
+         po.id_institucion,
+         COUNT(*) FILTER (WHERE GREATEST(dp.cantidad_solicitada - COALESCE(pe.entregado, 0), 0) > 0) AS productos_pendientes,
+         COALESCE(SUM(GREATEST(dp.cantidad_solicitada - COALESCE(pe.entregado, 0), 0)), 0) AS cantidad_pendiente_total
+       FROM pedidos_objetivo po
+       JOIN detalle_pedido dp ON dp.id_pedido = po.id_pedido
+       LEFT JOIN (
+         SELECT id_pedido, id_producto, SUM(cantidad_entregada) AS entregado
+         FROM pedido_entrega
+         GROUP BY id_pedido, id_producto
+       ) pe ON pe.id_pedido = dp.id_pedido AND pe.id_producto = dp.id_producto
+       GROUP BY po.id_institucion
+     ),
+     institucion_departamento AS (
+       SELECT
+         i.id_institucion,
+         i.nombre,
+         i.cue,
+         COALESCE(NULLIF(TRIM(${departamentoSql.expression}), ''), 'SIN_DEPARTAMENTO') AS departamento
+       FROM institucion i
+       ${departamentoSql.joins}
+       WHERE COALESCE(i.activo, TRUE) = TRUE
+     )
+     SELECT
+       idp.id_institucion,
+       idp.nombre AS institucion_nombre,
+       idp.cue,
+       spi.productos_pendientes,
+       spi.cantidad_pendiente_total
+     FROM saldo_por_institucion spi
+     JOIN institucion_departamento idp ON idp.id_institucion = spi.id_institucion
+     WHERE LOWER(idp.departamento) = LOWER($1)
+       AND COALESCE(spi.cantidad_pendiente_total, 0) > 0
+       AND NOT EXISTS (
+         SELECT 1
+         FROM solicitud_retiro sr
+         WHERE sr.id_institucion = idp.id_institucion
+           AND EXTRACT(YEAR FROM sr.fecha_retiro) = $2
+       )
+     ORDER BY idp.nombre ASC`,
+    [departamento, anio]
+  );
+
+  return rows.map((row) => ({
+    id_institucion: Number(row.id_institucion),
+    institucion_nombre: row.institucion_nombre,
+    cue: row.cue || null,
+    productos_pendientes: Number(row.productos_pendientes || 0),
+    cantidad_pendiente_total: Number(row.cantidad_pendiente_total || 0),
+  }));
+}
+
+function parseBoolean(value) {
+  if (value === true || value === false) return value;
+  if (typeof value === "number") return value === 1;
+  const normalized = String(value || "").trim().toLowerCase();
+  return normalized === "true" || normalized === "1" || normalized === "si" || normalized === "sí";
+}
+
+class RequestValidationError extends Error {
+  constructor(message, status = 400) {
+    super(message);
+    this.name = "RequestValidationError";
+    this.status = status;
+  }
+}
+
+function badRequest(message) {
+  return new RequestValidationError(message, 400);
+}
+
 // Crear tabla de control de entregas si no existe
 async function ensureEntregasSchema() {
   await run(`
@@ -33,6 +193,8 @@ async function ensureEntregasSchema() {
   await run(`ALTER TABLE solicitud_retiro ADD COLUMN IF NOT EXISTS id_usuario_entrega INT REFERENCES usuario(id_usuario)`);
   await run(`ALTER TABLE solicitud_retiro ADD COLUMN IF NOT EXISTS fecha_entrega TIMESTAMP`);
   await run(`ALTER TABLE solicitud_retiro ADD COLUMN IF NOT EXISTS observaciones TEXT`);
+  await run(`ALTER TABLE solicitud_retiro ADD COLUMN IF NOT EXISTS solicitar_envio BOOLEAN NOT NULL DEFAULT FALSE`);
+  await run(`ALTER TABLE solicitud_retiro ADD COLUMN IF NOT EXISTS departamento_envio TEXT`);
 
   await run(`
     CREATE TABLE IF NOT EXISTS solicitud_retiro (
@@ -191,6 +353,8 @@ async function getSolicitudRetiro(id, client = null) {
       sr.retira_tipo,
       sr.retira_nombre,
       sr.retira_dni,
+      COALESCE(sr.solicitar_envio, FALSE) AS solicitar_envio,
+      sr.departamento_envio,
       sr.estado,
       sr.id_usuario_entrega,
       ue.nombre AS entrega_usuario_nombre,
@@ -230,6 +394,8 @@ async function getSolicitudRetiro(id, client = null) {
     retira_tipo: first.retira_tipo,
     retira_nombre: first.retira_nombre,
     retira_dni: first.retira_dni,
+    solicitar_envio: Boolean(first.solicitar_envio),
+    departamento_envio: first.departamento_envio || null,
     estado: first.estado,
     id_usuario_acepta: first.id_usuario_acepta ? Number(first.id_usuario_acepta) : null,
     acepta_usuario_nombre: first.acepta_usuario_nombre || null,
@@ -411,9 +577,10 @@ router.post("/solicitudes", authorizePermissions(PERMISSIONS.PEDIDOS_CREATE), as
       return res.status(403).json({ error: "Solo el rol directivo puede crear solicitudes de retiro" });
     }
 
-    const { id_pedido, fecha_retiro, retira_tipo, retira_nombre, retira_dni, observaciones, items } = req.body;
+    const { id_pedido, fecha_retiro, retira_tipo, retira_nombre, retira_dni, observaciones, items, solicitar_envio } = req.body;
     const pedidoId = parsePositiveInt(id_pedido);
     const tipoRetira = normalizeRetiraTipo(retira_tipo);
+    const solicitarEnvio = parseBoolean(solicitar_envio);
     const fechaRetiro = String(fecha_retiro || "").trim();
 
     if (!pedidoId || !fechaRetiro || !Array.isArray(items) || items.length === 0) {
@@ -488,10 +655,14 @@ router.post("/solicitudes", authorizePermissions(PERMISSIONS.PEDIDOS_CREATE), as
 
     await client.query("BEGIN");
 
+    const departamentoEnvio = solicitarEnvio
+      ? (await resolveInstitucionDepartamento(usuario.id_institucion, client)) || "SIN_DEPARTAMENTO"
+      : null;
+
     const solicitudResult = await client.query(`
       INSERT INTO solicitud_retiro
-        (id_pedido, id_institucion, id_usuario_solicitante, fecha_retiro, retira_tipo, retira_nombre, retira_dni, observaciones)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        (id_pedido, id_institucion, id_usuario_solicitante, fecha_retiro, retira_tipo, retira_nombre, retira_dni, observaciones, solicitar_envio, departamento_envio)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING id
     `, [
       pedidoId,
@@ -501,7 +672,9 @@ router.post("/solicitudes", authorizePermissions(PERMISSIONS.PEDIDOS_CREATE), as
       tipoRetira,
       nombreRetira,
       dniRetira,
-      String(observaciones || "").trim() || null
+      String(observaciones || "").trim() || null,
+      solicitarEnvio,
+      departamentoEnvio
     ]);
 
     const solicitudId = solicitudResult.rows[0].id;
@@ -522,6 +695,353 @@ router.post("/solicitudes", authorizePermissions(PERMISSIONS.PEDIDOS_CREATE), as
     } catch (_) { /* ignore */ }
     console.error("Error al crear solicitud de retiro:", err);
     return res.status(500).json({ error: "No se pudo crear la solicitud de retiro" });
+  } finally {
+    client.release();
+  }
+});
+
+// GET /api/entregas/solicitudes-envio/departamentos - Resumen de solicitudes con envio agrupadas por departamento
+router.get("/solicitudes-envio/departamentos", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), async (req, res) => {
+  try {
+    await ensureEntregasSchema();
+    const anio = Number(req.query.anio || new Date().getFullYear());
+
+    const rows = await all(
+      `SELECT
+         COALESCE(NULLIF(TRIM(sr.departamento_envio), ''), 'SIN_DEPARTAMENTO') AS departamento,
+         COUNT(DISTINCT sr.id) AS cantidad_solicitudes,
+         COUNT(DISTINCT sr.id_institucion) AS cantidad_escuelas,
+         COUNT(*) AS cantidad_productos,
+         COALESCE(SUM(GREATEST(srd.cantidad_solicitada - COALESCE(srd.cantidad_entregada, 0), 0)), 0) AS cantidad_total_pendiente
+       FROM solicitud_retiro sr
+       JOIN solicitud_retiro_detalle srd ON srd.id_solicitud_retiro = sr.id
+       WHERE COALESCE(sr.solicitar_envio, FALSE) = TRUE
+         AND sr.estado IN ('pendiente', 'aceptada')
+         AND EXTRACT(YEAR FROM sr.fecha_retiro) = $1
+       GROUP BY COALESCE(NULLIF(TRIM(sr.departamento_envio), ''), 'SIN_DEPARTAMENTO')
+       HAVING COALESCE(SUM(GREATEST(srd.cantidad_solicitada - COALESCE(srd.cantidad_entregada, 0), 0)), 0) > 0
+       ORDER BY departamento ASC`,
+      [anio]
+    );
+
+    return res.json({ anio, departamentos: rows });
+  } catch (err) {
+    console.error("Error al listar solicitudes con envio por departamento:", err);
+    return res.status(500).json({ error: "No se pudieron obtener solicitudes con envio por departamento" });
+  }
+});
+
+// GET /api/entregas/solicitudes-envio/departamentos/:departamento/detalle - Detalle de solicitudes con envio de un departamento
+router.get("/solicitudes-envio/departamentos/:departamento/detalle", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), async (req, res) => {
+  try {
+    await ensureEntregasSchema();
+    const anio = Number(req.query.anio || new Date().getFullYear());
+    const departamentoParam = decodeURIComponent(String(req.params.departamento || "")).trim();
+    if (!departamentoParam) {
+      return res.status(400).json({ error: "Departamento inválido" });
+    }
+
+    const rows = await all(
+      `SELECT sr.id
+       FROM solicitud_retiro sr
+       WHERE COALESCE(sr.solicitar_envio, FALSE) = TRUE
+         AND sr.estado IN ('pendiente', 'aceptada')
+         AND EXTRACT(YEAR FROM sr.fecha_retiro) = $1
+         AND LOWER(COALESCE(NULLIF(TRIM(sr.departamento_envio), ''), 'SIN_DEPARTAMENTO')) = LOWER($2)
+       ORDER BY sr.fecha_retiro ASC, sr.created_at ASC`,
+      [anio, departamentoParam]
+    );
+
+    const solicitudes = [];
+    for (const row of rows) {
+      const solicitud = await getSolicitudRetiro(row.id);
+      if (solicitud) solicitudes.push(solicitud);
+    }
+
+    const faltantesSolicitud = await getInstitucionesFaltantesSolicitudPorDepartamento(departamentoParam, anio);
+
+    const resumen = {
+      total_solicitudes: solicitudes.length,
+      total_escuelas: new Set(solicitudes.map((s) => Number(s.id_institucion))).size,
+      total_productos: solicitudes.reduce((acc, s) => acc + (Array.isArray(s.items) ? s.items.length : 0), 0),
+      total_cantidad: solicitudes.reduce(
+        (acc, s) => acc + (s.items || []).reduce((sub, item) => sub + Math.max(0, Number(item.cantidad_solicitada || 0) - Number(item.cantidad_entregada || 0)), 0),
+        0
+      ),
+    };
+
+    const resumenFaltantes = {
+      total_instituciones: faltantesSolicitud.length,
+      total_productos_pendientes: faltantesSolicitud.reduce((acc, item) => acc + Number(item.productos_pendientes || 0), 0),
+      total_cantidad_pendiente: faltantesSolicitud.reduce((acc, item) => acc + Number(item.cantidad_pendiente_total || 0), 0),
+    };
+
+    return res.json({
+      anio,
+      departamento: departamentoParam,
+      resumen,
+      resumen_faltantes: resumenFaltantes,
+      solicitudes,
+      faltantes_solicitud: faltantesSolicitud,
+    });
+  } catch (err) {
+    console.error("Error al obtener detalle de solicitudes con envio:", err);
+    return res.status(500).json({ error: "No se pudo obtener el detalle de solicitudes con envio" });
+  }
+});
+
+// POST /api/entregas/solicitudes-envio/egreso-multiple - Registrar egreso multiple de solicitudes con envio por departamento
+router.post("/solicitudes-envio/egreso-multiple", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await ensureEntregasSchema();
+
+    const {
+      departamento,
+      id_deposito,
+      observaciones,
+      entregas,
+    } = req.body || {};
+
+    const departamentoValue = String(departamento || "").trim();
+    const depositoId = parsePositiveInt(id_deposito);
+    const entregasPayload = Array.isArray(entregas) ? entregas : [];
+
+    if (!departamentoValue || !depositoId || entregasPayload.length === 0) {
+      return res.status(400).json({ error: "Faltan datos obligatorios para registrar el egreso por departamento" });
+    }
+
+    const porSolicitud = new Map();
+    const totalPorProducto = new Map();
+
+    for (const row of entregasPayload) {
+      const solicitudId = parsePositiveInt(row?.id_solicitud);
+      const items = Array.isArray(row?.items) ? row.items : [];
+      if (!solicitudId || items.length === 0) continue;
+
+      if (!porSolicitud.has(solicitudId)) porSolicitud.set(solicitudId, []);
+
+      for (const item of items) {
+        const productoId = parsePositiveInt(item?.id_producto);
+        const cantidad = parsePositiveInt(item?.cantidad);
+        if (!productoId || !cantidad) continue;
+
+        porSolicitud.get(solicitudId).push({ id_producto: productoId, cantidad });
+        totalPorProducto.set(productoId, (totalPorProducto.get(productoId) || 0) + cantidad);
+      }
+    }
+
+    const solicitudIds = [...porSolicitud.keys()];
+    if (solicitudIds.length === 0 || totalPorProducto.size === 0) {
+      return res.status(400).json({ error: "No hay entregas válidas para procesar" });
+    }
+
+    await client.query("BEGIN");
+
+    const solicitudesRes = await client.query(
+      `SELECT
+         sr.id,
+         sr.id_pedido,
+         sr.id_institucion,
+         sr.estado,
+         COALESCE(sr.solicitar_envio, FALSE) AS solicitar_envio,
+         COALESCE(NULLIF(TRIM(sr.departamento_envio), ''), 'SIN_DEPARTAMENTO') AS departamento
+       FROM solicitud_retiro sr
+       WHERE sr.id = ANY($1::int[])
+       FOR UPDATE`,
+      [solicitudIds]
+    );
+
+    if (solicitudesRes.rows.length !== solicitudIds.length) {
+      throw badRequest("Hay solicitudes que no existen");
+    }
+
+    const solicitudesMap = new Map();
+    for (const row of solicitudesRes.rows) {
+      const solicitudId = Number(row.id);
+      const depRow = String(row.departamento || "SIN_DEPARTAMENTO").trim();
+      if (!Boolean(row.solicitar_envio)) {
+        throw badRequest(`La solicitud #${solicitudId} no está marcada para envío`);
+      }
+      if (!["pendiente", "aceptada"].includes(String(row.estado || ""))) {
+        throw badRequest(`La solicitud #${solicitudId} no se puede procesar en estado ${row.estado}`);
+      }
+      if (depRow.toLowerCase() !== departamentoValue.toLowerCase()) {
+        throw badRequest(`La solicitud #${solicitudId} no pertenece al departamento ${departamentoValue}`);
+      }
+      solicitudesMap.set(solicitudId, {
+        id_pedido: Number(row.id_pedido),
+        id_institucion: Number(row.id_institucion),
+        estado: String(row.estado),
+      });
+    }
+
+    const detallesRes = await client.query(
+      `SELECT
+         srd.id_solicitud_retiro,
+         srd.id_producto,
+         srd.cantidad_solicitada,
+         COALESCE(srd.cantidad_entregada, 0) AS cantidad_entregada,
+         p.nombre AS producto_nombre
+       FROM solicitud_retiro_detalle srd
+       JOIN producto p ON p.id_producto = srd.id_producto
+       WHERE srd.id_solicitud_retiro = ANY($1::int[])
+       FOR UPDATE`,
+      [solicitudIds]
+    );
+
+    const detalleMap = new Map();
+    for (const row of detallesRes.rows) {
+      const key = `${Number(row.id_solicitud_retiro)}:${Number(row.id_producto)}`;
+      detalleMap.set(key, {
+        cantidad_solicitada: Number(row.cantidad_solicitada || 0),
+        cantidad_entregada: Number(row.cantidad_entregada || 0),
+        producto_nombre: row.producto_nombre,
+      });
+    }
+
+    for (const [solicitudId, items] of porSolicitud.entries()) {
+      for (const item of items) {
+        const key = `${solicitudId}:${item.id_producto}`;
+        const detalle = detalleMap.get(key);
+        if (!detalle) {
+          throw badRequest(`El producto ${item.id_producto} no existe en la solicitud #${solicitudId}`);
+        }
+        const pendiente = Math.max(0, detalle.cantidad_solicitada - detalle.cantidad_entregada);
+        if (item.cantidad > pendiente) {
+          throw badRequest(`La cantidad para ${detalle.producto_nombre} en solicitud #${solicitudId} supera el pendiente (${pendiente})`);
+        }
+      }
+    }
+
+    const stockRes = await client.query(
+      `SELECT id_producto, cantidad
+       FROM stock_deposito
+       WHERE id_deposito = $1
+         AND id_producto = ANY($2::int[])
+       FOR UPDATE`,
+      [depositoId, [...totalPorProducto.keys()]]
+    );
+    const stockMap = new Map(stockRes.rows.map((row) => [Number(row.id_producto), Number(row.cantidad || 0)]));
+
+    for (const [productoId, total] of totalPorProducto.entries()) {
+      const disponible = Number(stockMap.get(productoId) || 0);
+      if (disponible < total) {
+        throw badRequest(`Stock insuficiente para producto ${productoId}. Disponible: ${disponible}`);
+      }
+    }
+
+    const solicitudesEntregadas = new Set();
+    const solicitudesAceptadas = new Set();
+    let movimientosCreados = 0;
+
+    for (const [solicitudId, items] of porSolicitud.entries()) {
+      const solicitudData = solicitudesMap.get(solicitudId);
+
+      if (solicitudData.estado === "pendiente") {
+        await client.query(
+          `UPDATE solicitud_retiro
+           SET estado = 'aceptada', id_usuario_acepta = $1, fecha_aceptacion = NOW()
+           WHERE id = $2`,
+          [req.user.sub, solicitudId]
+        );
+        solicitudesAceptadas.add(solicitudId);
+      }
+
+      for (const item of items) {
+        const movimiento = await client.query(
+          `INSERT INTO movimiento_stock
+             (id_producto, tipo, cantidad, estado_producto, cargo_retira, id_institucion, id_usuario, motivo, fecha_movimiento, id_deposito)
+           VALUES ($1, 'egreso', $2, 'nuevo', $3, $4, $5, $6, NOW(), $7)
+           RETURNING id_movimiento`,
+          [
+            item.id_producto,
+            item.cantidad,
+            `Envio por departamento ${departamentoValue}`,
+            solicitudData.id_institucion,
+            req.user.sub,
+            observaciones || `Entrega por envío - Solicitud #${solicitudId} (${departamentoValue})`,
+            depositoId,
+          ]
+        );
+        const movimientoId = Number(movimiento.rows[0].id_movimiento);
+        movimientosCreados += 1;
+
+        await client.query(
+          `INSERT INTO pedido_entrega
+             (id_pedido, id_movimiento, id_producto, cantidad_entregada, id_usuario, observaciones, id_solicitud_retiro)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [
+            solicitudData.id_pedido,
+            movimientoId,
+            item.id_producto,
+            item.cantidad,
+            req.user.sub,
+            observaciones || null,
+            solicitudId,
+          ]
+        );
+
+        await client.query(
+          `UPDATE solicitud_retiro_detalle
+           SET cantidad_entregada = COALESCE(cantidad_entregada, 0) + $1,
+               id_movimiento = $2
+           WHERE id_solicitud_retiro = $3 AND id_producto = $4`,
+          [item.cantidad, movimientoId, solicitudId, item.id_producto]
+        );
+      }
+
+      const pendientesRes = await client.query(
+        `SELECT COUNT(*)::int AS pendientes
+         FROM solicitud_retiro_detalle
+         WHERE id_solicitud_retiro = $1
+           AND COALESCE(cantidad_entregada, 0) < cantidad_solicitada`,
+        [solicitudId]
+      );
+
+      if (Number(pendientesRes.rows[0]?.pendientes || 0) === 0) {
+        await client.query(
+          `UPDATE solicitud_retiro
+           SET estado = 'entregado',
+               id_usuario_entrega = $1,
+               fecha_entrega = NOW(),
+               id_usuario_acepta = COALESCE(id_usuario_acepta, $1),
+               fecha_aceptacion = COALESCE(fecha_aceptacion, NOW())
+           WHERE id = $2`,
+          [req.user.sub, solicitudId]
+        );
+        solicitudesEntregadas.add(solicitudId);
+      }
+    }
+
+    for (const [productoId, total] of totalPorProducto.entries()) {
+      await client.query(
+        `UPDATE stock_deposito
+         SET cantidad = cantidad - $1
+         WHERE id_deposito = $2 AND id_producto = $3`,
+        [total, depositoId, productoId]
+      );
+    }
+
+    await client.query("COMMIT");
+
+    return res.json({
+      ok: true,
+      departamento: departamentoValue,
+      movimientos_creados: movimientosCreados,
+      solicitudes_aceptadas: [...solicitudesAceptadas],
+      solicitudes_entregadas: [...solicitudesEntregadas],
+      total_productos: totalPorProducto.size,
+      total_cantidad: [...totalPorProducto.values()].reduce((acc, value) => acc + value, 0),
+      message: "Egreso múltiple por departamento registrado con éxito",
+    });
+  } catch (err) {
+    try {
+      await client.query("ROLLBACK");
+    } catch (_) { /* ignore */ }
+    console.error("Error al registrar egreso múltiple por departamento:", err);
+    const status = Number(err?.status || 500);
+    return res.status(status).json({ error: err.message || "No se pudo registrar el egreso por departamento" });
   } finally {
     client.release();
   }

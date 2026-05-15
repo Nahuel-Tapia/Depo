@@ -30,7 +30,7 @@ router.use(authenticate);
 // Listar movimientos
 router.get("/", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW), async (req, res) => {
   try {
-    const { producto_id, id_deposito, tipo, desde, hasta, usuario, limit = 50, offset = 0 } = req.query;
+    const { producto_id, id_deposito, tipo, desde, hasta, usuario, proveedor, limit = 50, offset = 0 } = req.query;
 
     let query = `
       SELECT 
@@ -42,7 +42,7 @@ router.get("/", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW), async (req, 
         m.estado_producto,
         m.cargo_retira,
         i.nombre as institucion_nombre,
-        pr.nombre as proveedor_nombre,
+        COALESCE(pr.nombre, pr_lic.proveedor_nombre) as proveedor_nombre,
         m.motivo,
         u.nombre as usuario_nombre,
         u.email as usuario_email,
@@ -54,6 +54,28 @@ router.get("/", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW), async (req, 
       LEFT JOIN usuario u ON m.id_usuario = u.id_usuario
       LEFT JOIN institucion i ON m.id_institucion = i.id_institucion
       LEFT JOIN proveedor pr ON m.id_proveedor = pr.id_proveedor
+      LEFT JOIN LATERAL (
+        SELECT cph.id_proveedor, prov.nombre AS proveedor_nombre
+        FROM compra_precio_historico cph
+        JOIN proveedor prov ON prov.id_proveedor = cph.id_proveedor
+        WHERE cph.id_producto = m.id_producto
+          AND cph.anio = (
+            CASE
+              WHEN substring(m.motivo from 'REMITO-([0-9]{4})-') IS NOT NULL
+                THEN CAST(substring(m.motivo from 'REMITO-([0-9]{4})-') AS INT)
+              WHEN substring(m.motivo from 'Licitación #([0-9]+)') IS NOT NULL
+                THEN (
+                  SELECT lp.anio
+                  FROM licitacion_publicada lp
+                  WHERE lp.id = CAST(substring(m.motivo from 'Licitación #([0-9]+)') AS INT)
+                  LIMIT 1
+                )
+              ELSE NULL
+            END
+          )
+        ORDER BY cph.updated_at DESC NULLS LAST, cph.id_proveedor
+        LIMIT 1
+      ) pr_lic ON m.id_proveedor IS NULL
       LEFT JOIN deposito d ON m.id_deposito = d.id_deposito
       WHERE 1 = 1
     `;
@@ -73,6 +95,19 @@ router.get("/", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW), async (req, 
     if (id_deposito) {
       query += ` AND m.id_deposito = $${paramIndex++}`;
       params.push(id_deposito);
+    }
+
+    if (proveedor) {
+      const proveedorStr = String(proveedor).trim();
+      if (proveedorStr) {
+        if (/^\d+$/.test(proveedorStr)) {
+          query += ` AND COALESCE(m.id_proveedor, pr_lic.id_proveedor) = $${paramIndex++}`;
+          params.push(parseInt(proveedorStr, 10));
+        } else {
+          query += ` AND COALESCE(pr.nombre, pr_lic.proveedor_nombre) ILIKE $${paramIndex++}`;
+          params.push(`%${proveedorStr}%`);
+        }
+      }
     }
 
     query += ` ORDER BY m.fecha_movimiento DESC LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
@@ -100,7 +135,7 @@ router.get("/:id", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW), async (re
         m.estado_producto,
         m.cargo_retira,
         i.nombre as institucion_nombre,
-        pr.nombre as proveedor_nombre,
+        COALESCE(pr.nombre, pr_lic.proveedor_nombre) as proveedor_nombre,
         m.motivo,
         u.nombre as usuario_nombre,
         m.fecha_movimiento as created_at
@@ -109,6 +144,28 @@ router.get("/:id", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW), async (re
       LEFT JOIN usuario u ON m.id_usuario = u.id_usuario
       LEFT JOIN institucion i ON m.id_institucion = i.id_institucion
       LEFT JOIN proveedor pr ON m.id_proveedor = pr.id_proveedor
+      LEFT JOIN LATERAL (
+        SELECT cph.id_proveedor, prov.nombre AS proveedor_nombre
+        FROM compra_precio_historico cph
+        JOIN proveedor prov ON prov.id_proveedor = cph.id_proveedor
+        WHERE cph.id_producto = m.id_producto
+          AND cph.anio = (
+            CASE
+              WHEN substring(m.motivo from 'REMITO-([0-9]{4})-') IS NOT NULL
+                THEN CAST(substring(m.motivo from 'REMITO-([0-9]{4})-') AS INT)
+              WHEN substring(m.motivo from 'Licitación #([0-9]+)') IS NOT NULL
+                THEN (
+                  SELECT lp.anio
+                  FROM licitacion_publicada lp
+                  WHERE lp.id = CAST(substring(m.motivo from 'Licitación #([0-9]+)') AS INT)
+                  LIMIT 1
+                )
+              ELSE NULL
+            END
+          )
+        ORDER BY cph.updated_at DESC NULLS LAST, cph.id_proveedor
+        LIMIT 1
+      ) pr_lic ON m.id_proveedor IS NULL
       WHERE m.id_movimiento = ?
     `, [id]);
 
