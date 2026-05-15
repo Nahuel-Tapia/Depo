@@ -740,13 +740,20 @@ function DirectivoPedidos() {
   const ApprovalStepper = ({ pedido }) => {
     const { estado, logistica } = pedido
     
-    let steps = [
-      { id: 'pendiente', label: 'Supervisor' },
-      { id: 'pendiente_director', label: 'Director Área' },
-      { id: 'aprobado', label: 'Autorizado' }
-    ]
+    // Para pedidos de tipo 'refuerzo' no mostramos el paso de Director Área
+    const isAnual = (pedido.tipo || 'anual') === 'anual'
+    let steps = isAnual
+      ? [
+          { id: 'pendiente', label: 'Supervisor' },
+          { id: 'pendiente_director', label: 'Director Área' },
+          { id: 'aprobado', label: 'Autorizado' }
+        ]
+      : [
+          { id: 'pendiente', label: 'Supervisor' },
+          { id: 'aprobado', label: 'Autorizado' }
+        ]
 
-    if (pedido.tipo === 'anual' && logistica) {
+    if (isAnual && pedido.tipo === 'anual' && logistica) {
       steps = [
         ...steps,
         { id: 'licitacion', label: 'Licitación' },
@@ -756,7 +763,9 @@ function DirectivoPedidos() {
     }
 
     const getStepStatus = (stepId, currentEstado, log) => {
-      const order = ['pendiente', 'pendiente_director', 'aprobado', 'licitacion', 'en_deposito', 'entregado']
+      const order = isAnual
+        ? ['pendiente', 'pendiente_director', 'aprobado', 'licitacion', 'en_deposito', 'entregado']
+        : ['pendiente', 'aprobado']
       let logicalEstado = currentEstado
 
       if (pedido.tipo === 'anual' && log && currentEstado === 'aprobado') {

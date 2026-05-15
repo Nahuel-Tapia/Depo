@@ -14,6 +14,7 @@ import SupervisorDashboard from '../components/SupervisorDashboard'
 import SupervisorStatsDashboard from '../components/SupervisorStatsDashboard'
 import AsignarKit from '../components/AsignarKit'
 import DirectorAreaPanel from '../components/DirectorAreaPanel'
+import MiStock from '../components/MiStock'
 import ComprasPanel from '../components/ComprasPanel'
 import ProductKitsManager from '../components/ProductKitsManager'
 import MiCuenta from '../components/MiCuenta'
@@ -61,6 +62,7 @@ const TABS = [
   { key: 'kits', label: 'Kits de Productos', permission: 'supervision.manage', roleFor: 'director_area', icon: BoxIcon },
   { key: 'depositos', label: 'Depositos', permission: 'stock.view', roleFor: 'admin', icon: BuildingIcon },
   { key: 'mi-cuenta', label: 'Mi cuenta', permission: null, icon: UserIcon },
+  { key: 'mi-stock', label: 'Mi stock', permission: 'pedidos.view', roleFor: 'directivo', icon: BoxIcon },
 ]
 
 export default function Dashboard() {
@@ -119,7 +121,7 @@ export default function Dashboard() {
     }
 
     if (user.role === 'directivo') {
-      return TABS.filter((tab) => ['inicio', 'pedidos', 'mi-cuenta'].includes(tab.key))
+      return TABS.filter((tab) => ['inicio', 'pedidos', 'mi-stock', 'mi-cuenta'].includes(tab.key))
     }
 
     if (user.role === 'operador') {
@@ -133,6 +135,18 @@ export default function Dashboard() {
         'deposito-recepcion',
         'deposito-distribucion',
         'solicitudes-retiro',
+      ].includes(tab.key))
+    }
+
+    if (user.role === 'operador_escolar') {
+      return TABS.filter((tab) => [
+        'inicio',
+        'mi-cuenta',
+        'productos',
+        'movimientos',
+        'proveedores',
+        'pedidos',
+        'instituciones'
       ].includes(tab.key))
     }
 
@@ -234,6 +248,8 @@ export default function Dashboard() {
         return <Movimientos />
       case 'pedidos':
         return <Pedidos />
+      case 'mi-stock':
+        return <MiStock />
       case 'instituciones':
         return <Instituciones />
       case 'historial':
