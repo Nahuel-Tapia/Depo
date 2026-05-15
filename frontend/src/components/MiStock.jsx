@@ -6,6 +6,27 @@ function itemKey(loteId, productoId) {
   return `${loteId}:${productoId}`
 }
 
+function filesToBase64(files = []) {
+  return Promise.all(
+    Array.from(files).map((file) =>
+      new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => {
+          const raw = String(reader.result || '')
+          const base64 = raw.includes(',') ? raw.split(',')[1] : raw
+          resolve({
+            nombre: file.name,
+            mime_type: file.type || 'image/jpeg',
+            datos: base64,
+          })
+        }
+        reader.onerror = () => reject(new Error('No se pudo leer archivo'))
+        reader.readAsDataURL(file)
+      })
+    )
+  )
+}
+
 export default function MiStock() {
   const { token } = useAuth()
   const [loading, setLoading] = useState(true)
@@ -59,8 +80,12 @@ export default function MiStock() {
             const key = itemKey(lote.lote_id, item.id_producto)
             nextForm[key] = {
               cantidad_recibida: String(item.cantidad_planificada || 0),
+              cantidad_danada: String(item.cantidad_danada || 0),
+              detalle_danio: item.detalle_danio || '',
+              coincide_esperado: item.coincide_esperado !== false,
               observaciones_directivo: item.observaciones_directivo || '',
               reclamo_directivo: item.reclamo_directivo || '',
+              imagenes: item.imagenes || [],
             }
           }
         }
@@ -97,14 +122,21 @@ export default function MiStock() {
       return {
         id_producto: Number(item.id_producto),
         cantidad_recibida: Number(formRow.cantidad_recibida || 0),
+        cantidad_danada: Number(formRow.cantidad_danada || 0),
+        detalle_danio: formRow.detalle_danio || '',
+        coincide_esperado: formRow.coincide_esperado !== false,
         observaciones_directivo: formRow.observaciones_directivo || '',
         reclamo_directivo: formRow.reclamo_directivo || '',
+        imagenes: Array.isArray(formRow.imagenes) ? formRow.imagenes : [],
       }
     })
 
-    const invalidItem = payloadItems.find((it, idx) => Number(it.cantidad_recibida) > Number(lote.items[idx]?.cantidad_planificada || 0))
+    const invalidItem = payloadItems.find((it, idx) => {
+      const planificada = Number(lote.items[idx]?.cantidad_planificada || 0)
+      return Number(it.cantidad_recibida) + Number(it.cantidad_danada || 0) > planificada
+    })
     if (invalidItem) {
-      setDistMsg({ text: 'Hay cantidades recibidas mayores a la planificada', type: 'error' })
+      setDistMsg({ text: 'Hay ítems donde recibido + dañado supera la cantidad planificada', type: 'error' })
       return
     }
 
@@ -125,6 +157,18 @@ export default function MiStock() {
       }
     } catch {
       setDistMsg({ text: 'Error de conexión al confirmar recepción', type: 'error' })
+    }
+  }
+
+  const handleImageChange = async (loteId, productoId, fileList) => {
+    const files = Array.from(fileList || [])
+    if (files.length === 0) return
+
+    try {
+      const converted = await filesToBase64(files)
+      handleFormChange(loteId, productoId, 'imagenes', converted)
+    } catch {
+      setDistMsg({ text: 'No se pudieron procesar las imágenes de daño', type: 'error' })
     }
   }
 
@@ -173,9 +217,9 @@ export default function MiStock() {
       )}
 
       <div style={{ marginTop: 28 }}>
-        <h3 style={{ marginBottom: 6 }}>Validación de Distribuciones Recibidas</h3>
+        <h3 style={{ marginBottom: 6 }}>Recepción de Envío</h3>
         <p style={{ color: 'var(--muted)', marginTop: 0 }}>
-          Confirmá recepción completa, parcial o cargá reclamo por diferencias detectadas.
+          Confirmá recepción total o parcial, informá productos dañados y adjuntá evidencia cuando corresponda.
         </p>
 
         {distMsg.text && (
@@ -207,14 +251,19 @@ export default function MiStock() {
                     <th>Producto</th>
                     <th style={{ textAlign: 'center' }}>Planificado</th>
                     <th style={{ textAlign: 'center' }}>Recibido Ahora</th>
+                    <th style={{ textAlign: 'center' }}>Dañado</th>
+                    <th style={{ textAlign: 'center' }}>Coincide</th>
+                    <th>Detalle daño</th>
                     <th>Observaciones</th>
                     <th>Reclamo</th>
+                    <th>Evidencia</th>
                   </tr>
                 </thead>
                 <tbody>
                   {(lote.items || []).map((item) => {
                     const key = itemKey(lote.lote_id, item.id_producto)
                     const row = recepcionForm[key] || {}
+                    const imagenes = Array.isArray(row.imagenes) ? row.imagenes : []
                     return (
                       <tr key={`${lote.lote_id}-${item.id_producto}`}>
                         <td>
@@ -232,6 +281,31 @@ export default function MiStock() {
                             style={{ width: 120, textAlign: 'center' }}
                           />
                         </td>
+                        <td style={{ textAlign: 'center' }}>
+                          <input
+                            type="number"
+                            min="0"
+                            max={item.cantidad_planificada}
+                            value={row.cantidad_danada || ''}
+                            onChange={(e) => handleFormChange(lote.lote_id, item.id_producto, 'cantidad_danada', e.target.value)}
+                            style={{ width: 90, textAlign: 'center' }}
+                          />
+                        </td>
+                        <td style={{ textAlign: 'center' }}>
+                          <input
+                            type="checkbox"
+                            checked={row.coincide_esperado !== false}
+                            onChange={(e) => handleFormChange(lote.lote_id, item.id_producto, 'coincide_esperado', e.target.checked)}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            value={row.detalle_danio || ''}
+                            onChange={(e) => handleFormChange(lote.lote_id, item.id_producto, 'detalle_danio', e.target.value)}
+                            placeholder="Detalle de daño"
+                          />
+                        </td>
                         <td>
                           <input
                             type="text"
@@ -247,6 +321,27 @@ export default function MiStock() {
                             onChange={(e) => handleFormChange(lote.lote_id, item.id_producto, 'reclamo_directivo', e.target.value)}
                             placeholder="Detalle de reclamo"
                           />
+                        </td>
+                        <td>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            onChange={(e) => handleImageChange(lote.lote_id, item.id_producto, e.target.files)}
+                          />
+                          {imagenes.length > 0 && (
+                            <div style={{ marginTop: 6, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                              {imagenes.slice(0, 3).map((img, idx) => (
+                                <img
+                                  key={`${key}-img-${idx}`}
+                                  alt={img.nombre || `img-${idx}`}
+                                  src={`data:${img.mime_type || 'image/jpeg'};base64,${img.datos}`}
+                                  style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 4, border: '1px solid #e2e8f0' }}
+                                />
+                              ))}
+                              {imagenes.length > 3 && <span style={{ fontSize: '0.75rem', color: '#64748b' }}>+{imagenes.length - 3}</span>}
+                            </div>
+                          )}
                         </td>
                       </tr>
                     )

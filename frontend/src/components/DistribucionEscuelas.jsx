@@ -9,12 +9,16 @@ export default function DistribucionEscuelas() {
   const [detalleZona, setDetalleZona] = useState(null)
   const [departamentosEnvio, setDepartamentosEnvio] = useState([])
   const [detalleDepartamento, setDetalleDepartamento] = useState(null)
+  const [seguimientoEnvio, setSeguimientoEnvio] = useState([])
+  const [resumenSeguimiento, setResumenSeguimiento] = useState(null)
+  const [detalleSeguimiento, setDetalleSeguimiento] = useState(null)
   const [depositos, setDepositos] = useState([])
   const [selectedDeposito, setSelectedDeposito] = useState('')
   const [entregas, setEntregas] = useState({})
   const [entregasEnvio, setEntregasEnvio] = useState({})
   const [loading, setLoading] = useState(false)
   const [loadingEnvio, setLoadingEnvio] = useState(false)
+  const [loadingSeguimiento, setLoadingSeguimiento] = useState(false)
   const [saving, setSaving] = useState(false)
   const [savingEnvio, setSavingEnvio] = useState(false)
   const [msg, setMsg] = useState({ text: '', type: '' })
@@ -78,10 +82,48 @@ export default function DistribucionEscuelas() {
     }
   }
 
+  const loadSeguimientoEnvio = async () => {
+    setLoadingSeguimiento(true)
+    try {
+      const res = await apiFetch(`/api/entregas/solicitudes-envio/seguimiento?anio=${anioActual}`, { token })
+      if (res.ok) {
+        const data = await res.json()
+        setSeguimientoEnvio(data.lotes || [])
+        setResumenSeguimiento(data.resumen || null)
+      } else {
+        const data = await res.json().catch(() => ({}))
+        setMsg({ text: data.error || 'No se pudo cargar seguimiento de envíos', type: 'error' })
+      }
+    } catch {
+      setMsg({ text: 'Error de conexión al cargar seguimiento de envíos', type: 'error' })
+    } finally {
+      setLoadingSeguimiento(false)
+    }
+  }
+
+  const verDetalleSeguimiento = async (loteId) => {
+    setLoadingSeguimiento(true)
+    try {
+      const res = await apiFetch(`/api/entregas/solicitudes-envio/seguimiento/${loteId}`, { token })
+      if (res.ok) {
+        const data = await res.json()
+        setDetalleSeguimiento(data)
+      } else {
+        const data = await res.json().catch(() => ({}))
+        setMsg({ text: data.error || 'No se pudo cargar el detalle del lote', type: 'error' })
+      }
+    } catch {
+      setMsg({ text: 'Error de conexión al cargar detalle de seguimiento', type: 'error' })
+    } finally {
+      setLoadingSeguimiento(false)
+    }
+  }
+
   useEffect(() => {
     loadZonas()
     loadDepositos()
     loadDepartamentosEnvio()
+    loadSeguimientoEnvio()
   }, [])
 
   const verDetalleZona = async (zona) => {
@@ -241,6 +283,7 @@ export default function DistribucionEscuelas() {
         setDetalleDepartamento(null)
         setEntregasEnvio({})
         loadDepartamentosEnvio()
+        loadSeguimientoEnvio()
       } else {
         const data = await res.json().catch(() => ({}))
         setMsg({ text: data.error || 'No se pudo registrar el egreso por departamento', type: 'error' })
@@ -374,6 +417,113 @@ export default function DistribucionEscuelas() {
   }
 
   const renderEnviosDepartamento = () => {
+    const renderBadgeEstadoLote = (estado) => {
+      const value = String(estado || '').toLowerCase()
+      if (value === 'recibido_total') return <span className="badge" style={{ background: '#dcfce7', color: '#166534' }}>Recibido total</span>
+      if (value === 'con_reclamos') return <span className="badge" style={{ background: '#fee2e2', color: '#991b1b' }}>Con reclamos</span>
+      if (value === 'parcialmente_recibido') return <span className="badge" style={{ background: '#fef3c7', color: '#92400e' }}>Parcial</span>
+      return <span className="badge" style={{ background: '#e0f2fe', color: '#0c4a6e' }}>En tránsito</span>
+    }
+
+    const renderPanelSeguimiento = () => (
+      <section style={{ marginTop: 18, borderTop: '1px solid #e2e8f0', paddingTop: 16 }}>
+        <h4 style={{ margin: '0 0 8px 0' }}>Seguimiento de Envíos</h4>
+        <p style={{ marginTop: 0, color: 'var(--muted)' }}>
+          Corroborá estado de recepción por institución luego de confirmar el egreso.
+        </p>
+
+        {resumenSeguimiento && (
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
+            <span className="badge" style={{ background: '#f8fafc', color: '#334155' }}>Lotes: {resumenSeguimiento.total_lotes || 0}</span>
+            <span className="badge" style={{ background: '#e0f2fe', color: '#0c4a6e' }}>En tránsito: {resumenSeguimiento.en_transito || 0}</span>
+            <span className="badge" style={{ background: '#fef3c7', color: '#92400e' }}>Parciales: {resumenSeguimiento.parcialmente_recibidos || 0}</span>
+            <span className="badge" style={{ background: '#fee2e2', color: '#991b1b' }}>Con reclamos: {resumenSeguimiento.con_reclamos || 0}</span>
+            <span className="badge" style={{ background: '#dcfce7', color: '#166534' }}>Recibidos totales: {resumenSeguimiento.recibidos_totales || 0}</span>
+          </div>
+        )}
+
+        {loadingSeguimiento ? (
+          <div className="sv-empty-state">Cargando seguimiento...</div>
+        ) : seguimientoEnvio.length === 0 ? (
+          <div className="sv-empty-state">Todavía no hay lotes de envío por departamento.</div>
+        ) : (
+          <table>
+            <thead>
+              <tr style={{ background: '#f8fafc' }}>
+                <th>LOTE</th>
+                <th>DEPARTAMENTO</th>
+                <th>DEPÓSITO</th>
+                <th style={{ textAlign: 'center' }}>INSTITUCIONES</th>
+                <th style={{ textAlign: 'center' }}>PLANIFICADA</th>
+                <th style={{ textAlign: 'center' }}>RECIBIDA</th>
+                <th style={{ textAlign: 'center' }}>ESTADO</th>
+                <th style={{ textAlign: 'right' }}>ACCIONES</th>
+              </tr>
+            </thead>
+            <tbody>
+              {seguimientoEnvio.map((lote) => (
+                <tr key={lote.lote_id}>
+                  <td style={{ fontWeight: 700 }}>#{lote.lote_id}</td>
+                  <td>{lote.departamento || 'SIN_DEPARTAMENTO'}</td>
+                  <td>{lote.deposito_nombre || '-'}</td>
+                  <td style={{ textAlign: 'center' }}>{lote.total_instituciones || 0}</td>
+                  <td style={{ textAlign: 'center' }}>{lote.cantidad_planificada_total || 0}</td>
+                  <td style={{ textAlign: 'center' }}>{lote.cantidad_recibida_total || 0}</td>
+                  <td style={{ textAlign: 'center' }}>{renderBadgeEstadoLote(lote.estado_lote)}</td>
+                  <td style={{ textAlign: 'right' }}>
+                    <button type="button" onClick={() => verDetalleSeguimiento(lote.lote_id)}>Ver Seguimiento</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+
+        {detalleSeguimiento?.lote && (
+          <div style={{ marginTop: 14, border: '1px solid #e2e8f0', borderRadius: 10, padding: 14 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
+              <div>
+                <strong>Lote #{detalleSeguimiento.lote.lote_id}</strong>
+                <div style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>
+                  Departamento: {detalleSeguimiento.lote.departamento} | Depósito: {detalleSeguimiento.lote.deposito_nombre || '-'}
+                </div>
+              </div>
+              <button className="secondary" type="button" onClick={() => setDetalleSeguimiento(null)}>Cerrar detalle</button>
+            </div>
+
+            {(detalleSeguimiento.instituciones || []).map((institucion) => (
+              <div key={institucion.id_institucion} style={{ border: '1px solid #f1f5f9', borderRadius: 8, padding: 10, marginBottom: 10 }}>
+                <div style={{ fontWeight: 700 }}>{institucion.institucion_nombre}</div>
+                <div style={{ fontSize: '0.82rem', color: 'var(--muted)', marginBottom: 8 }}>CUE: {institucion.cue || '-'}</div>
+                <table style={{ marginBottom: 0 }}>
+                  <thead>
+                    <tr style={{ background: '#f8fafc' }}>
+                      <th>Producto</th>
+                      <th style={{ textAlign: 'center' }}>Planificada</th>
+                      <th style={{ textAlign: 'center' }}>Recibida</th>
+                      <th style={{ textAlign: 'center' }}>Dañada</th>
+                      <th style={{ textAlign: 'center' }}>Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(institucion.items || []).map((item) => (
+                      <tr key={item.lote_item_id}>
+                        <td>{item.producto_nombre}</td>
+                        <td style={{ textAlign: 'center' }}>{item.cantidad_planificada}</td>
+                        <td style={{ textAlign: 'center' }}>{item.cantidad_recibida}</td>
+                        <td style={{ textAlign: 'center' }}>{item.cantidad_danada || 0}</td>
+                        <td style={{ textAlign: 'center' }}>{renderBadgeEstadoLote(item.estado_recepcion === 'recibido' ? 'recibido_total' : item.estado_recepcion === 'reclamo' ? 'con_reclamos' : item.estado_recepcion === 'parcial' ? 'parcialmente_recibido' : 'en_transito')}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+    )
+
     if (!detalleDepartamento) {
       if (loadingEnvio) return <div className="sv-empty-state">Buscando departamentos con envíos pendientes...</div>
       if (departamentosEnvio.length === 0) return <div className="sv-empty-state">No hay solicitudes con envío pendientes.</div>
@@ -410,6 +560,8 @@ export default function DistribucionEscuelas() {
           <p style={{ marginTop: 10, color: 'var(--muted)', fontSize: '0.88rem' }}>
             Para ver qué solicitó cada escuela y las instituciones faltantes por solicitar retiro, entrá al detalle del departamento.
           </p>
+
+          {renderPanelSeguimiento()}
         </>
       )
     }
@@ -576,6 +728,8 @@ export default function DistribucionEscuelas() {
             {savingEnvio ? 'Registrando...' : 'Confirmar Egreso por Departamento'}
           </button>
         </div>
+
+        {renderPanelSeguimiento()}
       </section>
     )
   }

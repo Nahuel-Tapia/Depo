@@ -101,6 +101,11 @@ async function initDb() {
   const check = await get("SELECT COUNT(*) as count FROM usuario");
   console.log("Database initialized");
 
+  // Compatibilidad de esquema: algunas rutas aún consultan producto.marca y zona.nombre.
+  await pool.query("ALTER TABLE IF EXISTS producto ADD COLUMN IF NOT EXISTS marca VARCHAR(120)");
+  await pool.query("ALTER TABLE IF EXISTS zona ADD COLUMN IF NOT EXISTS nombre VARCHAR(120)");
+  await pool.query("UPDATE zona SET nombre = name WHERE nombre IS NULL AND name IS NOT NULL");
+
   await pool.query("ALTER TABLE usuario DROP CONSTRAINT IF EXISTS usuario_dni_key");
   
   // Crear usuario admin por defecto si no existe
