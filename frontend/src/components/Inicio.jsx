@@ -29,7 +29,26 @@ export default function Inicio({ onNavigate }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [modalType, setModalType] = useState(null)
+  const [movimientosModalInfo, setMovimientosModalInfo] = useState(null)
+  const [movimientosList, setMovimientosList] = useState([])
   const printRef = useRef(null)
+
+  const handleMovimientoClick = async (tipo, titulo) => {
+    setMovimientosModalInfo({ tipo, titulo })
+    setMovimientosList(null) // Representa estado de carga
+    try {
+      const res = await apiFetch(`/api/dashboard/movimientos-mes?tipo=${tipo}`, { token })
+      if (res.ok) {
+        const data = await res.json()
+        setMovimientosList(data.movimientos || [])
+      } else {
+        setMovimientosList([])
+      }
+    } catch (err) {
+      console.error(err)
+      setMovimientosList([])
+    }
+  }
 
   useEffect(() => {
     if (user?.role === 'supervisor' || user?.role === 'directivo' || user?.role === 'director_area') {
@@ -205,11 +224,11 @@ export default function Inicio({ onNavigate }) {
           </div>
 
           <div className="dashboard-mini-grid">
-            <MiniCard label="Total" value={stats.movimientos_mes.total} color="var(--dark)" />
-            <MiniCard label="Ingresos" value={stats.movimientos_mes.ingresos} color="#065f46" />
-            <MiniCard label="Egresos" value={stats.movimientos_mes.egresos} color="#b91c1c" />
-            <MiniCard label="Ajustes" value={stats.movimientos_mes.ajustes} color="#92400e" />
-            <MiniCard label="Devoluciones" value={stats.movimientos_mes.devoluciones} color="#1e40af" />
+            <MiniCard label="Total" value={stats.movimientos_mes.total} color="var(--dark)" onClick={() => handleMovimientoClick('total', 'Todos los movimientos del mes')} />
+            <MiniCard label="Ingresos" value={stats.movimientos_mes.ingresos} color="#065f46" onClick={() => handleMovimientoClick('ingreso', 'Ingresos del mes')} />
+            <MiniCard label="Egresos" value={stats.movimientos_mes.egresos} color="#b91c1c" onClick={() => handleMovimientoClick('egreso', 'Egresos del mes')} />
+            <MiniCard label="Ajustes" value={stats.movimientos_mes.ajustes} color="#92400e" onClick={() => handleMovimientoClick('ajuste', 'Ajustes del mes')} />
+            <MiniCard label="Devoluciones" value={stats.movimientos_mes.devoluciones} color="#1e40af" onClick={() => handleMovimientoClick('devolucion', 'Devoluciones del mes')} />
           </div>
         </section>
 
@@ -345,6 +364,72 @@ export default function Inicio({ onNavigate }) {
             </div>
           </div>
         )}
+
+        {movimientosModalInfo && (
+          <div
+            className="dashboard-modal-overlay"
+            onClick={(event) => {
+              if (event.target === event.currentTarget) setMovimientosModalInfo(null)
+            }}
+          >
+            <div className="dashboard-modal-panel">
+              <div className="dashboard-section-head">
+                <div>
+                  <h3>{movimientosModalInfo.titulo}</h3>
+                  <p>Detalle de los movimientos registrados.</p>
+                </div>
+              </div>
+
+              {movimientosList === null ? (
+                <p style={{ textAlign: 'center', color: 'var(--muted)', padding: '20px' }}>Cargando movimientos...</p>
+              ) : (
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Fecha</th>
+                      <th>Tipo</th>
+                      <th>Producto</th>
+                      <th>Cantidad</th>
+                      <th>Usuario</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {movimientosList.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} style={{ textAlign: 'center', color: 'var(--muted)' }}>
+                          No hay movimientos para mostrar en esta categoría
+                        </td>
+                      </tr>
+                    ) : (
+                      movimientosList.map((mov) => {
+                        const tipoStyle = TIPO_COLORS[mov.tipo] || {}
+                        return (
+                          <tr key={mov.id}>
+                            <td>{new Date(mov.fecha).toLocaleDateString('es-AR')}</td>
+                            <td>
+                              <span className="badge" style={{ background: tipoStyle.bg, color: tipoStyle.color }}>
+                                {mov.tipo}
+                              </span>
+                            </td>
+                            <td style={{ fontWeight: 600 }}>{mov.producto || '-'}</td>
+                            <td style={{ textAlign: 'center' }}>{mov.cantidad}</td>
+                            <td>{mov.usuario || '-'}</td>
+                          </tr>
+                        )
+                      })
+                    )}
+                  </tbody>
+                </table>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+                <button type="button" className="secondary" onClick={() => setMovimientosModalInfo(null)}>
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -365,7 +450,15 @@ function StatCard({ label, value, icon, accent, onClick }) {
   )
 }
 
-function MiniCard({ label, value, color }) {
+function MiniCard({ label, value, color, onClick }) {
+  if (onClick) {
+    return (
+      <button type="button" className="dashboard-mini-card" onClick={onClick}>
+        <div className="dashboard-mini-value" style={{ color }}>{value}</div>
+        <div className="dashboard-mini-label">{label}</div>
+      </button>
+    )
+  }
   return (
     <div className="dashboard-mini-card">
       <div className="dashboard-mini-value" style={{ color }}>{value}</div>
