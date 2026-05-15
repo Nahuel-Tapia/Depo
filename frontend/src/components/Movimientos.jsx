@@ -86,7 +86,7 @@ export default function Movimientos() {
 
   const loadInstituciones = async () => {
     try {
-      const res = await fetch('/api/instituciones/public/list')
+      const res = await apiFetch('/api/instituciones/public/list')
       if (res.ok) {
         const data = await res.json()
         setInstituciones(data.instituciones || [])
@@ -368,14 +368,9 @@ const handleBajaSubmit = async (e) => {
 
   if (!token) { setMsg({ text: 'No autenticado: token no disponible', type: 'error' }); return }
 
-  const apiBase = import.meta.env.VITE_API_BASE || ''
-  const url = apiBase ? `${apiBase.replace(/\/$/, '')}/api/movimientos/baja` : '/api/movimientos/baja'
-
-  const res = await fetch(url, {
+  const res = await apiFetch('/api/movimientos/baja', {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`
-    },
+    token,
     body: fd
   })
 

@@ -79,7 +79,7 @@ export default function Usuarios() {
 
   const loadInstituciones = async () => {
     try {
-      const res = await fetch('/api/instituciones/public/list')
+      const res = await apiFetch('/api/instituciones/public/list')
       const data = await res.json()
       setInstituciones(data.instituciones || [])
     } catch { /* ignore */ }
@@ -88,7 +88,7 @@ export default function Usuarios() {
   useEffect(() => {
     if (form.role === 'directivo' && form.cue && form.cue.length === 9) {
       setCueLoading(true)
-      fetch(`/api/instituciones/public/cue/${form.cue}`)
+      apiFetch(`/api/instituciones/public/cue/${form.cue}`)
         .then((res) => res.ok ? res.json() : null)
         .then((data) => {
           setCueInfo(data)

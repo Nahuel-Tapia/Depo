@@ -156,7 +156,7 @@ router.get("/alertas", async (req, res) => {
         m.id_movimiento AS id,
         m.tipo,
         m.cantidad,
-        p.nombre || COALESCE(' - ' || NULLIF(p.marca, ''), '') as producto_nombre,
+        p.nombre as producto_nombre,
         p.unidad_medida,
         m.fecha_movimiento AS fecha,
         m.motivo AS notas
@@ -175,7 +175,7 @@ router.get("/alertas", async (req, res) => {
         m.id_movimiento AS id,
         m.tipo,
         m.cantidad,
-        p.nombre || COALESCE(' - ' || NULLIF(p.marca, ''), '') as producto_nombre,
+        p.nombre as producto_nombre,
         p.unidad_medida,
         m.fecha_movimiento AS fecha,
         u.nombre AS usuario_nombre

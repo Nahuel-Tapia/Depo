@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { apiFetch } from '../api'
 
 export default function Register() {
   const { login } = useAuth()
@@ -25,7 +26,7 @@ export default function Register() {
     }
 
     try {
-      const res = await fetch(`/api/instituciones/public/cue/${cue}`)
+      const res = await apiFetch(`/api/instituciones/public/cue/${cue}`)
       const data = await res.json().catch(() => ({}))
 
       if (res.ok && data.nombre) {
@@ -61,9 +62,8 @@ export default function Register() {
     setMsg({ text: '', type: '' })
 
     try {
-      const res = await fetch('/api/auth/register', {
+      const res = await apiFetch('/api/auth/register', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nombre, email, cue, nivel_educativo: nivelEducativo, numero, password })
       })
 
@@ -81,9 +81,8 @@ export default function Register() {
       }
 
       // Login automático
-      const loginRes = await fetch('/api/auth/login', {
+      const loginRes = await apiFetch('/api/auth/login', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, cue: '', password })
       })
 
