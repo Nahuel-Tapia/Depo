@@ -521,7 +521,7 @@ export default function Depositos() {
                     const disp = stock.find(s => s.id === p.id)?.cantidad || 0;
                     const stockText = (modalType === 'egreso' || modalType === 'traslado') ? ` - Disp: ${disp}` : '';
                     return (
-                      <option key={p.id} value={p.id}>{p.nombre} ({p.unidad_medida}){stockText}</option>
+                      <option key={p.id} value={p.id}>{p.nombre}{p.marca ? ` - ${p.marca}` : ''} ({p.unidad_medida}){stockText}</option>
                     )
                   })}
                 </select>

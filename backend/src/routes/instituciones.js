@@ -262,7 +262,7 @@ router.get("/historial", authorizePermissions(PERMISSIONS.INSTITUCIONES_VIEW), a
           ms.cantidad,
           ms.motivo,
           ms.estado_producto,
-          pr.nombre AS producto_nombre,
+          pr.nombre || COALESCE(' - ' || NULLIF(pr.marca, ''), '') AS producto_nombre,
           u.nombre AS usuario_nombre
         FROM movimiento_stock ms
         LEFT JOIN producto pr ON ms.id_producto = pr.id_producto
@@ -338,7 +338,7 @@ router.get("/:id(\\d+)", authorizePermissions(PERMISSIONS.INSTITUCIONES_VIEW), a
     // Obtener asignaciones de stock
     const asignaciones = await all(`
       SELECT 
-        a.id, a.producto_id, p.nombre as producto_nombre, p.codigo as producto_codigo,
+        a.id, a.producto_id, p.nombre || COALESCE(' - ' || NULLIF(p.marca, ''), '') as producto_nombre, p.codigo as producto_codigo,
         a.cantidad_asignada, a.cantidad_entregada, a.periodo
       FROM asignaciones_stock a
       JOIN producto p ON a.producto_id = p.id_producto
@@ -612,7 +612,7 @@ router.get("/:id/asignaciones", authorizePermissions(PERMISSIONS.INSTITUCIONES_V
 
     let sql = `
       SELECT 
-        a.id, a.producto_id, p.nombre as producto_nombre, p.codigo as producto_codigo,
+        a.id, a.producto_id, p.nombre || COALESCE(' - ' || NULLIF(p.marca, ''), '') as producto_nombre, p.codigo as producto_codigo,
         p.tipo as producto_tipo, a.cantidad_asignada, a.cantidad_entregada, 
         (a.cantidad_asignada - a.cantidad_entregada) as pendiente,
         a.periodo, a.created_at
@@ -783,7 +783,7 @@ router.post("/:id/entregar", authorizePermissions(PERMISSIONS.INSTITUCIONES_ASIG
     await client.query("BEGIN");
 
     const asignacionResult = await client.query(
-      `SELECT a.*, i.nombre as institucion_nombre, i.cue, p.nombre as producto_nombre, p.stock_actual
+      `SELECT a.*, i.nombre as institucion_nombre, i.cue, p.nombre || COALESCE(' - ' || NULLIF(p.marca, ''), '') as producto_nombre, p.stock_actual
        FROM asignaciones_stock a
        JOIN institucion i ON a.institucion_id = i.id_institucion
        JOIN producto p ON a.producto_id = p.id_producto
@@ -974,7 +974,7 @@ router.get("/:id/historial", authorizePermissions(PERMISSIONS.INSTITUCIONES_VIEW
           ms.motivo,
           ms.estado_producto,
           ms.cargo_retira,
-          pr.nombre AS producto_nombre,
+          pr.nombre || COALESCE(' - ' || NULLIF(pr.marca, ''), '') AS producto_nombre,
           u.nombre AS usuario_nombre
         FROM movimiento_stock ms
         LEFT JOIN producto pr ON ms.id_producto = pr.id_producto

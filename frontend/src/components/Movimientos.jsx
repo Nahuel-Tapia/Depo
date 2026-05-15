@@ -644,7 +644,7 @@ return (
                       />
                       <datalist id="egresoProductoList">
                         {productos.map(p => (
-                          <option key={p.id} value={p.nombre}>{p.nombre} ({p.unidad_medida || 'unidad'})</option>
+                          <option key={p.id} value={p.nombre}>{p.nombre}{p.marca ? ` - ${p.marca}` : ''} ({p.unidad_medida || 'unidad'})</option>
                         ))}
                       </datalist>
                     </div>
@@ -765,7 +765,7 @@ return (
                       >
                         <option value="">Seleccionar producto...</option>
                         {productos.map(p => (
-                          <option key={p.id} value={p.id}>{p.nombre} ({p.unidad_medida || 'unidad'})</option>
+                          <option key={p.id} value={p.id}>{p.nombre}{p.marca ? ` - ${p.marca}` : ''} ({p.unidad_medida || 'unidad'})</option>
                         ))}
                       </select>
                     </div>
@@ -892,7 +892,7 @@ return (
                   <select value={bajaItem.productoId} onChange={e => setBajaItem({ ...bajaItem, productoId: e.target.value })}>
                     <option value="">Seleccionar producto...</option>
                     {productos.map(p => (
-                      <option key={p.id} value={p.id}>{p.nombre} ({p.unidad_medida || 'unidad'})</option>
+                      <option key={p.id} value={p.id}>{p.nombre}{p.marca ? ` - ${p.marca}` : ''} ({p.unidad_medida || 'unidad'})</option>
                     ))}
                   </select>
                 </div>

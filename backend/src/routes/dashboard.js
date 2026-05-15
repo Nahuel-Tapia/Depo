@@ -52,7 +52,7 @@ router.get("/stats", authorizePermissions(PERMISSIONS.DASHBOARD_VIEW), async (re
       stockBajo = await all(`
         SELECT 
           p.id_producto as id,
-          p.nombre,
+          p.nombre || COALESCE(' - ' || NULLIF(p.marca, ''), '') as nombre,
           COALESCE(sd.stock_total, 0) as stock_actual,
           p.stock_minimo,
           c.nombre as categoria
@@ -71,7 +71,7 @@ router.get("/stats", authorizePermissions(PERMISSIONS.DASHBOARD_VIEW), async (re
       sinStockList = await all(`
         SELECT
           p.id_producto as id,
-          p.nombre,
+          p.nombre || COALESCE(' - ' || NULLIF(p.marca, ''), '') as nombre,
           COALESCE(sd.stock_total, 0) as stock_actual,
           p.stock_minimo,
           c.nombre as categoria
@@ -98,7 +98,7 @@ router.get("/stats", authorizePermissions(PERMISSIONS.DASHBOARD_VIEW), async (re
       stockBajo = await all(`
         SELECT 
           p.id_producto as id,
-          p.nombre,
+          p.nombre || COALESCE(' - ' || NULLIF(p.marca, ''), '') as nombre,
           p.stock_actual,
           p.stock_minimo,
           c.nombre as categoria
@@ -112,7 +112,7 @@ router.get("/stats", authorizePermissions(PERMISSIONS.DASHBOARD_VIEW), async (re
       sinStockList = await all(`
         SELECT
           p.id_producto as id,
-          p.nombre,
+          p.nombre || COALESCE(' - ' || NULLIF(p.marca, ''), '') as nombre,
           p.stock_actual,
           p.stock_minimo,
           c.nombre as categoria
@@ -150,7 +150,7 @@ router.get("/stats", authorizePermissions(PERMISSIONS.DASHBOARD_VIEW), async (re
     const ultimosMovimientos = await all(`
       SELECT 
         m.id_movimiento as id,
-        p.nombre as producto,
+        p.nombre || COALESCE(' - ' || NULLIF(p.marca, ''), '') as producto,
         m.tipo,
         m.cantidad,
         i.nombre as institucion,
