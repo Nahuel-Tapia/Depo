@@ -52,7 +52,7 @@ router.get("/stats", authorizePermissions(PERMISSIONS.DASHBOARD_VIEW), async (re
       stockBajo = await all(`
         SELECT 
           p.id_producto as id,
-          p.nombre,
+          p.nombre || COALESCE(' - ' || NULLIF(p.marca, ''), '') as nombre,
           COALESCE(sd.stock_total, 0) as stock_actual,
           p.stock_minimo,
           c.nombre as categoria
@@ -71,7 +71,7 @@ router.get("/stats", authorizePermissions(PERMISSIONS.DASHBOARD_VIEW), async (re
       sinStockList = await all(`
         SELECT
           p.id_producto as id,
-          p.nombre,
+          p.nombre || COALESCE(' - ' || NULLIF(p.marca, ''), '') as nombre,
           COALESCE(sd.stock_total, 0) as stock_actual,
           p.stock_minimo,
           c.nombre as categoria
@@ -98,7 +98,7 @@ router.get("/stats", authorizePermissions(PERMISSIONS.DASHBOARD_VIEW), async (re
       stockBajo = await all(`
         SELECT 
           p.id_producto as id,
-          p.nombre,
+          p.nombre || COALESCE(' - ' || NULLIF(p.marca, ''), '') as nombre,
           p.stock_actual,
           p.stock_minimo,
           c.nombre as categoria
@@ -112,7 +112,7 @@ router.get("/stats", authorizePermissions(PERMISSIONS.DASHBOARD_VIEW), async (re
       sinStockList = await all(`
         SELECT
           p.id_producto as id,
-          p.nombre,
+          p.nombre || COALESCE(' - ' || NULLIF(p.marca, ''), '') as nombre,
           p.stock_actual,
           p.stock_minimo,
           c.nombre as categoria
@@ -150,7 +150,7 @@ router.get("/stats", authorizePermissions(PERMISSIONS.DASHBOARD_VIEW), async (re
     const ultimosMovimientos = await all(`
       SELECT 
         m.id_movimiento as id,
-        p.nombre as producto,
+        p.nombre || COALESCE(' - ' || NULLIF(p.marca, ''), '') as producto,
         m.tipo,
         m.cantidad,
         i.nombre as institucion,
@@ -191,6 +191,44 @@ router.get("/stats", authorizePermissions(PERMISSIONS.DASHBOARD_VIEW), async (re
   } catch (err) {
     console.error("Error obteniendo stats del dashboard:", err);
     return res.status(500).json({ error: "No se pudo obtener el resumen" });
+  }
+});
+
+// Obtener detalles de movimientos del mes (por tipo)
+router.get("/movimientos-mes", authorizePermissions(PERMISSIONS.DASHBOARD_VIEW), async (req, res) => {
+  try {
+    const { tipo } = req.query;
+    
+    let query = `
+      SELECT 
+        m.id_movimiento as id,
+        p.nombre || COALESCE(' - ' || NULLIF(p.marca, ''), '') as producto,
+        m.tipo,
+        m.cantidad,
+        i.nombre as institucion,
+        u.nombre as usuario,
+        m.motivo,
+        m.fecha_movimiento as fecha
+      FROM movimiento_stock m
+      LEFT JOIN producto p ON m.id_producto = p.id_producto
+      LEFT JOIN usuario u ON m.id_usuario = u.id_usuario
+      LEFT JOIN institucion i ON m.id_institucion = i.id_institucion
+      WHERE m.fecha_movimiento >= date_trunc('month', CURRENT_DATE)
+    `;
+
+    const params = [];
+    if (tipo && tipo !== 'total') {
+      query += ` AND m.tipo = $1`;
+      params.push(tipo);
+    }
+
+    query += ` ORDER BY m.fecha_movimiento DESC`;
+
+    const movimientos = await all(query, params);
+    return res.json({ movimientos });
+  } catch (err) {
+    console.error("Error obteniendo movimientos del mes:", err);
+    return res.status(500).json({ error: "No se pudo obtener los movimientos" });
   }
 });
 

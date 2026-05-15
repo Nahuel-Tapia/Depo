@@ -17,7 +17,7 @@ export default function Productos() {
   const [filterCategoria, setFilterCategoria] = useState('')
   const [filterEstado, setFilterEstado] = useState('')
   const [sortBy, setSortBy] = useState('nombre_asc')
-  const [form, setForm] = useState({ nombre: '', unidad_medida: 'unidad', stock_minimo: 0, id_categoria: '' })
+  const [form, setForm] = useState({ nombre: '', marca: '', unidad_medida: 'unidad', stock_minimo: 0, id_categoria: '' })
   const [vencimientosProximos, setVencimientosProximos] = useState(new Set())
   const canDeleteProductos = hasPermission('productos.delete') || user?.role === 'admin' || user?.role === 'master'
 
@@ -89,6 +89,7 @@ export default function Productos() {
 
     const payload = {
       nombre: form.nombre.trim(),
+      marca: form.marca.trim() || '',
       unidad_medida: form.unidad_medida.trim() || 'unidad',
       stock_minimo: parseInt(form.stock_minimo) || 0,
       id_categoria: form.id_categoria || null
@@ -106,7 +107,7 @@ export default function Productos() {
       return
     }
 
-    setForm({ nombre: '', unidad_medida: 'unidad', stock_minimo: 0, id_categoria: '' })
+    setForm({ nombre: '', marca: '', unidad_medida: 'unidad', stock_minimo: 0, id_categoria: '' })
     setFormOpen(false)
     setMsg({ text: 'Producto creado', type: 'success' })
     loadProductos()
@@ -119,6 +120,7 @@ export default function Productos() {
     setEditModal({
       id: producto.id,
       nombre: producto.nombre || '',
+      marca: producto.marca || '',
       unidad_medida: producto.unidad_medida || 'unidad',
       stock_minimo: producto.stock_minimo ?? 0,
       id_categoria: producto.id_categoria || ''
@@ -131,6 +133,7 @@ export default function Productos() {
 
     const payload = {
       nombre: String(editModal.nombre || '').trim(),
+      marca: String(editModal.marca || '').trim() || '',
       unidad_medida: String(editModal.unidad_medida || '').trim() || 'unidad',
       stock_minimo: parseInt(editModal.stock_minimo, 10) || 0,
       id_categoria: editModal.id_categoria || null
@@ -200,6 +203,7 @@ export default function Productos() {
       .filter((producto) => {
         const matchesSearch = !search || [
           producto.nombre,
+          producto.marca,
           producto.unidad_medida,
           producto.deposito,
           producto.categoria_nombre,
@@ -295,6 +299,7 @@ export default function Productos() {
             <tr>
               <th>ID</th>
               <th>Nombre</th>
+              <th>Marca</th>
               <th>Unidad</th>
         <th>Stock Total</th>
         <th>Depósito</th>
@@ -308,6 +313,7 @@ export default function Productos() {
             <tr key={p.id}>
               <td>{p.id}</td>
               <td>{p.nombre}</td>
+              <td>{p.marca || '-'}</td>
               <td>{p.unidad_medida || 'unidad'}</td>
               <td>{p.stock_total ?? 0}</td>
               <td>{p.deposito || '-'}</td>
@@ -393,6 +399,10 @@ export default function Productos() {
                 <input type="text" value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Ej: Resma A4" required />
               </div>
               <div>
+                <label>Marca</label>
+                <input type="text" value={form.marca} onChange={e => setForm({ ...form, marca: e.target.value })} placeholder="Ej: Autor" />
+              </div>
+              <div>
                 <label>Unidad de medida</label>
                 <input type="text" value={form.unidad_medida} onChange={e => setForm({ ...form, unidad_medida: e.target.value })} placeholder="Ej: unidad, kg, litro" />
               </div>
@@ -440,6 +450,10 @@ export default function Productos() {
               <div>
                 <label>Nombre del producto</label>
                 <input type="text" value={editModal.nombre} onChange={e => setEditModal({ ...editModal, nombre: e.target.value })} placeholder="Ej: Resma A4" required />
+              </div>
+              <div>
+                <label>Marca</label>
+                <input type="text" value={editModal.marca} onChange={e => setEditModal({ ...editModal, marca: e.target.value })} placeholder="Ej: Autor" />
               </div>
               <div>
                 <label>Unidad de medida</label>

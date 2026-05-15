@@ -21,8 +21,9 @@ function formatUnidad(unidad) {
 
 function formatProductoOptionLabel(producto) {
   const nombre = normalizeLabelText(producto?.nombre) || 'Producto sin nombre'
+  const marca = producto?.marca ? ` - ${producto.marca}` : ''
   const unidad = formatUnidad(producto?.unidad_medida)
-  return `${nombre} (${unidad})`
+  return `${nombre}${marca} (${unidad})`
 }
 
 

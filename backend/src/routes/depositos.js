@@ -251,7 +251,7 @@ router.get("/:id/productos", authorizePermissions(PERMISSIONS.STOCK_VIEW), async
   try {
     const { id } = req.params;
     const productos = await all(
-      `SELECT p.id_producto as id, p.nombre, p.unidad_medida, COALESCE(sd.cantidad, 0) as cantidad
+      `SELECT p.id_producto as id, p.nombre || COALESCE(' - ' || NULLIF(p.marca, ''), ''), p.unidad_medida, COALESCE(sd.cantidad, 0) as cantidad
        FROM producto p
        LEFT JOIN stock_deposito sd ON sd.id_producto = p.id_producto AND sd.id_deposito = ?`,
       [id]
@@ -270,8 +270,7 @@ router.get("/stock-por-producto", authorizePermissions(PERMISSIONS.STOCK_VIEW), 
     const productos = await all(`
         SELECT 
           p.id_producto as id,
-          p.nombre,
-          p.unidad_medida,
+          p.nombre || COALESCE(' - ' || NULLIF(p.marca, ''), ''), p.unidad_medida,
           p.stock_actual,
           COALESCE(SUM(CASE WHEN d.tipo = 'central' THEN sd.cantidad ELSE 0 END), 0) as stock_central,
           COALESCE(SUM(CASE WHEN d.tipo = 'centro_civico' THEN sd.cantidad ELSE 0 END), 0) as stock_centro_civico,
@@ -280,7 +279,7 @@ router.get("/stock-por-producto", authorizePermissions(PERMISSIONS.STOCK_VIEW), 
         LEFT JOIN stock_deposito sd ON sd.id_producto = p.id_producto
         LEFT JOIN deposito d ON d.id_deposito = sd.id_deposito
         WHERE 1=1 ${isEscolar ? 'AND (p.requiere_autorizacion = FALSE OR p.requiere_autorizacion IS NULL)' : ''}
-        GROUP BY p.id_producto, p.nombre, p.unidad_medida, p.stock_actual
+        GROUP BY p.id_producto, p.nombre || COALESCE(' - ' || NULLIF(p.marca, ''), ''), p.unidad_medida, p.stock_actual
         ORDER BY p.nombre
       `);
     return res.json({ productos });
@@ -309,8 +308,7 @@ router.get("/:id/stock", authorizePermissions(PERMISSIONS.STOCK_VIEW), async (re
     let stockQuery = `
       SELECT 
         p.id_producto as id,
-        p.nombre,
-        p.unidad_medida,
+        p.nombre || COALESCE(' - ' || NULLIF(p.marca, ''), ''), p.unidad_medida,
         COALESCE(sd.cantidad, 0) as cantidad
       FROM producto p
       LEFT JOIN stock_deposito sd ON sd.id_producto = p.id_producto 
@@ -323,15 +321,14 @@ router.get("/:id/stock", authorizePermissions(PERMISSIONS.STOCK_VIEW), async (re
       stockQuery = `
         SELECT 
           p.id_producto as id,
-          p.nombre,
-          p.unidad_medida,
+          p.nombre || COALESCE(' - ' || NULLIF(p.marca, ''), ''), p.unidad_medida,
           COALESCE(SUM(sd.cantidad), 0) as cantidad,
           CASE WHEN sd_caps.id_deposito IS NOT NULL THEN 'capsula' ELSE NULL END as en_capsula
         FROM producto p
         LEFT JOIN stock_deposito sd ON sd.id_producto = p.id_producto AND sd.id_deposito = $1
         LEFT JOIN stock_deposito sd_caps ON sd_caps.id_producto = p.id_producto 
           AND sd_caps.id_deposito = (SELECT id_deposito FROM deposito WHERE tipo = 'capsula')
-        GROUP BY p.id_producto, p.nombre, p.unidad_medida, sd_caps.id_deposito
+        GROUP BY p.id_producto, p.nombre || COALESCE(' - ' || NULLIF(p.marca, ''), ''), p.unidad_medida, sd_caps.id_deposito
       `;
     }
 
@@ -395,7 +392,7 @@ router.get("/traslados", authorizePermissions(PERMISSIONS.STOCK_MOVEMENT_VIEW), 
       SELECT
         m.id_movimiento,
         m.id_producto,
-        p.nombre AS producto_nombre,
+        p.nombre || COALESCE(' - ' || NULLIF(p.marca, ''), '') as producto_nombre,
         m.cantidad,
         m.motivo,
         m.fecha_movimiento AS created_at,
@@ -838,7 +835,7 @@ router.get("/licitacion/recepciones/:id/remitos", authorizePermissions(PERMISSIO
     // Para cada remito, traer los items + proveedor desde historial de precios
     for (const remito of remitos) {
       remito.items = await all(
-        `SELECT rl.id, rl.producto_id, p.nombre AS producto_nombre, p.unidad_medida,
+        `SELECT rl.id, rl.producto_id, p.nombre || COALESCE(' - ' || NULLIF(p.marca, ''), '') as producto_nombre, p.unidad_medida,
                 rl.cantidad_recibida, rl.cantidad_danada, rl.obs_danio, rl.fecha_vencimiento,
                 pr.nombre AS proveedor_nombre
          FROM recepcion_licitacion rl

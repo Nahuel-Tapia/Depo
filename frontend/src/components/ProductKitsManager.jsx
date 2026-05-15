@@ -293,7 +293,7 @@ export default function ProductKitsManager() {
                           <option value="">Seleccionar producto...</option>
                           {productosOrdenados.map((producto) => (
                             <option key={producto.id} value={producto.id}>
-                              {producto.nombre} ({producto.unidad_medida || 'unidad'})
+                              {producto.nombre}{producto.marca ? ` - ${producto.marca}` : ''} ({producto.unidad_medida || 'unidad'})
                             </option>
                           ))}
                         </select>

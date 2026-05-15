@@ -2184,6 +2184,17 @@ body.dashboard-nav-open {
   text-align: center;
 }
 
+button.dashboard-mini-card {
+  width: 100%;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  cursor: pointer;
+}
+
+button.dashboard-mini-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 20px -10px rgba(29, 37, 45, 0.15);
+}
+
 .dashboard-mini-value {
   font-size: 1.5rem;
   font-weight: 700;

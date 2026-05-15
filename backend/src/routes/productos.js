@@ -27,6 +27,7 @@ router.get("/", authorizePermissions(PERMISSIONS.PRODUCTOS_VIEW), async (req, re
         SELECT
           p.id_producto as id,
           p.nombre,
+          p.marca,
           p.unidad_medida,
           p.stock_actual,
           p.stock_minimo,
@@ -55,7 +56,7 @@ router.get("/", authorizePermissions(PERMISSIONS.PRODUCTOS_VIEW), async (req, re
       }
 
       query += `
-        GROUP BY p.id_producto, p.nombre, p.unidad_medida, p.stock_actual, p.stock_minimo, p.id_categoria, c.nombre
+        GROUP BY p.id_producto, p.nombre, p.marca, p.unidad_medida, p.stock_actual, p.stock_minimo, p.id_categoria, c.nombre
         ORDER BY p.id_producto DESC
       `;
       
@@ -65,6 +66,7 @@ router.get("/", authorizePermissions(PERMISSIONS.PRODUCTOS_VIEW), async (req, re
         SELECT
           p.id_producto as id,
           p.nombre,
+          p.marca,
           p.unidad_medida,
           p.stock_actual,
           p.stock_minimo,
@@ -116,6 +118,7 @@ router.get("/:id", authorizePermissions(PERMISSIONS.PRODUCTOS_VIEW), async (req,
       SELECT 
         p.id_producto as id,
         p.nombre,
+        p.marca,
         p.unidad_medida,
         p.stock_actual,
         p.stock_minimo,
@@ -182,7 +185,7 @@ router.get("/:id/stock-detalle", authorizePermissions(PERMISSIONS.PRODUCTOS_VIEW
 router.post("/", authorizePermissions(PERMISSIONS.PRODUCTOS_CREATE), async (req, res) => {
   const client = await pool.connect();
   try {
-    const { nombre, unidad_medida, stock_minimo, id_categoria } = req.body;
+    const { nombre, marca, unidad_medida, stock_minimo, id_categoria } = req.body;
 
     if (!nombre) {
       return res.status(400).json({ error: "El nombre es obligatorio" });
@@ -194,10 +197,10 @@ router.post("/", authorizePermissions(PERMISSIONS.PRODUCTOS_CREATE), async (req,
 
     // Insertar producto
     const insertResult = await client.query(
-      `INSERT INTO producto (nombre, unidad_medida, stock_actual, stock_minimo, id_categoria)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO producto (nombre, marca, unidad_medida, stock_actual, stock_minimo, id_categoria)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id_producto`,
-      [nombre, unidad_medida || 'unidad', stock_actual_val, parseInt(stock_minimo) || 0, id_categoria || null]
+      [nombre, marca || null, unidad_medida || 'unidad', stock_actual_val, parseInt(stock_minimo) || 0, id_categoria || null]
     );
 
     const newId = insertResult.rows[0].id_producto;
@@ -250,7 +253,7 @@ router.patch("/:id", authorizePermissions(PERMISSIONS.PRODUCTOS_EDIT), async (re
   const client = await pool.connect();
   try {
     const { id } = req.params;
-    const { nombre, unidad_medida, stock_minimo, id_categoria } = req.body;
+    const { nombre, marca, unidad_medida, stock_minimo, id_categoria } = req.body;
 
     const productoResult = await client.query(
       "SELECT * FROM producto WHERE id_producto = $1",
@@ -267,6 +270,10 @@ router.patch("/:id", authorizePermissions(PERMISSIONS.PRODUCTOS_EDIT), async (re
     if (nombre !== undefined) {
       updates.push(`nombre = $${paramIndex++}`);
       params.push(nombre);
+    }
+    if (marca !== undefined) {
+      updates.push(`marca = $${paramIndex++}`);
+      params.push(marca || null);
     }
     if (unidad_medida !== undefined) {
       updates.push(`unidad_medida = $${paramIndex++}`);

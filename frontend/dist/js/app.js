@@ -769,17 +769,17 @@ function renderMovimientos() {
       ? `${m.institucion_nombre} (${m.cargo_retira})` 
       : m.institucion_nombre || m.cargo_retira || "-";
     
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${m.producto_nombre || "-"}</td>
-      <td><span class="badge badge-${m.tipo}">${m.tipo}</span></td>
-      <td>${m.cantidad}</td>
-      <td>${m.estado_producto || "-"}</td>
-      <td>${institucionCargo}</td>
-      <td>${m.proveedor_nombre || "-"}</td>
-      <td>${m.motivo || "-"}</td>
-      <td>${m.usuario_nombre || "-"}</td>
-      <td>${new Date(m.fecha_movimiento).toLocaleDateString()}</td>
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>#${m.id || m.id_movimiento || '-'}</td>
+        <td><span class="badge badge-${m.tipo}">${m.tipo}</span></td>
+        <td>${m.cantidad}</td>
+        <td>${m.estado_producto || "-"}</td>
+        <td>${institucionCargo}</td>
+        <td>${m.proveedor_nombre || "-"}</td>
+        <td>${m.motivo || "-"}</td>
+        <td>${m.usuario_nombre || "-"}</td>
+        <td>${new Date(m.fecha_movimiento).toLocaleDateString()}</td>
     `;
     tbody.appendChild(tr);
   });
