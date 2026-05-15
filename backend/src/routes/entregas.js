@@ -227,6 +227,59 @@ async function ensureEntregasSchema() {
       UNIQUE (id_solicitud_retiro, id_producto)
     )
   `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS distribucion_lote (
+      id SERIAL PRIMARY KEY,
+      anio INT NOT NULL,
+      zona_id INT,
+      id_deposito INT NOT NULL,
+      estado VARCHAR(30) NOT NULL DEFAULT 'en_transito',
+      observaciones TEXT,
+      usuario_id INT,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+
+  await run(`ALTER TABLE distribucion_lote ADD COLUMN IF NOT EXISTS origen VARCHAR(30) NOT NULL DEFAULT 'distribucion_zonal'`);
+  await run(`ALTER TABLE distribucion_lote ADD COLUMN IF NOT EXISTS departamento VARCHAR(120)`);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS distribucion_lote_item (
+      id SERIAL PRIMARY KEY,
+      lote_id INT NOT NULL REFERENCES distribucion_lote(id) ON DELETE CASCADE,
+      id_institucion INT NOT NULL,
+      id_producto INT NOT NULL,
+      cantidad_planificada NUMERIC(12,2) NOT NULL,
+      cantidad_recibida NUMERIC(12,2),
+      estado_recepcion VARCHAR(20) NOT NULL DEFAULT 'pendiente',
+      observaciones_directivo TEXT,
+      reclamo_directivo TEXT,
+      directivo_usuario_id INT,
+      recibido_at TIMESTAMP,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW(),
+      UNIQUE (lote_id, id_institucion, id_producto)
+    )
+  `);
+
+  await run(`ALTER TABLE distribucion_lote_item ADD COLUMN IF NOT EXISTS cantidad_danada NUMERIC(12,2) NOT NULL DEFAULT 0`);
+  await run(`ALTER TABLE distribucion_lote_item ADD COLUMN IF NOT EXISTS detalle_danio TEXT`);
+  await run(`ALTER TABLE distribucion_lote_item ADD COLUMN IF NOT EXISTS coincide_esperado BOOLEAN DEFAULT TRUE`);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS distribucion_lote_item_imagen (
+      id SERIAL PRIMARY KEY,
+      lote_item_id INT NOT NULL REFERENCES distribucion_lote_item(id) ON DELETE CASCADE,
+      id_institucion INT NOT NULL,
+      id_producto INT NOT NULL,
+      nombre VARCHAR(255),
+      mime_type VARCHAR(80),
+      datos TEXT NOT NULL,
+      directivo_usuario_id INT,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
 }
 
 function parsePositiveInt(value) {
@@ -798,12 +851,14 @@ router.post("/solicitudes-envio/egreso-multiple", authorizePermissions(PERMISSIO
 
     const {
       departamento,
+      anio,
       id_deposito,
       observaciones,
       entregas,
     } = req.body || {};
 
     const departamentoValue = String(departamento || "").trim();
+    const anioValue = Number(anio || new Date().getFullYear());
     const depositoId = parsePositiveInt(id_deposito);
     const entregasPayload = Array.isArray(entregas) ? entregas : [];
 
@@ -935,6 +990,22 @@ router.post("/solicitudes-envio/egreso-multiple", authorizePermissions(PERMISSIO
     const solicitudesAceptadas = new Set();
     let movimientosCreados = 0;
 
+    const loteResult = await client.query(
+      `INSERT INTO distribucion_lote
+        (anio, zona_id, id_deposito, estado, observaciones, usuario_id, origen, departamento)
+       VALUES ($1, NULL, $2, 'en_transito', $3, $4, 'solicitud_envio', $5)
+       RETURNING id`,
+      [
+        anioValue,
+        depositoId,
+        observaciones || `Envío por departamento ${departamentoValue}`,
+        req.user.sub,
+        departamentoValue,
+      ]
+    );
+    const loteId = Number(loteResult.rows[0].id);
+    const loteItemsMap = new Map();
+
     for (const [solicitudId, items] of porSolicitud.entries()) {
       const solicitudData = solicitudesMap.get(solicitudId);
 
@@ -989,6 +1060,13 @@ router.post("/solicitudes-envio/egreso-multiple", authorizePermissions(PERMISSIO
            WHERE id_solicitud_retiro = $3 AND id_producto = $4`,
           [item.cantidad, movimientoId, solicitudId, item.id_producto]
         );
+
+        const loteKey = `${solicitudData.id_institucion}:${item.id_producto}`;
+        loteItemsMap.set(loteKey, {
+          id_institucion: solicitudData.id_institucion,
+          id_producto: item.id_producto,
+          cantidad_planificada: Number((loteItemsMap.get(loteKey)?.cantidad_planificada || 0) + Number(item.cantidad || 0)),
+        });
       }
 
       const pendientesRes = await client.query(
@@ -1023,10 +1101,25 @@ router.post("/solicitudes-envio/egreso-multiple", authorizePermissions(PERMISSIO
       );
     }
 
+    for (const loteItem of loteItemsMap.values()) {
+      await client.query(
+        `INSERT INTO distribucion_lote_item
+           (lote_id, id_institucion, id_producto, cantidad_planificada, cantidad_recibida, estado_recepcion)
+         VALUES ($1, $2, $3, $4, 0, 'pendiente')`,
+        [
+          loteId,
+          Number(loteItem.id_institucion),
+          Number(loteItem.id_producto),
+          Number(loteItem.cantidad_planificada || 0),
+        ]
+      );
+    }
+
     await client.query("COMMIT");
 
     return res.json({
       ok: true,
+      lote_id: loteId,
       departamento: departamentoValue,
       movimientos_creados: movimientosCreados,
       solicitudes_aceptadas: [...solicitudesAceptadas],
@@ -1044,6 +1137,205 @@ router.post("/solicitudes-envio/egreso-multiple", authorizePermissions(PERMISSIO
     return res.status(status).json({ error: err.message || "No se pudo registrar el egreso por departamento" });
   } finally {
     client.release();
+  }
+});
+
+// GET /api/entregas/solicitudes-envio/seguimiento - Seguimiento operativo de lotes enviados por departamento
+router.get("/solicitudes-envio/seguimiento", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), async (req, res) => {
+  try {
+    await ensureEntregasSchema();
+
+    const anioValue = Number(req.query.anio || new Date().getFullYear());
+    const departamento = String(req.query.departamento || "").trim();
+    const estadoLote = String(req.query.estado_lote || "").trim().toLowerCase();
+
+    const clauses = ["l.origen = 'solicitud_envio'", "l.anio = $1"];
+    const params = [anioValue];
+
+    if (departamento) {
+      params.push(departamento);
+      clauses.push(`LOWER(COALESCE(l.departamento, 'SIN_DEPARTAMENTO')) = LOWER($${params.length})`);
+    }
+    if (estadoLote) {
+      params.push(estadoLote);
+      clauses.push(`LOWER(COALESCE(l.estado, 'en_transito')) = LOWER($${params.length})`);
+    }
+
+    const rows = await all(
+      `SELECT
+         l.id AS lote_id,
+         l.anio,
+         COALESCE(NULLIF(TRIM(l.departamento), ''), 'SIN_DEPARTAMENTO') AS departamento,
+         COALESCE(NULLIF(TRIM(l.estado), ''), 'en_transito') AS estado_lote,
+         l.created_at,
+         l.observaciones,
+         l.id_deposito,
+         d.nombre AS deposito_nombre,
+         u.nombre AS usuario_nombre,
+         u.apellido AS usuario_apellido,
+         COALESCE(stats.total_instituciones, 0) AS total_instituciones,
+         COALESCE(stats.total_items, 0) AS total_items,
+         COALESCE(stats.cantidad_planificada_total, 0) AS cantidad_planificada_total,
+         COALESCE(stats.cantidad_recibida_total, 0) AS cantidad_recibida_total,
+         COALESCE(stats.cantidad_danada_total, 0) AS cantidad_danada_total,
+         COALESCE(stats.items_pendientes, 0) AS items_pendientes,
+         COALESCE(stats.items_parciales, 0) AS items_parciales,
+         COALESCE(stats.items_recibidos, 0) AS items_recibidos,
+         COALESCE(stats.items_reclamo, 0) AS items_reclamo
+       FROM distribucion_lote l
+       LEFT JOIN deposito d ON d.id_deposito = l.id_deposito
+       LEFT JOIN usuario u ON u.id_usuario = l.usuario_id
+       LEFT JOIN (
+         SELECT
+           lote_id,
+           COUNT(DISTINCT id_institucion) AS total_instituciones,
+           COUNT(*) AS total_items,
+           SUM(COALESCE(cantidad_planificada, 0)) AS cantidad_planificada_total,
+           SUM(COALESCE(cantidad_recibida, 0)) AS cantidad_recibida_total,
+           SUM(COALESCE(cantidad_danada, 0)) AS cantidad_danada_total,
+           COUNT(*) FILTER (WHERE estado_recepcion = 'pendiente') AS items_pendientes,
+           COUNT(*) FILTER (WHERE estado_recepcion = 'parcial') AS items_parciales,
+           COUNT(*) FILTER (WHERE estado_recepcion = 'recibido') AS items_recibidos,
+           COUNT(*) FILTER (WHERE estado_recepcion = 'reclamo') AS items_reclamo
+         FROM distribucion_lote_item
+         GROUP BY lote_id
+       ) stats ON stats.lote_id = l.id
+       WHERE ${clauses.join(" AND ")}
+       ORDER BY l.created_at DESC, l.id DESC`,
+      params
+    );
+
+    const resumen = {
+      total_lotes: rows.length,
+      en_transito: rows.filter((row) => String(row.estado_lote) === "en_transito").length,
+      parcialmente_recibidos: rows.filter((row) => String(row.estado_lote) === "parcialmente_recibido").length,
+      con_reclamos: rows.filter((row) => String(row.estado_lote) === "con_reclamos").length,
+      recibidos_totales: rows.filter((row) => String(row.estado_lote) === "recibido_total").length,
+    };
+
+    return res.json({ anio: anioValue, resumen, lotes: rows });
+  } catch (err) {
+    console.error("Error al obtener seguimiento de envíos por departamento:", err);
+    return res.status(500).json({ error: "No se pudo obtener el seguimiento de envíos" });
+  }
+});
+
+// GET /api/entregas/solicitudes-envio/seguimiento/:loteId - Detalle por lote para corroborar recepción
+router.get("/solicitudes-envio/seguimiento/:loteId", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), async (req, res) => {
+  try {
+    await ensureEntregasSchema();
+
+    const loteId = parsePositiveInt(req.params.loteId);
+    if (!loteId) return res.status(400).json({ error: "Lote inválido" });
+
+    const lote = await get(
+      `SELECT
+         l.id AS lote_id,
+         l.anio,
+         COALESCE(NULLIF(TRIM(l.departamento), ''), 'SIN_DEPARTAMENTO') AS departamento,
+         COALESCE(NULLIF(TRIM(l.estado), ''), 'en_transito') AS estado_lote,
+         l.created_at,
+         l.observaciones,
+         l.id_deposito,
+         d.nombre AS deposito_nombre,
+         u.nombre AS usuario_nombre,
+         u.apellido AS usuario_apellido
+       FROM distribucion_lote l
+       LEFT JOIN deposito d ON d.id_deposito = l.id_deposito
+       LEFT JOIN usuario u ON u.id_usuario = l.usuario_id
+       WHERE l.id = $1
+         AND l.origen = 'solicitud_envio'`,
+      [loteId]
+    );
+
+    if (!lote) return res.status(404).json({ error: "Lote no encontrado" });
+
+    const itemsRows = await all(
+      `SELECT
+         li.id AS lote_item_id,
+         li.id_institucion,
+         i.nombre AS institucion_nombre,
+         i.cue,
+         li.id_producto,
+         p.nombre || COALESCE(' - ' || NULLIF(p.marca, ''), '') AS producto_nombre,
+         p.unidad_medida,
+         COALESCE(li.cantidad_planificada, 0) AS cantidad_planificada,
+         COALESCE(li.cantidad_recibida, 0) AS cantidad_recibida,
+         COALESCE(li.cantidad_danada, 0) AS cantidad_danada,
+         COALESCE(li.estado_recepcion, 'pendiente') AS estado_recepcion,
+         COALESCE(li.coincide_esperado, TRUE) AS coincide_esperado,
+         li.reclamo_directivo,
+         li.detalle_danio,
+         li.observaciones_directivo,
+         li.recibido_at,
+         du.nombre AS directivo_nombre,
+         du.apellido AS directivo_apellido
+       FROM distribucion_lote_item li
+       JOIN institucion i ON i.id_institucion = li.id_institucion
+       JOIN producto p ON p.id_producto = li.id_producto
+       LEFT JOIN usuario du ON du.id_usuario = li.directivo_usuario_id
+       WHERE li.lote_id = $1
+       ORDER BY i.nombre ASC, p.nombre ASC`,
+      [loteId]
+    );
+
+    const institucionesMap = new Map();
+    for (const row of itemsRows) {
+      const institucionId = Number(row.id_institucion);
+      if (!institucionesMap.has(institucionId)) {
+        institucionesMap.set(institucionId, {
+          id_institucion: institucionId,
+          institucion_nombre: row.institucion_nombre,
+          cue: row.cue || null,
+          items: [],
+        });
+      }
+      institucionesMap.get(institucionId).items.push({
+        lote_item_id: Number(row.lote_item_id),
+        id_producto: Number(row.id_producto),
+        producto_nombre: row.producto_nombre,
+        unidad_medida: row.unidad_medida || "unidad",
+        cantidad_planificada: Number(row.cantidad_planificada || 0),
+        cantidad_recibida: Number(row.cantidad_recibida || 0),
+        cantidad_danada: Number(row.cantidad_danada || 0),
+        estado_recepcion: row.estado_recepcion,
+        coincide_esperado: Boolean(row.coincide_esperado),
+        reclamo_directivo: row.reclamo_directivo || null,
+        detalle_danio: row.detalle_danio || null,
+        observaciones_directivo: row.observaciones_directivo || null,
+        recibido_at: row.recibido_at || null,
+        directivo_nombre: row.directivo_nombre || null,
+        directivo_apellido: row.directivo_apellido || null,
+      });
+    }
+
+    const items = itemsRows.map((row) => ({
+      cantidad_planificada: Number(row.cantidad_planificada || 0),
+      cantidad_recibida: Number(row.cantidad_recibida || 0),
+      cantidad_danada: Number(row.cantidad_danada || 0),
+      estado_recepcion: row.estado_recepcion,
+    }));
+
+    const resumen = {
+      total_instituciones: institucionesMap.size,
+      total_items: items.length,
+      cantidad_planificada_total: items.reduce((acc, row) => acc + row.cantidad_planificada, 0),
+      cantidad_recibida_total: items.reduce((acc, row) => acc + row.cantidad_recibida, 0),
+      cantidad_danada_total: items.reduce((acc, row) => acc + row.cantidad_danada, 0),
+      items_pendientes: items.filter((row) => row.estado_recepcion === "pendiente").length,
+      items_parciales: items.filter((row) => row.estado_recepcion === "parcial").length,
+      items_recibidos: items.filter((row) => row.estado_recepcion === "recibido").length,
+      items_reclamo: items.filter((row) => row.estado_recepcion === "reclamo").length,
+    };
+
+    return res.json({
+      lote,
+      resumen,
+      instituciones: Array.from(institucionesMap.values()),
+    });
+  } catch (err) {
+    console.error("Error al obtener detalle de seguimiento del lote:", err);
+    return res.status(500).json({ error: "No se pudo obtener el detalle del lote" });
   }
 });
 

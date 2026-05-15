@@ -5,6 +5,18 @@ const { authenticate } = require("../middleware/auth");
 const router = express.Router();
 router.use(authenticate);
 
+class RequestValidationError extends Error {
+  constructor(message, status = 400) {
+    super(message);
+    this.name = "RequestValidationError";
+    this.status = status;
+  }
+}
+
+function badRequest(message) {
+  return new RequestValidationError(message, 400);
+}
+
 let schemaReady = false;
 let schemaPromise = null;
 
@@ -46,6 +58,24 @@ async function ensureDirectivoSchema() {
           created_at TIMESTAMP DEFAULT NOW(),
           updated_at TIMESTAMP DEFAULT NOW(),
           UNIQUE (lote_id, id_institucion, id_producto)
+        )
+      `);
+
+      await pool.query(`ALTER TABLE distribucion_lote_item ADD COLUMN IF NOT EXISTS cantidad_danada NUMERIC(12,2) NOT NULL DEFAULT 0`);
+      await pool.query(`ALTER TABLE distribucion_lote_item ADD COLUMN IF NOT EXISTS detalle_danio TEXT`);
+      await pool.query(`ALTER TABLE distribucion_lote_item ADD COLUMN IF NOT EXISTS coincide_esperado BOOLEAN DEFAULT TRUE`);
+
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS distribucion_lote_item_imagen (
+          id SERIAL PRIMARY KEY,
+          lote_item_id INT NOT NULL REFERENCES distribucion_lote_item(id) ON DELETE CASCADE,
+          id_institucion INT NOT NULL,
+          id_producto INT NOT NULL,
+          nombre VARCHAR(255),
+          mime_type VARCHAR(80),
+          datos TEXT NOT NULL,
+          directivo_usuario_id INT,
+          created_at TIMESTAMP DEFAULT NOW()
         )
       `);
 
@@ -277,6 +307,7 @@ router.get("/distribuciones/pendientes", async (req, res) => {
 
     const rows = await all(
       `SELECT
+         li.id AS lote_item_id,
          li.lote_id,
          l.anio,
          l.estado AS lote_estado,
@@ -288,9 +319,12 @@ router.get("/distribuciones/pendientes", async (req, res) => {
          p.unidad_medida,
          li.cantidad_planificada,
          COALESCE(li.cantidad_recibida, 0) AS cantidad_recibida,
+         COALESCE(li.cantidad_danada, 0) AS cantidad_danada,
          li.estado_recepcion,
          li.observaciones_directivo,
-         li.reclamo_directivo
+         li.reclamo_directivo,
+         li.detalle_danio,
+         COALESCE(li.coincide_esperado, TRUE) AS coincide_esperado
        FROM distribucion_lote_item li
        JOIN distribucion_lote l ON l.id = li.lote_id
        LEFT JOIN zona z ON z.id = l.zona_id
@@ -301,6 +335,30 @@ router.get("/distribuciones/pendientes", async (req, res) => {
        ORDER BY l.created_at DESC, p.nombre ASC`,
       [institucionId]
     );
+
+    const loteItemIds = rows.map((row) => Number(row.lote_item_id)).filter((id) => Number.isInteger(id) && id > 0);
+    const imagenesRows = loteItemIds.length > 0
+      ? await all(
+        `SELECT id, lote_item_id, nombre, mime_type, datos, created_at
+         FROM distribucion_lote_item_imagen
+         WHERE lote_item_id = ANY($1::int[])
+         ORDER BY created_at DESC, id DESC`,
+        [loteItemIds]
+      )
+      : [];
+
+    const imagenesByItem = new Map();
+    for (const img of imagenesRows) {
+      const key = Number(img.lote_item_id);
+      if (!imagenesByItem.has(key)) imagenesByItem.set(key, []);
+      imagenesByItem.get(key).push({
+        id: Number(img.id),
+        nombre: img.nombre || null,
+        mime_type: img.mime_type || "image/jpeg",
+        datos: img.datos,
+        created_at: img.created_at,
+      });
+    }
 
     const lotesMap = new Map();
     for (const row of rows) {
@@ -317,14 +375,19 @@ router.get("/distribuciones/pendientes", async (req, res) => {
         });
       }
       lotesMap.get(loteId).items.push({
+        lote_item_id: Number(row.lote_item_id),
         id_producto: Number(row.id_producto),
         producto_nombre: row.producto_nombre,
         unidad_medida: row.unidad_medida,
         cantidad_planificada: Number(row.cantidad_planificada || 0),
         cantidad_recibida: Number(row.cantidad_recibida || 0),
+        cantidad_danada: Number(row.cantidad_danada || 0),
         estado_recepcion: row.estado_recepcion,
         observaciones_directivo: row.observaciones_directivo || null,
         reclamo_directivo: row.reclamo_directivo || null,
+        detalle_danio: row.detalle_danio || null,
+        coincide_esperado: Boolean(row.coincide_esperado),
+        imagenes: imagenesByItem.get(Number(row.lote_item_id)) || [],
       });
     }
 
@@ -359,7 +422,7 @@ router.post("/distribuciones/:loteId/confirmar-recepcion", async (req, res) => {
     await client.query("BEGIN");
 
     const loteRows = await client.query(
-      `SELECT id_producto, cantidad_planificada
+      `SELECT id, id_producto, cantidad_planificada
        FROM distribucion_lote_item
        WHERE lote_id = $1 AND id_institucion = $2
        FOR UPDATE`,
@@ -372,54 +435,107 @@ router.post("/distribuciones/:loteId/confirmar-recepcion", async (req, res) => {
     }
 
     const planificado = new Map(
-      loteRows.rows.map((r) => [Number(r.id_producto), Number(r.cantidad_planificada || 0)])
+      loteRows.rows.map((r) => [
+        Number(r.id_producto),
+        {
+          lote_item_id: Number(r.id),
+          cantidad_planificada: Number(r.cantidad_planificada || 0),
+        },
+      ])
     );
 
     for (const item of items) {
       const productoId = Number(item.id_producto);
       if (!planificado.has(productoId)) continue;
 
-      const cantidadPlanificada = Number(planificado.get(productoId) || 0);
+      const loteItemData = planificado.get(productoId);
+      const cantidadPlanificada = Number(loteItemData.cantidad_planificada || 0);
       const cantidadRecibida = Math.max(0, Number(item.cantidad_recibida || 0));
+      const cantidadDanada = Math.max(0, Number(item.cantidad_danada || 0));
       const observaciones = String(item.observaciones_directivo || "").trim();
       const reclamo = String(item.reclamo_directivo || "").trim();
+      const detalleDanio = String(item.detalle_danio || "").trim();
+      const coincideEsperado = item.coincide_esperado === false ? false : true;
+      const imagenes = Array.isArray(item.imagenes) ? item.imagenes : [];
 
-      if (cantidadRecibida > cantidadPlanificada) {
-        throw new Error(`Cantidad recibida inválida para producto ${productoId}`);
+      const totalConfirmado = cantidadRecibida + cantidadDanada;
+
+      if (totalConfirmado > cantidadPlanificada) {
+        throw badRequest(`Cantidad inválida para producto ${productoId}: recibido + dañado supera lo planificado`);
       }
 
       let estadoRecepcion = "pendiente";
-      if (reclamo) {
+      if (reclamo || cantidadDanada > 0 || !coincideEsperado) {
         estadoRecepcion = "reclamo";
-      } else if (cantidadRecibida >= cantidadPlanificada) {
+      } else if (totalConfirmado >= cantidadPlanificada) {
         estadoRecepcion = "recibido";
-      } else if (cantidadRecibida > 0) {
+      } else if (totalConfirmado > 0) {
         estadoRecepcion = "parcial";
       }
 
       await client.query(
         `UPDATE distribucion_lote_item
          SET cantidad_recibida = $1,
-             estado_recepcion = $2,
-             observaciones_directivo = $3,
-             reclamo_directivo = $4,
-             directivo_usuario_id = $5,
+             cantidad_danada = $2,
+             estado_recepcion = $3,
+             observaciones_directivo = $4,
+             reclamo_directivo = $5,
+             detalle_danio = $6,
+             coincide_esperado = $7,
+             directivo_usuario_id = $8,
              recibido_at = NOW(),
              updated_at = NOW()
-         WHERE lote_id = $6
-           AND id_institucion = $7
-           AND id_producto = $8`,
+         WHERE lote_id = $9
+           AND id_institucion = $10
+           AND id_producto = $11`,
         [
           cantidadRecibida,
+          cantidadDanada,
           estadoRecepcion,
           observaciones || null,
           reclamo || null,
+          detalleDanio || null,
+          coincideEsperado,
           userId,
           loteId,
           institucionId,
           productoId,
         ]
       );
+
+      if (imagenes.length > 0) {
+        await client.query(
+          `DELETE FROM distribucion_lote_item_imagen
+           WHERE lote_item_id = $1`,
+          [loteItemData.lote_item_id]
+        );
+
+        for (const imagen of imagenes) {
+          const mimeType = String(imagen?.mime_type || imagen?.mimeType || "").trim().toLowerCase();
+          const datos = String(imagen?.datos || imagen?.data || "").trim();
+          const nombre = String(imagen?.nombre || imagen?.name || "evidencia.jpg").trim().slice(0, 255);
+
+          if (!datos) continue;
+          if (!mimeType.startsWith("image/")) {
+            throw badRequest(`Formato de imagen inválido para producto ${productoId}`);
+          }
+
+          await client.query(
+            `INSERT INTO distribucion_lote_item_imagen
+              (lote_item_id, id_institucion, id_producto, nombre, mime_type, datos, directivo_usuario_id)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [
+              loteItemData.lote_item_id,
+              institucionId,
+              productoId,
+              nombre || null,
+              mimeType,
+              datos,
+              userId,
+            ]
+          );
+        }
+      }
     }
 
     const resumen = await client.query(
@@ -456,7 +572,8 @@ router.post("/distribuciones/:loteId/confirmar-recepcion", async (req, res) => {
   } catch (err) {
     await client.query("ROLLBACK");
     console.error("Error confirmando recepción directivo:", err);
-    return res.status(500).json({ error: err.message || "No se pudo registrar la recepción" });
+    const status = Number(err?.status || 500);
+    return res.status(status).json({ error: err.message || "No se pudo registrar la recepción" });
   } finally {
     client.release();
   }
