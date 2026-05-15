@@ -52,7 +52,7 @@ router.get("/stats", authorizePermissions(PERMISSIONS.DASHBOARD_VIEW), async (re
       stockBajo = await all(`
         SELECT 
           p.id_producto as id,
-          p.nombre || COALESCE(' - ' || NULLIF(p.marca, ''), '') as nombre,
+          p.nombre as nombre,
           COALESCE(sd.stock_total, 0) as stock_actual,
           p.stock_minimo,
           c.nombre as categoria
@@ -71,7 +71,7 @@ router.get("/stats", authorizePermissions(PERMISSIONS.DASHBOARD_VIEW), async (re
       sinStockList = await all(`
         SELECT
           p.id_producto as id,
-          p.nombre || COALESCE(' - ' || NULLIF(p.marca, ''), '') as nombre,
+          p.nombre as nombre,
           COALESCE(sd.stock_total, 0) as stock_actual,
           p.stock_minimo,
           c.nombre as categoria
@@ -98,7 +98,7 @@ router.get("/stats", authorizePermissions(PERMISSIONS.DASHBOARD_VIEW), async (re
       stockBajo = await all(`
         SELECT 
           p.id_producto as id,
-          p.nombre || COALESCE(' - ' || NULLIF(p.marca, ''), '') as nombre,
+          p.nombre as nombre,
           p.stock_actual,
           p.stock_minimo,
           c.nombre as categoria
@@ -112,7 +112,7 @@ router.get("/stats", authorizePermissions(PERMISSIONS.DASHBOARD_VIEW), async (re
       sinStockList = await all(`
         SELECT
           p.id_producto as id,
-          p.nombre || COALESCE(' - ' || NULLIF(p.marca, ''), '') as nombre,
+          p.nombre as nombre,
           p.stock_actual,
           p.stock_minimo,
           c.nombre as categoria
@@ -150,7 +150,7 @@ router.get("/stats", authorizePermissions(PERMISSIONS.DASHBOARD_VIEW), async (re
     const ultimosMovimientos = await all(`
       SELECT 
         m.id_movimiento as id,
-        p.nombre || COALESCE(' - ' || NULLIF(p.marca, ''), '') as producto,
+        p.nombre as producto,
         m.tipo,
         m.cantidad,
         i.nombre as institucion,
@@ -202,7 +202,7 @@ router.get("/movimientos-mes", authorizePermissions(PERMISSIONS.DASHBOARD_VIEW),
     let query = `
       SELECT 
         m.id_movimiento as id,
-        p.nombre || COALESCE(' - ' || NULLIF(p.marca, ''), '') as producto,
+        p.nombre as producto,
         m.tipo,
         m.cantidad,
         i.nombre as institucion,

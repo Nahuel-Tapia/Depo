@@ -162,8 +162,18 @@ export default function Dashboard() {
       ].includes(tab.key))
     }
 
-    if (user.role === 'admin' || user.role === 'master') {
-      return TABS.filter((tab) => !tab.roleFor || tab.roleFor === 'admin' || tab.roleFor === 'common' && tab.key !== 'mis-escuelas')
+    if (user.role === 'admin') {
+      return TABS.filter((tab) => [
+        'inicio',
+        'productos',
+        'movimientos',
+        'instituciones',
+        'historial',
+        'proveedores',
+        'usuarios',
+        'depositos',
+        'mi-cuenta'
+      ].includes(tab.key))
     }
 
     return TABS.filter((tab) => {

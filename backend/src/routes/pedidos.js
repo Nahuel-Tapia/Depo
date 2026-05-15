@@ -589,7 +589,7 @@ async function getKitById(kitId, { includeInactive = false } = {}) {
             k.created_at,
             k.updated_at,
             d.id_producto AS producto_id,
-            p.nombre || COALESCE(' - ' || NULLIF(p.marca, ''), '') as producto_nombre,
+            p.nombre as producto_nombre,
             p.unidad_medida,
             d.cantidad
      FROM producto_kit k
@@ -654,7 +654,7 @@ router.get("/kits", authorizePermissions(PERMISSIONS.PEDIDOS_VIEW), async (req, 
               k.updated_at,
               k.cantidad_alumnos,
               d.id_producto AS producto_id,
-              p.nombre || COALESCE(' - ' || NULLIF(p.marca, ''), '') as producto_nombre,
+              p.nombre as producto_nombre,
               p.unidad_medida,
               d.cantidad
        FROM producto_kit k
@@ -842,7 +842,7 @@ router.get("/", authorizePermissions(PERMISSIONS.PEDIDOS_VIEW), async (req, res)
         p.kit_nombre,
         p.kit_cantidad,
         dp.id_producto as detalle_producto_id,
-        pr.nombre || COALESCE(' - ' || NULLIF(pr.marca, ''), '') as detalle_producto_nombre,
+        pr.nombre as detalle_producto_nombre,
         pr.unidad_medida as detalle_unidad_medida,
         pr.stock_actual as detalle_stock_actual,
         dp.cantidad_solicitada as detalle_cantidad,
@@ -942,7 +942,7 @@ router.get("/cupos-anuales", authorizePermissions(PERMISSIONS.PEDIDOS_VIEW), asy
     const anio = Number(req.query.anio || new Date().getFullYear());
 
     const productos = await all(
-      `SELECT p.id_producto AS id, p.nombre || COALESCE(' - ' || NULLIF(p.marca, ''), ''), p.unidad_medida,
+      `SELECT p.id_producto AS id, p.nombre, p.unidad_medida,
               k.cantidad_base, k.alumnos_por_unidad, k.cantidad_por_unidad
        FROM kit_producto_anual k
        JOIN producto p ON p.id_producto = k.id_producto
@@ -1024,7 +1024,7 @@ router.get("/institucion/:institucion", authorizePermissions(PERMISSIONS.PEDIDOS
         ms.fecha_movimiento as created_at,
         ms.id_institucion,
         ms.id_producto as producto_id,
-        pr.nombre || COALESCE(' - ' || NULLIF(pr.marca, ''), '') AS producto_nombre,
+        pr.nombre AS producto_nombre,
         pr.unidad_medida,
         ms.estado_producto,
         ms.cargo_retira,
@@ -1072,7 +1072,7 @@ router.get("/:id(\\d+)", authorizePermissions(PERMISSIONS.PEDIDOS_VIEW), async (
         p.kit_nombre,
         p.kit_cantidad,
         dp.id_producto as detalle_producto_id,
-        pr.nombre || COALESCE(' - ' || NULLIF(pr.marca, ''), '') as detalle_producto_nombre,
+        pr.nombre as detalle_producto_nombre,
         pr.unidad_medida as detalle_unidad_medida,
         pr.stock_actual as detalle_stock_actual,
         dp.cantidad_solicitada as detalle_cantidad,

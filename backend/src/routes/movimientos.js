@@ -36,7 +36,7 @@ router.get("/", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW), async (req, 
       SELECT 
         m.id_movimiento as id,
         m.id_producto,
-        p.nombre || COALESCE(' - ' || NULLIF(p.marca, ''), '') as producto_nombre,
+        p.nombre as producto_nombre,
         m.tipo,
         m.cantidad,
         m.estado_producto,
@@ -94,7 +94,7 @@ router.get("/:id", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW), async (re
       SELECT 
         m.id_movimiento as id,
         m.id_producto,
-        p.nombre || COALESCE(' - ' || NULLIF(p.marca, ''), '') as producto_nombre,
+        p.nombre as producto_nombre,
         m.tipo,
         m.cantidad,
         m.estado_producto,
