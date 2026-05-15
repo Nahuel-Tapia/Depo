@@ -1,3 +1,5 @@
+export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000'
+
 export function authHeaders(token) {
   return {
     'Content-Type': 'application/json',
@@ -6,8 +8,23 @@ export function authHeaders(token) {
 }
 
 export function apiFetch(url, { token, ...options } = {}) {
-  const headers = token ? authHeaders(token) : { 'Content-Type': 'application/json' }
-  return fetch(url, { ...options, headers: { ...headers, ...options.headers } })
+  const headers = {}
+  if (token) {
+    headers.Authorization = `Bearer ${token}`
+  }
+  
+  if (!(options.body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json'
+  }
+
+  const normalizedBase = API_URL.replace(/\/$/, '')
+  const normalizedPath = url.startsWith('/') ? url : `/${url}`
+  const fullUrl = url.startsWith('http') ? url : `${normalizedBase}${normalizedPath}`
+  
+  return fetch(fullUrl, { 
+    ...options, 
+    headers: { ...headers, ...options.headers } 
+  })
 }
 
 /** Appends director_area_id for master "acting as" director (backend reads query on all methods). */
