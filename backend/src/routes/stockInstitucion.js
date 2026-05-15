@@ -64,7 +64,7 @@ router.get("/", async (req, res) => {
     if (!usuario || !usuario.id_institucion) return res.status(400).json({ error: "Sin institución" });
 
     const stock = await all(`
-      SELECT s.cantidad, p.nombre || COALESCE(' - ' || NULLIF(p.marca, ''), '') as producto_nombre, p.id_producto, p.unidad_medida
+      SELECT s.cantidad, p.nombre as producto_nombre, p.id_producto, p.unidad_medida
       FROM stock_institucion s
       JOIN producto p ON p.id_producto = s.id_producto
       WHERE s.id_institucion = ?

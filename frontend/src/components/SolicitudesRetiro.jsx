@@ -109,6 +109,7 @@ export default function SolicitudesRetiro({ embedded = false }) {
   const [retiraTipo, setRetiraTipo] = useState('directivo')
   const [retiraNombre, setRetiraNombre] = useState('')
   const [retiraDni, setRetiraDni] = useState('')
+  const [solicitarEnvio, setSolicitarEnvio] = useState(false)
   const [observaciones, setObservaciones] = useState('')
   const [msg, setMsg] = useState({ text: '', type: '' })
   const [loading, setLoading] = useState(true)
@@ -200,6 +201,7 @@ export default function SolicitudesRetiro({ embedded = false }) {
         retira_tipo: retiraTipo,
         retira_nombre: retiraTipo === 'otro' ? retiraNombre.trim() : null,
         retira_dni: retiraTipo === 'otro' ? retiraDni.trim() : null,
+        solicitar_envio: solicitarEnvio,
         observaciones: observaciones.trim() || null,
         items
       })
@@ -217,6 +219,7 @@ export default function SolicitudesRetiro({ embedded = false }) {
     setRetiraTipo('directivo')
     setRetiraNombre('')
     setRetiraDni('')
+    setSolicitarEnvio(false)
     setObservaciones('')
     setMsg({ text: 'Solicitud de retiro creada correctamente.', type: 'success' })
     loadData()
@@ -446,6 +449,20 @@ export default function SolicitudesRetiro({ embedded = false }) {
             )}
 
             <div style={{ gridColumn: '1 / -1' }}>
+              <label style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
+                <input
+                  type="checkbox"
+                  checked={solicitarEnvio}
+                  onChange={(event) => setSolicitarEnvio(event.target.checked)}
+                />
+                Solicitar envío
+              </label>
+              <div style={{ fontSize: '0.82rem', color: 'var(--muted)' }}>
+                Esta opción está disponible para escuelas de zona alejada.
+              </div>
+            </div>
+
+            <div style={{ gridColumn: '1 / -1' }}>
               <label>Observaciones</label>
               <input value={observaciones} onChange={(event) => setObservaciones(event.target.value)} />
             </div>
@@ -527,6 +544,7 @@ export default function SolicitudesRetiro({ embedded = false }) {
                 <tr>
                   <th>#</th>
                   <th>Institución</th>
+                  <th>Modalidad</th>
                   <th>Fecha retiro</th>
                   <th>Fecha entrega</th>
                   <th>Retira</th>
@@ -539,6 +557,7 @@ export default function SolicitudesRetiro({ embedded = false }) {
                   <tr key={sol.id}>
                     <td>#{sol.id}</td>
                     <td>{sol.institucion_nombre}</td>
+                    <td>{sol.solicitar_envio ? 'Envío' : 'Retiro'}</td>
                     <td>{formatDate(sol.fecha_retiro)}</td>
                     <td>{formatDate(sol.fecha_entrega)}</td>
                     <td>{buildRetiraLabel(sol)}</td>
@@ -586,6 +605,7 @@ function SolicitudesTable({ solicitudes, onEntregar, onAccept, onViewHistory, pr
         <tr>
           <th>#</th>
           <th>Institucion</th>
+          <th>Modalidad</th>
           <th>Fecha retiro</th>
           <th>Retira</th>
           <th>Productos</th>
@@ -598,6 +618,7 @@ function SolicitudesTable({ solicitudes, onEntregar, onAccept, onViewHistory, pr
           <tr key={solicitud.id}>
             <td>#{solicitud.id}</td>
             <td>{solicitud.institucion_nombre}</td>
+            <td>{solicitud.solicitar_envio ? 'Envío' : 'Retiro'}</td>
             <td>{formatDate(solicitud.fecha_retiro)}</td>
             <td>{buildRetiraLabel(solicitud)}</td>
             <td>

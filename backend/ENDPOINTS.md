@@ -642,6 +642,73 @@ Endpoints principales:
 - `POST /api/entregas/retirar`
 - `GET /api/entregas/historial/:id_pedido`
 
+### Solicitudes con modalidad de envio
+
+`POST /api/entregas/solicitudes` permite indicar si la solicitud requiere envio:
+
+```json
+{
+  "id_pedido": 123,
+  "fecha_retiro": "2026-05-15",
+  "solicitar_envio": true,
+  "items": [
+    { "id_producto": 3, "cantidad": 1 }
+  ]
+}
+```
+
+### Distribucion por departamento (envio)
+
+- `GET /api/entregas/solicitudes-envio/departamentos`
+- `GET /api/entregas/solicitudes-envio/departamentos/:departamento/detalle?anio=2026`
+- `POST /api/entregas/solicitudes-envio/egreso-multiple`
+
+Payload esperado para egreso multiple:
+
+```json
+{
+  "departamento": "CAPITAL",
+  "anio": 2026,
+  "id_deposito": 1,
+  "observaciones": "Entrega consolidada",
+  "entregas": [
+    {
+      "id_solicitud": 11,
+      "items": [
+        { "id_producto": 3, "cantidad": 1 }
+      ]
+    }
+  ]
+}
+```
+
+Respuesta exitosa (`200`):
+
+```json
+{
+  "ok": true,
+  "departamento": "CAPITAL",
+  "movimientos_creados": 1,
+  "solicitudes_aceptadas": [11],
+  "solicitudes_entregadas": [11],
+  "total_productos": 1,
+  "total_cantidad": 1,
+  "message": "Egreso múltiple por departamento registrado con éxito"
+}
+```
+
+Validaciones funcionales (`400`):
+
+- Solicitud inexistente
+- Solicitud en estado no procesable
+- Solicitud fuera del departamento indicado
+- Cantidad mayor al pendiente
+- Stock insuficiente
+
+Nota:
+
+- Los errores de negocio de `egreso-multiple` se reportan como `400 Bad Request` con mensaje claro para UI.
+
 ## Proveedores
 
 ### Endpoints

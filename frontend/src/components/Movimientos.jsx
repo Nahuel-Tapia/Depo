@@ -44,6 +44,7 @@ export default function Movimientos() {
   const [filterHasta, setFilterHasta] = useState('')
   const [filterTipo, setFilterTipo] = useState('')
   const [filterUsuario, setFilterUsuario] = useState('')
+  const [filterProveedor, setFilterProveedor] = useState('')
 
   // Depositos
   const [ingresoDeposito, setIngresoDeposito] = useState('')
@@ -66,11 +67,13 @@ export default function Movimientos() {
       const desdeVal = opts.desde ?? filterDesde
       const hastaVal = opts.hasta ?? filterHasta
       const usuarioVal = opts.usuario ?? filterUsuario
+      const proveedorVal = opts.proveedor ?? filterProveedor
 
       if (tipoVal) q.append('tipo', tipoVal)
       if (desdeVal) q.append('desde', desdeVal)
       if (hastaVal) q.append('hasta', hastaVal)
       if (usuarioVal) q.append('usuario', usuarioVal)
+      if (proveedorVal) q.append('proveedor', proveedorVal)
 
       const qs = q.toString() ? `?${q.toString()}` : ''
       const res = await apiFetch(`/api/movimientos${qs}`, { token })
@@ -991,9 +994,13 @@ return (
           <label style={{ display: 'block', fontSize: '0.8rem' }}>Usuario</label>
           <input placeholder="Nombre o id" value={filterUsuario} onChange={e => setFilterUsuario(e.target.value)} />
         </div>
+        <div>
+          <label style={{ display: 'block', fontSize: '0.8rem' }}>Proveedor</label>
+          <input placeholder="Nombre o id" value={filterProveedor} onChange={e => setFilterProveedor(e.target.value)} />
+        </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
           <button type="button" onClick={() => loadMovimientos()}>Buscar</button>
-          <button type="button" onClick={() => { setFilterDesde(''); setFilterHasta(''); setFilterTipo(''); setFilterUsuario(''); loadMovimientos({}) }} className="secondary">Limpiar</button>
+          <button type="button" onClick={() => { setFilterDesde(''); setFilterHasta(''); setFilterTipo(''); setFilterUsuario(''); setFilterProveedor(''); loadMovimientos({}) }} className="secondary">Limpiar</button>
         </div>
       </div>
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -1004,6 +1011,7 @@ return (
             <th>Cantidad</th>
             <th>Estado</th>
             <th>Motivo</th>
+            <th>Proveedor</th>
             <th>Registrado por</th>
             <th>Fecha</th>
             <th style={{ textAlign: 'center' }}>Acciones</th>
@@ -1035,7 +1043,7 @@ return (
                 : first.institucion_nombre || first.cargo_retira || '-';
 
               const isMulti = group.items.length > 1;
-              const productSummary = group.items.map(item => `${item.producto_nombre || '-'} (x${item.cantidad})`).join(', ');
+              const proveedoresResumen = [...new Set(group.items.map(item => item.proveedor_nombre).filter(Boolean))];
 
               const totalCantidad = group.items.reduce((sum, item) => sum + Number(item.cantidad || 0), 0);
 
@@ -1046,6 +1054,7 @@ return (
                   <td>{isMulti ? totalCantidad : first.cantidad}</td>
                   <td>{isMulti ? 'Varios' : (first.estado_producto || '-')}</td>
                   <td>{first.motivo || '-'}</td>
+                  <td>{proveedoresResumen.length > 0 ? proveedoresResumen.join(', ') : '-'}</td>
                   <td>{first.usuario_nombre || '-'}</td>
                   <td>{first.created_at ? new Date(first.created_at).toLocaleDateString() : '-'}</td>
                   <td style={{ textAlign: 'center' }}>
@@ -1063,7 +1072,7 @@ return (
                       <button
                         type="button"
                         className="secondary"
-                        onClick={() => { setDetalleData({ proveedor: first.proveedor_nombre, deposito: first.deposito_nombre, institucion: institucionCargo, productos: group.items }); setDetalleModalOpen(true) }}
+                        onClick={() => { setDetalleData({ proveedor: proveedoresResumen.length > 0 ? proveedoresResumen.join(', ') : null, deposito: first.deposito_nombre, institucion: institucionCargo, productos: group.items }); setDetalleModalOpen(true) }}
                         title="Ver detalle"
                         aria-label="Ver detalle"
                         style={{ width: 'auto', margin: 0, minWidth: 36, padding: '6px 10px' }}
