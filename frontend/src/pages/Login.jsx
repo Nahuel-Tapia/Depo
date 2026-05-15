@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000'
+
 export default function Login() {
   const { login } = useAuth()
   const [email, setEmail] = useState('')
@@ -15,7 +17,7 @@ export default function Login() {
     const cue = /^\d+$/.test(email.trim()) ? email.trim() : ''
 
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await fetch(`${API_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim(), cue, password })
