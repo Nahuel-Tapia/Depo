@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { API_URL } from '../api'
+import { apiFetch } from '../api'
 
 export default function Login() {
   const { login } = useAuth()
@@ -16,9 +16,8 @@ export default function Login() {
     const cue = /^\d+$/.test(email.trim()) ? email.trim() : ''
 
     try {
-      const res = await fetch(`${API_URL}/api/auth/login`, {
+      const res = await apiFetch('/api/auth/login', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim(), cue, password })
       })
 
