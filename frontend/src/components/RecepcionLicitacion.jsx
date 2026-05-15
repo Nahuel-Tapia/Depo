@@ -281,7 +281,7 @@ export default function RecepcionLicitacion() {
         <div style="text-align:right"><div style="font-weight:bold;font-size:1.2rem">${remito.numero}</div>
           <div style="color:#666">Remito de Ingreso</div></div></div>
       <div class="meta">
-        <div><strong>Licitación:</strong> #${detalle?.id} — Año ${detalle?.anio}</div>
+        <div><strong>Licitación:</strong> ${detalle?.titulo_display || (`Licitación #${detalle?.id} — Año ${detalle?.anio}`)}</div>
         <div><strong>Fecha:</strong> ${new Date(remito.created_at).toLocaleString('es-AR')}</div>
         <div><strong>Depósito:</strong> ${remito.deposito_nombre || '-'}</div>
         <div><strong>Registrado por:</strong> ${remito.usuario_nombre || '-'}</div>
@@ -328,7 +328,7 @@ export default function RecepcionLicitacion() {
           <div><div style="font-weight:bold;font-size:1.1rem">San Juan Gobierno</div>
           <div style="color:#666">Ministerio de Educación</div></div></div>
         <div style="text-align:right"><div style="font-weight:bold;font-size:1.2rem">Remito General</div>
-          <div style="color:#666">Licitación Anual ${data.anio}</div></div></div>
+          <div style="color:#666">${data.titulo_display || `Licitación Anual ${data.anio}`}</div></div></div>
       <h3>Detalle de Mercadería Recibida</h3>
       <table><thead><tr><th>Producto</th><th>Proveedor</th><th style="text-align:center">Unidad</th><th style="text-align:center">Adjudicado</th><th style="text-align:center">Recibido</th><th style="text-align:center">Estado</th></tr></thead>
       <tbody>${rowsHTML}</tbody></table>
@@ -381,6 +381,8 @@ export default function RecepcionLicitacion() {
                 <tr style={{ background: '#f8fafc' }}>
                   <th>ID</th>
                   <th>AÑO LICITACIÓN</th>
+                  <th>TÍTULO / MOTIVO</th>
+                  <th>PROVEEDOR(ES)</th>
                   <th>FECHA ENVÍO</th>
                   <th style={{ textAlign: 'right' }}>ACCIONES</th>
                 </tr>
@@ -390,6 +392,8 @@ export default function RecepcionLicitacion() {
                   <tr key={r.id}>
                     <td>#{r.id}</td>
                     <td style={{ fontWeight: 700 }}>{r.anio}</td>
+                    <td>{r.titulo_display || r.motivo || r.titulo || `Licitación Anual ${r.anio}`}</td>
+                    <td>{r.proveedores || 'Sin proveedor asignado'}</td>
                     <td>{new Date(r.fecha_publicacion).toLocaleString()}</td>
                     <td style={{ textAlign: 'right' }}>
                       <button onClick={() => verDetalle(r.id)}>📦 Recibir Mercadería</button>
@@ -417,7 +421,7 @@ export default function RecepcionLicitacion() {
           </div>
 
           <h3 style={{ borderBottom: '2px solid var(--primary)', paddingBottom: 10 }}>
-            Carga de Ingreso — Licitación #{detalle.id} ({detalle.anio})
+            Carga de Ingreso — {detalle.titulo_display || `Licitación #${detalle.id} (${detalle.anio})`}
           </h3>
 
           <div className="recepcion-table-wrap">
@@ -425,6 +429,7 @@ export default function RecepcionLicitacion() {
             <thead>
               <tr>
                 <th>PRODUCTO</th>
+                <th>PROVEEDOR</th>
                 <th style={{ textAlign: 'center' }}>TOTAL ADJUDICADO</th>
                 <th style={{ textAlign: 'center' }}>YA RECIBIDO</th>
                 <th style={{ textAlign: 'center', width: 140 }}>CANT. A INGRESAR</th>
@@ -444,6 +449,9 @@ export default function RecepcionLicitacion() {
                     <td>
                       <div style={{ fontWeight: 600 }}>{item.producto}</div>
                       <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>{item.unidad_medida}</div>
+                    </td>
+                    <td>
+                      <div style={{ fontSize: '0.85rem' }}>{item.proveedor_nombre || 'Sin proveedor asignado'}</div>
                     </td>
                     <td style={{ textAlign: 'center' }}>{item.cantidad_total}</td>
                     <td style={{ textAlign: 'center', color: yaRecibido > 0 ? 'var(--primary)' : 'var(--muted)' }}>
@@ -561,6 +569,7 @@ export default function RecepcionLicitacion() {
                     <th>N° REMITO</th>
                     <th>FECHA</th>
                     <th>DEPÓSITO</th>
+                    <th>PROVEEDOR</th>
                     <th style={{ textAlign: 'center' }}>PRODUCTOS</th>
                     <th>REGISTRADO POR</th>
                     <th style={{ textAlign: 'center' }}>ACCIONES</th>
@@ -569,11 +578,13 @@ export default function RecepcionLicitacion() {
                 <tbody>
                   {remitos.map(r => {
                     const tieneImagenes = r.imagenes && r.imagenes.length > 0
+                    const proveedores = [...new Set((r.items || []).map(it => it.proveedor_nombre).filter(Boolean))]
                     return (
                       <tr key={r.id}>
                         <td style={{ fontWeight: 700, color: 'var(--primary)' }}>{r.numero}</td>
                         <td>{new Date(r.created_at).toLocaleString('es-AR')}</td>
                         <td>{r.deposito_nombre || '-'}</td>
+                        <td>{proveedores.length > 0 ? proveedores.join(', ') : '-'}</td>
                         <td style={{ textAlign: 'center' }}>{r.items?.length || 0}</td>
                         <td>{r.usuario_nombre || '-'}</td>
                         <td style={{ textAlign: 'center' }}>
@@ -639,6 +650,7 @@ export default function RecepcionLicitacion() {
                       <thead>
                         <tr style={{ background: '#f8fafc', textAlign: 'left' }}>
                           <th style={{ padding: '8px 10px', fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', fontSize: '0.78rem', borderBottom: '1px solid #e5e7eb' }}>Producto</th>
+                          <th style={{ padding: '8px 10px', fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', fontSize: '0.78rem', borderBottom: '1px solid #e5e7eb' }}>Proveedor</th>
                           <th style={{ padding: '8px 10px', fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', fontSize: '0.78rem', borderBottom: '1px solid #e5e7eb', textAlign: 'center' }}>Cant. recibida</th>
                           <th style={{ padding: '8px 10px', fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', fontSize: '0.78rem', borderBottom: '1px solid #e5e7eb', textAlign: 'center' }}>Cant. dañada</th>
                           <th style={{ padding: '8px 10px', fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', fontSize: '0.78rem', borderBottom: '1px solid #e5e7eb' }}>Observación de daño</th>
@@ -652,6 +664,7 @@ export default function RecepcionLicitacion() {
                               <div style={{ fontWeight: 500 }}>{item.producto_nombre}</div>
                               <div style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>{item.unidad_medida}</div>
                             </td>
+                            <td style={{ padding: '8px 10px', fontSize: '0.85rem' }}>{item.proveedor_nombre || '-'}</td>
                             <td style={{ padding: '8px 10px', textAlign: 'center' }}>{item.cantidad_recibida}</td>
                             <td style={{ padding: '8px 10px', textAlign: 'center' }}>
                               {Number(item.cantidad_danada) > 0 ? (

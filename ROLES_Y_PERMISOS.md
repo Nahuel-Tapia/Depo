@@ -25,8 +25,8 @@
 - El supervisor se vincula automáticamente al director de área creador
 - La jurisdicción se hereda del director de área
 
-### 其他 Roles
-- No pueden crear usuarios ( salvo los anteriores )
+### Otros roles
+- No pueden crear usuarios (salvo admin y director_area)
 
 ## 3. Flujo de Creación de Usuarios
 
@@ -67,6 +67,7 @@ DIRECTOR_AREA:
 ### Operador
 - Dashboard, Stock (ver/editar/movimientos), Productos (CRUD)
 - Movimientos, Ajustes, Auditoría, Proveedores (CRUD)
+- Operaciones de logística de entregas (retiro y envío por departamento)
 
 ### Consulta
 - Dashboard, Stock, Productos, Movimientos, Ajustes, Auditoría
@@ -131,6 +132,8 @@ PLANILLA_VIEW, PLANILLA_MANAGE, PLANILLA_ENVIAR
 | `/api/compras` | Planillas de compra |
 | `/api/auditoria` | Log de auditoría |
 | `/api/dashboard` | Estadísticas |
+| `/api/entregas` | Solicitudes de retiro y envíos por departamento |
+| `/api/depositos` | Stock y operaciones por depósito |
 
 ## 7. Estructura de Datos de Usuario
 
@@ -141,7 +144,7 @@ usuario {
   apellido,
   email,
   dni,
-  role,           -- admin, controla_ministerio, director_area, directivo, supervisor, operador, consulta, area_compras
+  role,           -- admin, control_ministerio, director_area, directivo, supervisor, operador, consulta, area_compras
   password,
   telefono,
   activo,
@@ -158,7 +161,7 @@ Los permisos se definen en `backend/src/permissions.js`:
 - `PERMISSIONS`: Constantes de permisos
 - `DEFAULT_ROLE_PERMISSIONS`: Mapeo rol → permisos por defecto
 
-La verificación de permisos se realiza en el frontend mediante el hook `useAuth()` que expõe `hasPermission(permiso)`.
+La verificación de permisos se realiza en el frontend mediante el hook `useAuth()` que expone `hasPermission(permiso)`.
 
 ## 9. Validaciones en Backend (users.js - POST /api/users)
 

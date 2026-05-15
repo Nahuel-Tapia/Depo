@@ -156,6 +156,37 @@ Entre los modulos presentes hoy en el repositorio:
 - Recepcion de licitaciones y distribucion a escuelas
 - Instituciones, proveedores, auditoria y patrimonio
 
+## Flujo logistico actualizado (Mayo 2026)
+
+El circuito de entregas ahora contempla dos modalidades de salida para instituciones:
+
+- Retiro presencial (flujo tradicional)
+- Envio por departamento (flujo nuevo)
+
+### Envio por departamento
+
+1. El directivo crea la solicitud de retiro y marca la opcion de solicitar envio.
+2. El sistema agrupa solicitudes pendientes por departamento.
+3. El operador entra en Distribucion a Escuelas -> Envio por Departamento.
+4. Desde el detalle del departamento, arma cantidades por solicitud y producto.
+5. El sistema registra el egreso multiple y actualiza estados/entregas.
+
+Notas operativas:
+
+- El detalle incluye resumen por solicitud (solicitado, entregado, pendiente).
+- Se muestra un bloque de instituciones faltantes por solicitar retiro en ese departamento.
+- Las validaciones funcionales del egreso multiple ahora devuelven `400` con mensaje explicito (ya no `500` para errores de negocio).
+
+## Documentacion recomendada
+
+Para revisar el estado actual del sistema usar:
+
+- `README.md` (vision general y arranque)
+- `backend/ENDPOINTS.md` (API actualizada)
+- `GUIA_ROLES_SISTEMA.md` (flujo operativo por rol)
+- `DIAGRAMA_Y_FLUJO_SISTEMA.md` (casos de uso y secuencias)
+- `ROLES_Y_PERMISOS.md` (restricciones de permisos)
+
 ## Build
 
 Backend:

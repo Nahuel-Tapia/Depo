@@ -1,5 +1,31 @@
 # Revision de Documentacion y Mejoras Prioritarias
 
+## Actualizacion de documentacion ejecutada (2026-05-15)
+
+Se realizo una actualizacion integral de la documentacion funcional y tecnica para alinear el contenido con el estado real del sistema.
+
+Documentos actualizados:
+
+- `README.md`
+- `CHANGELOG.md`
+- `backend/ENDPOINTS.md`
+- `GUIA_ROLES_SISTEMA.md`
+- `ROLES_Y_PERMISOS.md`
+- `DIAGRAMA_Y_FLUJO_SISTEMA.md`
+
+Cobertura agregada en esta actualizacion:
+
+- Flujo de solicitudes con modalidad de envio.
+- Distribucion por departamento para operador.
+- Detalle por departamento con faltantes por solicitar retiro.
+- Semantica de errores de negocio en egreso multiple (`400` con mensaje funcional).
+
+Pendientes de mejora (se mantienen como backlog):
+
+- Ajustes de scripts de arranque/cierre para Windows.
+- Definicion formal de modos de base de datos para onboarding.
+- Pruebas automatizadas minimas y smoke checks.
+
 Este documento resume la revision del proyecto y ordena las mejoras en un plan de trabajo aplicable.
 
 ## Estado general

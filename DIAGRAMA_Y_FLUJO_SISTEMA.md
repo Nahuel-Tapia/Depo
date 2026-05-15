@@ -94,3 +94,35 @@ sequenceDiagram
     AC->>OP: Orden de Entrega
     OP->>DIR: Distribución Física a la Escuela
 ```
+
+---
+
+## 3. Flujo de Retiro vs Envio por Departamento (Implementado)
+
+Luego de la adjudicacion e ingreso a deposito, el directivo inicia una solicitud de retiro y define la modalidad operativa.
+
+```mermaid
+flowchart TD
+    A[Directivo crea solicitud de retiro] --> B{Solicitar envio?}
+    B -->|No| C[Flujo de retiro presencial]
+    B -->|Si| D[Solicitud entra a Envio por Departamento]
+    D --> E[Operador ve resumen agrupado por departamento]
+    E --> F[Operador abre detalle y arma egreso multiple]
+    F --> G{Validaciones de negocio}
+    G -->|OK| H[Registrar movimientos y entregas]
+    G -->|Error| I[Respuesta 400 con mensaje funcional]
+    H --> J[Solicitud actualizada: aceptada/entregada]
+```
+
+### Validaciones clave del egreso multiple
+
+1. Solicitud existente y procesable (pendiente o aceptada).
+2. Solicitud marcada para envio y perteneciente al departamento seleccionado.
+3. Cantidad a despachar menor o igual al pendiente por item.
+4. Stock suficiente en el deposito origen.
+
+### Salidas operativas disponibles para el operador
+
+1. Resumen por solicitud: solicitado, ya entregado y pendiente.
+2. Consolidado por departamento: solicitudes, escuelas, productos, cantidad pendiente.
+3. Seccion de instituciones faltantes por solicitar retiro en el mismo departamento.

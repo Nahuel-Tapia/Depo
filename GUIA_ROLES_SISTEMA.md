@@ -9,6 +9,9 @@ Este documento detalla las capacidades y flujos de trabajo para cada rol dentro 
 
 *   **Solicitud Anual**: Generar el pedido de suministros para todo el ciclo lectivo basado en el Kit asignado a su tipo de escuela.
 *   **Solicitud de Refuerzos**: Realizar pedidos extraordinarios de productos específicos cuando el stock anual sea insuficiente.
+*   **Modalidad de Entrega**:
+    *   Puede generar solicitud para **retiro presencial**.
+    *   Puede marcar **solicitar envio** para que el operador procese su entrega dentro del flujo por departamento.
 *   **Seguimiento Logístico**: 
     *   Visualizar el estado de su pedido en tiempo real (Pendiente, Autorizado, Licitación, En Depósito Central).
     *   Verificar cantidades recibidas vs. cantidades solicitadas.
@@ -67,6 +70,12 @@ Este documento detalla las capacidades y flujos de trabajo para cada rol dentro 
 *   **Distribución a Escuelas**: 
     *   Armar las "salidas" de mercadería hacia cada escuela según lo que se les adjudicó.
     *   Generar remitos virtuales de entrega.
+*   **Envíos por Departamento (Nuevo)**:
+    *   Vista agrupada por departamento para solicitudes marcadas con envío.
+    *   Pantalla de detalle por departamento con resumen por solicitud: solicitado, ya entregado y pendiente.
+    *   Sección de instituciones faltantes por solicitar retiro para gestión preventiva.
+    *   Confirmación de egreso múltiple por departamento con selección de depósito origen.
+    *   Errores funcionales en confirmación se informan como validaciones (`400`) con mensaje claro.
 *   **Control de Inventario**: 
     *   Visualizar stock actual por depósito.
     *   **Detalle de Stock**: Ver en qué depósitos está distribuida la mercadería y sus fechas de vencimiento desde la lista de productos.
@@ -86,3 +95,10 @@ Este documento detalla las capacidades y flujos de trabajo para cada rol dentro 
 
 ### Flujo Crítico de un Pedido Anual (Resumen):
 1. **Directivo** pide → 2. **Supervisor** valida → 3. **Director Área** autoriza → 4. **Compras** licita y adjudica → 5. **Operador** recibe del proveedor → 6. **Operador** entrega a la escuela.
+
+### Flujo de Retiro/Envío (Post Adjudicación)
+1. **Directivo** crea solicitud de retiro.
+2. Si marca **solicitar envío**, la solicitud entra al tablero de **Envíos por Departamento**.
+3. **Operador** abre detalle del departamento y arma cantidades a despachar.
+4. **Operador** confirma egreso múltiple.
+5. El sistema actualiza movimientos, cantidades entregadas y estado de solicitud.

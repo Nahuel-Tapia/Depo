@@ -1,5 +1,19 @@
 # Registro de Cambios - Depo
 
+## [1.6.0] - 2026-05-15
+### Añadido
+- **Solicitudes con modalidad de envío**: el directivo ahora puede marcar en la solicitud de retiro si desea envío en lugar de retiro presencial.
+- **Distribución por departamento (Operador)**: nueva vista en Distribución a Escuelas para agrupar solicitudes con envío por departamento y armar egreso múltiple.
+- **Detalle operativo por departamento**: se incorporó el detalle por solicitud, con resumen de solicitado/entregado/pendiente y la sección de instituciones faltantes por solicitar retiro.
+
+### Mejoras
+- **UX de distribución**: botón y textos aclaratorios en la grilla de departamentos para guiar la navegación hacia el detalle y armado de egreso.
+- **Consistencia de flujo**: el operador puede seleccionar depósito de origen y confirmar egreso consolidado por departamento.
+
+### Correcciones
+- **Confirmación de egreso por departamento**: las validaciones de negocio ya no responden como error interno; ahora retornan `400 Bad Request` con mensaje funcional claro.
+- **Mensajes de validación**: se mejoró la trazabilidad de errores de estado, cantidad pendiente y pertenencia de solicitud/departamento.
+
 ## [1.5.0] - 2026-05-11
 ### Añadido
 - **Detalle de Distribución y Vencimiento**: Se agregó un modal en la vista de Productos que permite ver en qué depósitos está distribuida la mercadería y las fechas de vencimiento registradas en los ingresos.

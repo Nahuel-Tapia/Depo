@@ -1,11 +1,25 @@
-require("dotenv").config();
+const path = require("path");
+const fs = require("fs");
+const dotenv = require("dotenv");
+
+// Permite iniciar el backend tanto desde la raiz del repo como desde /backend.
+const envCandidates = [
+  path.resolve(__dirname, "..", "..", ".env"),
+  path.resolve(process.cwd(), ".env"),
+  path.resolve(__dirname, "..", ".env"),
+];
+const envPath = envCandidates.find((candidate) => fs.existsSync(candidate));
+if (envPath) {
+  dotenv.config({ path: envPath });
+} else {
+  dotenv.config();
+}
 
 if (!process.env.JWT_SECRET) {
   console.error("[ERROR] JWT_SECRET no está definido. Definílo en el archivo .env antes de iniciar.");
   process.exit(1);
 }
 
-const path = require("path");
 const express = require("express");
 const cors = require("cors");
 const { initDb } = require("./db.pg");
@@ -56,7 +70,6 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 // Servir el build de React (frontend/dist)
 const frontendDistPath = path.join(__dirname, "..", "..", "frontend", "dist");
 const frontendPublicPath = path.join(__dirname, "..", "..", "frontend", "public");
-const fs = require("fs");
 const staticPath = fs.existsSync(frontendDistPath) ? frontendDistPath : frontendPublicPath;
 app.use(express.static(staticPath));
 

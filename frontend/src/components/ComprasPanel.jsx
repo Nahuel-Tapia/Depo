@@ -90,6 +90,7 @@ export default function ComprasPanel({ section = 'pedidos' }) {
   const [publicacionStatus, setPublicacionStatus] = useState({ publicada: false, data: null })
   const [editQty, setEditQty] = useState({})
   const [showConfirmPublicar, setShowConfirmPublicar] = useState(false)
+  const [motivoLicitacion, setMotivoLicitacion] = useState(`Licitación Anual ${new Date().getFullYear()}`)
 
   useEffect(() => {
     if (user?.role === 'master' && masterDirectorAreaId) {
@@ -132,6 +133,9 @@ export default function ComprasPanel({ section = 'pedidos' }) {
       setPublicacionStatus(pubData)
       setAdjudicacion(adjudicacionData.items || [])
       setPlanillas(planillasData.planillas || [])
+      setMotivoLicitacion(
+        String(pubData?.data?.motivo || pubData?.data?.titulo || `Licitación Anual ${anio}`).trim()
+      )
       
       setFormByProduct((prev) => {
         const next = { ...prev }
@@ -294,8 +298,11 @@ export default function ComprasPanel({ section = 'pedidos' }) {
     setSaving(true)
     try {
       const anio = new Date().getFullYear()
+      const motivoSanitizado = String(motivoLicitacion || '').trim() || `Licitación Anual ${anio}`
       const payload = {
         anio,
+        titulo: motivoSanitizado,
+        motivo: motivoSanitizado,
         items: consolidado.map(item => ({
           ...item,
           cantidad_a_licitar: editQty[item.producto_id] !== undefined ? editQty[item.producto_id] : item.cantidad_total
@@ -758,6 +765,15 @@ export default function ComprasPanel({ section = 'pedidos' }) {
             <h2 className="sv-modal-title" style={{ color: 'var(--primary)' }}>🔒 ¿Confirmar cierre de licitación?</h2>
             <div className="sv-modal-body">
               <p>Se registrará el listado final con las cantidades editadas y se habilitará la fase de Adjudicación.</p>
+              <label style={{ display: 'block', marginTop: 12, fontWeight: 700 }}>Motivo de Licitación (título visible en Recepción)</label>
+              <input
+                type="text"
+                value={motivoLicitacion}
+                onChange={(e) => setMotivoLicitacion(e.target.value)}
+                placeholder="Ej: Licitación Anual Artículos de Limpieza"
+                style={{ width: '100%', marginTop: 8 }}
+                maxLength={255}
+              />
               <p style={{ fontWeight: 700, color: '#e11d48' }}>Esta acción no se puede deshacer.</p>
             </div>
             <div className="sv-modal-footer">
