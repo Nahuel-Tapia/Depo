@@ -12,17 +12,33 @@ const password =
   process.env.POSTGRES_PASSWORD ||
   "postgres";
 
-module.exports = {
-  host,
-  port,
-  database,
-  user,
-  password,
+const baseConfig = {
   // Pool config
   max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
 };
+
+let dbConfig = {};
+
+if (process.env.DATABASE_URL) {
+  dbConfig = {
+    ...baseConfig,
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false
+  };
+} else {
+  dbConfig = {
+    ...baseConfig,
+    host,
+    port,
+    database,
+    user,
+    password,
+  };
+}
+
+module.exports = dbConfig;
 
 module.exports.getDbConfigForLogs = () => ({
   host,
