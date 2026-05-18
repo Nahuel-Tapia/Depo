@@ -139,6 +139,23 @@ async function ensureTables() {
     `);
 
       await client.query(`
+      ALTER TABLE planilla_pedido_anual
+      ADD COLUMN IF NOT EXISTS direccion_area VARCHAR(100)
+    `);
+
+      await client.query(`
+      ALTER TABLE planilla_pedido_anual
+      ADD COLUMN IF NOT EXISTS motivo_devolucion TEXT
+    `);
+
+      await client.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_planilla_anio_direccion
+      ON planilla_pedido_anual (anio, direccion_area)
+      WHERE estado IN ('enviada', 'aceptada', 'adjudicada', 'cerrada')
+        AND direccion_area IS NOT NULL
+    `);
+
+      await client.query(`
       CREATE TABLE IF NOT EXISTS compra_precio_historico (
         id SERIAL PRIMARY KEY,
         anio INT NOT NULL,
@@ -445,24 +462,40 @@ async function getConsolidadoRealTime({ anio }) {
 }
 
 async function getEstadoDirectores({ anio }) {
-  const query = `
-    SELECT 
-      u.id_usuario,
-      u.nombre,
-      u.apellido,
-      u.nivel_educativo,
-      (
-        SELECT COUNT(*) > 0
-        FROM planilla_pedido_anual ppa
-        WHERE ppa.director_area_id = u.id_usuario
-          AND ppa.anio = ?
-          AND ppa.estado IN ('enviada', 'aceptada', 'adjudicada', 'cerrada')
-      ) AS enviado
-    FROM usuario u
-    WHERE u.role = 'director_area'
-    ORDER BY u.nivel_educativo ASC
-  `;
-  return await all(query, [anio]);
+  const rows = await all(
+    `SELECT
+       COALESCE(da, 'Sin dirección') AS direccion_area,
+       EXISTS (
+         SELECT 1 FROM planilla_pedido_anual ppa
+         WHERE ppa.direccion_area = da
+           AND ppa.anio = $1
+           AND ppa.estado IN ('enviada', 'aceptada', 'adjudicada', 'cerrada')
+       ) AS enviado,
+       (
+         SELECT ppa.id FROM planilla_pedido_anual ppa
+         WHERE ppa.direccion_area = da
+           AND ppa.anio = $1
+           AND ppa.estado IN ('enviada', 'aceptada', 'adjudicada', 'cerrada')
+         ORDER BY ppa.created_at DESC, ppa.id DESC
+         LIMIT 1
+       ) AS planilla_id,
+       (
+         SELECT ppa.estado FROM planilla_pedido_anual ppa
+         WHERE ppa.direccion_area = da
+           AND ppa.anio = $1
+           AND ppa.estado IN ('enviada', 'aceptada', 'adjudicada', 'cerrada')
+         ORDER BY ppa.created_at DESC, ppa.id DESC
+         LIMIT 1
+       ) AS planilla_estado
+     FROM (
+       SELECT DISTINCT NULLIF(BTRIM(i.direccion_area), '') AS da
+       FROM institucion i
+       WHERE i.direccion_area IS NOT NULL AND BTRIM(i.direccion_area) != ''
+     ) sub
+     ORDER BY direccion_area ASC`,
+    [anio]
+  );
+  return rows;
 }
 
 router.get("/planillas", authorizePermissions(PERMISSIONS.PLANILLA_VIEW), async (req, res) => {
@@ -757,12 +790,15 @@ async function getEnviadaStatus(req, res) {
       return res.json({ sent: false, planilla: null });
     }
     const planilla = await get(
-      `SELECT id, estado, enviada_at, aceptada_at
+      `SELECT id, estado, enviada_at, aceptada_at, motivo_devolucion
        FROM planilla_pedido_anual
-       WHERE director_area_id = $1 AND anio = $2`,
+       WHERE director_area_id = $1 AND anio = $2
+       ORDER BY created_at DESC, id DESC
+       LIMIT 1`,
       [directorUserId, anio]
     );
-    res.json({ sent: !!planilla && (planilla.estado === 'enviada' || planilla.estado === 'aceptada'), planilla });
+    const sent = !!planilla && ['enviada', 'aceptada', 'adjudicada', 'cerrada'].includes(String(planilla.estado || '').toLowerCase());
+    res.json({ sent, planilla });
   } catch (err) {
     console.error("Error al obtener estado de envío:", err);
     res.status(500).json({ error: "No se pudo obtener el estado de envío" });
@@ -821,27 +857,66 @@ async function enviarLicitacionFinal(req, res) {
         error: "No hay un Director de Area activo. Creá uno o pasá director_area_id."
       });
     }
+
+    // Obtener la direccion_area del director desde sus instituciones asignadas
+    const dirRow = await client.query(
+      `SELECT DISTINCT NULLIF(BTRIM(i.direccion_area), '') AS direccion_area
+       FROM supervisor_escuela_asignacion sea
+       JOIN institucion i ON i.id_institucion = sea.institucion_id
+       WHERE sea.director_area_id = $1
+         AND i.direccion_area IS NOT NULL AND BTRIM(i.direccion_area) != ''
+       LIMIT 1`,
+      [directorUserId]
+    );
+    const direccionArea = dirRow.rows[0]?.direccion_area || null;
+
+    // Verificar si ya existe planilla enviada para esta direccion_area en el año (cualquier director)
+    if (direccionArea) {
+      const crossCheck = await client.query(
+        `SELECT id FROM planilla_pedido_anual
+         WHERE direccion_area = $1 AND anio = $2
+           AND estado IN ('enviada', 'aceptada', 'adjudicada', 'cerrada')
+         LIMIT 1`,
+        [direccionArea, anio]
+      );
+      if (crossCheck.rowCount > 0) {
+        await client.query("ROLLBACK");
+        return res.status(409).json({
+          error: `La Dirección de Área "${direccionArea}" ya envió la licitación anual ${anio}. No se puede enviar nuevamente.`
+        });
+      }
+    }
+
     const existing = await client.query(
-      `SELECT id, estado FROM planilla_pedido_anual WHERE director_area_id = $1 AND anio = $2`,
+      `SELECT id, estado
+       FROM planilla_pedido_anual
+       WHERE director_area_id = $1 AND anio = $2
+       ORDER BY created_at DESC, id DESC`,
       [directorUserId, anio]
     );
 
-    if (existing.rowCount > 0 && (existing.rows[0].estado === 'enviada' || existing.rows[0].estado === 'aceptada')) {
-      throw new Error(`Ya realizaste el envío para el año ${anio}.`);
+    const alreadySent = existing.rows.some((row) => ['enviada', 'aceptada', 'adjudicada', 'cerrada'].includes(String(row.estado || '').toLowerCase()));
+    if (alreadySent) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({
+        error: `La Dirección de Área ya envió la licitación anual ${anio}. No se puede enviar nuevamente.`
+      });
     }
 
     let planillaId;
-    if (existing.rowCount > 0) {
-      planillaId = existing.rows[0].id;
+    const borradorExistente = existing.rows.find((row) => ['borrador', 'devuelta'].includes(String(row.estado || '').toLowerCase()));
+    if (borradorExistente) {
+      planillaId = borradorExistente.id;
       await client.query(
-        `UPDATE planilla_pedido_anual SET estado = 'enviada', enviada_at = NOW() WHERE id = $1`,
-        [planillaId]
+        `UPDATE planilla_pedido_anual SET estado = 'enviada', enviada_at = NOW(),
+         direccion_area = COALESCE(direccion_area, $2) WHERE id = $1`,
+        [planillaId, direccionArea]
       );
     } else {
       const resIns = await client.query(
-        `INSERT INTO planilla_pedido_anual (director_area_id, anio, estado, enviada_at)
-         VALUES ($1, $2, 'enviada', NOW()) RETURNING id`,
-        [directorUserId, anio]
+        `INSERT INTO planilla_pedido_anual (director_area_id, anio, estado, enviada_at, direccion_area)
+         VALUES ($1, $2, 'enviada', NOW(), $3) RETURNING id`,
+        [directorUserId, anio, direccionArea]
       );
       planillaId = resIns.rows[0].id;
     }
@@ -860,7 +935,37 @@ async function enviarLicitacionFinal(req, res) {
   }
 }
 
+async function devolverPlanilla(req, res) {
+  try {
+    await ensureTables();
+    const { id } = req.params;
+    const { motivo } = req.body || {};
+
+    const planilla = await get(
+      `SELECT id, estado FROM planilla_pedido_anual WHERE id = $1`,
+      [id]
+    );
+    if (!planilla) {
+      return res.status(404).json({ error: 'Planilla no encontrada' });
+    }
+    const estadoActual = String(planilla.estado || '').toLowerCase();
+    if (!['enviada', 'aceptada'].includes(estadoActual)) {
+      return res.status(400).json({ error: `No se puede devolver una planilla en estado "${estadoActual}"` });
+    }
+
+    await run(
+      `UPDATE planilla_pedido_anual SET estado = 'devuelta', motivo_devolucion = $1 WHERE id = $2`,
+      [motivo || null, id]
+    );
+    res.json({ ok: true, message: 'Planilla devuelta al director de área' });
+  } catch (err) {
+    console.error('Error al devolver planilla:', err);
+    res.status(500).json({ error: err.message });
+  }
+}
+
 router.patch("/planillas/:id/aceptar", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), aceptarPlanilla);
+router.patch("/planillas/:id/devolver", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), devolverPlanilla);
 router.patch("/planillas/:id/procesar", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), aceptarPlanilla);
 
 router.delete("/planillas/:id", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), async (req, res) => {
@@ -960,9 +1065,16 @@ async function getFinalItems(req, res) {
       JOIN institucion i ON i.id_institucion = p.id_institucion
       JOIN supervisor_escuela_asignacion sea ON sea.institucion_id = i.id_institucion
       JOIN usuario u ON u.id_usuario = sea.director_area_id
-      JOIN planilla_pedido_anual ppa ON ppa.director_area_id = u.id_usuario
-      WHERE ppa.anio = $1
-        AND ppa.estado IN ('enviada', 'aceptada')
+      JOIN LATERAL (
+        SELECT ppa.estado, ppa.enviada_at
+        FROM planilla_pedido_anual ppa
+        WHERE ppa.director_area_id = u.id_usuario
+          AND ppa.anio = $1
+          AND ppa.estado IN ('enviada', 'aceptada')
+        ORDER BY ppa.created_at DESC, ppa.id DESC
+        LIMIT 1
+      ) ppa ON TRUE
+      WHERE ppa.estado IN ('enviada', 'aceptada')
         AND COALESCE(p.tipo, 'anual') = 'anual'
         AND p.estado = 'aprobado'
         AND p.aprobado_director_area IS TRUE
@@ -1064,11 +1176,20 @@ router.delete("/licitacion/anual/publicar/:anio", authorizePermissions(PERMISSIO
 async function getLicitacionesCerradas(req, res) {
   try {
     const rows = await all(
-      `SELECT id, anio, fecha_publicacion, estado,
-       (SELECT COUNT(*) FROM json_array_elements(items::json)) as total_items
-       FROM licitacion_publicada
-       WHERE estado IN ('adjudicada', 'en_deposito', 'completada')
-       ORDER BY anio DESC`
+      `SELECT lp.id, lp.anio, lp.fecha_publicacion, lp.estado,
+       (SELECT COUNT(*) FROM json_array_elements(lp.items::json)) AS total_items,
+       COALESCE((
+         SELECT SUM((item->>'cantidad_a_licitar')::numeric)
+         FROM jsonb_array_elements(lp.items::jsonb) AS item
+       ), 0) AS total_adjudicado,
+       COALESCE((
+         SELECT SUM(rl.cantidad_recibida)
+         FROM recepcion_licitacion rl
+         WHERE rl.licitacion_id = lp.id
+       ), 0) AS total_recibido
+       FROM licitacion_publicada lp
+       WHERE lp.estado IN ('adjudicada', 'en_deposito', 'completada')
+       ORDER BY lp.anio DESC`
     );
     res.json({ licitaciones: rows });
   } catch (err) {

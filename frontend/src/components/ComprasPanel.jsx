@@ -88,6 +88,7 @@ export default function ComprasPanel({ section = 'pedidos' }) {
   const [updatingId, setUpdatingId] = useState(null)
   const [itemsFinales, setItemsFinales] = useState([])
   const [publicacionStatus, setPublicacionStatus] = useState({ publicada: false, data: null })
+  const [devolucionState, setDevolucionState] = useState({})
   const [editQty, setEditQty] = useState({})
   const [showConfirmPublicar, setShowConfirmPublicar] = useState(false)
   const [motivoLicitacion, setMotivoLicitacion] = useState(`Licitación Anual ${new Date().getFullYear()}`)
@@ -254,6 +255,31 @@ export default function ComprasPanel({ section = 'pedidos' }) {
       setMsg({ text: err.message, type: 'error' })
     } finally {
       setUpdatingId(null)
+    }
+  }
+
+  const handleDevolverPlanilla = async (planillaId) => {
+    const motivo = devolucionState[planillaId]?.motivo || ''
+    setDevolucionState(prev => ({ ...prev, [planillaId]: { ...prev[planillaId], loading: true } }))
+    try {
+      const res = await apiFetch(`/api/compras/planillas/${planillaId}/devolver`, {
+        token,
+        method: 'PATCH',
+        body: JSON.stringify({ motivo }),
+        headers: { 'Content-Type': 'application/json' }
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'No se pudo devolver la planilla')
+      setMsg({ text: `Planilla devuelta al director de área.`, type: 'success' })
+      setDevolucionState(prev => {
+        const next = { ...prev }
+        delete next[planillaId]
+        return next
+      })
+      await loadWorkflowData(filters)
+    } catch (err) {
+      setMsg({ text: err.message, type: 'error' })
+      setDevolucionState(prev => ({ ...prev, [planillaId]: { ...prev[planillaId], loading: false } }))
     }
   }
 
@@ -427,65 +453,93 @@ export default function ComprasPanel({ section = 'pedidos' }) {
       )}
 
       <div ref={printRef} style={{ marginTop: 18 }}>
-        {section === 'adjudicacion' && (
-          <section style={{ 
-            background: 'white', 
-            padding: 24, 
-            borderRadius: 12, 
-            boxShadow: '0 1px 3px rgba(0,0,0,0.1)', 
-            marginBottom: 24 
-          }}>
-            <h3 style={{ marginTop: 0 }}>Filtros de búsqueda</h3>
-            <Filters filters={filters} setFilters={setFilters} directores={directores} />
-          </section>
-        )}
-
-
         {section === 'licitacion' && (
           <div>
-            <section className="card" style={{ padding: 24, marginBottom: 24, minHeight: 'auto' }}>
+            <section className="card" style={{ padding: 24, marginBottom: 24, minHeight: 'auto', width: '100%' }}>
               <h3 style={{ marginTop: 0, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ fontSize: '1.5rem' }}>🚦</span> Estado de envío por Director de Área
               </h3>
               <table style={{ marginBottom: 0 }}>
                 <thead>
                   <tr style={{ background: '#f8fafc' }}>
-                    <th>NIVEL EDUCATIVO</th>
-                    <th>DIRECTOR DE ÁREA</th>
+                    <th>DIRECCIÓN DE ÁREA</th>
                     <th style={{ textAlign: 'center' }}>ESTADO</th>
+                    <th style={{ textAlign: 'center' }}>ACCIÓN</th>
                   </tr>
                 </thead>
                 <tbody>
                   {estadoDirectores.length === 0 ? (
                     <tr>
                       <td colSpan={3} style={{ textAlign: 'center', padding: 20, color: 'var(--muted)' }}>
-                        No hay directores de área registrados.
+                        No hay direcciones de área registradas.
                       </td>
                     </tr>
                   ) : (
-                    estadoDirectores.map((dir) => (
-                      <tr key={dir.id_usuario}>
-                        <td style={{ fontWeight: 600 }}>{dir.nivel_educativo || 'Sin nivel'}</td>
-                        <td>{`${dir.nombre || ''} ${dir.apellido || ''}`.trim()}</td>
-                        <td style={{ textAlign: 'center' }}>
-                          {dir.enviado ? (
-                            <span style={{ color: '#166534', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                              ✅ Enviado
-                            </span>
-                          ) : (
-                            <span style={{ color: '#9a3412', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                              ⏳ Pendiente
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    ))
+                    estadoDirectores.map((dir) => {
+                      const pid = dir.planilla_id
+                      const dev = devolucionState[pid] || {}
+                      return (
+                        <tr key={dir.direccion_area}>
+                          <td style={{ fontWeight: 600 }}>{dir.direccion_area || 'Sin dirección'}</td>
+                          <td style={{ textAlign: 'center' }}>
+                            {dir.enviado ? (
+                              <span style={{ color: '#166534', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                                ✅ Enviado
+                              </span>
+                            ) : (
+                              <span style={{ color: '#9a3412', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                                ⏳ Pendiente
+                              </span>
+                            )}
+                          </td>
+                          <td style={{ textAlign: 'center', minWidth: 180 }}>
+                            {dir.enviado && pid ? (
+                              dev.open ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'stretch' }}>
+                                  <textarea
+                                    rows={2}
+                                    placeholder="Motivo de devolución (opcional)"
+                                    value={dev.motivo || ''}
+                                    onChange={e => setDevolucionState(prev => ({ ...prev, [pid]: { ...prev[pid], motivo: e.target.value } }))}
+                                    style={{ fontSize: '0.8rem', padding: '4px 6px', resize: 'vertical', borderRadius: 4, border: '1px solid #d1d5db' }}
+                                  />
+                                  <div style={{ display: 'flex', gap: 6 }}>
+                                    <button
+                                      onClick={() => handleDevolverPlanilla(pid)}
+                                      disabled={dev.loading}
+                                      style={{ flex: 1, background: '#b91c1c', color: '#fff', border: 'none', borderRadius: 4, padding: '4px 8px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}
+                                    >
+                                      {dev.loading ? 'Devolviendo...' : '↩ Confirmar'}
+                                    </button>
+                                    <button
+                                      onClick={() => setDevolucionState(prev => { const n = { ...prev }; delete n[pid]; return n })}
+                                      style={{ background: '#e5e7eb', border: 'none', borderRadius: 4, padding: '4px 8px', cursor: 'pointer', fontSize: '0.8rem' }}
+                                    >
+                                      Cancelar
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => setDevolucionState(prev => ({ ...prev, [pid]: { open: true, motivo: '', loading: false } }))}
+                                  style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fbbf24', borderRadius: 4, padding: '4px 12px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}
+                                >
+                                  ↩ Devolver
+                                </button>
+                              )
+                            ) : (
+                              <span style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>—</span>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })
                   )}
                 </tbody>
               </table>
             </section>
 
-            <section className="card" style={{ padding: 24, marginBottom: 24, minHeight: 'auto' }}>
+            <section className="card" style={{ padding: 24, marginBottom: 24, minHeight: 'auto', width: '100%' }}>
               <h3 style={{ marginTop: 0, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ fontSize: '1.5rem' }}>📜</span> Historial de Resúmenes Enviados
               </h3>
@@ -532,7 +586,7 @@ export default function ComprasPanel({ section = 'pedidos' }) {
             </section>
 
             {detalle && detalle.planilla && (
-              <section className="card" style={{ padding: 24, marginBottom: 24, minHeight: 'auto' }}>
+              <section className="card" style={{ padding: 24, marginBottom: 24, minHeight: 'auto', width: '100%' }}>
                 <h3 style={{ marginTop: 0, marginBottom: 20 }}>
                   Detalle del Resumen #{detalle.planilla.id} - {detalle.planilla.director_nombre} {detalle.planilla.director_apellido}
                 </h3>
@@ -559,7 +613,7 @@ export default function ComprasPanel({ section = 'pedidos' }) {
               </section>
             )}
 
-            <section className="card" style={{ padding: 24, minHeight: 'auto' }}>
+            <section className="card" style={{ padding: 24, minHeight: 'auto', width: '100%' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                 <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
                   <span style={{ fontSize: '1.5rem' }}>📋</span> Consolidado general
@@ -600,7 +654,7 @@ export default function ComprasPanel({ section = 'pedidos' }) {
         )}
 
         {section === 'listado-final' && (
-          <section className="card" style={{ padding: 24, minHeight: 'auto' }}>
+          <section className="card" style={{ padding: 24, minHeight: 'auto', width: '100%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <h3 style={{ margin: 0 }}>
                 {publicacionStatus.publicada ? '📋 Licitación Publicada' : '📝 Listado Final a Licitar'}
@@ -666,7 +720,7 @@ export default function ComprasPanel({ section = 'pedidos' }) {
         )}
 
         {section === 'adjudicacion' && (
-          <section className="card" style={{ padding: 18, minHeight: 'auto' }}>
+          <section className="card" style={{ padding: 18, minHeight: 'calc(100vh - 220px)', width: '100%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
               <h3 style={{ margin: 0 }}>Cierre de compra</h3>
               {publicacionStatus.publicada && (

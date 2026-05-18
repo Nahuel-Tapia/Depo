@@ -97,9 +97,21 @@ export default function DirectorAreaResumenAnual({ solicitudes, submissionStatus
 
   const isSent = submissionStatus?.sent
   const sentAt = submissionStatus?.planilla?.enviada_at
+  const isDevuelta = submissionStatus?.planilla?.estado === 'devuelta'
+  const motivoDevolucion = submissionStatus?.planilla?.motivo_devolucion
 
   return (
     <div style={{ background: '#f9fafb', borderRadius: 8, padding: 20 }}>
+      {isDevuelta && (
+        <div style={{ background: '#fff7ed', border: '1px solid #fdba74', borderRadius: 8, padding: '12px 16px', marginBottom: 20, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+          <span style={{ fontSize: '1.3rem' }}>↩</span>
+          <div>
+            <div style={{ fontWeight: 700, color: '#92400e', marginBottom: 2 }}>Tu licitación fue devuelta por el área de Compras</div>
+            {motivoDevolucion && <div style={{ fontSize: '0.85rem', color: '#78350f' }}>Motivo: {motivoDevolucion}</div>}
+            <div style={{ fontSize: '0.8rem', color: 'var(--muted)', marginTop: 4 }}>Podés corregir y volver a enviar.</div>
+          </div>
+        </div>
+      )}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
         <div>
           <h2 style={{ color: '#2a4d8f', marginBottom: 8, marginTop: 0 }}>Resumen Solicitud Anual {anioActual}</h2>

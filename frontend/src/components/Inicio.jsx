@@ -51,7 +51,7 @@ export default function Inicio({ onNavigate }) {
   }
 
   useEffect(() => {
-    if (user?.role === 'supervisor' || user?.role === 'directivo' || user?.role === 'director_area') {
+    if (user?.role === 'supervisor' || user?.role === 'directivo' || user?.role === 'director_area' || user?.role === 'area_compras') {
       setLoading(false)
       return
     }
@@ -98,6 +98,10 @@ export default function Inicio({ onNavigate }) {
 
   if (user?.role === 'director_area') {
     return <DirectorAreaInicio onNavigate={onNavigate} user={user} />
+  }
+
+  if (user?.role === 'area_compras') {
+    return <AreaComprasInicio onNavigate={onNavigate} user={user} />
   }
 
   if (error) {
@@ -444,7 +448,7 @@ function StatCard({ label, value, icon, accent, onClick }) {
       style={accent ? { '--dashboard-stat-accent': accent } : undefined}
     >
       <span className="dashboard-stat-icon" aria-hidden="true">{icon}</span>
-      <span className="dashboard-stat-value">{value}</span>
+      {value !== undefined && value !== null && value !== '' && <span className="dashboard-stat-value">{value}</span>}
       <span className="dashboard-stat-label">{label}</span>
     </button>
   )
@@ -880,6 +884,144 @@ function DirectorAreaInicio({ onNavigate }) {
   )
 }
 
+function AreaComprasInicio({ onNavigate, user }) {
+  const { token } = useAuth()
+  const [stats, setStats] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  const accesos = [
+    {
+      key: 'productos',
+      label: 'Listado de productos en stock',
+      icon: <BoxIcon />,
+    },
+    {
+      key: 'compras-licitacion',
+      label: 'Licitación anual',
+      icon: <ClipboardIcon />,
+    },
+    {
+      key: 'compras-listado-final',
+      label: 'Listado final a licitar',
+      icon: <ListIcon />,
+    },
+    {
+      key: 'proveedores',
+      label: 'Proveedores',
+      icon: <TruckIcon />,
+    },
+  ]
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await apiFetch('/api/dashboard/stats', { token })
+        if (res.ok) {
+          const data = await res.json()
+          setStats(data)
+        } else {
+          setStats({ stock_bajo: [] })
+        }
+      } catch {
+        setStats({ stock_bajo: [] })
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    load()
+  }, [token])
+
+  return (
+    <div className="dashboard-stack">
+      <section className="dashboard-hero">
+        <div className="dashboard-hero-copy">
+          <span className="dashboard-hero-chip">Área de Compras</span>
+          <h2>Bienvenido, {user?.nombre || 'Usuario'}</h2>
+          <p>Accesos directos a stock, licitación y proveedores.</p>
+        </div>
+
+        <div className="dashboard-hero-aside">
+          <div className="dashboard-status-list">
+            <div className="dashboard-status-row">
+              <span className="dashboard-status-label">Rol activo</span>
+              <span className="dashboard-status-value">Área Compras</span>
+            </div>
+            <div className="dashboard-status-row">
+              <span className="dashboard-status-label">Enfoque</span>
+              <span className="dashboard-status-value">Stock y licitación</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="dashboard-section-card">
+        <div className="dashboard-section-head">
+          <div>
+            <h3>Accesos rápidos</h3>
+            <p>Accesos directos para compras y revisión de inventario.</p>
+          </div>
+        </div>
+
+        <div className="dashboard-stats-grid">
+          {accesos.map((acceso) => (
+            <StatCard
+              key={acceso.key}
+              label={acceso.label}
+              icon={acceso.icon}
+              onClick={() => onNavigate?.(acceso.key)}
+            />
+          ))}
+        </div>
+      </section>
+
+      <section className="dashboard-section-card dashboard-table-card">
+        <div className="dashboard-section-head">
+          <div>
+            <h3>Productos con stock bajo</h3>
+            <p>Lista priorizada para revisar reposición antes de licitar o comprar.</p>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="dashboard-empty-state" style={{ margin: 0 }}>
+            <p style={{ margin: 0, fontWeight: 700 }}>Cargando productos con stock bajo...</p>
+          </div>
+        ) : (stats?.stock_bajo || []).length > 0 ? (
+          <div style={{ display: 'grid', gap: 12 }}>
+            {(stats?.stock_bajo || []).map((producto) => (
+              <div key={producto.id} style={{ display: 'grid', gridTemplateColumns: '1.5fr 0.7fr 0.7fr 0.8fr', gap: 12, alignItems: 'center', padding: '14px 16px', border: '1px solid var(--border)', borderRadius: 10, background: 'white' }}>
+                <div>
+                  <div style={{ fontWeight: 700, color: 'var(--dark)' }}>{producto.nombre}</div>
+                  <div style={{ fontSize: '0.82rem', color: 'var(--muted)' }}>{producto.categoria || 'Sin categoría'}</div>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontWeight: 800, color: '#b91c1c' }}>{producto.stock_actual}</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Stock actual</div>
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontWeight: 800, color: 'var(--dark)' }}>{producto.stock_minimo}</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Mínimo</div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <button type="button" onClick={() => onNavigate?.('productos')} style={{ width: 'auto', margin: 0 }}>
+                    Ver producto
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="dashboard-empty-state" style={{ margin: 0 }}>
+            <p style={{ margin: '0 0 12px', fontWeight: 700 }}>No hay productos con stock bajo</p>
+            <p style={{ margin: 0 }}>El inventario no muestra alertas de reposición por ahora.</p>
+          </div>
+        )}
+      </section>
+    </div>
+  )
+}
+
 function BoxIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" width="22" height="22">
@@ -935,6 +1077,19 @@ function ClipboardIcon() {
       <path d="M9 4.5h6" />
       <rect x="6" y="3" width="12" height="18" rx="2.5" />
       <path d="M9 8.5h6M9 12.5h6M9 16.5h4" />
+    </svg>
+  )
+}
+
+function ListIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" width="22" height="22">
+      <path d="M8 6h12" />
+      <path d="M8 12h12" />
+      <path d="M8 18h12" />
+      <circle cx="4" cy="6" r="1" />
+      <circle cx="4" cy="12" r="1" />
+      <circle cx="4" cy="18" r="1" />
     </svg>
   )
 }

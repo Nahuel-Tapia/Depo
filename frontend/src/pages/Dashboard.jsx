@@ -154,6 +154,7 @@ export default function Dashboard() {
       return TABS.filter((tab) => [
         'inicio',
         'mi-cuenta',
+        'productos',
         'compras-licitacion',
         'compras-listado-final',
         'compras-adjudicacion',
@@ -291,7 +292,9 @@ export default function Dashboard() {
             {visibleTabs.map((tab) => {
               const Icon = tab.icon || GridIcon
               const isActive = activeTab === tab.key
+              const isAreaComprasProducts = user?.role === 'area_compras' && tab.key === 'productos'
               const label = tab.key === 'usuarios' && user?.role === 'director_area' ? 'Supervisores' : tab.label
+              const displayLabel = isAreaComprasProducts ? 'Stock de Productos' : label
               const roleLabel = user?.role === 'master' && tab.roleFor ? tab.roleFor : null
 
               return (
@@ -309,7 +312,7 @@ export default function Dashboard() {
                     <Icon />
                   </span>
                   <span className="dashboard-nav-copy">
-                    <span className="dashboard-nav-label">{label}</span>
+                    <span className="dashboard-nav-label">{displayLabel}</span>
                     {roleLabel && <span className="dashboard-nav-role">{roleLabel}</span>}
                   </span>
                 </button>
