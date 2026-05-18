@@ -1149,9 +1149,9 @@ function DashboardCharts({ stats }) {
       
       <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px', marginTop: '16px' }}>
         {/* Gráfico de Estado de Stock */}
-        <div style={{ background: '#fafafa', padding: '20px', borderRadius: '8px', border: '1px solid var(--border)' }}>
-          <h4 style={{ textAlign: 'center', marginBottom: '16px', fontSize: '1rem', color: 'var(--muted)' }}>Distribución de Stock</h4>
-          <div style={{ height: 250, width: '100%' }}>
+        <div className="chart-container">
+          <h4>Distribución de Stock</h4>
+          <div className="chart-wrapper">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
@@ -1175,9 +1175,9 @@ function DashboardCharts({ stats }) {
         </div>
 
         {/* Gráfico de Movimientos del Mes */}
-        <div style={{ background: '#fafafa', padding: '20px', borderRadius: '8px', border: '1px solid var(--border)' }}>
-          <h4 style={{ textAlign: 'center', marginBottom: '16px', fontSize: '1rem', color: 'var(--muted)' }}>Movimientos del Mes</h4>
-          <div style={{ height: 250, width: '100%' }}>
+        <div className="chart-container">
+          <h4>Movimientos del Mes</h4>
+          <div className="chart-wrapper">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={movData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e0e0e0" />
