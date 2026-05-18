@@ -18,7 +18,13 @@ export function apiFetch(url, { token, ...options } = {}) {
   }
 
   const normalizedBase = API_URL.replace(/\/$/, '')
-  const normalizedPath = url.startsWith('/') ? url : `/${url}`
+  let normalizedPath = url.startsWith('/') ? url : `/${url}`
+  
+  // Prevent duplicate /api if base already includes it
+  if (normalizedBase.endsWith('/api') && normalizedPath.startsWith('/api')) {
+    normalizedPath = normalizedPath.substring(4)
+  }
+  
   const fullUrl = url.startsWith('http') ? url : `${normalizedBase}${normalizedPath}`
   
   return fetch(fullUrl, { 
