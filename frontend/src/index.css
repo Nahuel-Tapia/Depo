@@ -1974,6 +1974,12 @@ body.dashboard-nav-open {
   border-radius: 6px;
 }
 
+.dashboard-sidebar-divider {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  margin: 0;
+}
+
 .dashboard-nav {
   display: flex;
   flex-direction: column;

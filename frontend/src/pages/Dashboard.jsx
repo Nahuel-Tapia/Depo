@@ -288,6 +288,8 @@ export default function Dashboard() {
             <img className="dashboard-sidebar-logo" src={LOGO_URL} alt="San Juan Gobierno" />
           </div>
 
+          <hr className="dashboard-sidebar-divider" />
+
           <nav className="dashboard-nav" aria-label="Panel administrativo">
             {visibleTabs.map((tab) => {
               const Icon = tab.icon || GridIcon
