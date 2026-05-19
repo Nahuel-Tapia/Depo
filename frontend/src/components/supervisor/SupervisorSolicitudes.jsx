@@ -11,6 +11,7 @@ function normalizeEstado(estado, respuestaSupervisorTipo) {
   if (estado === 'aprobado') return 'aprobado'
   if (estado === 'rechazado') return 'rechazado'
   if (estado === 'cancelado') return 'cancelado'
+  if (estado === 'entregado' || estado === 'finalizado') return 'entregado'
   return 'pendiente'
 }
 

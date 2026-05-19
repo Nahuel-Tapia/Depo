@@ -633,6 +633,24 @@ function DirectivoInicio({ onNavigate, token, user }) {
   const pedidosAprobados = alertas?.alertas?.pedidosAprobados || {}
   const movimientosPendientes = alertas?.alertas?.movimientosPendientes || {}
   const ultimasTransacciones = alertas?.ultimasTransacciones || []
+  const pendientesItems = movimientosPendientes.items || []
+  const pendientesPorPedido = Array.from(
+    pendientesItems.reduce((map, item) => {
+      const key = item.id_pedido || item.id || 'sin-pedido'
+      const current = map.get(key) || {
+        id_pedido: item.id_pedido,
+        tipo_pedido: item.tipo_pedido || 'anual',
+        fecha: item.fecha,
+        items: [],
+        cantidad_total: 0,
+      }
+      current.items.push(item)
+      current.cantidad_total += Number(item.cantidad || 0)
+      map.set(key, current)
+      return map
+    }, new Map()).values()
+  )
+  const pendientesCantidad = pendientesPorPedido.length
 
   return (
     <div className="dashboard-stack">
@@ -651,7 +669,7 @@ function DirectivoInicio({ onNavigate, token, user }) {
             </div>
             <div className="dashboard-status-row">
               <span className="dashboard-status-label">Pendiente retirar</span>
-              <span className="dashboard-status-value">{movimientosPendientes.cantidad || 0}</span>
+              <span className="dashboard-status-value">{pendientesCantidad}</span>
             </div>
           </div>
         </div>
@@ -660,7 +678,7 @@ function DirectivoInicio({ onNavigate, token, user }) {
       <section className="dashboard-section-card">
         <div className="dashboard-stats-grid">
           <StatCard label="Pedidos aprobados" value={pedidosAprobados.cantidad || 0} icon={<ClipboardIcon />} accent={pedidosAprobados.cantidad > 0 ? '#FF8200' : '#065f46'} />
-          <StatCard label="Pendiente retirar" value={movimientosPendientes.cantidad || 0} icon={<TruckIcon />} accent={movimientosPendientes.cantidad > 0 ? '#E03C31' : '#065f46'} onClick={() => onNavigate?.('pedidos')} />
+          <StatCard label="Pendiente retirar" value={pendientesCantidad} icon={<TruckIcon />} accent={pendientesCantidad > 0 ? '#E03C31' : '#065f46'} onClick={() => onNavigate?.('pedidos')} />
         </div>
       </section>
 
@@ -700,31 +718,39 @@ function DirectivoInicio({ onNavigate, token, user }) {
         </section>
       )}
 
-      {movimientosPendientes.items?.length > 0 && (
+      {pendientesPorPedido.length > 0 && (
         <section className="dashboard-section-card dashboard-table-card">
           <div className="dashboard-section-head">
             <div>
               <h3>Productos pendientes de retirar</h3>
-              <p>Movimientos ya aprobados para la institucion.</p>
+              <p>Saldo aprobado que todavia no fue marcado como entregado por deposito.</p>
             </div>
           </div>
 
           <table>
             <thead>
               <tr>
-                <th>Producto</th>
-                <th>Cantidad</th>
-                <th>Unidad</th>
+                <th>Pedido</th>
+                <th>Productos pendientes</th>
+                <th>Total</th>
                 <th>Fecha</th>
               </tr>
             </thead>
             <tbody>
-              {movimientosPendientes.items.map((movimiento) => (
-                <tr key={movimiento.id}>
-                  <td style={{ fontWeight: 600 }}>{movimiento.producto_nombre}</td>
-                  <td style={{ textAlign: 'center' }}>{movimiento.cantidad}</td>
-                  <td>{movimiento.unidad_medida || '-'}</td>
-                  <td>{new Date(movimiento.fecha).toLocaleDateString('es-AR')}</td>
+              {pendientesPorPedido.map((pedido) => (
+                <tr key={pedido.id_pedido || pedido.fecha}>
+                  <td style={{ fontWeight: 600 }}>
+                    #{pedido.id_pedido || '-'} {pedido.tipo_pedido === 'refuerzo' ? '(Refuerzo)' : '(Anual)'}
+                  </td>
+                  <td>
+                    {pedido.items.map((item) => (
+                      <div key={`${pedido.id_pedido}-${item.id_producto}`}>
+                        {item.producto_nombre}: {item.cantidad} {item.unidad_medida || 'unidad'}
+                      </div>
+                    ))}
+                  </td>
+                  <td style={{ textAlign: 'center' }}>{pedido.cantidad_total}</td>
+                  <td>{new Date(pedido.fecha).toLocaleDateString('es-AR')}</td>
                 </tr>
               ))}
             </tbody>
