@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../api'
 
@@ -28,7 +28,7 @@ function Comprobante({ solicitud }, ref) {
           <img src="/faviconmin.png" alt="Logo San Juan" style={{ height: 40, width: 'auto' }} />
           <div>
             <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>San Juan Gobierno</div>
-            <div style={{ fontSize: '0.9rem', color: '#666' }}>Ministerio de Educación</div>
+            <div style={{ fontSize: '0.9rem', color: '#666' }}>Ministerio de EducaciÃ³n</div>
           </div>
         </div>
         <div style={{ textAlign: 'right' }}>
@@ -263,7 +263,7 @@ export default function SolicitudesRetiro({ embedded = false }) {
       setSolicitudes(prev => prev.map(s => s.id === solicitudId ? { ...s, estado: 'aceptada', id_usuario_acepta: data.solicitud?.id_usuario_acepta || null } : s))
       setMsg({ text: `Solicitud #${solicitudId} aceptada.`, type: 'success' })
     } catch (err) {
-      setMsg({ text: 'Error de conexión al aceptar solicitud', type: 'error' })
+      setMsg({ text: 'Error de conexiÃ³n al aceptar solicitud', type: 'error' })
     } finally {
       setTimeout(() => setMsg({ text: '', type: '' }), 3000)
       setProcessingId(null)
@@ -294,7 +294,7 @@ export default function SolicitudesRetiro({ embedded = false }) {
         </div>
         <p><strong>Pedido anual #${solicitud.id_pedido}</strong></p>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
-          <div><strong>Institución:</strong> ${solicitud.institucion_nombre}</div>
+          <div><strong>InstituciÃ³n:</strong> ${solicitud.institucion_nombre}</div>
           <div><strong>CUE:</strong> ${solicitud.cue || '-'}</div>
           <div><strong>Fecha solicitada de retiro:</strong> ${fmtDate(solicitud.fecha_retiro)}</div>
           <div><strong>Fecha de entrega:</strong> ${fmtDate(solicitud.fecha_entrega)}</div>
@@ -455,10 +455,10 @@ export default function SolicitudesRetiro({ embedded = false }) {
                   checked={solicitarEnvio}
                   onChange={(event) => setSolicitarEnvio(event.target.checked)}
                 />
-                Solicitar envío
+                Solicitar envÃ­o
               </label>
               <div style={{ fontSize: '0.82rem', color: 'var(--muted)' }}>
-                Esta opción está disponible para escuelas de zona alejada.
+                Esta opciÃ³n estÃ¡ disponible para escuelas de zona alejada.
               </div>
             </div>
 
@@ -504,7 +504,7 @@ export default function SolicitudesRetiro({ embedded = false }) {
                 <p style={{ color: 'var(--muted)', marginTop: 12 }}>Cargando pedidos...</p>
               ) : operatorPedidos.length > 0 ? (
                 <table style={{ marginTop: 12 }}>
-                  <thead><tr><th>Pedido</th><th>Institución</th><th>Fecha</th><th>Items pendientes</th></tr></thead>
+                  <thead><tr><th>Pedido</th><th>InstituciÃ³n</th><th>Fecha</th><th>Items pendientes</th></tr></thead>
                   <tbody>
                     {operatorPedidos.map(p => (
                       <tr key={p.id}>
@@ -524,7 +524,7 @@ export default function SolicitudesRetiro({ embedded = false }) {
               onEntregar={handleEntregar}
               onAccept={handleAccept}
               processingId={processingId}
-              onSelectComprobante={setComprobante}
+              onPrintComprobante={printSolicitud}
             />
           )}
         </>
@@ -543,7 +543,7 @@ export default function SolicitudesRetiro({ embedded = false }) {
               <thead>
                 <tr>
                   <th>#</th>
-                  <th>Institución</th>
+                  <th>InstituciÃ³n</th>
                   <th>Modalidad</th>
                   <th>Fecha retiro</th>
                   <th>Fecha entrega</th>
@@ -557,7 +557,7 @@ export default function SolicitudesRetiro({ embedded = false }) {
                   <tr key={sol.id}>
                     <td>#{sol.id}</td>
                     <td>{sol.institucion_nombre}</td>
-                    <td>{sol.solicitar_envio ? 'Envío' : 'Retiro'}</td>
+                    <td>{sol.solicitar_envio ? 'EnvÃ­o' : 'Retiro'}</td>
                     <td>{formatDate(sol.fecha_retiro)}</td>
                     <td>{formatDate(sol.fecha_entrega)}</td>
                     <td>{buildRetiraLabel(sol)}</td>
@@ -567,7 +567,7 @@ export default function SolicitudesRetiro({ embedded = false }) {
                       ))}
                     </td>
                     <td>
-                      <button type="button" className="secondary" onClick={() => setComprobante(sol)} style={{ width: 'auto', margin: 0 }}>
+                      <button type="button" className="secondary" onClick={() => printSolicitud(sol)} style={{ width: 'auto', margin: 0 }}>
                         Imprimir
                       </button>
                     </td>
@@ -594,7 +594,7 @@ export default function SolicitudesRetiro({ embedded = false }) {
   )
 }
 
-function SolicitudesTable({ solicitudes, onEntregar, onAccept, onViewHistory, processingId, onSelectComprobante }) {
+function SolicitudesTable({ solicitudes, onEntregar, onAccept, onViewHistory, processingId, onSelectComprobante, onPrintComprobante }) {
   if (!solicitudes.length) {
     return <div className="sv-empty-state">No hay solicitudes registradas.</div>
   }
@@ -618,7 +618,7 @@ function SolicitudesTable({ solicitudes, onEntregar, onAccept, onViewHistory, pr
           <tr key={solicitud.id}>
             <td>#{solicitud.id}</td>
             <td>{solicitud.institucion_nombre}</td>
-            <td>{solicitud.solicitar_envio ? 'Envío' : 'Retiro'}</td>
+            <td>{solicitud.solicitar_envio ? 'EnvÃ­o' : 'Retiro'}</td>
             <td>{formatDate(solicitud.fecha_retiro)}</td>
             <td>{buildRetiraLabel(solicitud)}</td>
             <td>
@@ -650,7 +650,7 @@ function SolicitudesTable({ solicitudes, onEntregar, onAccept, onViewHistory, pr
                   </button>
                 )}
                 {solicitud.estado === 'entregado' && (
-                  <button type="button" className="secondary" onClick={() => onSelectComprobante?.(solicitud)}>
+                  <button type="button" className="secondary" onClick={() => (onPrintComprobante || onSelectComprobante)?.(solicitud)}>
                     Comprobante
                   </button>
                 )}
@@ -662,3 +662,8 @@ function SolicitudesTable({ solicitudes, onEntregar, onAccept, onViewHistory, pr
     </table>
   )
 }
+
+
+
+
+

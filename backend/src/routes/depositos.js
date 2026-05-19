@@ -781,6 +781,25 @@ router.get("/licitacion/recepciones", authorizePermissions(PERMISSIONS.STOCK_VIE
 router.get("/licitacion/recepciones/:id", authorizePermissions(PERMISSIONS.STOCK_VIEW), getDetalleRecepcion);
 router.post("/licitacion/registrar-ingreso", authorizePermissions(PERMISSIONS.STOCK_MOVEMENT_CREATE), registrarIngresoLicitacion);
 
+// POST /licitacion/cerrar/:id — marca la licitación como completada y habilita el Remito General
+router.post("/licitacion/cerrar/:id", authorizePermissions(PERMISSIONS.STOCK_MOVEMENT_CREATE), async (req, res) => {
+  try {
+    await ensureDepositosSchema();
+    const { id } = req.params;
+    const lic = await get(`SELECT id, estado FROM licitacion_publicada WHERE id = $1`, [id]);
+    if (!lic) return res.status(404).json({ error: "Licitación no encontrada" });
+    if (lic.estado === 'completada') return res.json({ ok: true, message: "La licitación ya estaba completada" });
+    if (lic.estado !== 'en_deposito') {
+      return res.status(400).json({ error: "Solo se puede cerrar una licitación en estado 'en_deposito'" });
+    }
+    await run(`UPDATE licitacion_publicada SET estado = 'completada' WHERE id = $1`, [id]);
+    res.json({ ok: true, message: "Licitación cerrada correctamente" });
+  } catch (err) {
+    console.error("Error cerrando licitación:", err);
+    res.status(500).json({ error: "No se pudo cerrar la licitación" });
+  }
+});
+
 // POST /licitacion/danio/imagen — adjuntar evidencia de daño al remito
 router.post("/licitacion/danio/imagen", authorizePermissions(PERMISSIONS.STOCK_MOVEMENT_CREATE), async (req, res) => {
   try {

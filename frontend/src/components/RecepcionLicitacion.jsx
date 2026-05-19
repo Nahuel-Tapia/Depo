@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../api'
 
 export default function RecepcionLicitacion() {
   const { token } = useAuth()
+  const navigate = useNavigate()
   const [recepciones, setRecepciones] = useState([])
   const [detalle, setDetalle] = useState(null)
   const [depositos, setDepositos] = useState([])
@@ -299,8 +301,6 @@ export default function RecepcionLicitacion() {
   }
 
   const printRemitoGeneral = (data) => {
-    const win = window.open('', '_blank', 'width=900,height=700')
-    if (!win) return
     const rowsHTML = data.items.map(it => {
       const dif = it.diferencia
       const difColor = dif === 0 ? '#166534' : (dif > 0 ? '#1d4ed8' : '#b91c1c')
@@ -315,46 +315,37 @@ export default function RecepcionLicitacion() {
     const remitosHTML = data.remitos.map(r =>
       `<tr><td>${r.numero}</td><td>${new Date(r.created_at).toLocaleString('es-AR')}</td><td>${r.deposito_nombre || '-'}</td><td>${r.usuario_nombre || '-'}</td></tr>`
     ).join('')
-    win.document.write(`<!DOCTYPE html><html><head><title>Remito General — Licitación ${data.anio}</title>
-      <style>*{box-sizing:border-box;font-family:Arial,sans-serif}body{margin:24px;color:#111827;font-size:13px}
-      .header{display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #FF8200;padding-bottom:10px;margin-bottom:16px}
-      .header-left{display:flex;align-items:center;gap:12px}.header-left img{height:40px}
-      h3{margin:24px 0 8px;font-size:14px;border-bottom:1px solid #e5e7eb;padding-bottom:4px}
-      table{width:100%;border-collapse:collapse;margin-bottom:20px}th,td{border:1px solid #d1d5db;padding:8px 10px;text-align:left}th{background:#f3f4f6}
-      .sigs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:36px;margin-top:54px}
-      .sig{border-top:1px solid #111827;padding-top:8px;text-align:center;font-size:12px}</style></head><body>
-      <div class="header">
-        <div class="header-left"><img src="/faviconmin.png" alt="Logo"/>
-          <div><div style="font-weight:bold;font-size:1.1rem">San Juan Gobierno</div>
-          <div style="color:#666">Ministerio de Educación</div></div></div>
-        <div style="text-align:right"><div style="font-weight:bold;font-size:1.2rem">Remito General</div>
-          <div style="color:#666">${data.titulo_display || `Licitación Anual ${data.anio}`}</div></div></div>
-      <h3>Detalle de Mercadería Recibida</h3>
-      <table><thead><tr><th>Producto</th><th>Proveedor</th><th style="text-align:center">Unidad</th><th style="text-align:center">Adjudicado</th><th style="text-align:center">Recibido</th><th style="text-align:center">Estado</th></tr></thead>
-      <tbody>${rowsHTML}</tbody></table>
-      <h3>Remitos Parciales Incluidos</h3>
-      <table><thead><tr><th>N° Remito</th><th>Fecha</th><th>Depósito</th><th>Operador</th></tr></thead>
-      <tbody>${remitosHTML}</tbody></table>
-      <div class="sigs">
-        <div class="sig">Jefe de Depósito</div><div class="sig">Director de Compras</div><div class="sig">Proveedor</div>
-      </div></body></html>`)
-    win.document.close()
-    win.print()
+    return { rowsHTML, remitosHTML }
   }
 
   const handlePrintRemitoGeneral = async () => {
+    navigate(`/print/remito-general/${detalle.id}`)
+  }
+
+  const handleCerrarYRemitoGeneral = async () => {
+    if (!window.confirm('¿Cerrar esta licitación y generar el Remito General? Esta acción no se puede deshacer.')) return
     try {
-      const res = await apiFetch(`/api/depositos/licitacion/remito-general/${detalle.id}`, { token })
-      if (res.ok) {
-        printRemitoGeneral(await res.json())
-      } else {
+      const res = await apiFetch(`/api/depositos/licitacion/cerrar/${detalle.id}`, { token, method: 'POST' })
+      if (!res.ok) {
         const d = await res.json()
-        setMsg({ text: d.error || 'No se pudo generar el Remito General', type: 'error' })
+        setMsg({ text: d.error || 'No se pudo cerrar la licitación', type: 'error' })
+        return
       }
+      setDetalle(prev => ({ ...prev, estado: 'completada' }))
+      navigate(`/print/remito-general/${detalle.id}`)
     } catch {
       setMsg({ text: 'Error de conexión', type: 'error' })
     }
   }
+
+  const todoCompleto = detalle
+    ? detalle.items.every(item => {
+        const yaRecibido = detalle.recibidos?.find(
+          r => r.producto?.trim().toLowerCase() === item.producto?.trim().toLowerCase()
+        )?.total_recibida || 0
+        return Number(yaRecibido) >= Number(item.cantidad_total)
+      })
+    : false
 
   return (
     <div className="card recepcion-card">
@@ -547,9 +538,16 @@ export default function RecepcionLicitacion() {
             </div>
             <div style={{ display: 'flex', gap: 14 }}>
               <button className="secondary" onClick={() => setDetalle(null)} disabled={saving}>Cancelar</button>
-              <button className="primary" onClick={handleConfirmarIngreso} disabled={saving}>
-                {saving ? 'Registrando...' : '🚀 Confirmar Ingreso a Stock'}
-              </button>
+              {detalle.estado === 'completada' ? null : todoCompleto ? (
+                <button className="primary" onClick={handleCerrarYRemitoGeneral} disabled={saving}
+                  style={{ background: '#16a34a', borderColor: '#16a34a' }}>
+                  ✅ Cerrar Licitación y Generar Remito General
+                </button>
+              ) : (
+                <button className="primary" onClick={handleConfirmarIngreso} disabled={saving}>
+                  {saving ? 'Registrando...' : '🚀 Confirmar Ingreso a Stock'}
+                </button>
+              )}
             </div>
           </div>
 
