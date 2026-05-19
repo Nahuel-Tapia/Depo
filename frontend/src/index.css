@@ -1241,11 +1241,10 @@ tbody tr:hover td {
 @media (max-width: 480px) {
   .container {
     padding: 8px;
-    height: 100vh;
   }
 
   .auth-container {
-    padding-top: 40px;
+    padding-top: 24px;
     padding-bottom: 16px;
     padding-left: 8px;
     padding-right: 8px;
@@ -1362,38 +1361,6 @@ tbody tr:hover td {
     -webkit-overflow-scrolling: touch;
   }
 
-  thead {
-    display: block;
-  }
-
-  tbody {
-    display: block;
-  }
-
-  tr {
-    display: block;
-    margin-bottom: 12px;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-  }
-
-  td {
-    padding: 10px;
-    display: block;
-    text-align: right;
-    border: none;
-    position: relative;
-    padding-left: 50%;
-  }
-
-  td::before {
-    content: attr(data-label);
-    position: absolute;
-    left: 8px;
-    font-weight: 600;
-    color: var(--muted);
-    font-size: 0.85rem;
-  }
 
   .recepcion-table-wrap {
     overflow-x: auto;
@@ -2668,63 +2635,7 @@ button.dashboard-mini-card:hover {
   }
 }
 
-@media (max-width: 768px) {
-  .dashboard-header {
-    padding: 12px 14px;
-    gap: 8px;
-  }
-
-  .dashboard-content {
-    padding: 14px;
-  }
-
-  .dashboard-module-card {
-    padding: 16px;
-    border-radius: 18px;
-  }
-
-  .dashboard-user-meta {
-    width: 100%;
-    flex-direction: column;
-  }
-
-  .dashboard-page-actions {
-    justify-content: stretch;
-    gap: 8px;
-  }
-
-  .dashboard-page-actions button {
-    width: 100%;
-    min-height: 44px;
-  }
-
-  .dashboard-stats-grid,
-  .dashboard-mini-grid,
-  .dashboard-vencimientos-grid {
-    grid-template-columns: 1fr;
-    gap: 12px;
-  }
-
-  h1 {
-    font-size: 1.4rem;
-  }
-
-  h2 {
-    font-size: 1.2rem;
-  }
-
-  h3 {
-    font-size: 1.05rem;
-  }
-
-  .dashboard-stat-value {
-    font-size: 1.6rem;
-  }
-
-  .dashboard-mini-value {
-    font-size: 1.3rem;
-  }
-}
+/* dashboard 768px rules moved into consolidated block below */
 
 /* ===== MODAL ===== */
 .sv-modal-overlay {
@@ -2802,23 +2713,32 @@ button.dashboard-mini-card:hover {
   border-bottom: none;
 }
 
-/* ===== RESPONSIVE MOBILE ===== */
+/* ===== RESPONSIVE MOBILE — CONSOLIDATED ===== */
 @media screen and (max-width: 768px) {
+  /* === Global === */
+  html, body {
+    overflow-x: hidden;
+  }
+
   .container {
     padding: 10px;
   }
 
-  /* Login / Auth */
+  /* === Auth pages === */
   .auth-container {
     padding-top: 20px;
     padding-bottom: 20px;
-    align-items: flex-start;
+    align-items: center;
   }
 
   .auth-card {
     width: min(440px, 100%);
     padding: 28px 20px;
     border-radius: 14px;
+  }
+
+  .auth-card:hover {
+    transform: none;
   }
 
   .card {
@@ -2845,7 +2765,7 @@ button.dashboard-mini-card:hover {
     flex-wrap: wrap;
   }
 
-  /* Tablas con scroll horizontal */
+  /* === Tables — horizontal scroll, no layout breaking === */
   table {
     display: block;
     width: 100%;
@@ -2854,12 +2774,11 @@ button.dashboard-mini-card:hover {
     -webkit-overflow-scrolling: touch;
   }
 
-  /* Grilla de Recepción */
   .recepcion-detalle-info {
     grid-template-columns: 1fr !important;
   }
 
-  /* Botones táctiles */
+  /* === Touch-friendly buttons === */
   button {
     padding: 12px 14px;
     font-size: 0.95rem;
@@ -2880,10 +2799,12 @@ button.dashboard-mini-card:hover {
     grid-template-columns: 1fr;
   }
 
-  h1 { font-size: 1.5rem; }
-  h2 { font-size: 1.25rem; }
-  h3 { font-size: 1.1rem; }
+  /* === Typography === */
+  h1 { font-size: 1.4rem; }
+  h2 { font-size: 1.2rem; }
+  h3 { font-size: 1.05rem; }
 
+  /* === Recharts === */
   .recharts-wrapper {
     min-height: 250px;
   }
@@ -2892,11 +2813,15 @@ button.dashboard-mini-card:hover {
     grid-template-columns: 1fr !important;
   }
 
-  /* Header del dashboard en mobile */
+  /* === Dashboard header === */
   .dashboard-header {
     grid-template-columns: 1fr;
     padding: 10px 12px;
     gap: 6px;
+  }
+
+  .dashboard-header-left {
+    gap: 8px;
   }
 
   .dashboard-header-right {
@@ -2911,6 +2836,18 @@ button.dashboard-mini-card:hover {
     flex: 1;
     min-width: 0;
     padding: 7px 10px;
+    border-radius: 10px;
+  }
+
+  .dashboard-user-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+  }
+
+  .dashboard-user-icon svg {
+    width: 14px;
+    height: 14px;
   }
 
   .dashboard-user-copy strong {
@@ -2926,12 +2863,14 @@ button.dashboard-mini-card:hover {
     font-size: 0.82rem;
     white-space: nowrap;
     flex-shrink: 0;
+    min-height: 36px;
   }
 
   .dashboard-datetime {
     display: none;
   }
 
+  /* === Dashboard content === */
   .dashboard-content {
     padding: 10px;
   }
@@ -2949,10 +2888,140 @@ button.dashboard-mini-card:hover {
   .dashboard-page-actions {
     width: 100%;
     justify-content: stretch;
+    gap: 8px;
   }
 
   .dashboard-page-actions button {
     width: 100%;
+    min-height: 44px;
+  }
+
+  /* === Dashboard stats === */
+  .dashboard-stats-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .dashboard-mini-grid,
+  .dashboard-vencimientos-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .dashboard-stat-card {
+    padding: 14px;
+    border-radius: 14px;
+  }
+
+  .dashboard-stat-value {
+    font-size: 1.5rem;
+  }
+
+  .dashboard-mini-value {
+    font-size: 1.3rem;
+  }
+
+  /* === Hero section === */
+  .dashboard-hero {
+    padding: 18px;
+    border-radius: 18px;
+  }
+
+  .dashboard-hero-copy h2 {
+    font-size: 1.2rem;
+  }
+
+  .dashboard-hero-copy p {
+    font-size: 0.88rem;
+  }
+
+  .dashboard-status-row {
+    padding: 10px 12px;
+    border-radius: 12px;
+  }
+
+  .dashboard-status-label {
+    font-size: 0.78rem;
+  }
+
+  .dashboard-status-value {
+    font-size: 0.88rem;
+  }
+
+  /* === Dashboard modals === */
+  .dashboard-modal-panel {
+    padding: 16px;
+    border-radius: 16px;
+    max-height: 90vh;
+  }
+
+  .sv-modal-panel {
+    width: 100%;
+    padding: 16px;
+  }
+
+  .sv-modal {
+    padding: 18px;
+  }
+
+  .sv-modal-footer {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .sv-modal-footer button {
+    width: 100%;
+  }
+
+  /* === Vencimiento cards === */
+  .dashboard-vencimiento-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 14px;
+  }
+
+  .dashboard-vencimiento-stock {
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .dashboard-vencimiento-stock span {
+    font-size: 1.2rem;
+  }
+
+  /* === Supervisor cards === */
+  .sv-instituciones-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sv-kit-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* === Misc === */
+  .register-institution-btn {
+    width: 100%;
+  }
+
+  .approval-stepper {
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+  }
+
+  .sub-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .sub-tab-btn {
+    white-space: nowrap;
+    font-size: 0.75rem;
+    padding: 8px 12px;
   }
 }
 
@@ -3003,7 +3072,7 @@ button.dashboard-mini-card:hover {
     min-height: 190px;
   }
 
-  /* Login en pantallas muy chicas */
+  /* Auth ultra small */
   .auth-container {
     padding-top: 12px;
     padding-bottom: 12px;
@@ -3014,37 +3083,79 @@ button.dashboard-mini-card:hover {
     border-radius: 12px;
   }
 
-  /* Dashboard contenido compacto */
+  /* Dashboard compact */
   .dashboard-content {
-    padding: 8px;
+    padding: 6px;
   }
 
   .dashboard-module-card {
-    padding: 12px;
-    border-radius: 14px;
+    padding: 10px;
+    border-radius: 12px;
   }
 
   .dashboard-stats-grid {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
     gap: 8px;
   }
 
   .dashboard-stat-card {
     padding: 12px;
-    border-radius: 12px;
+    border-radius: 10px;
   }
 
   .dashboard-stat-value {
-    font-size: 1.4rem;
+    font-size: 1.3rem;
   }
 
-  h1 { font-size: 1.3rem; }
-  h2 { font-size: 1.1rem; }
-  h3 { font-size: 1rem; }
+  .dashboard-hero {
+    padding: 14px;
+    border-radius: 14px;
+  }
 
-  /* Tablas más compactas */
+  .dashboard-hero-copy h2 {
+    font-size: 1.05rem;
+  }
+
+  .dashboard-section-head {
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+
+  h1 { font-size: 1.2rem; }
+  h2 { font-size: 1rem; }
+  h3 { font-size: 0.92rem; }
+
+  /* Compact tables */
   table th, table td {
+    padding: 8px 8px;
+    font-size: 0.8rem;
+  }
+
+  /* Dashboard header extra compact */
+  .dashboard-header {
     padding: 8px 10px;
-    font-size: 0.82rem;
+  }
+
+  .dashboard-user-meta {
+    padding: 5px 8px;
+  }
+
+  .dashboard-user-icon {
+    display: none;
+  }
+
+  .dashboard-logout {
+    padding: 6px 10px;
+    font-size: 0.78rem;
+  }
+
+  /* Sidebar nav items compact */
+  .dashboard-nav-item {
+    padding: 10px 12px;
+  }
+
+  .dashboard-nav-label {
+    font-size: 0.88rem;
   }
 }
