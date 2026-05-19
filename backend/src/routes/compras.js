@@ -121,6 +121,26 @@ async function ensureTables() {
     `);
 
       await client.query(`
+      ALTER TABLE pedido
+      ADD COLUMN IF NOT EXISTS requiere_licitacion BOOLEAN NOT NULL DEFAULT FALSE
+    `);
+
+      await client.query(`
+      ALTER TABLE pedido
+      ADD COLUMN IF NOT EXISTS estado_abastecimiento VARCHAR(40) NOT NULL DEFAULT 'stock_disponible'
+    `);
+
+      await client.query(`
+      ALTER TABLE detalle_pedido
+      ADD COLUMN IF NOT EXISTS requiere_licitacion BOOLEAN NOT NULL DEFAULT FALSE
+    `);
+
+      await client.query(`
+      ALTER TABLE detalle_pedido
+      ADD COLUMN IF NOT EXISTS stock_disponible_relevado NUMERIC(12,2)
+    `);
+
+      await client.query(`
       ALTER TABLE usuario
       ADD COLUMN IF NOT EXISTS nivel_educativo VARCHAR(120)
     `);
@@ -207,6 +227,93 @@ async function ensureTables() {
       await client.query(`
       ALTER TABLE licitacion_publicada
       ADD COLUMN IF NOT EXISTS motivo TEXT
+    `);
+
+      await client.query(`
+      ALTER TABLE licitacion_publicada
+      ADD COLUMN IF NOT EXISTS tipo VARCHAR(20) NOT NULL DEFAULT 'anual'
+    `);
+
+      await client.query(`
+      CREATE TABLE IF NOT EXISTS remito_licitacion (
+        id SERIAL PRIMARY KEY,
+        numero VARCHAR(30) NOT NULL UNIQUE,
+        licitacion_id INT NOT NULL,
+        id_deposito INT,
+        usuario_id INT,
+        observaciones TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+      await client.query(`
+      CREATE TABLE IF NOT EXISTS recepcion_licitacion (
+        id SERIAL PRIMARY KEY,
+        licitacion_id INT NOT NULL,
+        producto_id INT NOT NULL,
+        cantidad_recibida NUMERIC(12,2) NOT NULL,
+        usuario_id INT,
+        id_deposito INT,
+        fecha_vencimiento DATE,
+        observaciones TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+      await client.query(`
+      ALTER TABLE remito_licitacion
+      ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()
+    `);
+
+      await client.query(`
+      ALTER TABLE recepcion_licitacion
+      ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()
+    `);
+
+      await client.query(`
+      ALTER TABLE recepcion_licitacion
+      ADD COLUMN IF NOT EXISTS remito_id INT REFERENCES remito_licitacion(id)
+    `);
+
+      await client.query(`
+      ALTER TABLE recepcion_licitacion
+      ADD COLUMN IF NOT EXISTS cantidad_danada NUMERIC(12,2) NOT NULL DEFAULT 0
+    `);
+
+      await client.query(`
+      ALTER TABLE recepcion_licitacion
+      ADD COLUMN IF NOT EXISTS obs_danio TEXT
+    `);
+
+      await client.query(`
+      ALTER TABLE licitacion_publicada
+      DROP CONSTRAINT IF EXISTS licitacion_publicada_anio_key
+    `);
+
+      await client.query(`
+      ALTER TABLE compra_precio_historico
+      DROP CONSTRAINT IF EXISTS compra_precio_historico_anio_id_producto_key
+    `);
+
+      await client.query(`
+      ALTER TABLE compra_precio_historico
+      ADD COLUMN IF NOT EXISTS licitacion_id INT REFERENCES licitacion_publicada(id)
+    `);
+
+      await client.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'compra_precio_historico_licitacion_producto_key'
+        ) THEN
+          ALTER TABLE compra_precio_historico
+          ADD CONSTRAINT compra_precio_historico_licitacion_producto_key
+          UNIQUE (licitacion_id, id_producto);
+        END IF;
+      END
+      $$;
     `);
 
       await client.query(`
@@ -1091,11 +1198,185 @@ async function getFinalItems(req, res) {
   }
 }
 
+async function getLicitacionesByAnio(anio, tipo = null) {
+  const params = [anio];
+  const where = [`lp.anio = $1`];
+
+  if (tipo) {
+    params.push(tipo);
+    where.push(`COALESCE(lp.tipo, 'anual') = $${params.length}`);
+  }
+
+  return all(
+    `SELECT lp.id,
+            lp.anio,
+            lp.fecha_publicacion,
+            lp.estado,
+            COALESCE(lp.tipo, 'anual') AS tipo,
+            lp.titulo,
+            lp.motivo,
+            lp.items,
+            lp.usuario_id,
+            u.nombre,
+            u.apellido
+     FROM licitacion_publicada lp
+     LEFT JOIN usuario u ON u.id_usuario = lp.usuario_id
+     WHERE ${where.join(' AND ')}
+     ORDER BY lp.fecha_publicacion DESC, lp.id DESC`,
+    params
+  );
+}
+
+async function buildLicitacionHistoryRows({ anio = null } = {}) {
+  const params = [];
+  const where = [];
+
+  if (anio) {
+    params.push(anio);
+    where.push(`lp.anio = $${params.length}`);
+  }
+
+  const rows = await all(
+    `SELECT lp.id,
+            lp.anio,
+            lp.fecha_publicacion,
+            lp.estado,
+            COALESCE(lp.tipo, 'anual') AS tipo,
+            lp.titulo,
+            lp.motivo,
+            lp.items,
+            lp.usuario_id,
+            u.nombre AS creador_nombre,
+            u.apellido AS creador_apellido,
+            COUNT(DISTINCT ch.id) AS adjudicaciones_registradas,
+            COALESCE(SUM(ch.precio_compra_real * COALESCE((item_qty.item->>'cantidad_a_licitar')::numeric, (item_qty.item->>'cantidad_solicitada')::numeric, 0)), 0)::numeric AS monto_estimado,
+            COALESCE(rec.total_recibido, 0)::numeric AS total_recibido,
+            MAX(ch.updated_at) AS adjudicada_at,
+            rec.ultima_recepcion
+     FROM licitacion_publicada lp
+     LEFT JOIN usuario u ON u.id_usuario = lp.usuario_id
+     LEFT JOIN compra_precio_historico ch ON ch.licitacion_id = lp.id
+     LEFT JOIN LATERAL (
+       SELECT item
+       FROM jsonb_array_elements(COALESCE(lp.items, '[]'::jsonb)) AS item
+       WHERE (item->>'producto_id')::int = ch.id_producto
+       LIMIT 1
+     ) item_qty ON TRUE
+     LEFT JOIN LATERAL (
+       SELECT COALESCE(SUM(rl.cantidad_recibida), 0)::numeric AS total_recibido,
+              MAX(rl.created_at) AS ultima_recepcion
+       FROM recepcion_licitacion rl
+       WHERE rl.licitacion_id = lp.id
+     ) rec ON TRUE
+     ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+     GROUP BY lp.id, lp.anio, lp.fecha_publicacion, lp.estado, COALESCE(lp.tipo, 'anual'), lp.titulo, lp.motivo, lp.items, lp.usuario_id, u.nombre, u.apellido, rec.total_recibido, rec.ultima_recepcion
+     ORDER BY lp.anio DESC, lp.fecha_publicacion DESC, lp.id DESC`,
+    params
+  );
+
+  const licitaciones = [];
+
+  for (const row of rows) {
+    const detalleRows = await all(
+      `SELECT ch.id_producto AS producto_id,
+              p.nombre AS producto,
+              COALESCE(p.unidad_medida, 'unidad') AS unidad_medida,
+              ch.id_proveedor AS proveedor_id,
+              prov.nombre AS proveedor_nombre,
+              ch.precio_compra_real,
+              ch.updated_at,
+              COALESCE((
+                SELECT SUM(rl.cantidad_recibida)
+                FROM recepcion_licitacion rl
+                WHERE rl.licitacion_id = ch.licitacion_id
+                  AND rl.producto_id = ch.id_producto
+              ), 0)::numeric AS cantidad_recibida
+       FROM compra_precio_historico ch
+       JOIN producto p ON p.id_producto = ch.id_producto
+       LEFT JOIN proveedor prov ON prov.id_proveedor = ch.id_proveedor
+       WHERE ch.licitacion_id = $1
+       ORDER BY p.nombre ASC`,
+      [row.id]
+    );
+
+    const snapshotItems = typeof row.items === 'string' ? JSON.parse(row.items) : (row.items || []);
+    const quantityByProducto = new Map(
+      snapshotItems.map((item) => [
+        Number(item.producto_id),
+        Number(item.cantidad_a_licitar || item.cantidad_solicitada || 0)
+      ])
+    );
+
+    const detalle = detalleRows.map((detail) => ({
+      producto_id: Number(detail.producto_id),
+      producto: detail.producto,
+      unidad_medida: detail.unidad_medida,
+      cantidad_adjudicada: quantityByProducto.get(Number(detail.producto_id)) || 0,
+      cantidad_recibida: Number(detail.cantidad_recibida || 0),
+      proveedor_id: detail.proveedor_id ? Number(detail.proveedor_id) : null,
+      proveedor_nombre: detail.proveedor_nombre || null,
+      precio_compra_real: Number(detail.precio_compra_real || 0),
+      subtotal_estimado: (quantityByProducto.get(Number(detail.producto_id)) || 0) * Number(detail.precio_compra_real || 0),
+      adjudicado_at: detail.updated_at || null
+    }));
+
+    licitaciones.push({
+      id: Number(row.id),
+      anio: Number(row.anio),
+      fecha_publicacion: row.fecha_publicacion,
+      estado: row.estado,
+      tipo: row.tipo || 'anual',
+      titulo: row.titulo || null,
+      motivo: row.motivo || null,
+      usuario_id: row.usuario_id ? Number(row.usuario_id) : null,
+      creador_nombre: row.creador_nombre || null,
+      creador_apellido: row.creador_apellido || null,
+      creador: `${row.creador_nombre || ''} ${row.creador_apellido || ''}`.trim() || null,
+      total_items_snapshot: Array.isArray(snapshotItems) ? snapshotItems.length : 0,
+      adjudicaciones_registradas: Number(row.adjudicaciones_registradas || 0),
+      monto_estimado: Number(row.monto_estimado || 0),
+      total_recibido: Number(row.total_recibido || 0),
+      adjudicada_at: row.adjudicada_at || null,
+      ultima_recepcion: row.ultima_recepcion || null,
+      detalle
+    });
+  }
+
+  return licitaciones;
+}
+
+async function getSelectedLicitacion({ anio, licitacionId, tipo = null }) {
+  const licitacionIdNum = Number(licitacionId || 0);
+  if (licitacionIdNum > 0) {
+    return get(
+      `SELECT lp.id,
+              lp.anio,
+              lp.fecha_publicacion,
+              lp.estado,
+              COALESCE(lp.tipo, 'anual') AS tipo,
+              lp.titulo,
+              lp.motivo,
+              lp.items,
+              lp.usuario_id,
+              u.nombre,
+              u.apellido
+       FROM licitacion_publicada lp
+       LEFT JOIN usuario u ON u.id_usuario = lp.usuario_id
+       WHERE lp.id = $1`,
+      [licitacionIdNum]
+    );
+  }
+
+  const licitaciones = await getLicitacionesByAnio(anio, tipo);
+  return licitaciones[0] || null;
+}
+
 async function publicarLicitacion(req, res) {
   const client = await pool.connect();
   try {
     await ensureTables();
     const { anio, items, titulo, motivo } = req.body;
+    const tipo = String(req.body?.tipo || 'anual').trim().toLowerCase() === 'refuerzo' ? 'refuerzo' : 'anual';
     if (!anio || !items || !items.length) {
       return res.status(400).json({ error: "Datos insuficientes para publicar" });
     }
@@ -1104,21 +1385,16 @@ async function publicarLicitacion(req, res) {
     const tituloSanitizado = String(titulo || motivoSanitizado).trim();
 
     await client.query("BEGIN");
-    
-    // Snapshot en licitacion_publicada
-    await client.query(
-      `INSERT INTO licitacion_publicada (anio, usuario_id, items, titulo, motivo)
-       VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (anio) DO UPDATE
-       SET items = $3,
-           titulo = $4,
-           motivo = $5,
-           fecha_publicacion = NOW()`,
-      [anio, req.user.sub, JSON.stringify(items), tituloSanitizado || null, motivoSanitizado || null]
+
+    const inserted = await client.query(
+      `INSERT INTO licitacion_publicada (anio, usuario_id, items, titulo, motivo, estado, tipo)
+       VALUES ($1, $2, $3, $4, $5, 'publicada', $6)
+       RETURNING id, anio, fecha_publicacion, estado, tipo, titulo, motivo`,
+      [anio, req.user.sub, JSON.stringify(items), tituloSanitizado || null, motivoSanitizado || null, tipo]
     );
 
     await client.query("COMMIT");
-    res.json({ ok: true, message: "Licitación publicada con éxito" });
+    res.json({ ok: true, message: "Licitación publicada con éxito", licitacion: inserted.rows[0] });
   } catch (err) {
     await client.query("ROLLBACK");
     console.error("Error al publicar licitación:", err);
@@ -1131,16 +1407,18 @@ async function publicarLicitacion(req, res) {
 async function reabrirLicitacion(req, res) {
   const client = await pool.connect();
   try {
-    const anio = Number(req.params.anio);
+    const id = Number(req.params.id);
     await client.query("BEGIN");
-    
-    // Check current state
-    const lp = await client.query("SELECT estado FROM licitacion_publicada WHERE anio = $1", [anio]);
-    if (lp.rowCount > 0 && ['adjudicada', 'en_deposito', 'completada'].includes(lp.rows[0].estado)) {
+
+    const lp = await client.query("SELECT estado FROM licitacion_publicada WHERE id = $1", [id]);
+    if (lp.rowCount === 0) {
+      throw new Error("La licitación seleccionada no existe.");
+    }
+    if (['en_deposito', 'completada'].includes(lp.rows[0].estado)) {
       throw new Error("No se puede reabrir una licitación que ya fue adjudicada o enviada a depósito.");
     }
 
-    await client.query("DELETE FROM licitacion_publicada WHERE anio = $1", [anio]);
+    await client.query("DELETE FROM licitacion_publicada WHERE id = $1", [id]);
     await client.query("COMMIT");
     res.json({ ok: true, message: "Licitación reabierta con éxito" });
   } catch (err) {
@@ -1155,45 +1433,87 @@ async function reabrirLicitacion(req, res) {
 async function getPublicadaStatus(req, res) {
   try {
     const anio = Number(req.query.anio || new Date().getFullYear());
-    const row = await get(
-      `SELECT lp.id, lp.fecha_publicacion, lp.items, lp.titulo, lp.motivo, u.nombre, u.apellido
-       FROM licitacion_publicada lp
-       LEFT JOIN usuario u ON u.id_usuario = lp.usuario_id
-       WHERE lp.anio = $1`,
-      [anio]
-    );
-    res.json({ publicada: !!row, data: row });
+    const tipo = req.query.tipo ? String(req.query.tipo).trim().toLowerCase() : null;
+    const licitaciones = await getLicitacionesByAnio(anio, tipo);
+    const row = licitaciones[0] || null;
+    res.json({ publicada: licitaciones.length > 0, data: row, licitaciones });
   } catch (err) {
     res.status(500).json({ error: "Error al obtener estado de publicación" });
   }
 }
 
+async function getRefuerzosPendientesLicitacion(req, res) {
+  try {
+    await ensureTables();
+    const anio = Number(req.query.anio || new Date().getFullYear());
+
+    const rows = await all(
+      `SELECT
+         dp.id_producto AS producto_id,
+         pr.nombre AS producto,
+         COALESCE(pr.unidad_medida, 'unidad') AS unidad_medida,
+         SUM(dp.cantidad_solicitada)::numeric AS cantidad_total,
+         COALESCE((SELECT SUM(sd.cantidad) FROM stock_deposito sd WHERE sd.id_producto = dp.id_producto), 0)::numeric AS stock_actual,
+         MIN(dp.stock_disponible_relevado)::numeric AS stock_relevado_al_crear,
+         COUNT(DISTINCT p.id_pedido) AS pedidos_origen,
+         COUNT(DISTINCT p.id_institucion) AS escuelas_origen,
+         STRING_AGG(DISTINCT i.nombre, ', ' ORDER BY i.nombre) AS instituciones
+       FROM pedido p
+       JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido
+       JOIN producto pr ON pr.id_producto = dp.id_producto
+       JOIN institucion i ON i.id_institucion = p.id_institucion
+       WHERE COALESCE(p.tipo, 'anual') = 'refuerzo'
+         AND p.estado = 'aprobado'
+         AND COALESCE(p.requiere_licitacion, FALSE) = TRUE
+         AND COALESCE(dp.requiere_licitacion, FALSE) = TRUE
+         AND EXTRACT(YEAR FROM p.fecha_creacion) = $1
+       GROUP BY dp.id_producto, pr.nombre, pr.unidad_medida
+       ORDER BY pr.nombre ASC`,
+      [anio]
+    );
+
+    const items = rows.map((row) => ({
+      ...row,
+      producto_id: Number(row.producto_id),
+      cantidad_total: Number(row.cantidad_total || 0),
+      stock_actual: Number(row.stock_actual || 0),
+      stock_relevado_al_crear: row.stock_relevado_al_crear !== null ? Number(row.stock_relevado_al_crear) : null,
+      pedidos_origen: Number(row.pedidos_origen || 0),
+      escuelas_origen: Number(row.escuelas_origen || 0),
+      cantidad_a_licitar: Number(row.cantidad_total || 0)
+    }));
+
+    res.json({ anio, items });
+  } catch (err) {
+    console.error('Error al obtener refuerzos pendientes de licitación:', err);
+    res.status(500).json({ error: 'No se pudieron obtener los refuerzos pendientes de licitación' });
+  }
+}
+
 router.get("/licitacion/anual/final-items", authorizePermissions(PERMISSIONS.PLANILLA_VIEW), getFinalItems);
 router.get("/licitacion/anual/publicada-status", authorizePermissions(PERMISSIONS.PLANILLA_VIEW), getPublicadaStatus);
+router.get("/refuerzos/pendientes-licitacion", authorizePermissions(PERMISSIONS.PLANILLA_VIEW), getRefuerzosPendientesLicitacion);
 router.post("/licitacion/anual/publicar", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), publicarLicitacion);
-router.delete("/licitacion/anual/publicar/:anio", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), reabrirLicitacion);
+router.delete("/licitacion/anual/publicar/:id(\\d+)", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), reabrirLicitacion);
 
 async function getLicitacionesCerradas(req, res) {
   try {
-    const rows = await all(
-      `SELECT lp.id, lp.anio, lp.fecha_publicacion, lp.estado,
-       (SELECT COUNT(*) FROM json_array_elements(lp.items::json)) AS total_items,
-       COALESCE((
-         SELECT SUM((item->>'cantidad_a_licitar')::numeric)
-         FROM jsonb_array_elements(lp.items::jsonb) AS item
-       ), 0) AS total_adjudicado,
-       COALESCE((
-         SELECT SUM(rl.cantidad_recibida)
-         FROM recepcion_licitacion rl
-         WHERE rl.licitacion_id = lp.id
-       ), 0) AS total_recibido
-       FROM licitacion_publicada lp
-       WHERE lp.estado IN ('adjudicada', 'en_deposito', 'completada')
-       ORDER BY lp.anio DESC`
-    );
-    res.json({ licitaciones: rows });
+    const rows = await buildLicitacionHistoryRows({ anio: req.query?.anio ? Number(req.query.anio) : null });
+    res.json({ licitaciones: rows.filter((row) => ['adjudicada', 'en_deposito', 'completada'].includes(row.estado)) });
   } catch (err) {
     res.status(500).json({ error: "Error al obtener licitaciones cerradas" });
+  }
+}
+
+async function getAdjudicacionHistorial(req, res) {
+  try {
+    await ensureTables();
+    const anio = req.query?.anio ? Number(req.query.anio) : null;
+    const licitaciones = await buildLicitacionHistoryRows({ anio });
+    res.json({ licitaciones });
+  } catch (err) {
+    console.error('Error al obtener historial de adjudicaciones:', err);
+    res.status(500).json({ error: 'No se pudo obtener el historial de adjudicaciones' });
   }
 }
 
@@ -1208,15 +1528,16 @@ async function enviarADeposito(req, res) {
 }
 
 router.get("/licitacion/anual/cerradas", authorizePermissions(PERMISSIONS.PLANILLA_VIEW), getLicitacionesCerradas);
+router.get("/adjudicacion/historial", authorizePermissions(PERMISSIONS.PLANILLA_VIEW), getAdjudicacionHistorial);
 router.post("/licitacion/anual/enviar-deposito", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), enviarADeposito);
 
 router.get("/adjudicacion", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), async (req, res) => {
   try {
     await ensureTables();
     const anio = Number(req.query.anio || new Date().getFullYear());
-    
-    // 1. Verificar si hay licitación publicada para este año
-    const publicada = await get(`SELECT items FROM licitacion_publicada WHERE anio = $1`, [anio]);
+    const licitacionId = Number(req.query.licitacion_id || 0);
+    const tipo = req.query.tipo ? String(req.query.tipo).trim().toLowerCase() : null;
+    const publicada = await getSelectedLicitacion({ anio, licitacionId, tipo });
     
     let items = [];
     if (publicada && publicada.items) {
@@ -1250,10 +1571,27 @@ router.get("/adjudicacion", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), a
 
     // Enriquecer items con el precio anterior/actual de la tabla compra_precio_historico
     for (const item of items) {
-      const hist = await get(
-        `SELECT precio_compra_real, id_proveedor FROM compra_precio_historico WHERE anio = $1 AND id_producto = $2`,
-        [anio, item.producto_id]
-      );
+      let hist = null;
+      if (publicada?.id) {
+        hist = await get(
+          `SELECT precio_compra_real, id_proveedor
+           FROM compra_precio_historico
+           WHERE licitacion_id = $1 AND id_producto = $2`,
+          [publicada.id, item.producto_id]
+        );
+      }
+
+      if (!hist) {
+        hist = await get(
+          `SELECT precio_compra_real, id_proveedor
+           FROM compra_precio_historico
+           WHERE anio = $1 AND id_producto = $2
+           ORDER BY updated_at DESC, id DESC
+           LIMIT 1`,
+          [anio, item.producto_id]
+        );
+      }
+
       if (hist) {
         item.precio_actual = hist.precio_compra_real;
         item.proveedor_actual_id = hist.id_proveedor;
@@ -1269,7 +1607,7 @@ router.get("/adjudicacion", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), a
       }
     }
 
-    res.json({ anio, items, proveedores });
+    res.json({ anio, items, proveedores, licitacion: publicada || null });
   } catch (err) {
     console.error("Error al cargar adjudicación:", err);
     res.status(500).json({ error: "No se pudo cargar la adjudicación" });
@@ -1282,14 +1620,18 @@ router.post("/adjudicacion", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), 
     await ensureTables();
 
     const anio = Number(req.body?.anio || new Date().getFullYear());
+    const licitacionId = Number(req.body?.licitacion_id || 0);
     const items = Array.isArray(req.body?.items) ? req.body.items : [];
 
     if (!items.length) {
       return res.status(400).json({ error: "No hay productos para adjudicar" });
     }
 
-    // Validar contra lo publicado si existe, sino contra consolidado live
-    const publicada = await get(`SELECT items FROM licitacion_publicada WHERE anio = $1`, [anio]);
+    const publicada = await getSelectedLicitacion({ anio, licitacionId });
+    if (!publicada?.id) {
+      return res.status(400).json({ error: "Debes seleccionar una licitación válida para adjudicar." });
+    }
+
     let productoPermitidos;
     
     if (publicada && publicada.items) {
@@ -1340,34 +1682,26 @@ router.post("/adjudicacion", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), 
 
       for (const p of allProds.rows) {
         await client.query(
-          `INSERT INTO compra_precio_historico (anio, id_producto, id_proveedor, precio_compra_real, updated_at)
-           VALUES ($1, $2, $3, $4, NOW())
-           ON CONFLICT (anio, id_producto)
+          `INSERT INTO compra_precio_historico (anio, licitacion_id, id_producto, id_proveedor, precio_compra_real, updated_at)
+           VALUES ($1, $2, $3, $4, $5, NOW())
+           ON CONFLICT (licitacion_id, id_producto)
            DO UPDATE SET id_proveedor = EXCLUDED.id_proveedor,
                          precio_compra_real = EXCLUDED.precio_compra_real,
                          updated_at = NOW()`,
-          [anio, p.id_producto, proveedorId, precio]
+          [anio, publicada.id, p.id_producto, proveedorId, precio]
         );
       }
     }
 
     await client.query(
-      `UPDATE planilla_pedido_anual
-       SET estado = 'adjudicada'
-       WHERE anio = $1
-         AND estado = 'aceptada'`,
-      [anio]
-    );
-
-    await client.query(
       `UPDATE licitacion_publicada
        SET estado = 'adjudicada'
-       WHERE anio = $1`,
-      [anio]
+       WHERE id = $1`,
+      [publicada.id]
     );
 
     await client.query("COMMIT");
-    res.json({ ok: true, anio });
+    res.json({ ok: true, anio, licitacion_id: publicada.id });
   } catch (err) {
     await client.query("ROLLBACK");
     console.error("Error al guardar adjudicación:", err);

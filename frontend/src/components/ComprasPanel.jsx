@@ -69,7 +69,7 @@ function Filters({ filters, setFilters, directores, compact = false }) {
   )
 }
 
-export default function ComprasPanel({ section = 'pedidos' }) {
+export default function ComprasPanel({ section = 'pedidos', onNavigate }) {
   const { token, user, masterDirectorAreaId } = useAuth()
   const printRef = useRef(null)
 
@@ -80,6 +80,9 @@ export default function ComprasPanel({ section = 'pedidos' }) {
   const [consolidado, setConsolidado] = useState([])
   const [estadoDirectores, setEstadoDirectores] = useState([])
   const [adjudicacion, setAdjudicacion] = useState([])
+  const [refuerzoPendientes, setRefuerzoPendientes] = useState([])
+  const [historialAdjudicaciones, setHistorialAdjudicaciones] = useState([])
+  const [historialExpandido, setHistorialExpandido] = useState({})
   const [proveedores, setProveedores] = useState([])
   const [formByProduct, setFormByProduct] = useState({})
   const [msg, setMsg] = useState({ text: '', type: '' })
@@ -88,10 +91,13 @@ export default function ComprasPanel({ section = 'pedidos' }) {
   const [updatingId, setUpdatingId] = useState(null)
   const [itemsFinales, setItemsFinales] = useState([])
   const [publicacionStatus, setPublicacionStatus] = useState({ publicada: false, data: null })
+  const [selectedLicitacionId, setSelectedLicitacionId] = useState('')
   const [devolucionState, setDevolucionState] = useState({})
   const [editQty, setEditQty] = useState({})
   const [showConfirmPublicar, setShowConfirmPublicar] = useState(false)
   const [motivoLicitacion, setMotivoLicitacion] = useState(`Licitación Anual ${new Date().getFullYear()}`)
+
+  const licitacionStorageKey = 'compras.selectedLicitacionId'
 
   useEffect(() => {
     if (user?.role === 'master' && masterDirectorAreaId) {
@@ -107,37 +113,27 @@ export default function ComprasPanel({ section = 'pedidos' }) {
     setProveedores(proveedoresData.proveedores || [])
   }
 
-  const loadWorkflowData = async (activeFilters = filters) => {
-    setLoading(true)
+  const loadAdjudicacionData = async (licitacionId = selectedLicitacionId) => {
+    const licitacionIdNum = Number(licitacionId || 0)
+    if (!licitacionIdNum) {
+      setAdjudicacion([])
+      return
+    }
+
     try {
       const anio = new Date().getFullYear()
-
-      const [consolidadoRes, statusRes, finalRes, pubRes, adjudicacionRes, planillasRes] = await Promise.all([
-        apiFetch(`/api/compras/licitacion/anual/consolidado?anio=${anio}`, { token }),
-        apiFetch(`/api/compras/licitacion/anual/estado-directores?anio=${anio}`, { token }),
-        apiFetch(`/api/compras/licitacion/anual/final-items?anio=${anio}`, { token }),
-        apiFetch(`/api/compras/licitacion/anual/publicada-status?anio=${anio}`, { token }),
-        apiFetch(`/api/compras/adjudicacion?anio=${anio}`, { token }),
-        apiFetch(`/api/compras/planillas?anio=${anio}`, { token })
-      ])
-
-      const consolidadoData = consolidadoRes.ok ? await consolidadoRes.json() : { items: [] }
-      const statusData = statusRes.ok ? await statusRes.json() : { directores: [] }
-      const finalData = finalRes.ok ? await finalRes.json() : { items: [] }
-      const pubData = pubRes.ok ? await pubRes.json() : { publicada: false }
+      const adjudicacionRes = await apiFetch(`/api/compras/adjudicacion?anio=${anio}&licitacion_id=${licitacionIdNum}`, { token })
       const adjudicacionData = adjudicacionRes.ok ? await adjudicacionRes.json() : { items: [] }
-      const planillasData = planillasRes.ok ? await planillasRes.json() : { planillas: [] }
 
-      setConsolidado(consolidadoData.items || [])
-      setEstadoDirectores(statusData.directores || [])
-      setItemsFinales(finalData.items || [])
-      setPublicacionStatus(pubData)
+      if (!adjudicacionRes.ok) {
+        throw new Error(adjudicacionData.error || 'No se pudo cargar la adjudicación')
+      }
+
       setAdjudicacion(adjudicacionData.items || [])
-      setPlanillas(planillasData.planillas || [])
-      setMotivoLicitacion(
-        String(pubData?.data?.motivo || pubData?.data?.titulo || `Licitación Anual ${anio}`).trim()
-      )
-      
+      if (adjudicacionData.proveedores) {
+        setProveedores(adjudicacionData.proveedores || [])
+      }
+
       setFormByProduct((prev) => {
         const next = { ...prev }
         for (const item of adjudicacionData.items || []) {
@@ -149,26 +145,75 @@ export default function ComprasPanel({ section = 'pedidos' }) {
         }
         return next
       })
+    } catch (err) {
+      setAdjudicacion([])
+      setMsg({ text: err.message || 'No se pudo cargar la adjudicación', type: 'error' })
+    }
+  }
+
+  const loadWorkflowData = async (activeFilters = filters) => {
+    setLoading(true)
+    try {
+      const anio = new Date().getFullYear()
+      const tipoLicitacion = section === 'refuerzos' ? 'refuerzo' : section === 'listado-final' ? 'anual' : ''
+
+      const shouldLoadHistorial = section === 'adjudicacion'
+      const [consolidadoRes, statusRes, finalRes, pubRes, planillasRes, refuerzosRes, historialRes] = await Promise.all([
+        apiFetch(`/api/compras/licitacion/anual/consolidado?anio=${anio}`, { token }),
+        apiFetch(`/api/compras/licitacion/anual/estado-directores?anio=${anio}`, { token }),
+        apiFetch(`/api/compras/licitacion/anual/final-items?anio=${anio}`, { token }),
+        apiFetch(`/api/compras/licitacion/anual/publicada-status?anio=${anio}${tipoLicitacion ? `&tipo=${tipoLicitacion}` : ''}`, { token }),
+        apiFetch(`/api/compras/planillas?anio=${anio}`, { token }),
+        apiFetch(`/api/compras/refuerzos/pendientes-licitacion?anio=${anio}`, { token }),
+        shouldLoadHistorial ? apiFetch('/api/compras/adjudicacion/historial', { token }) : Promise.resolve({ ok: true, json: async () => ({ licitaciones: [] }) }),
+      ])
+
+      const consolidadoData = consolidadoRes.ok ? await consolidadoRes.json() : { items: [] }
+      const statusData = statusRes.ok ? await statusRes.json() : { directores: [] }
+      const finalData = finalRes.ok ? await finalRes.json() : { items: [] }
+      const pubData = pubRes.ok ? await pubRes.json() : { publicada: false }
+      const planillasData = planillasRes.ok ? await planillasRes.json() : { planillas: [] }
+      const refuerzosData = refuerzosRes.ok ? await refuerzosRes.json() : { items: [] }
+      const historialData = historialRes.ok ? await historialRes.json() : { licitaciones: [] }
+
+      setConsolidado(consolidadoData.items || [])
+      setEstadoDirectores(statusData.directores || [])
+      setItemsFinales(finalData.items || [])
+      setPublicacionStatus(pubData)
+      setPlanillas(planillasData.planillas || [])
+      setRefuerzoPendientes(refuerzosData.items || [])
+      setHistorialAdjudicaciones(historialData.licitaciones || [])
+      setMotivoLicitacion(
+        String(pubData?.data?.motivo || pubData?.data?.titulo || `Licitación Anual ${anio}`).trim()
+      )
+
+      const licitaciones = pubData?.licitaciones || []
+      const licitacionesActivas = licitaciones.filter((licitacion) => !['en_deposito', 'completada'].includes(licitacion.estado))
+      const rememberedId = typeof window !== 'undefined' ? window.sessionStorage.getItem(licitacionStorageKey) : ''
+      const preferredId = selectedLicitacionId || rememberedId || ''
+      const nextSelectedId = licitacionesActivas.some((licitacion) => String(licitacion.id) === String(preferredId))
+        ? String(preferredId)
+        : (licitacionesActivas[0] ? String(licitacionesActivas[0].id) : '')
+
+      if (String(nextSelectedId) !== String(selectedLicitacionId)) {
+        setSelectedLicitacionId(nextSelectedId)
+        if (typeof window !== 'undefined') {
+          if (nextSelectedId) window.sessionStorage.setItem(licitacionStorageKey, String(nextSelectedId))
+          else window.sessionStorage.removeItem(licitacionStorageKey)
+        }
+      } else if (nextSelectedId) {
+        await loadAdjudicacionData(nextSelectedId)
+      } else {
+        setAdjudicacion([])
+      }
       
       // Inicializar cantidades editables con las originales (sin descontar stock automáticamente)
-      if (!pubData.publicada) {
-        const initialEdit = {}
-        const itemsToUse = consolidadoData.items || []
-        itemsToUse.forEach(item => {
-          initialEdit[item.producto_id] = item.cantidad_total
-        })
-        setEditQty(initialEdit)
-      } else {
-        // Si ya está publicada, las cantidades vienen del snapshot
-        const snapshotEdit = {}
-        if (pubData.data && pubData.data.items) {
-          const rawItems = typeof pubData.data.items === 'string' ? JSON.parse(pubData.data.items) : pubData.data.items
-          rawItems.forEach(item => {
-            snapshotEdit[item.producto_id] = item.cantidad_a_licitar
-          })
-        }
-        setEditQty(snapshotEdit)
-      }
+      const initialEdit = {}
+      const itemsToUse = consolidadoData.items || []
+      itemsToUse.forEach(item => {
+        initialEdit[item.producto_id] = item.cantidad_total
+      })
+      setEditQty(initialEdit)
 
     } catch (err) {
       setMsg({ text: err.message || 'No se pudo cargar la informacion', type: 'error' })
@@ -187,6 +232,21 @@ export default function ComprasPanel({ section = 'pedidos' }) {
     loadWorkflowData(filters)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters.director_area_id, filters.nivel, filters.estado])
+
+  useEffect(() => {
+    if (!selectedLicitacionId) {
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.removeItem(licitacionStorageKey)
+      }
+      setAdjudicacion([])
+      return
+    }
+    if (typeof window !== 'undefined') {
+      window.sessionStorage.setItem(licitacionStorageKey, String(selectedLicitacionId))
+    }
+    loadAdjudicacionData(selectedLicitacionId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedLicitacionId])
 
   const directores = useMemo(() => {
     const map = new Map()
@@ -216,6 +276,77 @@ export default function ComprasPanel({ section = 'pedidos' }) {
     }, {})
     return Object.values(grouped)
   }, [detalle])
+
+  const licitaciones = useMemo(() => publicacionStatus.licitaciones || [], [publicacionStatus])
+
+  const licitacionesActivas = useMemo(
+    () => licitaciones.filter((licitacion) => !['en_deposito', 'completada'].includes(licitacion.estado)),
+    [licitaciones]
+  )
+
+  const selectedLicitacion = useMemo(() => {
+    if (!licitacionesActivas.length) return null
+    return licitacionesActivas.find((licitacion) => String(licitacion.id) === String(selectedLicitacionId)) || licitacionesActivas[0]
+  }, [licitacionesActivas, selectedLicitacionId])
+
+  const licitacionesHistoricas = useMemo(
+    () => historialAdjudicaciones.filter((licitacion) => ['adjudicada', 'en_deposito', 'completada'].includes(licitacion.estado)),
+    [historialAdjudicaciones]
+  )
+
+  const licitacionesAnualesActivas = useMemo(
+    () => licitaciones.filter((licitacion) => String(licitacion.tipo || 'anual') === 'anual'),
+    [licitaciones]
+  )
+
+  const licitacionesRefuerzoActivas = useMemo(
+    () => licitaciones.filter((licitacion) => String(licitacion.tipo || 'anual') === 'refuerzo'),
+    [licitaciones]
+  )
+
+  const listadoPendienteAnual = useMemo(() => {
+    const consumidoPorProducto = new Map()
+
+    for (const licitacion of licitacionesAnualesActivas) {
+      const rawItems = typeof licitacion.items === 'string' ? JSON.parse(licitacion.items) : (licitacion.items || [])
+      for (const item of rawItems) {
+        const productoId = Number(item.producto_id)
+        if (!productoId) continue
+        const cantidad = Number(item.cantidad_a_licitar || item.cantidad_solicitada || 0)
+        consumidoPorProducto.set(productoId, (consumidoPorProducto.get(productoId) || 0) + cantidad)
+      }
+    }
+
+    return consolidado
+      .map((item) => {
+        const consumido = consumidoPorProducto.get(Number(item.producto_id)) || 0
+        const pendiente = Math.max(0, Number(item.cantidad_total || 0) - consumido)
+        return pendiente > 0 ? { ...item, cantidad_total: pendiente, cantidad_pendiente: pendiente } : null
+      })
+      .filter(Boolean)
+  }, [consolidado, licitacionesAnualesActivas])
+
+  const listadoPendienteRefuerzo = useMemo(() => {
+    const consumidoPorProducto = new Map()
+
+    for (const licitacion of licitacionesRefuerzoActivas) {
+      const rawItems = typeof licitacion.items === 'string' ? JSON.parse(licitacion.items) : (licitacion.items || [])
+      for (const item of rawItems) {
+        const productoId = Number(item.producto_id)
+        if (!productoId) continue
+        const cantidad = Number(item.cantidad_a_licitar || item.cantidad_solicitada || 0)
+        consumidoPorProducto.set(productoId, (consumidoPorProducto.get(productoId) || 0) + cantidad)
+      }
+    }
+
+    return refuerzoPendientes
+      .map((item) => {
+        const consumido = consumidoPorProducto.get(Number(item.producto_id)) || 0
+        const pendiente = Math.max(0, Number(item.cantidad_total || 0) - consumido)
+        return pendiente > 0 ? { ...item, cantidad_total: pendiente, cantidad_a_licitar: pendiente } : null
+      })
+      .filter(Boolean)
+  }, [refuerzoPendientes, licitacionesRefuerzoActivas])
 
   const handleVerDetalle = async (id) => {
     if (detalle?.planilla?.id === id) {
@@ -320,16 +451,25 @@ export default function ComprasPanel({ section = 'pedidos' }) {
     }))
   }
 
+  const toggleHistorialDetalle = (licitacionId) => {
+    setHistorialExpandido((prev) => ({
+      ...prev,
+      [licitacionId]: !prev[licitacionId]
+    }))
+  }
+
   const handlePublicar = async () => {
     setSaving(true)
     try {
       const anio = new Date().getFullYear()
       const motivoSanitizado = String(motivoLicitacion || '').trim() || `Licitación Anual ${anio}`
+      const itemsSource = section === 'refuerzos' ? listadoPendienteRefuerzo : listadoPendienteAnual
       const payload = {
         anio,
+        tipo: section === 'refuerzos' ? 'refuerzo' : 'anual',
         titulo: motivoSanitizado,
         motivo: motivoSanitizado,
-        items: consolidado.map(item => ({
+        items: itemsSource.map(item => ({
           ...item,
           cantidad_a_licitar: editQty[item.producto_id] !== undefined ? editQty[item.producto_id] : item.cantidad_total
         }))
@@ -340,9 +480,17 @@ export default function ComprasPanel({ section = 'pedidos' }) {
         body: JSON.stringify(payload)
       })
       if (res.ok) {
+        const data = await res.json().catch(() => ({}))
         setShowConfirmPublicar(false)
+        if (data?.licitacion?.id) {
+          setSelectedLicitacionId(String(data.licitacion.id))
+          if (typeof window !== 'undefined') {
+            window.sessionStorage.setItem(licitacionStorageKey, String(data.licitacion.id))
+          }
+        }
         await loadWorkflowData()
-        setMsg({ text: 'Licitación publicada con éxito', type: 'success' })
+        if (onNavigate) onNavigate('compras-adjudicacion')
+        setMsg({ text: 'Nueva licitación creada. Continúa en Adjudicación y Cierre.', type: 'success' })
       } else {
         const data = await res.json()
         throw new Error(data.error || 'Error al publicar')
@@ -355,18 +503,19 @@ export default function ComprasPanel({ section = 'pedidos' }) {
   }
 
   const handleReabrir = async () => {
-    if (!window.confirm('¿Estás seguro que deseas reabrir la licitación? Las cantidades volverán a ser editables y la adjudicación se bloqueará.')) return
+    if (!selectedLicitacion?.id) return
+    if (!window.confirm('¿Estás seguro que deseas eliminar esta licitación? La adjudicación de esa licitación se perderá.')) return
     
     setLoading(true)
     try {
-      const anio = new Date().getFullYear()
-      const res = await apiFetch(`/api/compras/licitacion/anual/publicar/${anio}`, {
+      const res = await apiFetch(`/api/compras/licitacion/anual/publicar/${selectedLicitacion.id}`, {
         token,
         method: 'DELETE'
       })
       if (res.ok) {
+        setSelectedLicitacionId('')
         await loadWorkflowData()
-        setMsg({ text: 'Licitación reabierta. Ahora puedes editar las cantidades en el paso anterior.', type: 'success' })
+        setMsg({ text: 'Licitación eliminada. Puedes generar otra desde el listado final.', type: 'success' })
       } else {
         const data = await res.json()
         throw new Error(data.error || 'Error al reabrir')
@@ -377,7 +526,34 @@ export default function ComprasPanel({ section = 'pedidos' }) {
     }
   }
 
+  const handleEnviarADeposito = async () => {
+    if (!selectedLicitacion?.id) return
+
+    setSaving(true)
+    try {
+      const res = await apiFetch('/api/compras/licitacion/anual/enviar-deposito', {
+        token,
+        method: 'POST',
+        body: JSON.stringify({ id: selectedLicitacion.id })
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'No se pudo enviar la licitación a depósito')
+
+      setMsg({ text: 'La licitación se envió a depósito correctamente.', type: 'success' })
+      await loadWorkflowData(filters)
+    } catch (err) {
+      setMsg({ text: err.message, type: 'error' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const handleGuardarAdjudicacion = async () => {
+    if (!selectedLicitacion?.id) {
+      setMsg({ text: 'Debes seleccionar una licitación para adjudicar.', type: 'error' })
+      return
+    }
+
     const incomplete = adjudicacion.find((item) => {
       const current = formByProduct[String(item.producto_id)] || {}
       return !current.proveedor_id || !current.precio_compra_real
@@ -391,6 +567,7 @@ export default function ComprasPanel({ section = 'pedidos' }) {
     setSaving(true)
     try {
       const payload = {
+        licitacion_id: Number(selectedLicitacion.id),
         items: adjudicacion.map((item) => {
           const current = formByProduct[String(item.producto_id)] || {}
           return {
@@ -425,14 +602,18 @@ export default function ComprasPanel({ section = 'pedidos' }) {
       subtitle: 'Consolidado general de pedidos aprobados por directores de area.'
     },
     'listado-final': {
-      title: publicacionStatus.publicada ? `Licitación Publicada — ${new Date().getFullYear()}` : 'Listado Final a Licitar',
-      subtitle: publicacionStatus.publicada 
-        ? `Licitación cerrada el ${new Date(publicacionStatus.data.fecha_publicacion).toLocaleString('es-AR')}.`
+      title: 'Listado Final a Licitar',
+      subtitle: licitacionesAnualesActivas.length > 0
+        ? `Ya hay ${licitacionesAnualesActivas.length} licitación${licitacionesAnualesActivas.length === 1 ? '' : 'es'} anual${licitacionesAnualesActivas.length === 1 ? '' : 'es'} creada${licitacionesAnualesActivas.length === 1 ? '' : 's'}. El listado solo muestra pendientes no licitados.`
         : 'Listado detallado por institución para validación y ajuste de cantidades finales.'
+    },
+    refuerzos: {
+      title: 'Licitaciones Refuerzos',
+      subtitle: 'Solo aparecen productos de refuerzo sin stock disponible en depósito central.'
     },
     adjudicacion: {
       title: 'Adjudicacion y Cierre de Compra',
-      subtitle: 'Seleccion de proveedor ganador y carga del precio real con referencia historica.'
+      subtitle: 'Gestiona varias licitaciones del mismo año, adjudica cada una y envíalas a depósito por separado.'
     }
   }
 
@@ -657,19 +838,32 @@ export default function ComprasPanel({ section = 'pedidos' }) {
           <section className="card" style={{ padding: 24, minHeight: 'auto', width: '100%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <h3 style={{ margin: 0 }}>
-                {publicacionStatus.publicada ? '📋 Licitación Publicada' : '📝 Listado Final a Licitar'}
+                📝 Listado Final a Licitar
               </h3>
-              {!publicacionStatus.publicada && consolidado.length > 0 && (
+              {listadoPendienteAnual.length > 0 && (
                 <button className="primary" onClick={() => setShowConfirmPublicar(true)}>
-                  🔒 Cerrar Licitación
+                  ➕ Crear licitación
                 </button>
               )}
             </div>
 
+            {licitacionesAnualesActivas.length > 0 && (
+              <div style={{ marginBottom: 16, padding: 12, border: '1px solid #e2e8f0', borderRadius: 8, background: '#f8fafc' }}>
+                <strong style={{ display: 'block', marginBottom: 6 }}>Licitaciones creadas este año</strong>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {licitacionesAnualesActivas.map((licitacion) => (
+                    <span key={licitacion.id} className={`badge badge-${ESTADO_BADGE[licitacion.estado] || 'pendiente'}`}>
+                      #{licitacion.id} {licitacion.titulo || licitacion.motivo || `Licitación ${licitacion.id}`} - {licitacion.estado}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {loading ? (
               <div className="sv-empty-state">Cargando listado...</div>
-            ) : consolidado.length === 0 ? (
-              <div className="sv-empty-state">No hay pedidos disponibles para el listado final.</div>
+            ) : listadoPendienteAnual.length === 0 ? (
+              <div className="sv-empty-state">No quedan productos pendientes por licitar en el flujo anual.</div>
             ) : (
               <>
                 <table style={{ marginBottom: 24 }}>
@@ -683,7 +877,7 @@ export default function ComprasPanel({ section = 'pedidos' }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {consolidado.map((item) => {
+                    {listadoPendienteAnual.map((item) => {
                       const currentVal = editQty[item.producto_id]
                       return (
                         <tr key={item.producto_id}>
@@ -695,18 +889,14 @@ export default function ComprasPanel({ section = 'pedidos' }) {
                             {item.stock_actual}
                           </td>
                           <td style={{ textAlign: 'center' }}>
-                            {publicacionStatus.publicada ? (
-                              <span style={{ fontWeight: 700, color: 'var(--primary)', fontSize: '1.1rem' }}>{currentVal !== undefined ? currentVal : item.cantidad_total}</span>
-                            ) : (
-                              <input
-                                type="number"
-                                min="0"
-                                value={currentVal !== undefined ? currentVal : ''}
-                                onChange={(e) => handleEditQty(item.producto_id, e.target.value)}
-                                style={{ textAlign: 'center', fontWeight: 700, border: '1px solid #94a3b8', borderRadius: '6px', padding: '6px', width: '90px', margin: '0 auto', background: '#f8fafc' }}
-                                title="Editar cantidad a licitar"
-                              />
-                            )}
+                            <input
+                              type="number"
+                              min="0"
+                              value={currentVal !== undefined ? currentVal : ''}
+                              onChange={(e) => handleEditQty(item.producto_id, e.target.value)}
+                              style={{ textAlign: 'center', fontWeight: 700, border: '1px solid #94a3b8', borderRadius: '6px', padding: '6px', width: '90px', margin: '0 auto', background: '#f8fafc' }}
+                              title="Editar cantidad a licitar"
+                            />
                           </td>
                           <td style={{ color: 'var(--muted)' }}>{item.unidad_medida}</td>
                         </tr>
@@ -719,27 +909,136 @@ export default function ComprasPanel({ section = 'pedidos' }) {
           </section>
         )}
 
-        {section === 'adjudicacion' && (
-          <section className="card" style={{ padding: 18, minHeight: 'calc(100vh - 220px)', width: '100%' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
-              <h3 style={{ margin: 0 }}>Cierre de compra</h3>
-              {publicacionStatus.publicada && (
-                <button className="secondary" onClick={handleReabrir}>
-                  ⏪ Regresar a editar listado
+        {section === 'refuerzos' && (
+          <section className="card" style={{ padding: 24, minHeight: 'auto', width: '100%' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <h3 style={{ margin: 0 }}>🚨 Refuerzos sin stock</h3>
+              {listadoPendienteRefuerzo.length > 0 && (
+                <button className="primary" onClick={() => setShowConfirmPublicar(true)}>
+                  ➕ Crear licitación de refuerzo
                 </button>
               )}
             </div>
+
+            {licitacionesRefuerzoActivas.length > 0 && (
+              <div style={{ marginBottom: 16, padding: 12, border: '1px solid #e2e8f0', borderRadius: 8, background: '#f8fafc' }}>
+                <strong style={{ display: 'block', marginBottom: 6 }}>Licitaciones de refuerzo creadas</strong>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {licitacionesRefuerzoActivas.map((licitacion) => (
+                    <span key={licitacion.id} className={`badge badge-${ESTADO_BADGE[licitacion.estado] || 'pendiente'}`}>
+                      #{licitacion.id} {licitacion.titulo || licitacion.motivo || `Refuerzo ${licitacion.id}`} - {licitacion.estado}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {loading ? (
+              <div className="sv-empty-state">Cargando refuerzos...</div>
+            ) : listadoPendienteRefuerzo.length === 0 ? (
+              <div className="sv-empty-state">No hay productos de refuerzo sin stock para licitar.</div>
+            ) : (
+              <table style={{ marginBottom: 0 }}>
+                <thead>
+                  <tr style={{ background: '#f8fafc' }}>
+                    <th>PRODUCTO</th>
+                    <th style={{ textAlign: 'center' }}>CANTIDAD REFUERZO</th>
+                    <th style={{ textAlign: 'center' }}>STOCK ACTUAL</th>
+                    <th style={{ textAlign: 'center' }}>PEDIDOS</th>
+                    <th>ESCUELAS</th>
+                    <th style={{ textAlign: 'center', width: 140 }}>CANT. A LICITAR</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {listadoPendienteRefuerzo.map((item) => {
+                    const currentVal = editQty[item.producto_id]
+                    return (
+                      <tr key={`refuerzo-${item.producto_id}`}>
+                        <td>
+                          <div style={{ fontWeight: 700 }}>{item.producto}</div>
+                          <div style={{ color: 'var(--muted)', fontSize: '0.84rem' }}>{item.unidad_medida}</div>
+                        </td>
+                        <td style={{ textAlign: 'center', fontWeight: 700 }}>{item.cantidad_total}</td>
+                        <td style={{ textAlign: 'center', color: '#b91c1c', fontWeight: 700 }}>{item.stock_actual}</td>
+                        <td style={{ textAlign: 'center' }}>{item.pedidos_origen}</td>
+                        <td style={{ color: 'var(--muted)' }}>{item.instituciones}</td>
+                        <td style={{ textAlign: 'center' }}>
+                          <input
+                            type="number"
+                            min="0"
+                            value={currentVal !== undefined ? currentVal : item.cantidad_total}
+                            onChange={(e) => handleEditQty(item.producto_id, e.target.value)}
+                            style={{ textAlign: 'center', fontWeight: 700, border: '1px solid #94a3b8', borderRadius: '6px', padding: '6px', width: '90px', margin: '0 auto', background: '#f8fafc' }}
+                          />
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            )}
+          </section>
+        )}
+
+        {section === 'adjudicacion' && (
+          <section className="card" style={{ padding: 18, minHeight: 'calc(100vh - 220px)', width: '100%' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
+              <h3 style={{ margin: 0 }}>Licitaciones para adjudicar y enviar</h3>
+              {selectedLicitacion?.id && (
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {selectedLicitacion.estado === 'adjudicada' && (
+                    <button className="primary" onClick={handleEnviarADeposito} disabled={saving}>
+                      {saving ? 'Enviando...' : '📦 Enviar a depósito'}
+                    </button>
+                  )}
+                  {!['en_deposito', 'completada'].includes(selectedLicitacion.estado) && (
+                    <button className="secondary" onClick={handleReabrir}>
+                      🗑 Eliminar licitación
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {licitacionesActivas.length > 0 && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 420px) 1fr', gap: 12, alignItems: 'end', marginBottom: 16 }}>
+                <div>
+                  <label>Licitación activa</label>
+                  <select value={selectedLicitacionId} onChange={(e) => setSelectedLicitacionId(e.target.value)}>
+                    {licitacionesActivas.map((licitacion) => (
+                      <option key={licitacion.id} value={licitacion.id}>
+                        [{licitacion.tipo || 'anual'}] #{licitacion.id} - {licitacion.titulo || licitacion.motivo || `Licitación ${licitacion.id}`} - {licitacion.estado}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {selectedLicitacion && (
+                  <div style={{ padding: 12, borderRadius: 8, border: '1px solid #e2e8f0', background: '#f8fafc' }}>
+                    <strong>{selectedLicitacion.titulo || selectedLicitacion.motivo || `Licitación #${selectedLicitacion.id}`}</strong>
+                    <div style={{ color: 'var(--muted)', marginTop: 4 }}>
+                      Tipo: {selectedLicitacion.tipo || 'anual'}
+                    </div>
+                    <div style={{ color: 'var(--muted)', marginTop: 4 }}>
+                      Estado: <span className={`badge badge-${ESTADO_BADGE[selectedLicitacion.estado] || 'pendiente'}`}>{selectedLicitacion.estado}</span>
+                    </div>
+                    <div style={{ color: 'var(--muted)', marginTop: 4 }}>
+                      Fecha: {selectedLicitacion.fecha_publicacion ? new Date(selectedLicitacion.fecha_publicacion).toLocaleString('es-AR') : '-'}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
             
-            {!publicacionStatus.publicada ? (
+            {!licitacionesActivas.length ? (
               <div className="sv-empty-state" style={{ marginTop: 20 }}>
                 <span style={{ fontSize: '2.5rem', display: 'block', marginBottom: 12 }}>🔒</span>
-                <strong style={{ display: 'block', marginBottom: 5, fontSize: '1.2rem', color: '#334155' }}>Adjudicación bloqueada</strong>
-                <p style={{ color: 'var(--muted)', margin: 0 }}>Debes aprobar y subir el "Listado Final a Licitar" antes de poder adjudicar a proveedores.</p>
+                <strong style={{ display: 'block', marginBottom: 5, fontSize: '1.2rem', color: '#334155' }}>Sin licitaciones activas</strong>
+                <p style={{ color: 'var(--muted)', margin: 0 }}>Las licitaciones enviadas a depósito salen de esta bandeja y quedan disponibles en el historial de abajo.</p>
               </div>
             ) : (
               <>
                 <p style={{ marginTop: 0, color: 'var(--muted)' }}>
-                  Selecciona proveedor ganador y registra el precio de compra real. El precio historico queda visible como referencia.
+                  Selecciona una licitación, adjudica proveedor ganador y registra el precio real. Luego podrás enviarla al depósito por separado.
                 </p>
 
                 {loading ? (
@@ -810,32 +1109,147 @@ export default function ComprasPanel({ section = 'pedidos' }) {
                 )}
               </>
             )}
+
+            <div style={{ marginTop: 28, borderTop: '1px solid #e2e8f0', paddingTop: 20 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
+                <h3 style={{ margin: 0 }}>Historial de licitaciones</h3>
+                <span style={{ color: 'var(--muted)', fontSize: '0.9rem' }}>
+                  Incluye adjudicadas y enviadas a depósito con su detalle de compra.
+                </span>
+              </div>
+
+              {!licitacionesHistoricas.length ? (
+                <div className="sv-empty-state">Todavía no hay licitaciones en historial.</div>
+              ) : (
+                <div style={{ display: 'grid', gap: 16 }}>
+                  {licitacionesHistoricas.map((licitacion) => (
+                    <section key={`hist-${licitacion.id}`} style={{ border: '1px solid #e2e8f0', borderRadius: 12, background: '#fff', padding: 16 }}>
+                      {(() => {
+                        const expanded = Boolean(historialExpandido[licitacion.id])
+                        const detalleCount = licitacion.detalle?.length || 0
+                        return (
+                          <>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+                        <div>
+                          <div style={{ fontWeight: 800, fontSize: '1rem' }}>
+                            #{licitacion.id} {licitacion.titulo || licitacion.motivo || `Licitación ${licitacion.id}`}
+                          </div>
+                          <div style={{ color: 'var(--muted)', fontSize: '0.9rem', marginTop: 4 }}>
+                            Tipo: {licitacion.tipo || 'anual'} | Año: {licitacion.anio} | Creador: {licitacion.creador || 'Sin dato'}
+                          </div>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div>
+                            <span className={`badge badge-${ESTADO_BADGE[licitacion.estado] || 'pendiente'}`}>{licitacion.estado}</span>
+                          </div>
+                          <div style={{ color: 'var(--muted)', fontSize: '0.84rem', marginTop: 6 }}>
+                            Publicada: {licitacion.fecha_publicacion ? new Date(licitacion.fecha_publicacion).toLocaleString('es-AR') : '-'}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginBottom: 14 }}>
+                        <div style={{ padding: 10, borderRadius: 10, background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                          <div style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>Productos</div>
+                          <div style={{ fontWeight: 800 }}>{licitacion.total_items_snapshot || 0}</div>
+                        </div>
+                        <div style={{ padding: 10, borderRadius: 10, background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                          <div style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>Monto estimado</div>
+                          <div style={{ fontWeight: 800 }}>{formatCurrency(licitacion.monto_estimado)}</div>
+                        </div>
+                        <div style={{ padding: 10, borderRadius: 10, background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                          <div style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>Total recibido</div>
+                          <div style={{ fontWeight: 800 }}>{licitacion.total_recibido}</div>
+                        </div>
+                        <div style={{ padding: 10, borderRadius: 10, background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                          <div style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>Último movimiento</div>
+                          <div style={{ fontWeight: 800, fontSize: '0.9rem' }}>{licitacion.ultima_recepcion ? new Date(licitacion.ultima_recepcion).toLocaleString('es-AR') : (licitacion.adjudicada_at ? new Date(licitacion.adjudicada_at).toLocaleString('es-AR') : '-')}</div>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: expanded ? 12 : 0, flexWrap: 'wrap' }}>
+                        <div style={{ color: 'var(--muted)', fontSize: '0.92rem' }}>
+                          {detalleCount} producto{detalleCount === 1 ? '' : 's'} adjudicado{detalleCount === 1 ? '' : 's'}
+                        </div>
+                        <button
+                          type="button"
+                          className="secondary"
+                          onClick={() => toggleHistorialDetalle(licitacion.id)}
+                          style={{ minHeight: 'auto', padding: '8px 14px' }}
+                        >
+                          {expanded ? 'Ocultar productos' : 'Ver productos'}
+                        </button>
+                      </div>
+
+                      {!licitacion.detalle?.length ? (
+                        <div style={{ color: 'var(--muted)' }}>Sin detalle adjudicado registrado.</div>
+                      ) : expanded ? (
+                        <table style={{ marginBottom: 0 }}>
+                          <thead>
+                            <tr style={{ background: '#f8fafc' }}>
+                              <th>Producto</th>
+                              <th style={{ textAlign: 'center' }}>Cantidad</th>
+                              <th>Proveedor</th>
+                              <th style={{ textAlign: 'right' }}>Precio</th>
+                              <th style={{ textAlign: 'right' }}>Subtotal</th>
+                              <th style={{ textAlign: 'center' }}>Recibido</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {licitacion.detalle.map((item) => (
+                              <tr key={`hist-item-${licitacion.id}-${item.producto_id}`}>
+                                <td>
+                                  <div style={{ fontWeight: 700 }}>{item.producto}</div>
+                                  <div style={{ color: 'var(--muted)', fontSize: '0.82rem' }}>{item.unidad_medida}</div>
+                                </td>
+                                <td style={{ textAlign: 'center' }}>{item.cantidad_adjudicada}</td>
+                                <td>{item.proveedor_nombre || '-'}</td>
+                                <td style={{ textAlign: 'right' }}>{formatCurrency(item.precio_compra_real)}</td>
+                                <td style={{ textAlign: 'right' }}>{formatCurrency(item.subtotal_estimado)}</td>
+                                <td style={{ textAlign: 'center' }}>{item.cantidad_recibida}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      ) : null}
+                          </>
+                        )
+                      })()}
+                    </section>
+                  ))}
+                </div>
+              )}
+            </div>
           </section>
         )}
       </div>
       {showConfirmPublicar && (
         <div className="sv-modal-overlay">
           <div className="sv-modal">
-            <h2 className="sv-modal-title" style={{ color: 'var(--primary)' }}>🔒 ¿Confirmar cierre de licitación?</h2>
+            <h2 className="sv-modal-title" style={{ color: 'var(--primary)' }}>➕ ¿Crear nueva licitación?</h2>
             <div className="sv-modal-body">
-              <p>Se registrará el listado final con las cantidades editadas y se habilitará la fase de Adjudicación.</p>
+              <p>
+                {section === 'refuerzos'
+                  ? 'Se tomará un snapshot de los productos de refuerzo sin stock para crear una nueva licitación de refuerzo.'
+                  : 'Se tomará un snapshot del listado final anual pendiente para crear una nueva licitación.'}
+              </p>
               <label style={{ display: 'block', marginTop: 12, fontWeight: 700 }}>Motivo de Licitación (título visible en Recepción)</label>
               <input
                 type="text"
                 value={motivoLicitacion}
                 onChange={(e) => setMotivoLicitacion(e.target.value)}
-                placeholder="Ej: Licitación Anual Artículos de Limpieza"
+                placeholder={section === 'refuerzos' ? 'Ej: Licitación Refuerzo Productos Sin Stock' : 'Ej: Licitación Anual Artículos de Limpieza'}
                 style={{ width: '100%', marginTop: 8 }}
                 maxLength={255}
               />
-              <p style={{ fontWeight: 700, color: '#e11d48' }}>Esta acción no se puede deshacer.</p>
+              <p style={{ fontWeight: 700, color: '#0f766e' }}>Podrás adjudicar y enviar esta licitación de forma independiente.</p>
             </div>
             <div className="sv-modal-footer">
               <button className="secondary" onClick={() => setShowConfirmPublicar(false)} disabled={saving}>
                 Cancelar
               </button>
               <button className="primary" onClick={handlePublicar} disabled={saving}>
-                {saving ? 'Cerrando...' : 'Confirmar cierre'}
+                {saving ? 'Creando...' : 'Crear licitación'}
               </button>
             </div>
           </div>

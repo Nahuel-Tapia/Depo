@@ -30,6 +30,44 @@ function summarizePedidoItems(items = []) {
     .join(", ");
 }
 
+async function getStockDepositoByProductoIds(productoIds = []) {
+  const ids = [...new Set((productoIds || []).map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0))];
+  if (!ids.length) return new Map();
+
+  const rows = await all(
+    `SELECT id_producto, COALESCE(SUM(cantidad), 0)::numeric AS stock_actual
+     FROM stock_deposito
+     WHERE id_producto = ANY($1::int[])
+     GROUP BY id_producto`,
+    [ids]
+  );
+
+  return new Map(rows.map((row) => [Number(row.id_producto), Number(row.stock_actual || 0)]));
+}
+
+async function evaluateRefuerzoRouting(items = []) {
+  const stockByProducto = await getStockDepositoByProductoIds(items.map((item) => item.producto_id));
+
+  const detalleEvaluado = items.map((item) => {
+    const stockDisponible = Number(stockByProducto.get(Number(item.producto_id)) || 0);
+    const requiereLicitacion = stockDisponible <= 0;
+    return {
+      ...item,
+      stock_disponible_relevado: stockDisponible,
+      requiere_licitacion: requiereLicitacion
+    };
+  });
+
+  const itemsSinStock = detalleEvaluado.filter((item) => item.requiere_licitacion);
+
+  return {
+    detalleEvaluado,
+    requiereLicitacion: itemsSinStock.length > 0,
+    estadoAbastecimiento: itemsSinStock.length > 0 ? 'requiere_licitacion' : 'stock_disponible',
+    itemsSinStock
+  };
+}
+
 function groupPedidos(rows = []) {
   const grouped = new Map();
 
@@ -45,6 +83,8 @@ function groupPedidos(rows = []) {
         tipo: row.tipo || "anual",
         created_at: row.created_at,
         id_institucion: row.id_institucion || null,
+        requiere_licitacion: Boolean(row.requiere_licitacion),
+        estado_abastecimiento: row.estado_abastecimiento || 'stock_disponible',
         aprobado_por_supervisor_id: row.aprobado_por_supervisor_id || null,
         fecha_aprobacion_supervisor: row.fecha_aprobacion_supervisor || null,
         usuario_nombre: row.usuario_nombre || null,
@@ -66,7 +106,11 @@ function groupPedidos(rows = []) {
         producto_nombre: row.detalle_producto_nombre,
         cantidad: Number(row.detalle_cantidad || 0),
         unidad_medida: row.detalle_unidad_medida || "unidad",
-        stock_actual: row.detalle_stock_actual ?? null
+        stock_actual: row.detalle_stock_actual ?? null,
+        requiere_licitacion: Boolean(row.detalle_requiere_licitacion),
+        stock_disponible_relevado: row.detalle_stock_disponible_relevado !== null && row.detalle_stock_disponible_relevado !== undefined
+          ? Number(row.detalle_stock_disponible_relevado)
+          : null
       });
     }
   }
@@ -241,6 +285,20 @@ async function ensurePedidosSchema() {
 
     try {
       await run(`
+        ALTER TABLE pedido
+        ADD COLUMN IF NOT EXISTS requiere_licitacion BOOLEAN NOT NULL DEFAULT FALSE
+      `);
+    } catch (_) { /* ya existe o no se puede */ }
+
+    try {
+      await run(`
+        ALTER TABLE pedido
+        ADD COLUMN IF NOT EXISTS estado_abastecimiento VARCHAR(40) NOT NULL DEFAULT 'stock_disponible'
+      `);
+    } catch (_) { /* ya existe o no se puede */ }
+
+    try {
+      await run(`
         ALTER TABLE institucion
         ADD COLUMN IF NOT EXISTS tipo_escuela VARCHAR(40)
       `);
@@ -335,6 +393,20 @@ async function ensurePedidosSchema() {
         UNIQUE (kit_id, id_producto)
       )
     `);
+
+    try {
+      await run(`
+        ALTER TABLE detalle_pedido
+        ADD COLUMN IF NOT EXISTS requiere_licitacion BOOLEAN NOT NULL DEFAULT FALSE
+      `);
+    } catch (_) { /* ya existe o no se puede */ }
+
+    try {
+      await run(`
+        ALTER TABLE detalle_pedido
+        ADD COLUMN IF NOT EXISTS stock_disponible_relevado NUMERIC(12,2)
+      `);
+    } catch (_) { /* ya existe o no se puede */ }
 
     pedidosSchemaReady = true;
   })();
@@ -836,6 +908,8 @@ router.get("/", authorizePermissions(PERMISSIONS.PEDIDOS_VIEW), async (req, res)
         COALESCE(p.tipo, 'anual') as tipo,
         p.fecha_creacion as created_at,
         p.id_institucion,
+        COALESCE(p.requiere_licitacion, FALSE) as requiere_licitacion,
+        COALESCE(p.estado_abastecimiento, 'stock_disponible') as estado_abastecimiento,
         p.aprobado_por_supervisor_id,
         p.fecha_aprobacion_supervisor,
         p.kit_id,
@@ -845,6 +919,8 @@ router.get("/", authorizePermissions(PERMISSIONS.PEDIDOS_VIEW), async (req, res)
         pr.nombre as detalle_producto_nombre,
         pr.unidad_medida as detalle_unidad_medida,
         pr.stock_actual as detalle_stock_actual,
+        COALESCE(dp.requiere_licitacion, FALSE) as detalle_requiere_licitacion,
+        dp.stock_disponible_relevado as detalle_stock_disponible_relevado,
         dp.cantidad_solicitada as detalle_cantidad,
         p.aprobado_por_director_id,
         p.fecha_aprobacion_director,
@@ -1165,6 +1241,12 @@ router.post("/", authorizePermissions(PERMISSIONS.PEDIDOS_CREATE), async (req, r
 
     let kit = null;
     let detalleItems = [];
+    let routingData = {
+      detalleEvaluado: [],
+      requiereLicitacion: false,
+      estadoAbastecimiento: 'stock_disponible',
+      itemsSinStock: []
+    };
 
     if (hasItemsArray) {
       const parsedItems = items
@@ -1226,9 +1308,24 @@ router.post("/", authorizePermissions(PERMISSIONS.PEDIDOS_CREATE), async (req, r
       detalleItems = [{ producto_id: Number(producto_id), cantidad: cantidadSolicitada }];
     }
 
+    if (tipoValido === 'refuerzo') {
+      routingData = await evaluateRefuerzoRouting(detalleItems);
+      detalleItems = routingData.detalleEvaluado;
+    }
+
     const pedidoResult = await run(
-      `INSERT INTO pedido (id_usuario_solicitante, id_institucion, observaciones_generales, tipo, kit_id, kit_nombre, kit_cantidad)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO pedido (
+         id_usuario_solicitante,
+         id_institucion,
+         observaciones_generales,
+         tipo,
+         kit_id,
+         kit_nombre,
+         kit_cantidad,
+         requiere_licitacion,
+         estado_abastecimiento
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         req.user.sub,
         usuario.id_institucion,
@@ -1236,7 +1333,9 @@ router.post("/", authorizePermissions(PERMISSIONS.PEDIDOS_CREATE), async (req, r
         tipoValido,
         kit?.id || null,
         kit?.nombre || null,
-        kit ? cantidadSolicitada : null
+        kit ? cantidadSolicitada : null,
+        routingData.requiereLicitacion,
+        routingData.estadoAbastecimiento
       ]
     );
 
@@ -1247,12 +1346,35 @@ router.post("/", authorizePermissions(PERMISSIONS.PEDIDOS_CREATE), async (req, r
         return res.status(400).json({ error: "Cada ítem del pedido debe tener una cantidad entera mayor a cero" });
       }
       await run(
-        `INSERT INTO detalle_pedido (id_pedido, id_producto, cantidad_solicitada, observacion) VALUES (?, ?, ?, ?)`,
-        [pedidoResult.lastID, item.producto_id, cantidadEntera, null]
+        `INSERT INTO detalle_pedido (
+           id_pedido,
+           id_producto,
+           cantidad_solicitada,
+           observacion,
+           requiere_licitacion,
+           stock_disponible_relevado
+         ) VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          pedidoResult.lastID,
+          item.producto_id,
+          cantidadEntera,
+          null,
+          Boolean(item.requiere_licitacion),
+          item.stock_disponible_relevado ?? null
+        ]
       );
     }
 
-    return res.status(201).json({ id: pedidoResult.lastID, estado: "pendiente" });
+    return res.status(201).json({
+      id: pedidoResult.lastID,
+      estado: "pendiente",
+      requiere_licitacion: routingData.requiereLicitacion,
+      estado_abastecimiento: routingData.estadoAbastecimiento,
+      items_sin_stock: routingData.itemsSinStock.map((item) => ({
+        producto_id: item.producto_id,
+        stock_disponible_relevado: item.stock_disponible_relevado
+      }))
+    });
   } catch (err) {
     console.error("Error al crear pedido:", err && err.stack ? err.stack : err, "user:", req.user && req.user.sub, "body:", req.body);
     return res.status(500).json({ error: "No se pudo crear pedido" });
@@ -1308,6 +1430,41 @@ router.patch("/:id/estado", authorizePermissions(PERMISSIONS.PEDIDOS_MANAGE), as
       const motivoSupervisor = String(motivo || "").trim() || null;
       const esPedidoAnual = (pedido.tipo || "anual") === "anual";
 
+      if (!esPedidoAnual && estadoObjetivoDb === "aprobado") {
+        const detalleRefuerzo = await all(
+          `SELECT id_producto, cantidad_solicitada AS cantidad
+           FROM detalle_pedido
+           WHERE id_pedido = ?`,
+          [id]
+        );
+
+        const routingRefuerzo = await evaluateRefuerzoRouting(
+          detalleRefuerzo.map((item) => ({
+            producto_id: Number(item.id_producto),
+            cantidad: Number(item.cantidad || 0)
+          }))
+        );
+
+        for (const item of routingRefuerzo.detalleEvaluado) {
+          await run(
+            `UPDATE detalle_pedido
+             SET requiere_licitacion = ?,
+                 stock_disponible_relevado = ?
+             WHERE id_pedido = ?
+               AND id_producto = ?`,
+            [item.requiere_licitacion, item.stock_disponible_relevado, id, item.producto_id]
+          );
+        }
+
+        await run(
+          `UPDATE pedido
+           SET requiere_licitacion = ?,
+               estado_abastecimiento = ?
+           WHERE id_pedido = ?`,
+          [routingRefuerzo.requiereLicitacion, routingRefuerzo.estadoAbastecimiento, id]
+        );
+      }
+
       if (solicitaAclaracion) {
         if (!motivoSupervisor) {
           return res.status(400).json({ error: "Debés ingresar una aclaración para enviar la réplica." });
@@ -1346,7 +1503,20 @@ router.patch("/:id/estado", authorizePermissions(PERMISSIONS.PEDIDOS_MANAGE), as
         ]
       );
 
-      return res.json({ ok: true, estado: nuevoEstado });
+      const pedidoActualizado = await get(
+        `SELECT COALESCE(requiere_licitacion, FALSE) AS requiere_licitacion,
+                COALESCE(estado_abastecimiento, 'stock_disponible') AS estado_abastecimiento
+         FROM pedido
+         WHERE id_pedido = ?`,
+        [id]
+      );
+
+      return res.json({
+        ok: true,
+        estado: nuevoEstado,
+        requiere_licitacion: Boolean(pedidoActualizado?.requiere_licitacion),
+        estado_abastecimiento: pedidoActualizado?.estado_abastecimiento || 'stock_disponible'
+      });
     }
 
     if (pedido.estado_db === estadoObjetivoDb) {
