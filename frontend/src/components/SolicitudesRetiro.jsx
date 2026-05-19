@@ -37,7 +37,7 @@ function Comprobante({ solicitud }, ref) {
         </div>
       </div>
       <div style={{ paddingBottom: 10, marginBottom: 14 }}>
-        <strong>Pedido anual #{solicitud.id_pedido}</strong>
+        <strong>Pedido {solicitud.tipo_pedido === 'refuerzo' ? 'refuerzo' : 'anual'} #{solicitud.id_pedido}</strong>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
@@ -292,7 +292,7 @@ export default function SolicitudesRetiro({ embedded = false }) {
           <div><strong style="font-size:1.1rem">San Juan Gobierno</strong><br><span style="color:#666">Ministerio de Educaci\u00f3n</span></div>
           <div style="text-align:right"><strong style="font-size:1.1rem">Comprobante de entrega</strong><br><span style="color:#666">Solicitud #${solicitud.id}</span></div>
         </div>
-        <p><strong>Pedido anual #${solicitud.id_pedido}</strong></p>
+        <p><strong>Pedido ${solicitud.tipo_pedido === 'refuerzo' ? 'refuerzo' : 'anual'} #${solicitud.id_pedido}</strong></p>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
           <div><strong>Institución:</strong> ${solicitud.institucion_nombre}</div>
           <div><strong>CUE:</strong> ${solicitud.cue || '-'}</div>
@@ -364,7 +364,7 @@ export default function SolicitudesRetiro({ embedded = false }) {
         <>
           <form onSubmit={handleCreate} className="grid" style={{ marginTop: 16 }}>
             <div style={{ gridColumn: '1 / -1' }}>
-              <label>Pedido anual aprobado</label>
+              <label>Pedido aprobado</label>
               <select
                 value={selectedPedidoId}
                 onChange={(event) => {
@@ -531,7 +531,7 @@ export default function SolicitudesRetiro({ embedded = false }) {
       )}
 
       {/* Historial de solicitudes entregadas */}
-      {(() => {
+      {!isDirectivo && (() => {
         const historial = isDirectivo
           ? solicitudes.filter(s => s.estado === 'entregado')
           : historialEntregadas

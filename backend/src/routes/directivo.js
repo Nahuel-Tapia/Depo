@@ -147,27 +147,36 @@ router.get("/alertas", async (req, res) => {
       [usuario.id_institucion]
     );
 
-    // Obtener movimientos recientes
-    const fecha15DiasAtras = new Date();
-    fecha15DiasAtras.setDate(fecha15DiasAtras.getDate() - 15);
-
     const movimientosPendientes = await all(
       `SELECT
-        m.id_movimiento AS id,
-        m.tipo,
-        m.cantidad,
-        p.nombre as producto_nombre,
-        p.unidad_medida,
-        m.fecha_movimiento AS fecha,
-        m.motivo AS notas
-      FROM movimiento_stock m
-      JOIN producto p ON m.id_producto = p.id_producto
-      WHERE m.id_institucion = $1
-        AND m.tipo = 'egreso'
-        AND m.fecha_movimiento >= $2
-      ORDER BY m.fecha_movimiento DESC
-      LIMIT 10`,
-      [usuario.id_institucion, fecha15DiasAtras.toISOString()]
+        CONCAT(p.id_pedido, '-', dp.id_producto) AS id,
+        p.id_pedido,
+        COALESCE(p.tipo, 'anual') AS tipo_pedido,
+        dp.id_producto,
+        pr.nombre AS producto_nombre,
+        pr.unidad_medida,
+        p.fecha_creacion AS fecha,
+        dp.cantidad_solicitada,
+        COALESCE(pe.total_entregado, 0) AS cantidad_entregada,
+        GREATEST(dp.cantidad_solicitada - COALESCE(pe.total_entregado, 0), 0) AS cantidad
+      FROM pedido p
+      JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido
+      JOIN producto pr ON pr.id_producto = dp.id_producto
+      LEFT JOIN (
+        SELECT id_pedido, id_producto, SUM(cantidad_entregada) AS total_entregado
+        FROM pedido_entrega
+        GROUP BY id_pedido, id_producto
+      ) pe ON pe.id_pedido = p.id_pedido AND pe.id_producto = dp.id_producto
+      WHERE p.id_institucion = $1
+        AND p.estado = 'aprobado'
+        AND (
+          (COALESCE(p.tipo, 'anual') = 'anual' AND p.aprobado_director_area = TRUE)
+          OR COALESCE(p.tipo, 'anual') = 'refuerzo'
+        )
+        AND GREATEST(dp.cantidad_solicitada - COALESCE(pe.total_entregado, 0), 0) > 0
+      ORDER BY p.fecha_creacion DESC, pr.nombre ASC
+      LIMIT 20`,
+      [usuario.id_institucion]
     );
 
     const ultimasTransacciones = await all(
@@ -197,7 +206,7 @@ router.get("/alertas", async (req, res) => {
           items: pedidosAprobados,
         },
         movimientosPendientes: {
-          cantidad: movimientosPendientes.length,
+          cantidad: new Set(movimientosPendientes.map((item) => Number(item.id_pedido))).size,
           items: movimientosPendientes,
         },
       },
@@ -223,40 +232,46 @@ router.get("/mi-stock", async (req, res) => {
     if (!kitId) return res.json({ ok: true, kit: null, items: [] });
 
     const rows = await all(
-      `SELECT d.id_producto AS producto_id, p.nombre AS producto_nombre, p.unidad_medida, d.cantidad AS cantidad_por_kit,
-              COALESCE(ms.total_egresos, 0) - COALESCE(ref.total_entregado, 0) AS retirado_anual,
-              COALESCE(ref.total_entregado, 0) AS retirado_refuerzo,
+      `WITH movimientos_clasificados AS (
+         SELECT
+           m.id_producto,
+           m.cantidad,
+           COALESCE(pd.tipo, pd_motivo.tipo, 'anual') AS tipo_pedido
+         FROM movimiento_stock m
+         LEFT JOIN pedido_entrega pe ON pe.id_movimiento = m.id_movimiento
+         LEFT JOIN pedido pd ON pd.id_pedido = pe.id_pedido
+         LEFT JOIN pedido pd_motivo ON pd_motivo.id_pedido = NULLIF(SUBSTRING(m.motivo FROM 'pedido[^#]*#([0-9]+)'), '')::int
+         WHERE m.id_institucion = $1
+           AND m.tipo = 'egreso'
+       )
+       SELECT d.id_producto AS producto_id, p.nombre AS producto_nombre, p.unidad_medida, d.cantidad AS cantidad_por_kit,
+              COALESCE(ms.retirado_anual, 0) AS retirado_anual,
+              COALESCE(ms.retirado_refuerzo, 0) AS retirado_refuerzo,
               COALESCE(ref_solicitado.total_solicitado, 0) AS pedido_refuerzo,
               COALESCE(ms.total_egresos, 0) AS total_egresos
        FROM producto_kit_detalle d
        LEFT JOIN producto p ON p.id_producto = d.id_producto
        LEFT JOIN (
-         SELECT m.id_producto, SUM(m.cantidad) AS total_egresos
-         FROM movimiento_stock m
-         WHERE m.id_institucion = $1 AND m.tipo = 'egreso'
-         GROUP BY m.id_producto
+         SELECT
+           id_producto,
+           SUM(cantidad) AS total_egresos,
+           SUM(cantidad) FILTER (WHERE COALESCE(tipo_pedido, 'anual') = 'anual') AS retirado_anual,
+           SUM(cantidad) FILTER (WHERE COALESCE(tipo_pedido, 'anual') = 'refuerzo') AS retirado_refuerzo
+         FROM movimientos_clasificados
+         GROUP BY id_producto
        ) ms ON ms.id_producto = d.id_producto
-       LEFT JOIN (
-         SELECT pe.id_producto, SUM(pe.cantidad_entregada) AS total_entregado
-         FROM pedido_entrega pe
-         JOIN pedido pd ON pd.id_pedido = pe.id_pedido
-         WHERE pd.id_institucion = $2
-           AND pd.estado = 'aprobado'
-           AND COALESCE(pd.tipo, 'anual') = 'refuerzo'
-         GROUP BY pe.id_producto
-       ) ref ON ref.id_producto = d.id_producto
        LEFT JOIN (
          SELECT dp.id_producto, SUM(dp.cantidad_solicitada) AS total_solicitado
          FROM detalle_pedido dp
          JOIN pedido pd ON pd.id_pedido = dp.id_pedido
-         WHERE pd.id_institucion = $3
-           AND pd.estado = 'aprobado'
+         WHERE pd.id_institucion = $2
+           AND pd.estado::text IN ('aprobado', 'entregado', 'finalizado')
            AND COALESCE(pd.tipo, 'anual') = 'refuerzo'
          GROUP BY dp.id_producto
        ) ref_solicitado ON ref_solicitado.id_producto = d.id_producto
-       WHERE d.kit_id = $4
+       WHERE d.kit_id = $3
        ORDER BY p.nombre ASC`,
-      [usuario.id_institucion, usuario.id_institucion, usuario.id_institucion, kitId]
+      [usuario.id_institucion, usuario.id_institucion, kitId]
     );
 
     const items = rows.map((r) => {
@@ -288,6 +303,81 @@ router.get("/mi-stock", async (req, res) => {
   } catch (err) {
     console.error("Error en GET /api/directivo/mi-stock:", err);
     return res.status(500).json({ error: "Error al obtener Mi stock" });
+  }
+});
+
+// GET /api/directivo/historial-retiros - Historial consolidado de entregas de la institucion
+router.get("/historial-retiros", async (req, res) => {
+  try {
+    const userId = req.user?.sub;
+    if (!userId) return res.status(401).json({ error: "Usuario no autenticado" });
+
+    const context = await getDirectivoContext(userId);
+    if (context.error) {
+      return res.status(context.error.status).json({ error: context.error.msg });
+    }
+
+    const rows = await all(
+      `WITH movimientos_clasificados AS (
+         SELECT
+           m.id_movimiento,
+           m.id_producto,
+           p.nombre AS producto_nombre,
+           p.unidad_medida,
+           m.cantidad,
+           m.fecha_movimiento,
+           m.cargo_retira,
+           m.motivo,
+           pe.id_solicitud_retiro,
+           COALESCE(pe.id_pedido, pd_motivo.id_pedido) AS id_pedido,
+           COALESCE(pd.tipo, pd_motivo.tipo, 'anual') AS tipo_pedido
+         FROM movimiento_stock m
+         JOIN producto p ON p.id_producto = m.id_producto
+         LEFT JOIN pedido_entrega pe ON pe.id_movimiento = m.id_movimiento
+         LEFT JOIN pedido pd ON pd.id_pedido = pe.id_pedido
+         LEFT JOIN pedido pd_motivo ON pd_motivo.id_pedido = NULLIF(SUBSTRING(m.motivo FROM 'pedido[^#]*#([0-9]+)'), '')::int
+         WHERE m.id_institucion = $1
+           AND m.tipo = 'egreso'
+       )
+       SELECT
+         COALESCE(id_solicitud_retiro::text, 'mov-' || COALESCE(id_pedido::text, TO_CHAR(fecha_movimiento, 'YYYYMMDDHH24MISS'))) AS id,
+         id_solicitud_retiro,
+         id_pedido,
+         tipo_pedido,
+         MIN(fecha_movimiento) AS fecha_retiro,
+         MAX(fecha_movimiento) AS fecha_entrega,
+         COALESCE(NULLIF(MAX(cargo_retira), ''), 'Directivo') AS retira,
+         JSON_AGG(
+           JSON_BUILD_OBJECT(
+             'producto_id', id_producto,
+             'producto_nombre', producto_nombre,
+             'unidad_medida', unidad_medida,
+             'cantidad_entregada', cantidad
+           )
+           ORDER BY producto_nombre
+         ) AS items
+       FROM movimientos_clasificados
+       GROUP BY id_solicitud_retiro, id_pedido, tipo_pedido, COALESCE(id_solicitud_retiro::text, 'mov-' || COALESCE(id_pedido::text, TO_CHAR(fecha_movimiento, 'YYYYMMDDHH24MISS')))
+       ORDER BY MAX(fecha_movimiento) DESC
+       LIMIT 80`,
+      [context.usuario.id_institucion]
+    );
+
+    return res.json({
+      historial: rows.map((row) => ({
+        id: row.id,
+        id_solicitud_retiro: row.id_solicitud_retiro ? Number(row.id_solicitud_retiro) : null,
+        id_pedido: row.id_pedido ? Number(row.id_pedido) : null,
+        tipo_pedido: row.tipo_pedido || "anual",
+        fecha_retiro: row.fecha_retiro,
+        fecha_entrega: row.fecha_entrega,
+        retira: row.retira || "Directivo",
+        items: Array.isArray(row.items) ? row.items : [],
+      })),
+    });
+  } catch (err) {
+    console.error("Error en GET /api/directivo/historial-retiros:", err);
+    return res.status(500).json({ error: "Error al obtener historial de retiros" });
   }
 });
 

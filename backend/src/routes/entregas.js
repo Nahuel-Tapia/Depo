@@ -414,6 +414,7 @@ async function getSolicitudRetiro(id, client = null) {
       sr.fecha_entrega,
       sr.observaciones,
       sr.created_at,
+      COALESCE(pd.tipo, 'anual') AS tipo_pedido,
       srd.id_producto,
       pr.nombre AS producto_nombre,
       pr.unidad_medida,
@@ -424,6 +425,7 @@ async function getSolicitudRetiro(id, client = null) {
     FROM solicitud_retiro sr
     JOIN institucion i ON i.id_institucion = sr.id_institucion
     JOIN usuario us ON us.id_usuario = sr.id_usuario_solicitante
+    JOIN pedido pd ON pd.id_pedido = sr.id_pedido
     LEFT JOIN usuario ue ON ue.id_usuario = sr.id_usuario_entrega
     LEFT JOIN usuario ua ON ua.id_usuario = sr.id_usuario_acepta
     JOIN solicitud_retiro_detalle srd ON srd.id_solicitud_retiro = sr.id
@@ -457,6 +459,7 @@ async function getSolicitudRetiro(id, client = null) {
     fecha_entrega: first.fecha_entrega,
     observaciones: first.observaciones,
     created_at: first.created_at,
+    tipo_pedido: first.tipo_pedido || "anual",
     items: rows.map((row) => ({
       producto_id: Number(row.id_producto),
       producto_nombre: row.producto_nombre,
@@ -660,13 +663,15 @@ router.post("/solicitudes", authorizePermissions(PERMISSIONS.PEDIDOS_CREATE), as
     }
 
     const pedido = await get(`
-      SELECT id_pedido, id_institucion
+      SELECT id_pedido, id_institucion, COALESCE(tipo, 'anual') AS tipo
       FROM pedido
       WHERE id_pedido = ?
         AND id_institucion = ?
         AND estado = 'aprobado'
-        AND aprobado_director_area = TRUE
-        AND COALESCE(tipo, 'anual') = 'anual'
+        AND (
+          (COALESCE(tipo, 'anual') = 'anual' AND aprobado_director_area = TRUE)
+          OR COALESCE(tipo, 'anual') = 'refuerzo'
+        )
     `, [pedidoId, usuario.id_institucion]);
 
     if (!pedido) {
@@ -697,11 +702,11 @@ router.post("/solicitudes", authorizePermissions(PERMISSIONS.PEDIDOS_CREATE), as
     for (const item of parsedItems) {
       const disponible = availableByProduct.get(item.producto_id);
       if (!disponible) {
-        return res.status(400).json({ error: `El producto ${item.producto_id} no pertenece al kit pendiente de este pedido` });
+        return res.status(400).json({ error: `El producto ${item.producto_id} no pertenece al saldo pendiente de este pedido` });
       }
       if (item.cantidad > disponible.cantidad_disponible_kit) {
         return res.status(400).json({
-          error: `La cantidad solicitada para ${disponible.producto_nombre} supera el saldo del kit anual`
+          error: `La cantidad solicitada para ${disponible.producto_nombre} supera el saldo pendiente del pedido`
         });
       }
     }
@@ -1466,12 +1471,14 @@ router.post("/solicitudes/:id/entregar", authorizePermissions(PERMISSIONS.MOVIMI
     }
 
     const pedidoRes = await client.query(`
-      SELECT id_pedido, id_institucion
+      SELECT id_pedido, id_institucion, COALESCE(tipo, 'anual') AS tipo
       FROM pedido
       WHERE id_pedido = $1
         AND estado = 'aprobado'
-        AND aprobado_director_area = TRUE
-        AND COALESCE(tipo, 'anual') = 'anual'
+        AND (
+          (COALESCE(tipo, 'anual') = 'anual' AND aprobado_director_area = TRUE)
+          OR COALESCE(tipo, 'anual') = 'refuerzo'
+        )
     `, [solicitud.id_pedido]);
 
     if (!pedidoRes.rowCount) {
@@ -1527,7 +1534,7 @@ router.post("/solicitudes/:id/entregar", authorizePermissions(PERMISSIONS.MOVIMI
       if (entregadoTotal + cantidad > cantidadPedido) {
         await client.query("ROLLBACK");
         return res.status(400).json({
-          error: `La entrega de ${producto.nombre} supera el saldo del kit anual`
+          error: `La entrega de ${producto.nombre} supera el saldo pendiente del pedido`
         });
       }
 
@@ -1558,7 +1565,7 @@ router.post("/solicitudes/:id/entregar", authorizePermissions(PERMISSIONS.MOVIMI
         cargoRetira,
         solicitud.id_institucion,
         req.user.sub,
-        `Entrega de solicitud de retiro #${solicitud.id} - pedido anual #${solicitud.id_pedido}`
+        `Entrega de solicitud de retiro #${solicitud.id} - pedido ${pedidoRes.rows[0].tipo} #${solicitud.id_pedido}`
       ]);
 
       const idMovimiento = movResult.rows[0].id_movimiento;

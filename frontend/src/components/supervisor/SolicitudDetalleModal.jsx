@@ -6,6 +6,7 @@ function formatEstado(estado) {
   if (estado === 'aprobado') return 'Aprobado'
   if (estado === 'rechazado') return 'Rechazado'
   if (estado === 'cancelado') return 'Cancelado'
+  if (estado === 'entregado' || estado === 'finalizado') return 'Entregado'
   return 'Pendiente'
 }
 
