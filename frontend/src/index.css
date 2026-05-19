@@ -39,7 +39,7 @@ body {
 
 .auth-container {
   align-items: center;
-  padding-top: 60px;
+  padding-top: 40px;
   padding-bottom: 24px;
   background: #FF8200;
   min-height: 100vh;
@@ -2805,24 +2805,33 @@ button.dashboard-mini-card:hover {
 /* ===== RESPONSIVE MOBILE ===== */
 @media screen and (max-width: 768px) {
   .container {
-    padding: 12px;
+    padding: 10px;
   }
-  
-  .card {
-    padding: 20px;
-    min-height: calc(100vh - 24px);
-    border-radius: 8px;
+
+  /* Login / Auth */
+  .auth-container {
+    padding-top: 20px;
+    padding-bottom: 20px;
+    align-items: flex-start;
   }
-  
+
   .auth-card {
-    padding: 24px;
+    width: min(440px, 100%);
+    padding: 28px 20px;
+    border-radius: 14px;
+  }
+
+  .card {
+    padding: 16px;
+    min-height: auto;
+    border-radius: 8px;
   }
 
   .topbar {
     flex-direction: column;
-    margin: -20px -20px 24px -20px;
-    padding: 16px 20px;
-    gap: 12px;
+    margin: -16px -16px 20px -16px;
+    padding: 14px 16px;
+    gap: 10px;
     text-align: center;
     border-radius: 8px 8px 0 0;
   }
@@ -2836,7 +2845,7 @@ button.dashboard-mini-card:hover {
     flex-wrap: wrap;
   }
 
-  /* Adapta las tablas para que tengan scroll horizontal interno en lugar de desbordar toda la pantalla */
+  /* Tablas con scroll horizontal */
   table {
     display: block;
     width: 100%;
@@ -2844,16 +2853,16 @@ button.dashboard-mini-card:hover {
     white-space: nowrap;
     -webkit-overflow-scrolling: touch;
   }
-  
-  /* Ajusta contenedores en grilla de Recepción */
+
+  /* Grilla de Recepción */
   .recepcion-detalle-info {
     grid-template-columns: 1fr !important;
   }
-  
-  /* Botones más amigables para tocar en pantallas táctiles */
+
+  /* Botones táctiles */
   button {
-    padding: 12px 16px;
-    font-size: 1rem;
+    padding: 12px 14px;
+    font-size: 0.95rem;
   }
 
   .inline-actions {
@@ -2866,24 +2875,84 @@ button.dashboard-mini-card:hover {
     margin-top: 4px;
     margin-bottom: 4px;
   }
-  
-  /* Forza elementos de grid a apilarse en una columna */
+
   .grid {
     grid-template-columns: 1fr;
   }
-  
-  h1 { font-size: 1.6rem; }
-  h2 { font-size: 1.35rem; }
-  h3 { font-size: 1.15rem; }
 
-  /* Recharts containers - ensure proper height and stacking */
+  h1 { font-size: 1.5rem; }
+  h2 { font-size: 1.25rem; }
+  h3 { font-size: 1.1rem; }
+
   .recharts-wrapper {
     min-height: 250px;
   }
 
-  /* Dashboard section grids with charts should stack on mobile */
   .dashboard-section-card .grid {
     grid-template-columns: 1fr !important;
+  }
+
+  /* Header del dashboard en mobile */
+  .dashboard-header {
+    grid-template-columns: 1fr;
+    padding: 10px 12px;
+    gap: 6px;
+  }
+
+  .dashboard-header-right {
+    justify-content: space-between;
+    flex-wrap: nowrap;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .dashboard-user-meta {
+    flex-direction: row;
+    flex: 1;
+    min-width: 0;
+    padding: 7px 10px;
+  }
+
+  .dashboard-user-copy strong {
+    font-size: 0.82rem;
+  }
+
+  .dashboard-user-copy span {
+    font-size: 0.7rem;
+  }
+
+  .dashboard-logout {
+    padding: 8px 12px;
+    font-size: 0.82rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .dashboard-datetime {
+    display: none;
+  }
+
+  .dashboard-content {
+    padding: 10px;
+  }
+
+  .dashboard-module-card {
+    padding: 14px;
+    border-radius: 16px;
+  }
+
+  .dashboard-page-header {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .dashboard-page-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .dashboard-page-actions button {
+    width: 100%;
   }
 }
 
@@ -2925,11 +2994,57 @@ button.dashboard-mini-card:hover {
 
 @media (max-width: 480px) {
   .chart-container {
-    min-height: 260px;
-    margin-bottom: 16px;
+    min-height: 240px;
+    margin-bottom: 12px;
+    padding: 14px;
   }
 
   .chart-wrapper {
-    min-height: 200px;
+    min-height: 190px;
+  }
+
+  /* Login en pantallas muy chicas */
+  .auth-container {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+
+  .auth-card {
+    padding: 22px 16px;
+    border-radius: 12px;
+  }
+
+  /* Dashboard contenido compacto */
+  .dashboard-content {
+    padding: 8px;
+  }
+
+  .dashboard-module-card {
+    padding: 12px;
+    border-radius: 14px;
+  }
+
+  .dashboard-stats-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .dashboard-stat-card {
+    padding: 12px;
+    border-radius: 12px;
+  }
+
+  .dashboard-stat-value {
+    font-size: 1.4rem;
+  }
+
+  h1 { font-size: 1.3rem; }
+  h2 { font-size: 1.1rem; }
+  h3 { font-size: 1rem; }
+
+  /* Tablas más compactas */
+  table th, table td {
+    padding: 8px 10px;
+    font-size: 0.82rem;
   }
 }
