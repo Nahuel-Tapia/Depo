@@ -82,6 +82,17 @@ async function registrarBaja(req, res) {
   }
 }
 
+async function listarBajas(req, res) {
+  try {
+    const bajas = await movimientoService.listarBajas(req.query);
+    return res.json({ bajas });
+  } catch (err) {
+    console.error("Error listando bajas:", err);
+    const status = err.status || 500;
+    return res.status(status).json({ error: err.message || "No se pudo listar bajas" });
+  }
+}
+
 module.exports = {
   listarMovimientos,
   obtenerMovimiento,
@@ -89,5 +100,6 @@ module.exports = {
   crearLoteMovimientos,
   crearMovimientoDirecto,
   obtenerStatsResumen,
-  registrarBaja
+  registrarBaja,
+  listarBajas
 };

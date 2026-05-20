@@ -22,6 +22,7 @@ import Depositos from '../components/Depositos'
 import LicitacionesCerradas from '../components/LicitacionesCerradas'
 import RecepcionLicitacion from '../components/RecepcionLicitacion'
 import DistribucionEscuelas from '../components/DistribucionEscuelas'
+import Bajas from '../components/Bajas'
 
 const LOGO_URL = '/logo-sidebar.png'
 
@@ -61,6 +62,7 @@ const TABS = [
   { key: 'proveedores', label: 'Proveedores', permission: 'proveedores.view', hideForRoles: ['supervisor', 'director_area'], roleFor: 'admin', icon: TruckIcon },
   { key: 'usuarios', label: 'Usuarios', permission: 'users.read', icon: UserIcon },
   { key: 'kits', label: 'Kits de Productos', permission: 'supervision.manage', roleFor: 'director_area', icon: BoxIcon },
+  { key: 'bajas', label: 'Bajas', permission: 'movimientos.view', roleFor: 'operador', icon: ShieldIcon },
   { key: 'depositos', label: 'Depositos', permission: 'stock.view', roleFor: 'admin', icon: BuildingIcon },
   { key: 'mi-cuenta', label: 'Mi cuenta', permission: null, icon: UserIcon },
   { key: 'mi-stock', label: 'Mi stock', permission: 'pedidos.view', roleFor: 'directivo', icon: BoxIcon },
@@ -131,6 +133,7 @@ export default function Dashboard() {
         'mi-cuenta',
         'productos',
         'movimientos',
+        'bajas',
         'proveedores',
         'depositos',
         'deposito-recepcion',
@@ -170,6 +173,7 @@ export default function Dashboard() {
         'inicio',
         'productos',
         'movimientos',
+        'bajas',
         'instituciones',
         'historial',
         'proveedores',
@@ -275,6 +279,8 @@ export default function Dashboard() {
         return <Usuarios />
       case 'kits':
         return <ProductKitsManager />
+      case 'bajas':
+        return <Bajas />
       case 'depositos':
         return <Depositos />
       case 'mi-cuenta':

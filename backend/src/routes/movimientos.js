@@ -27,6 +27,12 @@ router.use(authenticate);
 // Listar movimientos
 router.get("/", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW), movimientoController.listarMovimientos);
 
+// Estadísticas de movimientos
+router.get("/stats/resumen", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW), movimientoController.obtenerStatsResumen);
+
+// Listar bajas registradas
+router.get("/bajas", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW), movimientoController.listarBajas);
+
 // Obtener un movimiento
 router.get("/:id", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW), movimientoController.obtenerMovimiento);
 
@@ -38,9 +44,6 @@ router.post("/lote", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), movim
 
 // Crear movimiento directo (egreso/ingreso)
 router.post("/directo", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), movimientoController.crearMovimientoDirecto);
-
-// Estadísticas de movimientos
-router.get("/stats/resumen", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW), movimientoController.obtenerStatsResumen);
 
 // Registrar baja por daño (subir foto opcional)
 router.post("/baja", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), upload.single('foto'), movimientoController.registrarBaja);

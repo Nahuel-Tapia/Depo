@@ -325,6 +325,28 @@ async function registrarSalidaDistribucion(req, res) {
   }
 }
 
+async function diagnosticoStock(req, res) {
+  try {
+    const result = await depositoService.diagnosticoStock();
+    return res.json(result);
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    console.error("Error en diagnóstico de stock:", err);
+    return res.status(500).json({ error: "Error al ejecutar diagnóstico de stock" });
+  }
+}
+
+async function reconciliarStock(req, res) {
+  try {
+    const result = await depositoService.reconciliarStock(req.user.sub);
+    return res.json(result);
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    console.error("Error en reconciliación de stock:", err);
+    return res.status(500).json({ error: "Error al reconciliar stock" });
+  }
+}
+
 module.exports = {
   listDepositos,
   getProductosByDeposito,
@@ -347,5 +369,7 @@ module.exports = {
   registrarEgresoMultipleZona,
   getPendientesDistribucion,
   getDetalleDistribucionEscuela,
-  registrarSalidaDistribucion
+  registrarSalidaDistribucion,
+  diagnosticoStock,
+  reconciliarStock
 };

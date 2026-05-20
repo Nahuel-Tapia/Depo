@@ -342,11 +342,15 @@ async function registrarBaja(user, body, file) {
     const chk = await client.query("SELECT to_regclass('public.baja_movimientos') as exists");
     console.log('baja_movimientos exists check:', chk.rows[0]);
 
-    const { producto_id, cantidad = 1, motivo } = body;
+    const { producto_id, cantidad = 1, motivo, id_deposito } = body;
     const cantidadNum = parseInt(cantidad, 10) || 1;
+    const depositoId = parseInt(id_deposito, 10);
 
     if (!producto_id) {
       throw { status: 400, message: 'Falta producto_id' };
+    }
+    if (isNaN(depositoId)) {
+      throw { status: 400, message: 'Falta id_deposito o es inválido' };
     }
 
     const prodRes = await client.query(
@@ -358,8 +362,14 @@ async function registrarBaja(user, body, file) {
     }
     const producto = prodRes.rows[0];
 
-    if (Number(producto.stock_actual) < cantidadNum) {
-      throw { status: 400, message: 'Stock insuficiente para dar de baja' };
+    const stockDepRes = await client.query(
+      'SELECT cantidad FROM stock_deposito WHERE id_deposito = $1 AND id_producto = $2',
+      [depositoId, producto_id]
+    );
+    const stockDisponible = stockDepRes.rows[0]?.cantidad || 0;
+
+    if (stockDisponible < cantidadNum) {
+      throw { status: 400, message: `Stock insuficiente en el depósito. Disponible: ${stockDisponible}, solicitado: ${cantidadNum}` };
     }
 
     await client.query('BEGIN');
@@ -367,14 +377,19 @@ async function registrarBaja(user, body, file) {
     const fotoPath = file ? `/uploads/${file.filename}` : null;
 
     const bajaRes = await client.query(
-      'INSERT INTO baja_movimientos (id_producto, cantidad, motivo, foto_path, id_usuario) VALUES ($1, $2, $3, $4, $5) RETURNING id',
-      [producto_id, cantidadNum, motivo || null, fotoPath, user.sub]
+      'INSERT INTO baja_movimientos (id_producto, cantidad, motivo, foto_path, id_usuario, id_deposito) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+      [producto_id, cantidadNum, motivo || null, fotoPath, user.sub, depositoId]
     );
 
     const movRes = await client.query(
-      `INSERT INTO movimiento_stock (id_producto, tipo, cantidad, estado_producto, id_usuario, motivo, fecha_movimiento)
-       VALUES ($1, $2, $3, $4, $5, $6, NOW()) RETURNING id_movimiento`,
-      [producto_id, 'ajuste', cantidadNum, 'dañado', user.sub, motivo ? `Baja: ${motivo}` : 'Baja de mercadería']
+      `INSERT INTO movimiento_stock (id_producto, tipo, cantidad, estado_producto, id_usuario, motivo, id_deposito, fecha_movimiento)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW()) RETURNING id_movimiento`,
+      [producto_id, 'ajuste', cantidadNum, 'dañado', user.sub, motivo ? `Baja: ${motivo}` : 'Baja de mercadería', depositoId]
+    );
+
+    await client.query(
+      'UPDATE stock_deposito SET cantidad = cantidad - $1 WHERE id_deposito = $2 AND id_producto = $3',
+      [cantidadNum, depositoId, producto_id]
     );
 
     await client.query(
@@ -393,6 +408,58 @@ async function registrarBaja(user, body, file) {
   }
 }
 
+async function listarBajas(queryParams) {
+  const { id_deposito, producto_id, desde, hasta, limit = 50, offset = 0 } = queryParams;
+
+  let query = `
+    SELECT 
+      b.id,
+      b.id_producto,
+      p.nombre as producto_nombre,
+      p.unidad_medida,
+      b.cantidad,
+      b.motivo,
+      b.foto_path,
+      b.id_usuario,
+      u.nombre as usuario_nombre,
+      b.id_deposito,
+      d.nombre as deposito_nombre,
+      b."createdAt" as created_at
+    FROM baja_movimientos b
+    LEFT JOIN producto p ON b.id_producto = p.id_producto
+    LEFT JOIN usuario u ON b.id_usuario = u.id_usuario
+    LEFT JOIN deposito d ON b.id_deposito = d.id_deposito
+    WHERE 1 = 1
+  `;
+  const params = [];
+  let paramIndex = 1;
+
+  if (id_deposito) {
+    query += ` AND b.id_deposito = $${paramIndex++}`;
+    params.push(parseInt(id_deposito, 10));
+  }
+
+  if (producto_id) {
+    query += ` AND b.id_producto = $${paramIndex++}`;
+    params.push(parseInt(producto_id, 10));
+  }
+
+  if (desde) {
+    query += ` AND b."createdAt" >= $${paramIndex++}`;
+    params.push(desde);
+  }
+
+  if (hasta) {
+    query += ` AND b."createdAt" <= $${paramIndex++}`;
+    params.push(hasta);
+  }
+
+  query += ` ORDER BY b."createdAt" DESC LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
+  params.push(parseInt(limit), parseInt(offset));
+
+  return await all(query, params);
+}
+
 module.exports = {
   listarMovimientos,
   obtenerMovimiento,
@@ -400,5 +467,6 @@ module.exports = {
   crearLoteMovimientos,
   crearMovimientoDirecto,
   obtenerStatsResumen,
-  registrarBaja
+  registrarBaja,
+  listarBajas
 };

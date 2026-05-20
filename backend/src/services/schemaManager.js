@@ -676,9 +676,14 @@ async function initDatabaseSchema() {
           motivo TEXT,
           foto_path VARCHAR(255),
           id_usuario INTEGER NOT NULL,
+          id_deposito INTEGER,
           "createdAt" TIMESTAMP DEFAULT NOW(),
           "updatedAt" TIMESTAMP DEFAULT NOW()
         );
+      `);
+      await client.query(`
+        ALTER TABLE public.baja_movimientos 
+        ADD COLUMN IF NOT EXISTS id_deposito INTEGER;
       `);
     } catch (err) {
       console.warn("[schemaManager] Warning creating table baja_movimientos:", err.message);

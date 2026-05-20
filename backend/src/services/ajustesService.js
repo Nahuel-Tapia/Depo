@@ -1,4 +1,4 @@
-const { all, get, run } = require("../db.pg");
+const { all, get, run, pool } = require("../db.pg");
 
 async function listAjustes({ producto_id, limit = 50, offset = 0 }) {
   let query = `
@@ -74,8 +74,19 @@ async function createAjuste(userId, { producto_id, cantidad_nueva, motivo }) {
   // Actualizar stock del producto
   await run("UPDATE producto SET stock_actual = ?, updated_at = CURRENT_TIMESTAMP WHERE id_producto = ?", [cantidadNuevaNum, producto_id]);
 
-  // Auditoría
+  // Sincronizar stock_deposito (depósito central id=1)
   const diferencia = cantidadNuevaNum - cantidad_anterior;
+  if (diferencia !== 0) {
+    await pool.query(
+      `INSERT INTO stock_deposito (id_deposito, id_producto, cantidad)
+       VALUES (1, $1, GREATEST(0, $2))
+       ON CONFLICT (id_deposito, id_producto)
+       DO UPDATE SET cantidad = GREATEST(0, stock_deposito.cantidad + $2)`,
+      [producto_id, diferencia]
+    );
+  }
+
+  // Auditoría
   await run(
     "INSERT INTO auditoria (usuario_id, entidad, accion, id_registro, cambios) VALUES (?, ?, ?, ?, ?)",
     [

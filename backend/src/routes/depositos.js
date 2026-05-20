@@ -27,6 +27,10 @@ router.post("/licitacion/danio/imagen", authorizePermissions(PERMISSIONS.STOCK_M
 router.get("/licitacion/recepciones/:id/remitos", authorizePermissions(PERMISSIONS.STOCK_VIEW), depositoController.getRemitosByLicitacion);
 router.get("/licitacion/remito-general/:id", authorizePermissions(PERMISSIONS.STOCK_VIEW), depositoController.getRemitoGeneralLicitacion);
 
+// Diagnóstico y Reconciliación de Stock
+router.get("/diagnostico-stock", authorizePermissions(PERMISSIONS.STOCK_VIEW), depositoController.diagnosticoStock);
+router.post("/reconciliar-stock", authorizePermissions(PERMISSIONS.STOCK_MOVEMENT_CREATE), depositoController.reconciliarStock);
+
 // Stock & Traslados
 router.get("/stock-por-producto", authorizePermissions(PERMISSIONS.STOCK_VIEW), depositoController.getStockPorProducto);
 router.post("/mover", authorizePermissions(PERMISSIONS.STOCK_MOVEMENT_CREATE), depositoController.moverStock);

@@ -1174,6 +1174,106 @@ async function getVencimientosProximos(dias = 60) {
   `, [dias]);
 }
 
+async function diagnosticoStock() {
+  const rows = await all(`
+    SELECT 
+      p.id_producto AS id,
+      p.nombre,
+      p.unidad_medida,
+      COALESCE(p.stock_actual, 0) AS stock_global,
+      COALESCE(sd_sum.total_depositos, 0) AS stock_depositos,
+      COALESCE(p.stock_actual, 0) - COALESCE(sd_sum.total_depositos, 0) AS diferencia
+    FROM producto p
+    LEFT JOIN (
+      SELECT id_producto, SUM(cantidad) AS total_depositos
+      FROM stock_deposito
+      GROUP BY id_producto
+    ) sd_sum ON sd_sum.id_producto = p.id_producto
+    ORDER BY ABS(COALESCE(p.stock_actual, 0) - COALESCE(sd_sum.total_depositos, 0)) DESC, p.nombre
+  `);
+
+  const inconsistentes = rows.filter(r => Number(r.diferencia) !== 0);
+  const consistentes = rows.filter(r => Number(r.diferencia) === 0);
+
+  return {
+    total_productos: rows.length,
+    productos_consistentes: consistentes.length,
+    productos_inconsistentes: inconsistentes.length,
+    inconsistencias: inconsistentes,
+    resumen: inconsistentes.length === 0
+      ? 'Stock consistente: producto.stock_actual coincide con la suma de stock_deposito para todos los productos.'
+      : `Se encontraron ${inconsistentes.length} producto(s) con diferencias entre stock global y stock por depósito.`
+  };
+}
+
+async function reconciliarStock(userId) {
+  const inconsistentes = await all(`
+    SELECT 
+      p.id_producto AS id,
+      p.nombre,
+      COALESCE(p.stock_actual, 0) AS stock_anterior,
+      COALESCE(sd_sum.total_depositos, 0) AS stock_correcto
+    FROM producto p
+    LEFT JOIN (
+      SELECT id_producto, SUM(cantidad) AS total_depositos
+      FROM stock_deposito
+      GROUP BY id_producto
+    ) sd_sum ON sd_sum.id_producto = p.id_producto
+    WHERE COALESCE(p.stock_actual, 0) <> COALESCE(sd_sum.total_depositos, 0)
+  `);
+
+  if (inconsistentes.length === 0) {
+    return { ok: true, corregidos: 0, message: 'No hay inconsistencias. Stock ya está sincronizado.' };
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    for (const item of inconsistentes) {
+      await client.query(
+        'UPDATE producto SET stock_actual = $1, updated_at = CURRENT_TIMESTAMP WHERE id_producto = $2',
+        [item.stock_correcto, item.id]
+      );
+
+      await client.query(
+        `INSERT INTO auditoria (usuario_id, entidad, accion, id_registro, cambios)
+         VALUES ($1, 'producto', 'RECONCILIACION_STOCK', $2, $3)`,
+        [
+          userId,
+          item.id,
+          JSON.stringify({
+            producto: item.nombre,
+            stock_anterior: Number(item.stock_anterior),
+            stock_correcto: Number(item.stock_correcto),
+            diferencia: Number(item.stock_anterior) - Number(item.stock_correcto),
+            motivo: 'Reconciliación automática: stock_actual ajustado a la suma de stock_deposito'
+          })
+        ]
+      );
+    }
+
+    await client.query('COMMIT');
+
+    return {
+      ok: true,
+      corregidos: inconsistentes.length,
+      detalles: inconsistentes.map(i => ({
+        id: i.id,
+        nombre: i.nombre,
+        stock_anterior: Number(i.stock_anterior),
+        stock_correcto: Number(i.stock_correcto)
+      })),
+      message: `Se corrigieron ${inconsistentes.length} producto(s).`
+    };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 module.exports = {
   listDepositos,
   getProductosByDeposito,
@@ -1196,5 +1296,7 @@ module.exports = {
   getDistribucionZonasPendientes,
   getDistribucionZonaDetalle,
   registrarEgresoMultipleZona,
-  getVencimientosProximos
+  getVencimientosProximos,
+  diagnosticoStock,
+  reconciliarStock
 };
