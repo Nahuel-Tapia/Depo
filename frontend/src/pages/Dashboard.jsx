@@ -44,6 +44,7 @@ const TABS = [
   { key: 'resumen', label: 'Resumen Solicitud Anual', permission: 'supervision.manage', roleFor: 'director_area', icon: ListIcon },
   { key: 'compras-licitacion', label: 'Licitacion Anual', permission: 'planilla.view', roleFor: 'area_compras', icon: DocumentIcon },
   { key: 'compras-listado-final', label: 'Listado Final a Licitar', permission: 'planilla.view', roleFor: 'area_compras', icon: ListIcon },
+  { key: 'compras-refuerzos', label: 'Licitaciones Refuerzos', permission: 'planilla.view', roleFor: 'area_compras', icon: ClipboardIcon },
   { key: 'compras-adjudicacion', label: 'Adjudicacion y Cierre', permission: 'planilla.manage', roleFor: 'area_compras', icon: ShieldIcon },
   { key: 'compras-entregas', label: 'Gestion de Entregas', permission: 'planilla.view', roleFor: 'area_compras', icon: TruckIcon },
   { key: 'deposito-recepcion', label: 'Recepcion Licitacion', permission: 'stock.movement.create', roleFor: 'operador', icon: DocumentIcon },
@@ -157,6 +158,7 @@ export default function Dashboard() {
         'productos',
         'compras-licitacion',
         'compras-listado-final',
+        'compras-refuerzos',
         'compras-adjudicacion',
         'compras-entregas',
         'proveedores',
@@ -234,11 +236,13 @@ export default function Dashboard() {
       case 'resumen':
         return <DirectorAreaPanel initialSection="resumen-anual" standalone={true} />
       case 'compras-licitacion':
-        return <ComprasPanel section="licitacion" />
+        return <ComprasPanel section="licitacion" onNavigate={setActiveTab} />
       case 'compras-listado-final':
-        return <ComprasPanel section="listado-final" />
+        return <ComprasPanel section="listado-final" onNavigate={setActiveTab} />
+      case 'compras-refuerzos':
+        return <ComprasPanel section="refuerzos" onNavigate={setActiveTab} />
       case 'compras-adjudicacion':
-        return <ComprasPanel section="adjudicacion" />
+        return <ComprasPanel section="adjudicacion" onNavigate={setActiveTab} />
       case 'compras-entregas':
         return <LicitacionesCerradas />
       case 'deposito-recepcion':

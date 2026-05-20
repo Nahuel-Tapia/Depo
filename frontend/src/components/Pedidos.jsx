@@ -715,7 +715,12 @@ function DirectivoPedidos() {
     }
     setForm({ kit_id: '', cantidad: '1', notas: '', items: {} })
     setModalOpen(false)
-    setMsg({ text: 'Pedido creado correctamente', type: 'success' })
+    const mensajeCreacion = tab === 'refuerzo'
+      ? (data.requiere_licitacion
+          ? 'Solicitud creada. Los productos sin stock quedarán derivados a Licitaciones Refuerzos cuando se apruebe.'
+          : 'Solicitud creada. El refuerzo podrá atenderse con stock disponible.')
+      : 'Pedido creado correctamente'
+    setMsg({ text: mensajeCreacion, type: 'success' })
     loadPedidos()
   }
 
@@ -805,6 +810,13 @@ function DirectivoPedidos() {
     const { estado, logistica } = pedido
     if (estado === 'aclaracion') return 'Aclaración solicitada'
     if (estado === 'pendiente_director') return 'Aprobado por Supervisor'
+
+    if ((pedido.tipo || 'anual') === 'refuerzo' && estado === 'aprobado') {
+      if (pedido.requiere_licitacion || pedido.estado_abastecimiento === 'requiere_licitacion') {
+        return 'Aprobado - Derivado a compra'
+      }
+      return 'Aprobado - Stock disponible'
+    }
     
     if (estado === 'aprobado' && logistica) {
       if (logistica.porcentaje_entrega >= 100) return 'Entregado (100%)'
@@ -1135,6 +1147,13 @@ function DirectivoPedidos() {
                       {pedido.motivo_supervisor && (
                         <div style={{ marginTop: 6, fontSize: '0.85rem', color: estadoVisible === 'aclaracion' ? '#1d4ed8' : '#991b1b' }}>
                           <strong>{estadoVisible === 'aclaracion' ? 'Replica del supervisor:' : 'Respuesta del supervisor:'}</strong> {pedido.motivo_supervisor}
+                        </div>
+                      )}
+                      {(pedido.tipo || 'anual') === 'refuerzo' && pedido.estado === 'aprobado' && (
+                        <div style={{ marginTop: 6, fontSize: '0.85rem', color: pedido.requiere_licitacion ? '#92400e' : '#166534' }}>
+                          <strong>Abastecimiento:</strong> {pedido.requiere_licitacion
+                            ? 'Derivado a Licitaciones Refuerzos por falta de stock.'
+                            : 'Se cubre con stock disponible.'}
                         </div>
                       )}
                     </td>
