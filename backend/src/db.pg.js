@@ -1,7 +1,6 @@
 require("dotenv").config();
 
 const { Pool } = require("pg");
-const bcrypt = require("bcryptjs");
 const dbConfig = require("./config/database");
 
 const pool = new Pool(dbConfig);
@@ -97,29 +96,9 @@ async function all(sql, params = []) {
  * Tabla principal de usuarios: usuario (id_usuario, nombre, apellido, dni, email, password, telefono, id_institucion, role, activo, created_at)
  */
 async function initDb() {
-  // Verificar conexión y que existan las tablas del esquema
-  const check = await get("SELECT COUNT(*) as count FROM usuario");
-  console.log("Database initialized");
-
-  // Compatibilidad de esquema: algunas rutas aún consultan producto.marca y zona.nombre.
-  await pool.query("ALTER TABLE IF EXISTS producto ADD COLUMN IF NOT EXISTS marca VARCHAR(120)");
-  await pool.query("ALTER TABLE IF EXISTS zona ADD COLUMN IF NOT EXISTS nombre VARCHAR(120)");
-  await pool.query("UPDATE zona SET nombre = name WHERE nombre IS NULL AND name IS NOT NULL");
-
-  await pool.query("ALTER TABLE usuario DROP CONSTRAINT IF EXISTS usuario_dni_key");
-  
-  // Crear usuario admin por defecto si no existe
-  const admin = await get("SELECT id_usuario FROM usuario WHERE email = $1", ["admin@depo.local"]);
-  if (!admin) {
-    const hash = bcrypt.hashSync("Admin123!", 10);
-    await pool.query(
-      `INSERT INTO usuario (nombre, apellido, dni, email, password, role, activo, created_at) 
-       VALUES ($1, $2, $3, $4, $5, $6, TRUE, NOW())
-       ON CONFLICT (email) DO NOTHING`,
-      ["Administrador", "Inicial", "00000000", "admin@depo.local", hash, "admin"]
-    );
-  }
-
+  // Verificar conexión
+  await get("SELECT 1");
+  console.log("Database connection successful");
 }
 
 /**

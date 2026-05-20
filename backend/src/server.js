@@ -25,6 +25,8 @@ const cors = require("cors");
 const { initDb } = require("./db.pg");
 const { getDbConfigForLogs } = require("./config/database");
 const { ensureRbacSchemaAndSeed } = require("./services/rbac");
+const errorHandler = require("./middleware/errorHandler");
+const { initDatabaseSchema } = require("./services/schemaManager");
 
 const authRoutes = require("./routes/auth");
 const userRoutes = require("./routes/users");
@@ -121,9 +123,13 @@ app.get("*", (req, res) => {
   res.sendFile(path.join(staticPath, "index.html"));
 });
 
+// Middleware global de manejo de errores
+app.use(errorHandler);
+
 initDb()
   .then(async () => {
     await ensureRbacSchemaAndSeed();
+    await initDatabaseSchema();
     console.log("Database initialized");
     app.listen(PORT, () => {
       console.log(`Servidor corriendo en http://localhost:${PORT}`);
