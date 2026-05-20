@@ -292,9 +292,9 @@ export default function Instituciones({ supervisorMode = false }) {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.5fr) minmax(320px, 1fr)', gap: 16, alignItems: 'start' }}>
+      <div className="instituciones-map-layout">
         {/* Mapa */}
-        <div style={{ height: '540px', border: '1px solid #ccc', borderRadius: 8, overflow: 'hidden' }}>
+        <div className="instituciones-map-container">
           {validInstituciones.length === 0 ? (
             <div style={{ padding: 20, color: 'var(--muted)' }}>
               No hay instituciones georreferenciadas para mostrar en el mapa con los filtros actuales.
@@ -339,7 +339,7 @@ export default function Instituciones({ supervisorMode = false }) {
         </div>
 
         {/* Panel derecho */}
-        <aside style={{ border: '1px solid var(--border)', borderRadius: 8, background: '#fff', padding: 12, maxHeight: '540px', overflowY: 'auto' }}>
+        <aside className="instituciones-map-aside">
           <h3 style={{ marginTop: 4 }}>CUE por Edificio</h3>
 
           {!selectedEdificioKey && (

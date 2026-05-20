@@ -1696,6 +1696,55 @@ button:not(.secondary):hover {
   color: #1e40af;
 }
 
+/* ===== INSTITUCIONES MAP LAYOUT ===== */
+.instituciones-map-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(320px, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.instituciones-map-container {
+  height: 540px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.instituciones-map-aside {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  padding: 12px;
+  max-height: 540px;
+  overflow-y: auto;
+}
+
+@media (max-width: 768px) {
+  .instituciones-map-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .instituciones-map-container {
+    height: 350px;
+  }
+
+  .instituciones-map-aside {
+    max-height: 400px;
+  }
+}
+
+@media (max-width: 480px) {
+  .instituciones-map-container {
+    height: 280px;
+  }
+
+  .instituciones-map-aside {
+    max-height: 350px;
+    padding: 10px;
+  }
+}
+
 /* Instituciones grid */
 .sv-instituciones-grid {
   display: grid;
