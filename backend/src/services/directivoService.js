@@ -371,9 +371,10 @@ async function confirmarRecepcion(userId, loteId, items) {
     await client.query("BEGIN");
 
     const loteRows = await client.query(
-      `SELECT id, id_producto, cantidad_planificada
-       FROM distribucion_lote_item
-       WHERE lote_id = $1 AND id_institucion = $2
+      `SELECT li.id, li.id_producto, li.cantidad_planificada, p.nombre AS producto_nombre
+       FROM distribucion_lote_item li
+       JOIN producto p ON p.id_producto = li.id_producto
+       WHERE li.lote_id = $1 AND li.id_institucion = $2
        FOR UPDATE`,
       [loteId, institucionId]
     );
@@ -388,6 +389,7 @@ async function confirmarRecepcion(userId, loteId, items) {
         {
           lote_item_id: Number(r.id),
           cantidad_planificada: Number(r.cantidad_planificada || 0),
+          producto_nombre: r.producto_nombre,
         },
       ])
     );
@@ -410,6 +412,17 @@ async function confirmarRecepcion(userId, loteId, items) {
 
       if (totalConfirmado > cantidadPlanificada) {
         throw badRequest(`Cantidad inválida para producto ${productoId}: recibido + dañado supera lo planificado`);
+      }
+
+      // Validar obligatoriedad de observaciones y fotos al recibir mercadería
+      if (cantidadRecibida > 0 || cantidadDanada > 0) {
+        const prodName = loteItemData.producto_nombre || `Producto #${productoId}`;
+        if (!observaciones) {
+          throw badRequest(`Las observaciones son obligatorias para el producto "${prodName}".`);
+        }
+        if (imagenes.length === 0) {
+          throw badRequest(`Debe adjuntar al menos una foto de evidencia para el producto "${prodName}".`);
+        }
       }
 
       let estadoRecepcion = "pendiente";

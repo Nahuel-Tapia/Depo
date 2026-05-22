@@ -168,6 +168,20 @@ export default function MiStock() {
       return
     }
 
+    // Validar obligatoriedad de observaciones y fotos para cada producto que se está recibiendo
+    const missingFieldsItem = payloadItems.find((it) => {
+      const isReceiving = it.cantidad_recibida > 0 || it.cantidad_danada > 0
+      return isReceiving && (!it.observaciones_directivo.trim() || it.imagenes.length === 0)
+    })
+    if (missingFieldsItem) {
+      const prodName = lote.items.find(x => Number(x.id_producto) === Number(missingFieldsItem.id_producto))?.producto_nombre || 'producto'
+      setDistMsg({
+        text: `Es obligatorio ingresar Observaciones y adjuntar al menos una foto (Evidencia) para el producto: "${prodName}".`,
+        type: 'error'
+      })
+      return
+    }
+
     try {
       const res = await apiFetch(`/api/directivo/distribuciones/${lote.lote_id}/confirmar-recepcion`, {
         token,
@@ -345,7 +359,11 @@ export default function MiStock() {
       <div style={{ marginTop: 28 }}>
         <h3 style={{ marginBottom: 6 }}>Recepción de Envío</h3>
         <p style={{ color: 'var(--muted)', marginTop: 0 }}>
-          Confirmá recepción total o parcial, informá productos dañados y adjuntá evidencia cuando corresponda.
+          Confirmá recepción total o parcial, informá productos dañados y adjuntá evidencia.
+          <br />
+          <strong style={{ color: '#dc2626', fontSize: '0.85rem' }}>
+            * Al recibir mercadería (recibido o dañado > 0), es obligatorio ingresar Observaciones y adjuntar al menos una foto (Evidencia).
+          </strong>
         </p>
 
         {distMsg.text && (
@@ -380,9 +398,9 @@ export default function MiStock() {
                     <th style={{ textAlign: 'center' }}>Dañado</th>
                     <th style={{ textAlign: 'center' }}>Coincide</th>
                     <th>Detalle daño</th>
-                    <th>Observaciones</th>
+                    <th>Observaciones <span style={{ color: '#dc2626' }}>*</span></th>
                     <th>Reclamo</th>
-                    <th>Evidencia</th>
+                    <th>Evidencia (Fotos) <span style={{ color: '#dc2626' }}>*</span></th>
                   </tr>
                 </thead>
                 <tbody>
