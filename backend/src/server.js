@@ -77,10 +77,17 @@ app.use(express.static(staticPath));
 
 // Servir fotos/evidencias subidas (uploads)
 const uploadsPath = path.join(__dirname, '..', '..', 'uploads');
-if (!fs.existsSync(uploadsPath)) {
-  fs.mkdirSync(uploadsPath, { recursive: true });
+const legacyUploadsPath = path.join(__dirname, '..', 'uploads');
+for (const dir of [uploadsPath, legacyUploadsPath]) {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
 }
-app.use('/uploads', express.static(uploadsPath));
+app.use('/uploads', express.static(uploadsPath, { fallthrough: true }));
+app.use('/uploads', express.static(legacyUploadsPath, { fallthrough: true }));
+app.use('/uploads', (req, res) => {
+  return res.status(404).json({ error: 'Archivo no encontrado' });
+});
 
 app.get("/api/health", (req, res) => {
   res.json({ ok: true });

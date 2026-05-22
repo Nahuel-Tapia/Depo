@@ -336,11 +336,34 @@ async function obtenerStatsResumen() {
   `);
 }
 
+async function ensureBajaMovimientosSchema(client = pool) {
+  const columnsRes = await client.query(`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'baja_movimientos'
+  `);
+
+  const columns = new Set(columnsRes.rows.map((row) => row.column_name));
+
+  if (!columns.has('id_deposito')) {
+    await client.query(`
+      ALTER TABLE public.baja_movimientos
+      ADD COLUMN IF NOT EXISTS id_deposito INTEGER
+    `);
+    columns.add('id_deposito');
+  }
+
+  return {
+    createdColumn: columns.has('createdAt')
+      ? '"createdAt"'
+      : (columns.has('created_at') ? 'created_at' : null),
+  };
+}
+
 async function registrarBaja(user, body, file) {
   const client = await pool.connect();
   try {
-    const chk = await client.query("SELECT to_regclass('public.baja_movimientos') as exists");
-    console.log('baja_movimientos exists check:', chk.rows[0]);
+    await ensureBajaMovimientosSchema(client);
 
     const { producto_id, cantidad = 1, motivo, id_deposito } = body;
     const cantidadNum = parseInt(cantidad, 10) || 1;
@@ -410,6 +433,8 @@ async function registrarBaja(user, body, file) {
 
 async function listarBajas(queryParams) {
   const { id_deposito, producto_id, desde, hasta, limit = 50, offset = 0 } = queryParams;
+  const bajaSchema = await ensureBajaMovimientosSchema();
+  const createdExpr = bajaSchema.createdColumn ? `b.${bajaSchema.createdColumn}` : 'NOW()';
 
   let query = `
     SELECT 
@@ -424,7 +449,7 @@ async function listarBajas(queryParams) {
       u.nombre as usuario_nombre,
       b.id_deposito,
       d.nombre as deposito_nombre,
-      b."createdAt" as created_at
+      ${createdExpr} as created_at
     FROM baja_movimientos b
     LEFT JOIN producto p ON b.id_producto = p.id_producto
     LEFT JOIN usuario u ON b.id_usuario = u.id_usuario
@@ -445,16 +470,16 @@ async function listarBajas(queryParams) {
   }
 
   if (desde) {
-    query += ` AND b."createdAt" >= $${paramIndex++}`;
+    query += ` AND ${createdExpr} >= $${paramIndex++}`;
     params.push(desde);
   }
 
   if (hasta) {
-    query += ` AND b."createdAt" <= $${paramIndex++}`;
+    query += ` AND ${createdExpr} <= $${paramIndex++}`;
     params.push(hasta);
   }
 
-  query += ` ORDER BY b."createdAt" DESC LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
+  query += ` ORDER BY ${createdExpr} DESC, b.id DESC LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
   params.push(parseInt(limit), parseInt(offset));
 
   return await all(query, params);

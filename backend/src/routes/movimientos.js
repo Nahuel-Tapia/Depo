@@ -6,7 +6,7 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 
-const uploadsDir = path.join(__dirname, '..', '..', 'uploads');
+const uploadsDir = path.resolve(__dirname, '..', '..', '..', 'uploads');
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
@@ -34,7 +34,8 @@ router.get("/stats/resumen", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW),
 router.get("/bajas", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW), movimientoController.listarBajas);
 
 // Obtener un movimiento
-router.get("/:id", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW), movimientoController.obtenerMovimiento);
+// Only match numeric ids to avoid colliding with named routes like `/bajas`
+router.get("/:id(\\d+)", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW), movimientoController.obtenerMovimiento);
 
 // Crear movimiento
 router.post("/", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), movimientoController.crearMovimiento);

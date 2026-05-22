@@ -33,6 +33,7 @@ export default function Bajas() {
   // Preview de foto
   const [fotoModalOpen, setFotoModalOpen] = useState(false)
   const [fotoModalSrc, setFotoModalSrc] = useState('')
+  const [fotoModalError, setFotoModalError] = useState('')
 
   const canCreate = hasPermission('movimientos.create')
 
@@ -53,12 +54,21 @@ export default function Bajas() {
 
       const qs = q.toString() ? `?${q.toString()}` : ''
       const res = await apiFetch(`/api/movimientos/bajas${qs}`, { token })
-      if (res.ok) {
-        const data = await res.json()
-        setBajas(data.bajas || [])
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setBajas([])
+        setMsg({ text: data.error || 'No se pudo cargar el historial de bajas', type: 'error' })
+        return
       }
-    } catch { /* ignore */ }
-    setLoading(false)
+      const data = await res.json()
+      setBajas(data.bajas || [])
+      setMsg(prev => prev.type === 'error' ? { text: '', type: '' } : prev)
+    } catch {
+      setBajas([])
+      setMsg({ text: 'Error de red al cargar el historial de bajas', type: 'error' })
+    } finally {
+      setLoading(false)
+    }
   }, [token, filterDeposito, filterProducto, filterDesde, filterHasta])
 
   const loadProductos = useCallback(async () => {
@@ -191,6 +201,12 @@ export default function Bajas() {
     setForm(prev => ({ ...prev, fotoFile: e.target.files?.[0] || null }))
   }
 
+  const openFotoModal = (fotoPath) => {
+    setFotoModalError('')
+    setFotoModalSrc(`${API_URL}${fotoPath}`)
+    setFotoModalOpen(true)
+  }
+
   const fmtDate = (d) => d ? new Date(d).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'
 
   // ─── Render ───
@@ -315,7 +331,7 @@ export default function Bajas() {
                     {b.foto_path ? (
                       <button
                         type="button"
-                        onClick={() => { setFotoModalSrc(`${API_URL}${b.foto_path}`); setFotoModalOpen(true) }}
+                        onClick={() => openFotoModal(b.foto_path)}
                         style={{
                           background: 'none', border: '1px solid var(--border)', borderRadius: 6,
                           padding: '4px 10px', cursor: 'pointer', fontSize: '0.85rem', color: 'var(--orange)',
@@ -554,7 +570,7 @@ export default function Bajas() {
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             zIndex: 1100, padding: 16, cursor: 'pointer'
           }}
-          onClick={() => setFotoModalOpen(false)}
+          onClick={() => { setFotoModalOpen(false); setFotoModalError('') }}
         >
           <div style={{
             position: 'relative', maxWidth: '90vw', maxHeight: '85vh',
@@ -563,7 +579,7 @@ export default function Bajas() {
           }} onClick={e => e.stopPropagation()}>
             <button
               type="button"
-              onClick={() => setFotoModalOpen(false)}
+              onClick={() => { setFotoModalOpen(false); setFotoModalError('') }}
               style={{
                 position: 'absolute', top: -10, right: -10,
                 background: '#1d252d', color: '#fff', border: 'none',
@@ -572,10 +588,25 @@ export default function Bajas() {
                 fontSize: '1.1rem', fontWeight: 700, margin: 0, padding: 0, minHeight: 0
               }}
             >×</button>
+            {fotoModalError && (
+              <div style={{
+                minWidth: 320,
+                maxWidth: 480,
+                padding: '28px 24px',
+                textAlign: 'center',
+                color: '#b91c1c'
+              }}>
+                <div style={{ fontWeight: 700, marginBottom: 8 }}>No se pudo cargar la foto</div>
+                <div style={{ fontSize: '0.92rem', color: 'var(--muted)' }}>
+                  El registro existe, pero el archivo de imagen no est&aacute; disponible en el servidor.
+                </div>
+              </div>
+            )}
             <img
               src={fotoModalSrc}
+              onError={() => setFotoModalError('missing')}
               alt="Foto de evidencia de daño"
-              style={{ maxWidth: '85vw', maxHeight: '80vh', borderRadius: 8, objectFit: 'contain' }}
+              style={{ maxWidth: '85vw', maxHeight: '80vh', borderRadius: 8, objectFit: 'contain', display: fotoModalError ? 'none' : 'block' }}
             />
           </div>
         </div>
