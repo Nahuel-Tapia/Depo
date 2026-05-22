@@ -748,6 +748,15 @@ async function deliverStock(authUserId, id, { asignacion_id, cantidad }) {
       [cantidadNum, asignacion.producto_id]
     );
 
+    // Actualizar stock_deposito (depósito central id=1 por defecto)
+    await client.query(
+      `INSERT INTO stock_deposito (id_deposito, id_producto, cantidad)
+       VALUES (1, $2, 0)
+       ON CONFLICT (id_deposito, id_producto)
+       DO UPDATE SET cantidad = GREATEST(0, stock_deposito.cantidad - $1)`,
+      [cantidadNum, asignacion.producto_id]
+    );
+
     await client.query("COMMIT");
 
     return { 

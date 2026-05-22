@@ -23,6 +23,7 @@ import LicitacionesCerradas from '../components/LicitacionesCerradas'
 import RecepcionLicitacion from '../components/RecepcionLicitacion'
 import DistribucionEscuelas from '../components/DistribucionEscuelas'
 import Bajas from '../components/Bajas'
+import DiagnosticoStock from '../components/DiagnosticoStock'
 
 const LOGO_URL = '/logo-sidebar.png'
 
@@ -64,6 +65,7 @@ const TABS = [
   { key: 'kits', label: 'Kits de Productos', permission: 'supervision.manage', roleFor: 'director_area', icon: BoxIcon },
   { key: 'bajas', label: 'Bajas', permission: 'movimientos.view', roleFor: 'operador', icon: ShieldIcon },
   { key: 'depositos', label: 'Depositos', permission: 'stock.view', roleFor: 'admin', icon: BuildingIcon },
+  { key: 'diagnostico-stock', label: 'Diagnóstico de Stock', permission: 'stock.view', roleFor: 'admin', icon: ShieldIcon },
   { key: 'mi-cuenta', label: 'Mi cuenta', permission: null, icon: UserIcon },
   { key: 'mi-stock', label: 'Mi stock', permission: 'pedidos.view', roleFor: 'directivo', icon: BoxIcon },
 ]
@@ -179,6 +181,7 @@ export default function Dashboard() {
         'proveedores',
         'usuarios',
         'depositos',
+        'diagnostico-stock',
         'mi-cuenta'
       ].includes(tab.key))
     }
@@ -283,6 +286,8 @@ export default function Dashboard() {
         return <Bajas />
       case 'depositos':
         return <Depositos />
+      case 'diagnostico-stock':
+        return <DiagnosticoStock />
       case 'mi-cuenta':
         return <MiCuenta />
       default:

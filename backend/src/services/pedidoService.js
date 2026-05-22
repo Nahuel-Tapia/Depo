@@ -1,4 +1,4 @@
-﻿const express = require("express");
+const express = require("express");
 const { all, get, run, pool } = require("../db.pg");
 const { authenticate, authorizePermissions, isAdminLikeRole } = require("../middleware/auth");
 const { PERMISSIONS } = require("../permissions");
@@ -989,6 +989,14 @@ async function updateEstadoPedido(id, data, user) {
           await client.query("ROLLBACK");
           throw { status: 400, message: `Stock insuficiente para entregar pedido. Producto ${item.id_producto}: solicitado ${cantidad}, disponible ${disponible}` };
         }
+
+        await client.query(
+          `INSERT INTO stock_deposito (id_deposito, id_producto, cantidad)
+           VALUES (1, $2, 0)
+           ON CONFLICT (id_deposito, id_producto)
+           DO UPDATE SET cantidad = GREATEST(0, stock_deposito.cantidad - $1)`,
+          [cantidad, item.id_producto]
+        );
 
         await client.query(
           "INSERT INTO movimiento_stock (id_producto, cantidad, tipo, id_institucion, id_usuario, motivo) VALUES ($1, $2, 'egreso', $3, $4, $5)",
