@@ -910,7 +910,7 @@ async function registrarEgresoMultipleEnvio(userId, body) {
         loteItemsMap.set(loteKey, {
           id_institucion: solicitudData.id_institucion,
           id_producto: item.id_producto,
-          amount: Number((loteItemsMap.get(loteKey)?.cantidad_planificada || 0) + Number(item.cantidad || 0)), // Wait, it's cantidad_planificada
+          amount: Number((loteItemsMap.get(loteKey)?.amount || 0) + Number(item.cantidad || 0)),
         });
       }
 

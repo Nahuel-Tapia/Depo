@@ -92,10 +92,28 @@ async function confirmarRecepcion(req, res) {
   }
 }
 
+async function getDistribucionesHistorial(req, res) {
+  try {
+    const userId = req.user?.sub;
+    if (!userId) {
+      return res.status(401).json({ error: "Usuario no autenticado" });
+    }
+
+    const { desde, hasta } = req.query;
+    const lotes = await directivoService.getDistribucionesHistorial(userId, { desde, hasta });
+    return res.json({ lotes });
+  } catch (err) {
+    console.error("Error en GET /api/directivo/distribuciones/historial:", err);
+    const status = Number(err?.status || 500);
+    return res.status(status).json({ error: err.message || "No se pudo obtener el historial de distribuciones" });
+  }
+}
+
 module.exports = {
   getAlertas,
   getMiStock,
   getHistorialRetiros,
   getDistribucionesPendientes,
+  getDistribucionesHistorial,
   confirmarRecepcion
 };

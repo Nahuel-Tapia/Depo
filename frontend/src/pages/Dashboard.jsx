@@ -15,6 +15,7 @@ import SupervisorStatsDashboard from '../components/SupervisorStatsDashboard'
 import AsignarKit from '../components/AsignarKit'
 import DirectorAreaPanel from '../components/DirectorAreaPanel'
 import MiStock from '../components/MiStock'
+import RecepcionMercaderia from '../components/RecepcionMercaderia'
 import ComprasPanel from '../components/ComprasPanel'
 import ProductKitsManager from '../components/ProductKitsManager'
 import MiCuenta from '../components/MiCuenta'
@@ -68,6 +69,7 @@ const TABS = [
   { key: 'diagnostico-stock', label: 'Diagnóstico de Stock', permission: 'stock.view', roleFor: 'admin', icon: ShieldIcon },
   { key: 'mi-cuenta', label: 'Mi cuenta', permission: null, icon: UserIcon },
   { key: 'mi-stock', label: 'Mi stock', permission: 'pedidos.view', roleFor: 'directivo', icon: BoxIcon },
+  { key: 'recepcion-mercaderia', label: 'Recepción de Mercadería', permission: 'pedidos.view', roleFor: 'directivo', icon: BoxIcon },
 ]
 
 export default function Dashboard() {
@@ -126,7 +128,7 @@ export default function Dashboard() {
     }
 
     if (user.role === 'directivo') {
-      return TABS.filter((tab) => ['inicio', 'pedidos', 'mi-stock', 'mi-cuenta'].includes(tab.key))
+      return TABS.filter((tab) => ['inicio', 'pedidos', 'mi-stock', 'recepcion-mercaderia', 'mi-cuenta'].includes(tab.key))
     }
 
     if (user.role === 'operador') {
@@ -272,6 +274,8 @@ export default function Dashboard() {
         return <Pedidos />
       case 'mi-stock':
         return <MiStock />
+      case 'recepcion-mercaderia':
+        return <RecepcionMercaderia />
       case 'instituciones':
         return <Instituciones />
       case 'historial':

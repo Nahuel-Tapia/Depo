@@ -295,7 +295,7 @@ async function getDistribucionesPendientes(userId) {
      LEFT JOIN deposito d ON d.id_deposito = l.id_deposito
      JOIN producto p ON p.id_producto = li.id_producto
      WHERE li.id_institucion = $1
-       AND li.estado_recepcion IN ('pendiente', 'parcial', 'reclamo')
+       AND li.recibido_at IS NULL
      ORDER BY l.created_at DESC, p.nombre ASC`,
     [institucionId]
   );
@@ -335,6 +335,114 @@ async function getDistribucionesPendientes(userId) {
         created_at: row.created_at,
         zona_nombre: row.zona_nombre,
         deposito_nombre: row.deposito_nombre,
+        items: [],
+      });
+    }
+    lotesMap.get(loteId).items.push({
+      lote_item_id: Number(row.lote_item_id),
+      id_producto: Number(row.id_producto),
+      producto_nombre: row.producto_nombre,
+      unidad_medida: row.unidad_medida,
+      cantidad_planificada: Number(row.cantidad_planificada || 0),
+      cantidad_recibida: Number(row.cantidad_recibida || 0),
+      cantidad_danada: Number(row.cantidad_danada || 0),
+      estado_recepcion: row.estado_recepcion,
+      observaciones_directivo: row.observaciones_directivo || null,
+      reclamo_directivo: row.reclamo_directivo || null,
+      detalle_danio: row.detalle_danio || null,
+      coincide_esperado: Boolean(row.coincide_esperado),
+      imagenes: imagenesByItem.get(Number(row.lote_item_id)) || [],
+    });
+  }
+
+  return Array.from(lotesMap.values());
+}
+
+async function getDistribucionesHistorial(userId, filters = {}) {
+  const context = await getDirectivoContext(userId);
+  const institucionId = context.usuario.id_institucion;
+
+  let query = `
+    SELECT
+       li.id AS lote_item_id,
+       li.lote_id,
+       l.anio,
+       l.estado AS lote_estado,
+       l.created_at,
+       COALESCE(z.nombre, 'Zona sin nombre') AS zona_nombre,
+       COALESCE(d.nombre, 'Depósito') AS deposito_nombre,
+       li.id_producto,
+       p.nombre AS producto_nombre,
+       p.unidad_medida,
+       li.cantidad_planificada,
+       COALESCE(li.cantidad_recibida, 0) AS cantidad_recibida,
+       COALESCE(li.cantidad_danada, 0) AS cantidad_danada,
+       li.estado_recepcion,
+       li.observaciones_directivo,
+       li.reclamo_directivo,
+       li.detalle_danio,
+       COALESCE(li.coincide_esperado, TRUE) AS coincide_esperado,
+       li.recibido_at
+     FROM distribucion_lote_item li
+     JOIN distribucion_lote l ON l.id = li.lote_id
+     LEFT JOIN zona z ON z.id = l.zona_id
+     LEFT JOIN deposito d ON d.id_deposito = l.id_deposito
+     JOIN producto p ON p.id_producto = li.id_producto
+     WHERE li.id_institucion = $1
+       AND li.recibido_at IS NOT NULL
+  `;
+
+  const params = [institucionId];
+
+  if (filters.desde) {
+    params.push(filters.desde);
+    query += ` AND li.recibido_at >= $${params.length}`;
+  }
+  if (filters.hasta) {
+    params.push(`${filters.hasta} 23:59:59`);
+    query += ` AND li.recibido_at <= $${params.length}`;
+  }
+
+  query += ` ORDER BY li.recibido_at DESC, p.nombre ASC`;
+
+  const rows = await all(query, params);
+
+  const loteItemIds = rows.map((row) => Number(row.lote_item_id)).filter((id) => Number.isInteger(id) && id > 0);
+  const imagenesRows = loteItemIds.length > 0
+    ? await all(
+      `SELECT id, lote_item_id, nombre, mime_type, datos, created_at
+       FROM distribucion_lote_item_imagen
+       WHERE lote_item_id = ANY($1::int[])
+       ORDER BY created_at DESC, id DESC`,
+      [loteItemIds]
+    )
+    : [];
+
+  const imagenesByItem = new Map();
+  for (const img of imagenesRows) {
+    const key = Number(img.lote_item_id);
+    if (!imagenesByItem.has(key)) imagenesByItem.set(key, []);
+    imagenesByItem.get(key).push({
+      id: Number(img.id),
+      nombre: img.nombre || null,
+      mime_type: img.mime_type || "image/jpeg",
+      datos: img.datos,
+      created_at: img.created_at,
+    });
+  }
+
+  const lotesMap = new Map();
+  for (const row of rows) {
+    const loteId = Number(row.lote_id);
+    if (!lotesMap.has(loteId)) {
+      lotesMap.set(loteId, {
+        lote_id: loteId,
+        anio: Number(row.anio),
+        lote_estado: row.lote_estado,
+        created_at: row.created_at,
+        zona_nombre: row.zona_nombre,
+        deposito_nombre: row.deposito_nombre,
+        recibido_at: row.recibido_at,
         items: [],
       });
     }
@@ -545,5 +653,6 @@ module.exports = {
   getMiStock,
   getHistorialRetiros,
   getDistribucionesPendientes,
+  getDistribucionesHistorial,
   confirmarRecepcion
 };
