@@ -3,6 +3,24 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../api'
 
+const RECEPCION_ESTADO_LABEL = {
+  en_deposito: 'En deposito',
+  completada: 'Completada'
+}
+
+const RECEPCION_ESTADO_STYLE = {
+  en_deposito: {
+    background: '#fff7ed',
+    color: '#c2410c',
+    border: '1px solid #fdba74'
+  },
+  completada: {
+    background: '#dcfce7',
+    color: '#166534',
+    border: '1px solid #86efac'
+  }
+}
+
 export default function RecepcionLicitacion() {
   const { token } = useAuth()
   const navigate = useNavigate()
@@ -375,17 +393,37 @@ export default function RecepcionLicitacion() {
                   <th>TÍTULO / MOTIVO</th>
                   <th>PROVEEDOR(ES)</th>
                   <th>FECHA ENVÍO</th>
+                  <th>ESTADO</th>
                   <th style={{ textAlign: 'right' }}>ACCIONES</th>
                 </tr>
               </thead>
               <tbody>
                 {recepciones.map(r => (
-                  <tr key={r.id}>
+                  <tr key={r.id} style={r.estado === 'completada' ? { background: '#f8fafc' } : undefined}>
                     <td>#{r.id}</td>
                     <td style={{ fontWeight: 700 }}>{r.anio}</td>
                     <td>{r.titulo_display || r.motivo || r.titulo || `Licitación Anual ${r.anio}`}</td>
                     <td>{r.proveedores || 'Sin proveedor asignado'}</td>
                     <td>{new Date(r.fecha_publicacion).toLocaleString()}</td>
+                    <td>
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          padding: '4px 10px',
+                          borderRadius: 999,
+                          fontSize: '0.78rem',
+                          fontWeight: 700,
+                          ...(RECEPCION_ESTADO_STYLE[r.estado] || {
+                            background: '#e2e8f0',
+                            color: '#334155',
+                            border: '1px solid #cbd5e1'
+                          })
+                        }}
+                      >
+                        {RECEPCION_ESTADO_LABEL[r.estado] || r.estado}
+                      </span>
+                    </td>
                     <td style={{ textAlign: 'right' }}>
                       <button onClick={() => verDetalle(r.id)}>📦 Recibir Mercadería</button>
                     </td>

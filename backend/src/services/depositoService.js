@@ -350,14 +350,21 @@ async function getRecepcionesLicitacion() {
        LEFT JOIN proveedor pr ON pr.id_proveedor = cph.id_proveedor
      ) prov_data ON TRUE
      WHERE lp.estado IN ('en_deposito', 'completada')
-     ORDER BY lp.fecha_publicacion DESC`
+     ORDER BY
+       CASE
+         WHEN lp.estado = 'en_deposito' THEN 0
+         WHEN lp.estado = 'completada' THEN 1
+         ELSE 2
+       END,
+       lp.fecha_publicacion DESC,
+       lp.id DESC`
   );
 }
 
 async function getDetalleRecepcion(id) {
   await ensureDepositosSchema();
   const row = await get(
-    `SELECT id, items, anio, titulo, motivo,
+    `SELECT id, items, anio, titulo, motivo, estado,
             COALESCE(NULLIF(BTRIM(motivo), ''), NULLIF(BTRIM(titulo), ''), 'Licitación Anual ' || anio::text) AS titulo_display
      FROM licitacion_publicada
      WHERE id = $1`,
@@ -413,6 +420,7 @@ async function getDetalleRecepcion(id) {
   return {
     id: row.id,
     anio: row.anio,
+    estado: row.estado,
     titulo: row.titulo || null,
     motivo: row.motivo || null,
     titulo_display: row.titulo_display,
