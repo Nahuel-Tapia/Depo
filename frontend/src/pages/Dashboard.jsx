@@ -43,7 +43,7 @@ const ROLE_LABELS = {
 const TABS = [
   { key: 'inicio', label: 'Inicio', permission: null, icon: GridIcon },
   { key: 'zonas', label: 'Gestion de Zonas', permission: 'supervision.manage', roleFor: 'director_area', icon: BuildingIcon },
-  { key: 'solicitud_anual', label: 'Solicitud Anual', permission: 'supervision.manage', roleFor: 'director_area', icon: ClipboardIcon },
+  { key: 'solicitud_anual', label: 'Pedidos', permission: 'supervision.manage', roleFor: 'director_area', icon: ClipboardIcon },
   { key: 'resumen', label: 'Resumen Solicitud Anual', permission: 'supervision.manage', roleFor: 'director_area', icon: ListIcon },
   { key: 'compras-licitacion', label: 'Licitacion Anual', permission: 'planilla.view', roleFor: 'area_compras', icon: DocumentIcon },
   { key: 'compras-listado-final', label: 'Listado Final a Licitar', permission: 'planilla.view', roleFor: 'area_compras', icon: ListIcon },
@@ -58,7 +58,7 @@ const TABS = [
   { key: 'mis-escuelas', label: 'Mis Escuelas', permission: 'instituciones.view', roleFor: 'supervisor', hideForRoles: ['admin'], icon: BuildingIcon },
   { key: 'productos', label: 'Productos', permission: 'productos.view', hideForRoles: ['supervisor', 'director_area'], roleFor: 'admin', icon: BoxIcon },
   { key: 'movimientos', label: 'Movimientos', permission: 'movimientos.view', hideForRoles: ['supervisor', 'director_area'], roleFor: 'admin', icon: ActivityIcon },
-  { key: 'pedidos', label: 'Pedidos', permission: 'pedidos.view', hideForRoles: ['admin'], roleFor: 'common', icon: ClipboardIcon },
+  { key: 'pedidos', label: 'Pedidos', permission: 'pedidos.view', hideForRoles: ['admin', 'director_area'], roleFor: 'common', icon: ClipboardIcon },
   { key: 'instituciones', label: 'Instituciones', permission: 'instituciones.view', hideForRoles: ['supervisor'], roleFor: 'admin', icon: BuildingIcon },
   { key: 'historial', label: 'Historial', permission: 'instituciones.view', hideForRoles: ['supervisor', 'director_area'], roleFor: 'admin', icon: ListIcon },
   { key: 'proveedores', label: 'Proveedores', permission: 'proveedores.view', hideForRoles: ['supervisor', 'director_area'], roleFor: 'admin', icon: TruckIcon },
@@ -314,7 +314,8 @@ export default function Dashboard() {
               const Icon = tab.icon || GridIcon
               const isActive = activeTab === tab.key
               const isAreaComprasProducts = user?.role === 'area_compras' && tab.key === 'productos'
-              const label = tab.key === 'usuarios' && user?.role === 'director_area' ? 'Supervisores' : tab.label
+              let label = tab.label
+              if (tab.key === 'usuarios' && user?.role === 'director_area') label = 'Supervisores'
               const displayLabel = isAreaComprasProducts ? 'Stock de Productos' : label
               const roleLabel = user?.role === 'master' && tab.roleFor ? tab.roleFor : null
 

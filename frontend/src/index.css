@@ -47,7 +47,7 @@ body {
 }
 
 .card {
-  width: min(1200px, 100%);
+  width: 100%;
   background: var(--card);
   border-radius: 10px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);

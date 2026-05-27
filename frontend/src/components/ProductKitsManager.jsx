@@ -21,6 +21,14 @@ export default function ProductKitsManager() {
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState(emptyForm())
   const [saving, setSaving] = useState(false)
+  const [expandedKits, setExpandedKits] = useState({})
+
+  const toggleKit = (id) => {
+    setExpandedKits(prev => ({
+      ...prev,
+      [id]: !prev[id]
+    }))
+  }
 
   const productosOrdenados = useMemo(() => (
     [...productos].sort((a, b) =>
@@ -173,68 +181,191 @@ export default function ProductKitsManager() {
 
   return (
     <section>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', borderBottom: '1px solid #e2e8f0', paddingBottom: 16 }}>
         <div>
-          <h3 style={{ marginBottom: 6 }}>Kits de productos</h3>
+          <h3 style={{ marginBottom: 6, fontSize: '1.4rem', color: '#1e3a8a', fontWeight: 800 }}>Kits de productos</h3>
           <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.92rem' }}>
             Creá kits por nombre y después asignalos directamente a cada escuela.
           </p>
         </div>
-        <button type="button" onClick={openCreate}>Crear kit</button>
+        <button 
+          type="button" 
+          onClick={openCreate}
+          style={{ 
+            width: 'auto', 
+            margin: 0, 
+            padding: '10px 20px', 
+            borderRadius: 8, 
+            fontSize: '0.95rem', 
+            fontWeight: 600,
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6
+          }}
+        >
+          ➕ Crear kit
+        </button>
       </div>
 
       {msg.text && (
-        <div className={`msg show ${msg.type === 'success' ? 'msg-success' : 'msg-error'}`}>{msg.text}</div>
+        <div className={`msg show ${msg.type === 'success' ? 'msg-success' : 'msg-error'}`} style={{ marginTop: 16 }}>{msg.text}</div>
       )}
 
       {loading ? (
-        <p style={{ color: 'var(--muted)' }}>Cargando kits...</p>
+        <p style={{ color: 'var(--muted)', marginTop: 18 }}>Cargando kits...</p>
       ) : kits.length === 0 ? (
         <div className="sv-empty-state" style={{ marginTop: 18 }}>
           No hay kits configurados todavía.
         </div>
       ) : (
-        <div style={{ display: 'grid', gap: 14, marginTop: 18 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 20 }}>
           {kits.map((kit) => (
-            <article key={kit.id} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: 18 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-                <div>
-                  <h4 style={{ margin: 0 }}>{kit.nombre}</h4>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
-                    {!kit.activo && <span className="badge" style={{ background: '#fee2e2', color: '#991b1b' }}>Inactivo</span>}
+            <article 
+              key={kit.id} 
+              style={{ 
+                background: '#fff', 
+                border: '1px solid #e2e8f0', 
+                borderRadius: 12, 
+                padding: '20px 24px',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                transition: 'box-shadow 0.2s ease',
+                position: 'relative'
+              }}
+            >
+              <div 
+                style={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  gap: 12, 
+                  flexWrap: 'wrap', 
+                  alignItems: 'center',
+                  cursor: 'pointer'
+                }}
+                onClick={() => toggleKit(kit.id)}
+              >
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                    <h4 style={{ margin: 0, fontSize: '1.15rem', color: '#1e3a8a', fontWeight: 700 }}>{kit.nombre}</h4>
+                    {!kit.activo && (
+                      <span className="badge" style={{ background: '#fee2e2', color: '#991b1b', fontSize: '0.75rem', padding: '2px 8px', borderRadius: 4 }}>
+                        Inactivo
+                      </span>
+                    )}
+                    <span style={{ 
+                      background: '#f1f5f9', 
+                      color: '#475569', 
+                      fontSize: '0.8rem', 
+                      padding: '3px 10px', 
+                      borderRadius: 20, 
+                      fontWeight: 600 
+                    }}>
+                      📦 {(kit.items || []).length} productos
+                    </span>
+                    {kit.cantidad_alumnos && (
+                      <span style={{ 
+                        background: '#eff6ff', 
+                        color: '#1d4ed8', 
+                        fontSize: '0.8rem', 
+                        padding: '3px 10px', 
+                        borderRadius: 20, 
+                        fontWeight: 600 
+                      }}>
+                        👥 Ref: {kit.cantidad_alumnos} alumnos
+                      </span>
+                    )}
                   </div>
                   {kit.descripcion && (
-                    <p style={{ marginBottom: 0, color: 'var(--muted)' }}>{kit.descripcion}</p>
+                    <p style={{ margin: '6px 0 0 0', color: 'var(--muted)', fontSize: '0.9rem' }}>{kit.descripcion}</p>
                   )}
                 </div>
-                <div className="inline-actions">
-                  <button type="button" onClick={() => openEdit(kit)}>Editar</button>
-                  {kit.activo && (
-                    <button type="button" className="sv-btn-rechazar" onClick={() => handleDelete(kit)}>
-                      Eliminar
+                
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }} onClick={(e) => e.stopPropagation()}>
+                  <div className="inline-actions" style={{ display: 'flex', gap: 8 }}>
+                    <button 
+                      type="button" 
+                      onClick={() => openEdit(kit)}
+                      style={{ 
+                        width: 'auto', 
+                        margin: 0, 
+                        padding: '6px 14px', 
+                        fontSize: '0.85rem', 
+                        borderRadius: 6, 
+                        fontWeight: 600,
+                        cursor: 'pointer' 
+                      }}
+                    >
+                      ✏️ Editar
                     </button>
-                  )}
+                    {kit.activo && (
+                      <button 
+                        type="button" 
+                        className="sv-btn-rechazar" 
+                        onClick={() => handleDelete(kit)}
+                        style={{ 
+                          width: 'auto', 
+                          margin: 0, 
+                          padding: '6px 14px', 
+                          fontSize: '0.85rem', 
+                          borderRadius: 6, 
+                          fontWeight: 600,
+                          cursor: 'pointer' 
+                        }}
+                      >
+                        🗑️ Eliminar
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => toggleKit(kit.id)}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      margin: 0,
+                      padding: 4,
+                      width: 'auto',
+                      minHeight: 'auto',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      transform: expandedKits[kit.id] ? 'rotate(180deg)' : 'rotate(0deg)',
+                      transition: 'transform 0.2s ease',
+                    }}
+                  >
+                    <span style={{ fontSize: '0.95rem', color: '#64748b' }}>▼</span>
+                  </button>
                 </div>
               </div>
 
-              <table style={{ width: '100%', marginTop: 16 }}>
-                <thead>
-                  <tr>
-                    <th>Producto</th>
-                    <th>Cantidad</th>
-                    <th>Unidad</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(kit.items || []).map((item) => (
-                    <tr key={`${kit.id}-${item.producto_id}`}>
-                      <td>{item.producto_nombre}</td>
-                      <td>{item.cantidad}</td>
-                      <td>{item.unidad_medida || 'unidad'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              {expandedKits[kit.id] && (
+                <div style={{ 
+                  marginTop: 20, 
+                  borderTop: '1px solid #f1f5f9', 
+                  paddingTop: 16,
+                  animation: 'fadeIn 0.2s ease-out'
+                }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+                        <th style={{ textAlign: 'left', padding: '10px 12px', color: '#475569', fontWeight: 600, fontSize: '0.85rem' }}>Producto</th>
+                        <th style={{ textAlign: 'center', padding: '10px 12px', color: '#475569', fontWeight: 600, fontSize: '0.85rem' }}>Cantidad</th>
+                        <th style={{ textAlign: 'left', padding: '10px 12px', color: '#475569', fontWeight: 600, fontSize: '0.85rem' }}>Unidad</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(kit.items || []).map((item) => (
+                        <tr key={`${kit.id}-${item.producto_id}`} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                          <td style={{ padding: '10px 12px', color: '#334155' }}>{item.producto_nombre}</td>
+                          <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, color: '#1e3a8a' }}>{item.cantidad}</td>
+                          <td style={{ padding: '10px 12px', color: '#64748b' }}>{item.unidad_medida || 'unidad'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </article>
           ))}
         </div>
@@ -242,11 +373,30 @@ export default function ProductKitsManager() {
 
       {modalOpen && (
         <div
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}
+          style={{ 
+            position: 'fixed', 
+            inset: 0, 
+            background: 'rgba(15, 23, 42, 0.6)', 
+            backdropFilter: 'blur(8px)',
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            zIndex: 1000, 
+            padding: 16 
+          }}
           onClick={(e) => { if (e.target === e.currentTarget) closeModal() }}
         >
-          <div style={{ background: '#f9fafb', padding: 24, borderRadius: 10, width: 'min(920px, 100%)', maxHeight: '90vh', overflowY: 'auto' }}>
-            <h3 style={{ marginTop: 0 }}>{form.id ? 'Editar kit' : 'Nuevo kit'}</h3>
+          <div style={{ 
+            background: '#ffffff', 
+            padding: 32, 
+            borderRadius: 16, 
+            width: '100%',
+            maxWidth: '850px', 
+            maxHeight: '90vh', 
+            overflowY: 'auto',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+          }}>
+            <h3 style={{ marginTop: 0, color: '#1e3a8a', fontSize: '1.4rem', fontWeight: 800 }}>{form.id ? 'Editar kit' : 'Nuevo kit'}</h3>
             <form onSubmit={handleSubmit} className="grid">
               <div>
                 <label>Nombre del kit</label>
@@ -280,10 +430,10 @@ export default function ProductKitsManager() {
               </div>
 
               <div style={{ gridColumn: '1 / -1' }}>
-                <label>Productos del kit</label>
-                <div style={{ display: 'grid', gap: 10 }}>
+                <label style={{ fontWeight: 600, color: '#334155', marginBottom: 10, display: 'block' }}>Productos del kit</label>
+                <div style={{ display: 'grid', gap: 12 }}>
                   {form.items.map((item, index) => (
-                    <div key={`kit-item-${index}`} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(140px, 180px) auto', gap: 10, alignItems: 'end' }}>
+                    <div key={`kit-item-${index}`} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(120px, 150px) auto', gap: 10, alignItems: 'end' }}>
                       <div>
                         <select
                           value={item.producto_id}
@@ -307,22 +457,72 @@ export default function ProductKitsManager() {
                           onChange={(e) => updateItem(index, 'cantidad', e.target.value)}
                           placeholder="Cantidad"
                           required
+                          style={{ margin: 0 }}
                         />
                       </div>
-                      <button type="button" className="secondary" onClick={() => removeItem(index)} disabled={form.items.length === 1}>
-                        Quitar
+                      <button 
+                        type="button" 
+                        onClick={() => removeItem(index)} 
+                        disabled={form.items.length === 1}
+                        style={{ 
+                          width: 'auto', 
+                          margin: 0, 
+                          padding: '10px 14px', 
+                          borderRadius: 8, 
+                          background: '#fee2e2', 
+                          color: '#991b1b', 
+                          fontSize: '0.95rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          minHeight: '44px'
+                        }}
+                      >
+                        🗑️
                       </button>
                     </div>
                   ))}
                 </div>
-                <button type="button" className="secondary" style={{ marginTop: 12 }} onClick={addItem}>
-                  Agregar producto
+                <button 
+                  type="button" 
+                  className="secondary" 
+                  onClick={addItem}
+                  style={{ 
+                    width: 'auto', 
+                    marginTop: 14, 
+                    marginBottom: 0, 
+                    padding: '8px 16px', 
+                    borderRadius: 8, 
+                    fontWeight: 600,
+                    fontSize: '0.9rem',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    cursor: 'pointer'
+                  }}
+                >
+                  ➕ Agregar producto
                 </button>
               </div>
 
-              <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-                <button type="button" className="secondary" onClick={closeModal}>Cancelar</button>
-                <button type="submit" disabled={saving}>{saving ? 'Guardando...' : 'Guardar kit'}</button>
+              <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 24, borderTop: '1px solid #e2e8f0', paddingTop: 20 }}>
+                <button 
+                  type="button" 
+                  className="secondary" 
+                  onClick={closeModal}
+                  style={{ width: 'auto', margin: 0, padding: '10px 20px', borderRadius: 8, fontWeight: 600, cursor: 'pointer' }}
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={saving}
+                  style={{ width: 'auto', margin: 0, padding: '10px 20px', borderRadius: 8, fontWeight: 600, cursor: 'pointer' }}
+                >
+                  {saving ? 'Guardando...' : 'Guardar kit'}
+                </button>
               </div>
             </form>
           </div>

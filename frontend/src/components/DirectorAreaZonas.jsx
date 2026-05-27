@@ -331,35 +331,63 @@ export default function DirectorAreaZonas({ nivelEducativo }) {
   const renderInstitucionesSelector = () => {
     return (
       <div style={{ marginBottom: 16 }}>
-        <label>Escuelas disponibles ({institucionesFiltradas.length})</label>
+        <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+          Escuelas disponibles ({institucionesFiltradas.length})
+        </label>
         {institucionesSeleccionadasDetalle.length > 0 && (
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: '0.9rem', fontWeight: 600, marginBottom: 6 }}>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.3px' }}>
               Escuelas seleccionadas ({institucionesSeleccionadasDetalle.length})
             </div>
-            <div style={{ display: 'grid', gap: 6 }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {institucionesSeleccionadasDetalle.map((institucion) => (
                 <div
                   key={`selected-${institucion.id}`}
                   style={{
-                    display: 'flex',
+                    display: 'inline-flex',
                     alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: 8,
-                    padding: '8px 10px',
-                    border: '1px solid #e6e6e6',
-                    borderRadius: 8,
-                    background: '#f8fafc'
+                    gap: 6,
+                    padding: '4px 10px',
+                    border: '1px solid #cfe2ff',
+                    borderRadius: 20,
+                    background: '#e7f1ff',
+                    color: '#084298',
+                    fontSize: '0.82rem',
+                    fontWeight: 600,
                   }}
+                  title={getInstitutionOptionLabel(institucion)}
                 >
-                  <span style={{ lineHeight: 1.35 }}>{getInstitutionOptionLabel(institucion)}</span>
+                  <span style={{
+                    maxWidth: '220px',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    lineHeight: 1.2
+                  }}>
+                    {institucion.nombre}
+                  </span>
                   <button
                     type="button"
-                    className="secondary"
                     onClick={() => toggleInstitucion(institucion.id)}
-                    style={{ margin: 0, minHeight: 'auto', padding: '6px 10px' }}
+                    style={{
+                      margin: 0,
+                      minHeight: 'auto',
+                      padding: 0,
+                      background: 'transparent',
+                      border: 'none',
+                      color: '#dc3545',
+                      fontSize: '1rem',
+                      fontWeight: 'bold',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      lineHeight: 1,
+                      width: 16,
+                      height: 16,
+                    }}
                   >
-                    Quitar
+                    ×
                   </button>
                 </div>
               ))}
@@ -367,38 +395,41 @@ export default function DirectorAreaZonas({ nivelEducativo }) {
           </div>
         )}
 
-        <div style={{ marginBottom: 10 }}>
-          <label style={{ display: 'block', marginBottom: 6 }}>Buscar por CUE o nombre</label>
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ display: 'block', marginBottom: 6, fontSize: '0.85rem', fontWeight: 600, color: 'var(--muted)' }}>Buscar por CUE o nombre</label>
           <input
             type="text"
             value={busquedaEscuela}
             onChange={(e) => setBusquedaEscuela(e.target.value)}
             placeholder="Ej: 700057900 o Escuela Tecnica"
+            style={{ fontSize: '0.9rem', padding: '10px 12px' }}
           />
           <div style={{ fontSize: '0.8rem', color: '#6b7280', marginTop: 6 }}>
-            Los resultados se actualizan mientras escribis
+            Los resultados se actualizan mientras escribís
           </div>
         </div>
 
         {institucionesFiltradas.length === 0 ? (
-          <p style={{ color: '#888' }}>
+          <p style={{ color: '#888', fontSize: '0.9rem', fontStyle: 'italic' }}>
             {departamentoSeleccionado
               ? 'No hay instituciones disponibles de tu nivel para el filtro seleccionado'
               : 'No hay instituciones disponibles de tu nivel'}
           </p>
         ) : !terminoBusquedaEscuela ? (
-          <p style={{ color: '#6b7280' }}>Escribi en el buscador para ver coincidencias.</p>
+          <p style={{ color: '#6b7280', fontSize: '0.9rem', fontStyle: 'italic' }}>Escribí en el buscador para ver coincidencias.</p>
         ) : institucionesBuscadas.length === 0 ? (
-          <p style={{ color: '#888' }}>No se encontraron escuelas con ese CUE o nombre.</p>
+          <p style={{ color: '#888', fontSize: '0.9rem', fontStyle: 'italic' }}>No se encontraron escuelas con ese CUE o nombre.</p>
         ) : (
           <div
             style={{
               border: '1px solid var(--border)',
               borderRadius: 8,
-              padding: 12,
+              padding: 10,
               display: 'grid',
               gap: 8,
-              background: '#fcfcfd'
+              background: '#fcfcfd',
+              maxHeight: '260px',
+              overflowY: 'auto'
             }}
           >
             {institucionesBuscadas.map((institucion) => (
@@ -409,26 +440,33 @@ export default function DirectorAreaZonas({ nivelEducativo }) {
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   gap: 10,
-                  padding: '8px 10px',
-                  border: '1px solid #e5e7eb',
+                  padding: '8px 12px',
+                  border: '1px solid #e2e8f0',
                   borderRadius: 8,
                   background: '#fff'
                 }}
               >
-                <span style={{ lineHeight: 1.35 }}>{getInstitutionOptionLabel(institucion)}</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                  <span style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--dark)', lineHeight: 1.35, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {institucion.nombre}
+                  </span>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>
+                    CUE: {institucion.cue} • {institucion.departamento}
+                  </span>
+                </div>
                 <button
                   type="button"
                   className="secondary"
                   onClick={() => toggleInstitucion(institucion.id)}
-                  style={{ margin: 0, minHeight: 'auto', padding: '6px 10px', whiteSpace: 'nowrap' }}
+                  style={{ margin: 0, minHeight: 'auto', padding: '6px 12px', whiteSpace: 'nowrap', fontSize: '0.82rem' }}
                 >
                   Agregar
                 </button>
               </div>
             ))}
             {terminoBusquedaEscuela && institucionesBuscadas.length === 25 && (
-              <div style={{ fontSize: '0.8rem', color: '#6b7280' }}>
-                Mostrando los primeros 25 resultados. Segui escribiendo para acotar.
+              <div style={{ fontSize: '0.8rem', color: '#6b7280', textAlign: 'center', padding: '4px 0' }}>
+                Mostrando los primeros 25 resultados. Seguí escribiendo para acotar.
               </div>
             )}
           </div>
@@ -447,10 +485,10 @@ export default function DirectorAreaZonas({ nivelEducativo }) {
         background: inline ? '#fafafa' : 'transparent'
       }}
     >
-      {inline && <h5 style={{ margin: '0 0 12px 0' }}>Editar zona</h5>}
+      {inline && <h5 style={{ margin: '0 0 12px 0', fontSize: '1rem' }}>Editar zona</h5>}
 
       <div style={{ marginBottom: 16 }}>
-        <label>Nombre de la zona</label>
+        <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--muted)' }}>Nombre de la zona</label>
         <input
           type="text"
           value={nombreZona}
@@ -459,17 +497,19 @@ export default function DirectorAreaZonas({ nivelEducativo }) {
             setSuccess('')
           }}
           placeholder="Ej: Zona Centro Norte"
+          style={{ fontSize: '0.9rem', padding: '10px 12px' }}
         />
       </div>
 
       <div style={{ marginBottom: 16 }}>
-        <label>Filtrar escuelas por departamento</label>
+        <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--muted)' }}>Filtrar escuelas por departamento</label>
         <select
           value={departamentoSeleccionado}
           onChange={(e) => {
             setDepartamentoSeleccionado(e.target.value)
             setSuccess('')
           }}
+          style={{ fontSize: '0.9rem', padding: '10px 12px' }}
         >
           <option value="">Todos los departamentos</option>
           {departamentos.map((departamento) => (
@@ -481,8 +521,8 @@ export default function DirectorAreaZonas({ nivelEducativo }) {
       {renderInstitucionesSelector()}
 
       {(institucionesSeleccionadas.length > 0 || editingZoneId) && (
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button type="button" onClick={handleGuardarZona} disabled={creando || institucionesSeleccionadas.length === 0}>
+        <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+          <button type="button" onClick={handleGuardarZona} disabled={creando || institucionesSeleccionadas.length === 0} style={{ margin: 0, padding: '10px 20px' }}>
             {creando
               ? 'Guardando...'
               : editingZoneId
@@ -490,8 +530,8 @@ export default function DirectorAreaZonas({ nivelEducativo }) {
                 : `Crear Zona (${institucionesSeleccionadas.length})`}
           </button>
           {editingZoneId && (
-            <button type="button" className="secondary" onClick={resetForm} disabled={creando}>
-              Cancelar edicion
+            <button type="button" className="secondary" onClick={resetForm} disabled={creando} style={{ margin: 0, padding: '10px 20px' }}>
+              Cancelar edición
             </button>
           )}
         </div>
@@ -501,120 +541,256 @@ export default function DirectorAreaZonas({ nivelEducativo }) {
 
   if (loading) {
     return (
-      <div style={{ padding: 16 }}>
-        <h3>Gestion de Zonas</h3>
-        <p>Cargando...</p>
+      <div style={{ padding: 24, textAlign: 'center' }}>
+        <h3>Gestión de Zonas</h3>
+        <p style={{ color: 'var(--muted)' }}>Cargando datos del sistema...</p>
       </div>
     )
   }
 
   if (!miNivel) {
     return (
-      <div style={{ padding: 16 }}>
-        <h3>Gestion de Zonas</h3>
-        <p style={{ color: '#a00' }}>Advertencia: no tienes definido un nivel educativo en tu perfil.</p>
+      <div style={{ padding: 24 }}>
+        <h3>Gestión de Zonas</h3>
+        <p style={{ color: '#dc2626', fontWeight: 600 }}>Advertencia: no tienes definido un nivel educativo en tu perfil.</p>
       </div>
     )
   }
 
   return (
     <>
-      <section style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 16, background: '#fff' }}>
-        <h3>Gestion de Zonas</h3>
-        <p>Nivel Educativo activo: <strong>{miNivel}</strong></p>
+      <style>{`
+        @media (min-width: 1024px) {
+          .responsive-split-zones {
+            grid-template-columns: 4.5fr 5.5fr !important;
+          }
+          .btn-label-text {
+            display: inline !important;
+          }
+        }
+        @media (max-width: 1023px) {
+          .btn-label-text {
+            display: none !important;
+          }
+        }
+      `}</style>
 
-        {error && <div className="msg show msg-error">{error}</div>}
-        {success && !error && (
-          <div className="msg show msg-success" style={{ marginTop: 16 }}>
-            {success}
+      <div className="responsive-split-zones" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '28px', alignItems: 'flex-start' }}>
+        
+        {/* Columna Izquierda: Formulario de Creación/Edición */}
+        <section style={{ border: '1px solid var(--border)', borderRadius: 16, padding: 28, background: '#fff', boxShadow: 'var(--shadow-premium)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, borderBottom: '1px solid #f1f5f9', paddingBottom: 12 }}>
+            <h3 style={{ margin: 0, fontSize: '1.25rem' }}>
+              {editingZoneId ? '✏️ Editar Zona' : '➕ Nueva Zona'}
+            </h3>
+            <span style={{
+              background: '#fff7ed',
+              color: '#ea580c',
+              padding: '4px 12px',
+              borderRadius: '20px',
+              fontSize: '0.8rem',
+              fontWeight: 700,
+              border: '1px solid #ffedd5'
+            }}>
+              Nivel: {miNivel}
+            </span>
           </div>
-        )}
 
-        {!editingZoneId && renderZoneForm()}
+          {error && <div className="msg show msg-error" style={{ marginBottom: 16 }}>{error}</div>}
+          {success && !error && (
+            <div className="msg show msg-success" style={{ marginBottom: 16 }}>
+              {success}
+            </div>
+          )}
 
-        {zonas.length > 0 && (
-          <div style={{ marginTop: 24 }}>
-            <h4>Zonas ({zonas.length})</h4>
-            {zonas.map((zona) => (
-              <div key={zona.id} style={{ padding: '8px 0', borderBottom: '1px solid #eee' }}>
-                <strong>{getZoneLabel(zona)}</strong>
-                <div style={{ fontSize: '0.85rem', color: '#666' }}>
-                  Departamentos: {getZoneDepartmentsLabel(zona)}
-                </div>
-                {(zona.instituciones || []).length > 0 && (
-                  <div style={{ marginTop: 6 }}>
-                    <button
-                      type="button"
-                      onClick={() => toggleEscuelas(zona.id)}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        padding: '2px 0',
-                        cursor: 'pointer',
-                        fontSize: '0.85rem',
-                        color: '#2a4d8f',
-                        fontWeight: 600,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 4
-                      }}
-                    >
-                      <span style={{ transition: 'transform 0.2s', display: 'inline-block', transform: expandedZonas[zona.id] ? 'rotate(90deg)' : 'rotate(0deg)' }}>▶</span>
-                      {expandedZonas[zona.id] ? 'Ocultar' : 'Ver'} escuelas ({zona.instituciones.length})
-                    </button>
-                    {expandedZonas[zona.id] && (
-                      <div style={{ display: 'grid', gap: 3, marginTop: 6, paddingLeft: 16, borderLeft: '3px solid #e0e7ef' }}>
-                        {zona.instituciones.map((institucion) => (
-                          <span key={institucion.id} style={{ fontSize: '0.85rem', color: '#444' }}>
-                            {getInstitutionOptionLabel(institucion)}
+          {!editingZoneId && renderZoneForm()}
+          {editingZoneId && (
+            <div style={{ color: 'var(--muted)', textAlign: 'center', padding: '12px 0' }}>
+              <p style={{ margin: '0 0 12px 0', fontSize: '0.9rem' }}>Editando la zona seleccionada a la derecha.</p>
+              <button type="button" className="secondary" onClick={resetForm} style={{ width: '100%' }}>
+                Cancelar edición para crear una nueva
+              </button>
+            </div>
+          )}
+        </section>
+
+        {/* Columna Derecha: Listado de Zonas Registradas */}
+        <section style={{ border: '1px solid var(--border)', borderRadius: 16, padding: 28, background: '#fff', boxShadow: 'var(--shadow-premium)' }}>
+          <h3 style={{ marginBottom: 20, fontSize: '1.25rem', borderBottom: '1px solid #f1f5f9', paddingBottom: 12 }}>
+            📋 Zonas Registradas ({zonas.length})
+          </h3>
+
+          {zonas.length === 0 ? (
+            <p style={{ color: 'var(--muted)', textAlign: 'center', padding: '32px 0', fontStyle: 'italic' }}>
+              No hay zonas registradas para tu nivel.
+            </p>
+          ) : (
+            <div style={{ display: 'grid', gap: '18px' }}>
+              {zonas.map((zona) => {
+                const isEditing = editingZoneId === zona.id;
+                return (
+                  <div
+                    key={zona.id}
+                    style={{
+                      padding: '20px',
+                      borderRadius: '12px',
+                      border: isEditing ? '2px solid var(--orange)' : '1px solid #e2e8f0',
+                      background: isEditing ? '#fffbf7' : '#fff',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)',
+                      transition: 'all 0.2s ease',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <h4 style={{ margin: '0 0 8px 0', fontSize: '1.1rem', fontWeight: 700, color: 'var(--dark)' }}>
+                          {getZoneLabel(zona)}
+                        </h4>
+                        
+                        {/* Badges de Departamentos */}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8, alignItems: 'center' }}>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase', marginRight: 4 }}>Dptos:</span>
+                          {(zona.instituciones || []).length === 0 ? (
+                            <span style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>-</span>
+                          ) : (
+                            [...new Set((zona.instituciones || []).map(i => i.departamento).filter(Boolean))].map(d => (
+                              <span key={d} style={{ background: '#f1f5f9', color: '#475569', padding: '2px 8px', borderRadius: '12px', fontSize: '0.72rem', fontWeight: 600 }}>
+                                {d}
+                              </span>
+                            ))
+                          )}
+                        </div>
+
+                        {/* Supervisor Badge */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem', color: '#475569', marginTop: 8 }}>
+                          <span style={{ fontWeight: 700, color: 'var(--muted)', fontSize: '0.72rem', textTransform: 'uppercase' }}>Supervisor:</span>
+                          <span style={{
+                            background: (zona.supervisores || []).length > 0 ? '#f0fdf4' : '#fff1f2',
+                            color: (zona.supervisores || []).length > 0 ? '#166534' : '#991b1b',
+                            padding: '2px 8px',
+                            borderRadius: '12px',
+                            fontWeight: 700,
+                            fontSize: '0.75rem',
+                            border: (zona.supervisores || []).length > 0 ? '1px solid #dcfce7' : '1px solid #ffe4e6'
+                          }}>
+                            {getZoneSupervisorLabel(zona)}
                           </span>
-                        ))}
+                        </div>
+                      </div>
+
+                      {/* Botones de acción rápidos */}
+                      <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                        <button
+                          type="button"
+                          className="secondary"
+                          onClick={() => startEditZone(zona)}
+                          style={{ margin: 0, minHeight: 'auto', padding: '6px 10px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 4 }}
+                          title="Editar nombre y escuelas"
+                        >
+                          ✏️ <span className="btn-label-text">Editar</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary"
+                          onClick={() => openSupervisorModal(zona)}
+                          style={{ margin: 0, minHeight: 'auto', padding: '6px 10px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 4 }}
+                          title="Asignar Supervisor"
+                        >
+                          👤 <span className="btn-label-text">Supervisor</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary"
+                          onClick={() => handleDeleteZone(zona)}
+                          disabled={deletingZoneId === zona.id}
+                          style={{ margin: 0, minHeight: 'auto', padding: '6px 10px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 4, borderColor: '#fecaca', color: '#dc2626' }}
+                          title="Eliminar Zona"
+                        >
+                          🗑️ <span className="btn-label-text">Eliminar</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Acordeón de escuelas */}
+                    {(zona.instituciones || []).length > 0 && (
+                      <div style={{ marginTop: 14, borderTop: '1px solid #f1f5f9', paddingTop: 10 }}>
+                        <button
+                          type="button"
+                          onClick={() => toggleEscuelas(zona.id)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            padding: 0,
+                            cursor: 'pointer',
+                            fontSize: '0.82rem',
+                            color: '#0284c7',
+                            fontWeight: 600,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6
+                          }}
+                        >
+                          <span style={{ transition: 'transform 0.2s', display: 'inline-block', transform: expandedZonas[zona.id] ? 'rotate(90deg)' : 'rotate(0deg)' }}>▶</span>
+                          {expandedZonas[zona.id] ? 'Ocultar' : 'Ver'} escuelas ({zona.instituciones.length})
+                        </button>
+                        {expandedZonas[zona.id] && (
+                          <div style={{ display: 'grid', gap: 6, marginTop: 10, paddingLeft: 12, borderLeft: '2px solid #e2e8f0' }}>
+                            {zona.instituciones.map((institucion) => (
+                              <div key={institucion.id} style={{ fontSize: '0.78rem', color: '#334155', display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                                <span style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>🏫 {institucion.nombre}</span>
+                                <span style={{ color: 'var(--muted)', fontSize: '0.72rem', flexShrink: 0 }}>CUE {institucion.cue} ({institucion.departamento})</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    
+                    {/* Formulario de edición inline */}
+                    {isEditing && (
+                      <div style={{ marginTop: 16, borderTop: '2px dashed var(--orange)', paddingTop: 16 }}>
+                        {renderZoneForm({ inline: true })}
                       </div>
                     )}
                   </div>
-                )}
-                <div style={{ fontSize: '0.85rem', color: '#666' }}>
-                  Supervisores: {getZoneSupervisorLabel(zona)}
-                </div>
-                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                  <button type="button" className="secondary" onClick={() => startEditZone(zona)}>
-                    Editar
-                  </button>
-                  <button type="button" className="secondary" onClick={() => openSupervisorModal(zona)}>
-                    Supervisores
-                  </button>
-                  <button
-                    type="button"
-                    className="secondary"
-                    onClick={() => handleDeleteZone(zona)}
-                    disabled={deletingZoneId === zona.id}
-                  >
-                    {deletingZoneId === zona.id ? 'Eliminando...' : 'Eliminar'}
-                  </button>
-                </div>
-                {editingZoneId === zona.id && renderZoneForm({ inline: true })}
-              </div>
-            ))}
-          </div>
-        )}
+                )
+              })}
+            </div>
+          )}
 
-        {departamentos.length === 0 && !error && (
-          <p style={{ color: '#888' }}>No hay departamentos disponibles</p>
-        )}
-      </section>
+          {departamentos.length === 0 && !error && (
+            <p style={{ color: '#888', textAlign: 'center', marginTop: 16, fontSize: '0.9rem' }}>No hay departamentos disponibles</p>
+          )}
+        </section>
+      </div>
 
       {modalOpen && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div style={{ background: '#fff', padding: 20, borderRadius: 6, minWidth: 320, maxWidth: '90%' }}>
-            <h4>Asignar Supervisor a la Zona</h4>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,.45)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="card fade-in" style={{ padding: 28, borderRadius: 16, minWidth: 420, maxWidth: '90%', minHeight: 'auto', boxShadow: 'var(--shadow-premium)' }}>
+            <h4 style={{ margin: '0 0 8px 0', fontSize: '1.25rem' }}>👤 Asignar Supervisor</h4>
+            <p style={{ color: 'var(--muted)', fontSize: '0.9rem', marginBottom: 20 }}>Selecciona los supervisores que estarán a cargo de esta zona:</p>
             {modalLoading ? (
-              <p>Cargando supervisores...</p>
+              <p style={{ textAlign: 'center', padding: '20px 0', color: 'var(--muted)', fontSize: '0.9rem' }}>Cargando supervisores...</p>
             ) : modalSupervisores.length === 0 ? (
-              <p>No hay supervisores disponibles para este nivel.</p>
+              <p style={{ textAlign: 'center', padding: '20px 0', color: 'var(--muted)', fontSize: '0.9rem' }}>No hay supervisores disponibles para este nivel.</p>
             ) : (
-              <div style={{ maxHeight: 260, overflowY: 'auto', marginBottom: 12 }}>
+              <div style={{ maxHeight: 260, overflowY: 'auto', marginBottom: 24, padding: '4px', display: 'grid', gap: 10 }}>
                 {modalSupervisores.map((supervisor) => (
-                  <label key={supervisor.id} style={{ display: 'block', padding: '4px 0' }}>
+                  <label
+                    key={supervisor.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                      padding: '10px 12px',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: 8,
+                      cursor: 'pointer',
+                      background: selectedSupervisores.includes(supervisor.id) ? '#f0fdf4' : 'transparent',
+                      borderColor: selectedSupervisores.includes(supervisor.id) ? '#bbf7d0' : '#e2e8f0',
+                      transition: 'all 0.2s',
+                      margin: 0
+                    }}
+                  >
                     <input
                       type="checkbox"
                       checked={selectedSupervisores.includes(supervisor.id)}
@@ -625,22 +801,37 @@ export default function DirectorAreaZonas({ nivelEducativo }) {
                             : [...prev, supervisor.id]
                         ))
                       }}
+                      style={{ width: 'auto', minHeight: 'auto' }}
                     />
-                    {supervisor.nombre} - {supervisor.nivel_educativo}
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--dark)' }}>
+                        {supervisor.nombre} {supervisor.apellido}
+                      </span>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
+                        {supervisor.email || supervisor.username || 'Supervisor'}
+                      </span>
+                    </div>
                   </label>
                 ))}
               </div>
             )}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-              <button onClick={() => {
-                setModalOpen(false)
-                setZonaIdCreada(null)
-              }}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button
+                className="secondary"
+                onClick={() => {
+                  setModalOpen(false)
+                  setZonaIdCreada(null)
+                }}
+                style={{ margin: 0, padding: '8px 16px' }}
               >
                 Cancelar
               </button>
-              <button onClick={handleAssignSupervisores} disabled={modalLoading || selectedSupervisores.length === 0}>
-                Guardar asignacion
+              <button
+                onClick={handleAssignSupervisores}
+                disabled={modalLoading}
+                style={{ margin: 0, padding: '8px 20px' }}
+              >
+                Guardar asignación
               </button>
             </div>
           </div>

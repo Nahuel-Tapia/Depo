@@ -93,6 +93,9 @@ export default function ComprasPanel({ section = 'pedidos', onNavigate }) {
   const [publicacionStatus, setPublicacionStatus] = useState({ publicada: false, data: null })
   const [selectedLicitacionId, setSelectedLicitacionId] = useState('')
   const [devolucionState, setDevolucionState] = useState({})
+  const [devolucionModal, setDevolucionModal] = useState(null)
+  const [detalleSearch, setDetalleSearch] = useState('')
+  const [consolidadoSearch, setConsolidadoSearch] = useState('')
   const [editQty, setEditQty] = useState({})
   const [showConfirmPublicar, setShowConfirmPublicar] = useState(false)
   const [motivoLicitacion, setMotivoLicitacion] = useState(`Licitación Anual ${new Date().getFullYear()}`)
@@ -276,6 +279,25 @@ export default function ComprasPanel({ section = 'pedidos', onNavigate }) {
     }, {})
     return Object.values(grouped)
   }, [detalle])
+
+  const filteredConsolidado = useMemo(() => {
+    const q = String(consolidadoSearch || '').toLowerCase().trim()
+    if (!q) return consolidado
+    return consolidado.filter(item => 
+      String(item.producto || '').toLowerCase().includes(q)
+    )
+  }, [consolidado, consolidadoSearch])
+
+  const filteredDetalleItems = useMemo(() => {
+    if (!detalle?.detalles) return []
+    const q = String(detalleSearch || '').toLowerCase().trim()
+    if (!q) return detalle.detalles
+    return detalle.detalles.filter(item => 
+      String(item.producto || '').toLowerCase().includes(q) ||
+      String(item.institucion || '').toLowerCase().includes(q) ||
+      String(item.cue || '').toLowerCase().includes(q)
+    )
+  }, [detalle, detalleSearch])
 
   const licitaciones = useMemo(() => publicacionStatus.licitaciones || [], [publicacionStatus])
 
@@ -636,78 +658,69 @@ export default function ComprasPanel({ section = 'pedidos', onNavigate }) {
       <div ref={printRef} style={{ marginTop: 18 }}>
         {section === 'licitacion' && (
           <div>
-            <section className="card" style={{ padding: 24, marginBottom: 24, minHeight: 'auto', width: '100%' }}>
-              <h3 style={{ marginTop: 0, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: '1.5rem' }}>🚦</span> Estado de envío por Director de Área
+            <section className="card" style={{ padding: 24, marginBottom: 24, minHeight: 'auto', width: '100%', borderRadius: 16 }}>
+              <h3 style={{ marginTop: 0, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10, fontSize: '1.1rem', fontWeight: 700 }}>
+                <span style={{ display: 'flex', alignItems: 'center', color: '#1e3a8a' }}><TrafficLightIcon /></span> Estado de envío por Director de Área
               </h3>
               <table style={{ marginBottom: 0 }}>
                 <thead>
                   <tr style={{ background: '#f8fafc' }}>
-                    <th>DIRECCIÓN DE ÁREA</th>
-                    <th style={{ textAlign: 'center' }}>ESTADO</th>
-                    <th style={{ textAlign: 'center' }}>ACCIÓN</th>
+                    <th style={{ padding: '12px 16px' }}>DIRECCIÓN DE ÁREA</th>
+                    <th style={{ textAlign: 'center', padding: '12px 16px' }}>ESTADO</th>
+                    <th style={{ textAlign: 'center', padding: '12px 16px' }}>ACCIÓN</th>
                   </tr>
                 </thead>
                 <tbody>
                   {estadoDirectores.length === 0 ? (
                     <tr>
-                      <td colSpan={3} style={{ textAlign: 'center', padding: 20, color: 'var(--muted)' }}>
+                      <td colSpan={3} style={{ textAlign: 'center', padding: 24, color: 'var(--muted)' }}>
                         No hay direcciones de área registradas.
                       </td>
                     </tr>
                   ) : (
                     estadoDirectores.map((dir) => {
                       const pid = dir.planilla_id
-                      const dev = devolucionState[pid] || {}
                       return (
-                        <tr key={dir.direccion_area}>
-                          <td style={{ fontWeight: 600 }}>{dir.direccion_area || 'Sin dirección'}</td>
-                          <td style={{ textAlign: 'center' }}>
+                        <tr key={dir.direccion_area} style={{ borderBottom: '1px solid rgba(29,37,45,0.05)' }}>
+                          <td style={{ fontWeight: 700, padding: '12px 16px' }}>{dir.direccion_area || 'Sin dirección'}</td>
+                          <td style={{ textAlign: 'center', padding: '12px 16px' }}>
                             {dir.enviado ? (
-                              <span style={{ color: '#166534', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                                ✅ Enviado
+                              <span style={{ color: '#0f5132', background: '#d1fae5', padding: '4px 12px', borderRadius: 12, fontSize: '0.78rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                ✓ Enviado
                               </span>
                             ) : (
-                              <span style={{ color: '#9a3412', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                              <span style={{ color: '#92400e', background: '#fef3c7', padding: '4px 12px', borderRadius: 12, fontSize: '0.78rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                                 ⏳ Pendiente
                               </span>
                             )}
                           </td>
-                          <td style={{ textAlign: 'center', minWidth: 180 }}>
+                          <td style={{ textAlign: 'center', padding: '12px 16px', minWidth: 150 }}>
                             {dir.enviado && pid ? (
-                              dev.open ? (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'stretch' }}>
-                                  <textarea
-                                    rows={2}
-                                    placeholder="Motivo de devolución (opcional)"
-                                    value={dev.motivo || ''}
-                                    onChange={e => setDevolucionState(prev => ({ ...prev, [pid]: { ...prev[pid], motivo: e.target.value } }))}
-                                    style={{ fontSize: '0.8rem', padding: '4px 6px', resize: 'vertical', borderRadius: 4, border: '1px solid #d1d5db' }}
-                                  />
-                                  <div style={{ display: 'flex', gap: 6 }}>
-                                    <button
-                                      onClick={() => handleDevolverPlanilla(pid)}
-                                      disabled={dev.loading}
-                                      style={{ flex: 1, background: '#b91c1c', color: '#fff', border: 'none', borderRadius: 4, padding: '4px 8px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}
-                                    >
-                                      {dev.loading ? 'Devolviendo...' : '↩ Confirmar'}
-                                    </button>
-                                    <button
-                                      onClick={() => setDevolucionState(prev => { const n = { ...prev }; delete n[pid]; return n })}
-                                      style={{ background: '#e5e7eb', border: 'none', borderRadius: 4, padding: '4px 8px', cursor: 'pointer', fontSize: '0.8rem' }}
-                                    >
-                                      Cancelar
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={() => setDevolucionState(prev => ({ ...prev, [pid]: { open: true, motivo: '', loading: false } }))}
-                                  style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fbbf24', borderRadius: 4, padding: '4px 12px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}
-                                >
-                                  ↩ Devolver
-                                </button>
-                              )
+                              <button
+                                onClick={() => setDevolucionModal({
+                                  planillaId: pid,
+                                  motivo: '',
+                                  loading: false,
+                                  directorArea: dir.direccion_area
+                                })}
+                                style={{
+                                  background: 'rgba(185, 28, 28, 0.08)',
+                                  color: '#b91c1c',
+                                  border: '1px solid rgba(185, 28, 28, 0.2)',
+                                  borderRadius: 8,
+                                  padding: '6px 14px',
+                                  cursor: 'pointer',
+                                  fontSize: '0.82rem',
+                                  fontWeight: 600,
+                                  transition: 'all 0.2s ease',
+                                  margin: 0,
+                                  width: 'auto'
+                                }}
+                                onMouseOver={e => e.currentTarget.style.background = 'rgba(185, 28, 28, 0.15)'}
+                                onMouseOut={e => e.currentTarget.style.background = 'rgba(185, 28, 28, 0.08)'}
+                              >
+                                Devolver
+                              </button>
                             ) : (
                               <span style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>—</span>
                             )}
@@ -720,43 +733,47 @@ export default function ComprasPanel({ section = 'pedidos', onNavigate }) {
               </table>
             </section>
 
-            <section className="card" style={{ padding: 24, marginBottom: 24, minHeight: 'auto', width: '100%' }}>
-              <h3 style={{ marginTop: 0, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: '1.5rem' }}>📜</span> Historial de Resúmenes Enviados
+            <section className="card" style={{ padding: 24, marginBottom: 24, minHeight: 'auto', width: '100%', borderRadius: 16 }}>
+              <h3 style={{ marginTop: 0, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10, fontSize: '1.1rem', fontWeight: 700 }}>
+                <span style={{ display: 'flex', alignItems: 'center', color: '#1e3a8a' }}><HistoryIcon /></span> Historial de Resúmenes Enviados
               </h3>
               <table style={{ marginBottom: 0 }}>
                 <thead>
                   <tr style={{ background: '#f8fafc' }}>
-                    <th>AÑO</th>
-                    <th>DIRECTOR DE ÁREA</th>
-                    <th>NIVEL</th>
-                    <th>ESTADO</th>
-                    <th>FECHA ENVÍO</th>
-                    <th>ACCIONES</th>
+                    <th style={{ padding: '12px 16px' }}>AÑO</th>
+                    <th style={{ padding: '12px 16px' }}>DIRECTOR DE ÁREA</th>
+                    <th style={{ padding: '12px 16px' }}>NIVEL</th>
+                    <th style={{ padding: '12px 16px' }}>ESTADO</th>
+                    <th style={{ padding: '12px 16px' }}>FECHA ENVÍO</th>
+                    <th style={{ padding: '12px 16px' }}>ACCIONES</th>
                   </tr>
                 </thead>
                 <tbody>
                   {planillas.length === 0 ? (
                     <tr>
-                      <td colSpan={6} style={{ textAlign: 'center', padding: 20, color: 'var(--muted)' }}>
+                      <td colSpan={6} style={{ textAlign: 'center', padding: 24, color: 'var(--muted)' }}>
                         No hay resúmenes enviados aún.
                       </td>
                     </tr>
                   ) : (
                     planillas.map((p) => (
-                      <tr key={p.id}>
-                        <td>{p.anio}</td>
-                        <td>{`${p.director_nombre || ''} ${p.director_apellido || ''}`.trim()}</td>
-                        <td>{p.nivel_educativo || '-'}</td>
-                        <td>
+                      <tr key={p.id} style={{ borderBottom: '1px solid rgba(29,37,45,0.05)' }}>
+                        <td style={{ padding: '12px 16px' }}>{p.anio}</td>
+                        <td style={{ fontWeight: 600, padding: '12px 16px' }}>{`${p.director_nombre || ''} ${p.director_apellido || ''}`.trim()}</td>
+                        <td style={{ padding: '12px 16px' }}>{p.nivel_educativo || '-'}</td>
+                        <td style={{ padding: '12px 16px' }}>
                           <span className={`badge badge-${ESTADO_BADGE[p.estado] || 'pendiente'}`}>
                             {p.estado}
                           </span>
                         </td>
-                        <td>{p.enviada_at ? new Date(p.enviada_at).toLocaleString('es-AR') : '-'}</td>
-                        <td>
-                          <button className="secondary" onClick={() => handleVerDetalle(p.id)}>
-                            {detalle?.planilla?.id === p.id ? 'Ocultar' : 'Ver Detalle'}
+                        <td style={{ padding: '12px 16px' }}>{p.enviada_at ? new Date(p.enviada_at).toLocaleString('es-AR') : '-'}</td>
+                        <td style={{ padding: '12px 16px' }}>
+                          <button 
+                            className="secondary" 
+                            style={{ padding: '6px 12px', fontSize: '0.82rem', borderRadius: 8, margin: 0, width: 'auto' }}
+                            onClick={() => handleVerDetalle(p.id)}
+                          >
+                            Ver Detalle
                           </button>
                         </td>
                       </tr>
@@ -766,65 +783,67 @@ export default function ComprasPanel({ section = 'pedidos', onNavigate }) {
               </table>
             </section>
 
-            {detalle && detalle.planilla && (
-              <section className="card" style={{ padding: 24, marginBottom: 24, minHeight: 'auto', width: '100%' }}>
-                <h3 style={{ marginTop: 0, marginBottom: 20 }}>
-                  Detalle del Resumen #{detalle.planilla.id} - {detalle.planilla.director_nombre} {detalle.planilla.director_apellido}
-                </h3>
-                <table>
-                  <thead>
-                    <tr style={{ background: '#f8fafc' }}>
-                      <th>PRODUCTO</th>
-                      <th style={{ textAlign: 'center' }}>CANTIDAD</th>
-                      <th>UNIDAD</th>
-                      <th>INSTITUCIÓN</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {detalle.detalles.map((det) => (
-                      <tr key={`${det.producto_id}-${det.cue}`}>
-                        <td style={{ fontWeight: 600 }}>{det.producto}</td>
-                        <td style={{ textAlign: 'center', fontWeight: 700 }}>{det.cantidad}</td>
-                        <td style={{ color: 'var(--muted)' }}>{det.unidad_medida}</td>
-                        <td>{det.institucion} ({det.cue})</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </section>
-            )}
-
-            <section className="card" style={{ padding: 24, minHeight: 'auto', width: '100%' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontSize: '1.5rem' }}>📋</span> Consolidado general
-                </h3>
-                <button className="secondary" onClick={handleExportCSV} disabled={!consolidado.length}>
-                  📥 Exportar Consolidado (CSV)
-                </button>
+            <section className="card" style={{ padding: 24, minHeight: 'auto', width: '100%', borderRadius: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '10px',
+                    background: 'rgba(30, 58, 138, 0.08)',
+                    color: '#1e3a8a',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}>
+                    <ClipboardIcon />
+                  </div>
+                  <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--dark)', fontWeight: 700 }}>Consolidado general</h3>
+                </div>
+                
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', flex: 1, justifyContent: 'flex-end', maxWidth: '600px' }}>
+                  <input
+                    type="text"
+                    placeholder="🔍 Buscar producto consolidado..."
+                    value={consolidadoSearch}
+                    onChange={e => setConsolidadoSearch(e.target.value)}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 8,
+                      border: '1px solid var(--border)',
+                      fontSize: '0.85rem',
+                      outline: 'none',
+                      minWidth: '200px',
+                      maxWidth: '300px'
+                    }}
+                  />
+                  <button className="secondary" onClick={handleExportCSV} disabled={!consolidado.length} style={{ padding: '8px 16px', fontSize: '0.85rem', borderRadius: 8, margin: 0, width: 'auto' }}>
+                    📥 Exportar Consolidado (CSV)
+                  </button>
+                </div>
               </div>
 
               {loading ? (
                 <div className="sv-empty-state">Generando consolidado...</div>
-              ) : consolidado.length === 0 ? (
-                <div className="sv-empty-state">Todavía no hay solicitudes aprobadas para el año en curso.</div>
+              ) : filteredConsolidado.length === 0 ? (
+                <div className="sv-empty-state">No se encontraron productos en el consolidado.</div>
               ) : (
                 <table style={{ marginBottom: 0 }}>
                   <thead>
                     <tr style={{ background: '#f8fafc' }}>
-                      <th>PRODUCTO</th>
-                      <th style={{ textAlign: 'center' }}>CANTIDAD TOTAL</th>
-                      <th>UNIDAD</th>
+                      <th style={{ padding: '12px 16px' }}>PRODUCTO</th>
+                      <th style={{ textAlign: 'center', padding: '12px 16px' }}>CANTIDAD TOTAL</th>
+                      <th style={{ padding: '12px 16px' }}>UNIDAD</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {consolidado.map((item) => (
-                      <tr key={item.producto_id}>
-                        <td style={{ fontWeight: 600 }}>{item.producto}</td>
-                        <td style={{ textAlign: 'center', fontSize: '1.1rem', fontWeight: 700, color: 'var(--primary)' }}>
+                    {filteredConsolidado.map((item) => (
+                      <tr key={item.producto_id} style={{ borderBottom: '1px solid rgba(29,37,45,0.05)' }}>
+                        <td style={{ fontWeight: 600, padding: '12px 16px' }}>{item.producto}</td>
+                        <td style={{ textAlign: 'center', fontSize: '1.05rem', fontWeight: 800, color: 'var(--primary)', padding: '12px 16px' }}>
                           {item.cantidad_total}
                         </td>
-                        <td style={{ color: 'var(--muted)' }}>{item.unidad_medida}</td>
+                        <td style={{ color: 'var(--muted)', padding: '12px 16px' }}>{item.unidad_medida}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1255,6 +1274,253 @@ export default function ComprasPanel({ section = 'pedidos', onNavigate }) {
           </div>
         </div>
       )}
+
+      {/* Modal de Devolución de Planilla */}
+      {devolucionModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(29, 37, 45, 0.4)',
+          backdropFilter: 'blur(6px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          animation: 'fadeIn 0.2s ease'
+        }}>
+          <div className="card" style={{
+            width: '100%',
+            maxWidth: '480px',
+            padding: '28px',
+            borderRadius: '16px',
+            background: '#ffffff',
+            boxShadow: 'var(--shadow-premium)',
+            margin: '16px'
+          }}>
+            <h3 style={{ margin: '0 0 8px', display: 'flex', alignItems: 'center', gap: 8, color: '#b91c1c', fontSize: '1.1rem', fontWeight: 700 }}>
+              <span style={{ fontSize: '1.25rem' }}>↩</span> Devolver Planilla
+            </h3>
+            <p style={{ margin: '0 0 20px', fontSize: '0.88rem', color: 'var(--muted)' }}>
+              ¿Estás seguro que deseas devolver la planilla de <strong>{devolucionModal.directorArea}</strong>? El Director de Área deberá corregirla y enviarla nuevamente.
+            </p>
+
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ display: 'block', fontWeight: 600, marginBottom: 6, fontSize: '0.85rem' }}>
+                Motivo de Devolución
+              </label>
+              <textarea
+                rows={3}
+                placeholder="Escribe el motivo detallado de la devolución..."
+                value={devolucionModal.motivo}
+                onChange={e => setDevolucionModal(prev => ({ ...prev, motivo: e.target.value }))}
+                style={{
+                  width: '100%',
+                  fontSize: '0.9rem',
+                  padding: '10px 12px',
+                  borderRadius: 8,
+                  border: '1px solid var(--border)',
+                  outline: 'none',
+                  resize: 'none',
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => setDevolucionModal(null)}
+                style={{ padding: '8px 16px', borderRadius: 8, fontSize: '0.85rem', margin: 0, width: 'auto' }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={devolucionModal.loading}
+                onClick={async () => {
+                  setDevolucionModal(prev => ({ ...prev, loading: true }))
+                  try {
+                    const res = await apiFetch(`/api/compras/planillas/${devolucionModal.planillaId}/devolver`, {
+                      token,
+                      method: 'PATCH',
+                      body: JSON.stringify({ motivo: devolucionModal.motivo }),
+                      headers: { 'Content-Type': 'application/json' }
+                    })
+                    const data = await res.json().catch(() => ({}))
+                    if (!res.ok) throw new Error(data.error || 'No se pudo devolver la planilla')
+                    setMsg({ text: `Planilla devuelta al director de área.`, type: 'success' })
+                    setDevolucionModal(null)
+                    await loadWorkflowData(filters)
+                  } catch (err) {
+                    setMsg({ text: err.message, type: 'error' })
+                    setDevolucionModal(prev => ({ ...prev, loading: false }))
+                  }
+                }}
+                style={{
+                  padding: '8px 16px',
+                  background: '#b91c1c',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: 8,
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  margin: 0,
+                  width: 'auto',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6
+                }}
+              >
+                {devolucionModal.loading ? 'Devolviendo...' : '↩ Devolver Planilla'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Detalle de Planilla */}
+      {detalle && detalle.planilla && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(29, 37, 45, 0.4)',
+          backdropFilter: 'blur(6px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          animation: 'fadeIn 0.2s ease'
+        }}>
+          <div className="card" style={{
+            width: '100%',
+            maxWidth: '850px',
+            padding: '28px',
+            borderRadius: '16px',
+            background: '#ffffff',
+            boxShadow: 'var(--shadow-premium)',
+            maxHeight: '85vh',
+            display: 'flex',
+            flexDirection: 'column',
+            margin: '16px'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--dark)', fontWeight: 700 }}>
+                  Detalle del Resumen #{detalle.planilla.id}
+                </h3>
+                <p style={{ margin: '4px 0 0', fontSize: '0.88rem', color: 'var(--muted)' }}>
+                  Director: <strong>{detalle.planilla.director_nombre} {detalle.planilla.director_apellido}</strong> | Nivel: <strong>{detalle.planilla.nivel_educativo}</strong>
+                </p>
+              </div>
+              <button 
+                onClick={() => { setDetalle(null); setDetalleSearch(''); }}
+                style={{
+                  background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: 'var(--muted)', padding: '0 4px', margin: 0, width: 'auto'
+                }}
+              >
+                &times;
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+              <input
+                type="text"
+                placeholder="🔍 Buscar por producto o institución..."
+                value={detalleSearch}
+                onChange={e => setDetalleSearch(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px 14px',
+                  borderRadius: 8,
+                  border: '1px solid var(--border)',
+                  fontSize: '0.88rem',
+                  outline: 'none',
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
+
+            <div style={{ overflowY: 'auto', flex: 1, border: '1px solid var(--border)', borderRadius: 10 }}>
+              <table style={{ marginBottom: 0, width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: '#f8fafc', borderBottom: '1px solid var(--border)' }}>
+                    <th style={{ textAlign: 'left', padding: '12px 16px' }}>PRODUCTO</th>
+                    <th style={{ textAlign: 'center', padding: '12px 16px' }}>CANTIDAD</th>
+                    <th style={{ textAlign: 'left', padding: '12px 16px' }}>UNIDAD</th>
+                    <th style={{ textAlign: 'left', padding: '12px 16px' }}>INSTITUCIÓN</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredDetalleItems.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} style={{ textAlign: 'center', padding: 24, color: 'var(--muted)' }}>
+                        No se encontraron productos coincidentes.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredDetalleItems.map((det) => (
+                      <tr key={`${det.producto_id}-${det.cue}`} style={{ borderBottom: '1px solid rgba(29,37,45,0.05)' }}>
+                        <td style={{ fontWeight: 600, padding: '12px 16px' }}>{det.producto}</td>
+                        <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--primary)', padding: '12px 16px' }}>{det.cantidad}</td>
+                        <td style={{ color: 'var(--muted)', padding: '12px 16px' }}>{det.unidad_medida}</td>
+                        <td style={{ padding: '12px 16px' }}>{det.institucion} <span style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>({det.cue})</span></td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 18 }}>
+              <span style={{ fontSize: '0.82rem', color: 'var(--muted)' }}>
+                Mostrando {filteredDetalleItems.length} de {detalle.detalles.length} filas
+              </span>
+              <button 
+                type="button" 
+                className="secondary" 
+                onClick={() => { setDetalle(null); setDetalleSearch(''); }}
+                style={{ padding: '8px 18px', borderRadius: 8, fontSize: '0.85rem', margin: 0, width: 'auto' }}
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+  )
+}
+
+// Iconos SVG de apoyo locales
+function TrafficLightIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="5" y="2" width="14" height="20" rx="7" />
+      <circle cx="12" cy="7" r="2.5" fill="currentColor" />
+      <circle cx="12" cy="12" r="2.5" fill="currentColor" />
+      <circle cx="12" cy="17" r="2.5" fill="currentColor" />
+    </svg>
+  )
+}
+
+function HistoryIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+      <polyline points="3 3 3 8 8 8" />
+      <line x1="12" y1="7" x2="12" y2="12" />
+      <line x1="12" y1="12" x2="16" y2="14" />
+    </svg>
+  )
+}
+
+function ClipboardIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+      <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+    </svg>
   )
 }
