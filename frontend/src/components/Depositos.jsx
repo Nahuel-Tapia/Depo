@@ -268,12 +268,13 @@ export default function Depositos() {
     printWindow.print()
   }
 
-  const getTipoLabel = (tipo) => {
+  const getTipoLabel = (tipo, nombre) => {
     switch (tipo) {
       case 'central': return '📦 Central'
       case 'centro_civico': return '🏛️ Centro Cívico'
       case 'capsula': return '🔐 Cápsula'
-      default: return tipo
+      case 'desguace': return '🔧 Desguace (Scrap)'
+      default: return nombre || tipo || 'Depósito'
     }
   }
 
@@ -309,7 +310,7 @@ export default function Depositos() {
               gap: '8px'
             }}
           >
-            {getTipoLabel(d.tipo)}
+            {getTipoLabel(d.tipo, d.nombre)}
           </button>
         ))}
       </div>
@@ -399,7 +400,7 @@ export default function Depositos() {
               <div style={{ fontSize: '0.85rem', lineHeight: '1.6' }}>
                 <div style={{ marginBottom: '8px' }}><strong>📍 Ubicación:</strong> {depositoSeleccionado.ubicacion}</div>
                 <div style={{ marginBottom: '8px' }}><strong>📝 Descripción:</strong> {depositoSeleccionado.descripcion}</div>
-                <div><strong>🏷️ Tipo:</strong> <span style={{ textTransform: 'capitalize' }}>{depositoSeleccionado.tipo.replace('_', ' ')}</span></div>
+                <div><strong>🏷️ Tipo:</strong> <span style={{ textTransform: 'capitalize' }}>{depositoSeleccionado.tipo ? depositoSeleccionado.tipo.replace('_', ' ') : 'Otro'}</span></div>
               </div>
             </div>
 

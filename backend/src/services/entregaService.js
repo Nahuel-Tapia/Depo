@@ -679,6 +679,14 @@ async function getDetalleSolicitudesEnvioDepartamento(departamentoParam, anioQue
     total_cantidad_pendiente: faltantesSolicitud.reduce((acc, item) => acc + Number(item.cantidad_pendiente_total || 0), 0),
   };
 
+  const sedesRows = await all(
+    `SELECT id_institucion, nombre, cue, establecimiento_cabecera 
+     FROM institucion 
+     WHERE LOWER(COALESCE(NULLIF(TRIM(departamento), ''), 'sin_departamento')) = LOWER($1)
+     ORDER BY nombre ASC`,
+    [departamento]
+  );
+
   return {
     anio,
     departamento,
@@ -686,6 +694,7 @@ async function getDetalleSolicitudesEnvioDepartamento(departamentoParam, anioQue
     resumen_faltantes: resumenFaltantes,
     solicitudes,
     faltantes_solicitud: faltantesSolicitud,
+    sedes_posibles: sedesRows,
   };
 }
 
@@ -698,6 +707,8 @@ async function registrarEgresoMultipleEnvio(userId, body) {
     id_deposito,
     observaciones,
     entregas,
+    tipo_envio,
+    id_institucion_sede,
   } = body || {};
 
   const departamentoValue = String(departamento || "").trim();
@@ -734,9 +745,32 @@ async function registrarEgresoMultipleEnvio(userId, body) {
     throw { status: 400, message: "No hay entregas válidas para procesar" };
   }
 
+  const isEscuelaSede = tipo_envio === 'escuela_sede';
+  if (isEscuelaSede && !parsePositiveInt(id_institucion_sede)) {
+    throw { status: 400, message: "Debe especificar la institución sede" };
+  }
+
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+
+    let depositoSedeId = null;
+    if (isEscuelaSede) {
+      // Find or create virtual deposit for Sede
+      const sedeRes = await client.query(`SELECT id_deposito FROM deposito WHERE id_institucion = $1 AND tipo_deposito = 'ESCUELA_SEDE'`, [id_institucion_sede]);
+      if (sedeRes.rows.length > 0) {
+        depositoSedeId = sedeRes.rows[0].id_deposito;
+      } else {
+        const instRes = await client.query(`SELECT nombre FROM institucion WHERE id_institucion = $1`, [id_institucion_sede]);
+        const nombreInst = instRes.rows[0]?.nombre || 'Desconocida';
+        const newDepRes = await client.query(
+          `INSERT INTO deposito (nombre, descripcion, tipo, activo, tipo_deposito, id_institucion) 
+           VALUES ($1, $2, 'virtual', true, 'ESCUELA_SEDE', $3) RETURNING id_deposito`,
+          [`Sede - ${nombreInst}`, 'Sub-depósito temporal de Sede cabecera', id_institucion_sede]
+        );
+        depositoSedeId = newDepRes.rows[0].id_deposito;
+      }
+    }
 
     const solicitudesRes = await client.query(
       `SELECT
@@ -842,7 +876,7 @@ async function registrarEgresoMultipleEnvio(userId, body) {
        RETURNING id`,
       [
         anioValue,
-        depositoId,
+        isEscuelaSede ? depositoSedeId : depositoId,
         observaciones || `Envío por departamento ${departamentoValue}`,
         userId,
         departamentoValue,
@@ -873,10 +907,10 @@ async function registrarEgresoMultipleEnvio(userId, body) {
           [
             item.id_producto,
             item.cantidad,
-            `Envio por departamento ${departamentoValue}`,
+            isEscuelaSede ? `Traslado a Sede ${departamentoValue}` : `Envio por departamento ${departamentoValue}`,
             solicitudData.id_institucion,
             userId,
-            observaciones || `Entrega por envío - Solicitud #${solicitudId} (${departamentoValue})`,
+            observaciones || (isEscuelaSede ? `Traslado a Escuela Sede - Solicitud #${solicitudId}` : `Entrega por envío - Solicitud #${solicitudId} (${departamentoValue})`),
             depositoId,
           ]
         );
@@ -925,13 +959,13 @@ async function registrarEgresoMultipleEnvio(userId, body) {
       if (Number(pendientesRes.rows[0]?.pendientes || 0) === 0) {
         await client.query(
           `UPDATE solicitud_retiro
-           SET estado = 'entregado',
-               id_usuario_entrega = $1,
+           SET estado = $1,
+               id_usuario_entrega = $2,
                fecha_entrega = NOW(),
-               id_usuario_acepta = COALESCE(id_usuario_acepta, $1),
+               id_usuario_acepta = COALESCE(id_usuario_acepta, $2),
                fecha_aceptacion = COALESCE(fecha_aceptacion, NOW())
-           WHERE id = $2`,
-          [userId, solicitudId]
+           WHERE id = $3`,
+          [isEscuelaSede ? 'en_sede' : 'entregado', userId, solicitudId]
         );
         solicitudesEntregadas.add(solicitudId);
       }
@@ -944,6 +978,16 @@ async function registrarEgresoMultipleEnvio(userId, body) {
          WHERE id_deposito = $2 AND id_producto = $3`,
         [total, depositoId, productoId]
       );
+      
+      if (isEscuelaSede && depositoSedeId) {
+        // Ingresar al depósito sede
+        await client.query(
+          `INSERT INTO stock_deposito (id_deposito, id_producto, cantidad)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (id_deposito, id_producto) DO UPDATE SET cantidad = stock_deposito.cantidad + $3`,
+          [depositoSedeId, productoId, total]
+        );
+      }
     }
 
     for (const loteItem of loteItemsMap.values()) {
@@ -1665,6 +1709,122 @@ async function getHistorialEntregasPedido(id_pedido, user) {
   return entregas;
 }
 
+async function listarEnSede(userId, userRole) {
+  await ensureEntregasSchema();
+  const client = await pool.connect();
+  try {
+    let institutionClause = "";
+    const params = [];
+    if (userRole === "directivo") {
+      const userRes = await client.query("SELECT id_institucion FROM usuario WHERE id_usuario = $1", [userId]);
+      if (!userRes.rows[0]?.id_institucion) return [];
+      institutionClause = "AND d.id_institucion = $1";
+      params.push(userRes.rows[0].id_institucion);
+    }
+    
+    // Buscar lotes de sede y las solicitudes asociadas
+    const query = `
+      SELECT sr.*,
+             i.nombre as institucion_nombre,
+             d.nombre as sede_nombre,
+             d.id_institucion as sede_id_institucion
+      FROM solicitud_retiro sr
+      JOIN institucion i ON i.id_institucion = sr.id_institucion
+      JOIN distribucion_lote dl ON dl.departamento = sr.departamento_envio
+      JOIN deposito d ON d.id_deposito = dl.id_deposito AND d.tipo_deposito = 'ESCUELA_SEDE'
+      WHERE sr.estado = 'en_sede' ${institutionClause}
+      ORDER BY sr.fecha_retiro DESC
+    `;
+    const res = await client.query(query, params);
+    
+    // populate items for these solicitudes
+    for (const sr of res.rows) {
+      const itemsRes = await client.query(`
+        SELECT srd.*, p.nombre as producto_nombre, p.unidad_medida
+        FROM solicitud_retiro_detalle srd
+        JOIN producto p ON p.id_producto = srd.id_producto
+        WHERE srd.id_solicitud_retiro = $1
+      `, [sr.id]);
+      sr.items = itemsRes.rows;
+    }
+    
+    return res.rows;
+  } finally {
+    client.release();
+  }
+}
+
+async function entregarDesdeSede(userId, solicitudId) {
+  await ensureEntregasSchema();
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    
+    const solRes = await client.query(`
+      SELECT sr.*,
+             d.id_deposito as sede_deposito_id
+      FROM solicitud_retiro sr
+      JOIN distribucion_lote dl ON dl.departamento = sr.departamento_envio AND dl.origen = 'solicitud_envio'
+      JOIN deposito d ON d.id_deposito = dl.id_deposito AND d.tipo_deposito = 'ESCUELA_SEDE'
+      WHERE sr.id = $1 AND sr.estado = 'en_sede'
+      FOR UPDATE
+    `, [solicitudId]);
+    
+    if (solRes.rows.length === 0) {
+      throw badRequest("La solicitud no está en estado 'en_sede' o no existe.");
+    }
+    
+    const solicitud = solRes.rows[0];
+    
+    // Obtener los items a entregar
+    const itemsRes = await client.query(`
+      SELECT * FROM solicitud_retiro_detalle WHERE id_solicitud_retiro = $1
+    `, [solicitudId]);
+    
+    for (const item of itemsRes.rows) {
+      const cantidadEntregada = Number(item.cantidad_entregada || 0);
+      if (cantidadEntregada > 0) {
+        // Descontar del depósito de la sede
+        await client.query(`
+          UPDATE stock_deposito
+          SET cantidad = cantidad - $1
+          WHERE id_deposito = $2 AND id_producto = $3
+        `, [cantidadEntregada, solicitud.sede_deposito_id, item.id_producto]);
+        
+        // Movimiento de egreso desde sede
+        await client.query(`
+          INSERT INTO movimiento_stock
+            (id_producto, tipo, cantidad, estado_producto, id_institucion, id_usuario, motivo, fecha_movimiento, id_deposito)
+          VALUES ($1, 'egreso', $2, 'nuevo', $3, $4, $5, NOW(), $6)
+        `, [
+          item.id_producto,
+          cantidadEntregada,
+          solicitud.id_institucion,
+          userId,
+          `Entrega final desde Escuela Sede - Solicitud #${solicitudId}`,
+          solicitud.sede_deposito_id
+        ]);
+      }
+    }
+    
+    await client.query(`
+      UPDATE solicitud_retiro
+      SET estado = 'entregado',
+          fecha_entrega = NOW(),
+          id_usuario_entrega = $1
+      WHERE id = $2
+    `, [userId, solicitudId]);
+    
+    await client.query("COMMIT");
+    return { success: true, message: "Entregado desde Sede correctamente" };
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 module.exports = {
   listarPedidosDisponibles,
   getProductosDisponiblesRetiro,
@@ -1675,6 +1835,8 @@ module.exports = {
   registrarEgresoMultipleEnvio,
   getSeguimientoEnvios,
   getDetalleSeguimientoLote,
+  listarEnSede,
+  entregarDesdeSede,
   aceptarSolicitudRetiro,
   getSolicitudesPendientes,
   getSolicitudesEntregadas,

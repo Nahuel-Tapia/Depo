@@ -93,6 +93,31 @@ async function listarBajas(req, res) {
   }
 }
 
+async function autorizarBaja(req, res) {
+  try {
+    const { id } = req.params;
+    const { accion } = req.body; // 'aprobar' o 'rechazar'
+    const result = await movimientoService.autorizarBaja(id, req.user, accion);
+    return res.json(result);
+  } catch (err) {
+    console.error("Error autorizando baja:", err);
+    const status = err.status || 500;
+    return res.status(status).json({ error: err.message || "No se pudo autorizar la baja" });
+  }
+}
+
+async function obtenerHistorialBaja(req, res) {
+  try {
+    const { id } = req.params;
+    const historial = await movimientoService.obtenerHistorialBaja(id);
+    return res.json({ historial });
+  } catch (err) {
+    console.error("Error obteniendo historial de baja:", err);
+    const status = err.status || 500;
+    return res.status(status).json({ error: err.message || "No se pudo obtener el historial de la baja" });
+  }
+}
+
 module.exports = {
   listarMovimientos,
   obtenerMovimiento,
@@ -101,5 +126,7 @@ module.exports = {
   crearMovimientoDirecto,
   obtenerStatsResumen,
   registrarBaja,
-  listarBajas
+  listarBajas,
+  autorizarBaja,
+  obtenerHistorialBaja
 };

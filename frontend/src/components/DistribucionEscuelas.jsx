@@ -23,6 +23,12 @@ export default function DistribucionEscuelas() {
   const [savingEnvio, setSavingEnvio] = useState(false)
   const [msg, setMsg] = useState({ text: '', type: '' })
 
+  const [tipoEnvio, setTipoEnvio] = useState('directo')
+  const [selectedSede, setSelectedSede] = useState('')
+
+  const [solicitudesSede, setSolicitudesSede] = useState([])
+  const [loadingSedes, setLoadingSedes] = useState(false)
+
   const anioActual = new Date().getFullYear()
 
   const totalEscuelasConCarga = useMemo(() => {
@@ -119,12 +125,35 @@ export default function DistribucionEscuelas() {
     }
   }
 
+  const loadSedes = async () => {
+    setLoadingSedes(true)
+    try {
+      const res = await apiFetch(`/api/entregas/sedes/en-sede`, { token })
+      if (res.ok) {
+        const data = await res.json()
+        setSolicitudesSede(data.solicitudes || [])
+      } else {
+        const data = await res.json().catch(() => ({}))
+        setMsg({ text: data.error || 'No se pudieron cargar las solicitudes en Sede', type: 'error' })
+      }
+    } catch {
+      setMsg({ text: 'Error de conexión al cargar solicitudes en Sede', type: 'error' })
+    } finally {
+      setLoadingSedes(false)
+    }
+  }
+
   useEffect(() => {
-    loadZonas()
+    if (vista === 'envios') {
+      loadDepartamentosEnvio()
+      loadSeguimientoEnvio()
+    } else if (vista === 'sedes') {
+      loadSedes()
+    } else {
+      loadZonas()
+    }
     loadDepositos()
-    loadDepartamentosEnvio()
-    loadSeguimientoEnvio()
-  }, [])
+  }, [vista])
 
   const verDetalleZona = async (zona) => {
     setLoading(true)
@@ -249,6 +278,10 @@ export default function DistribucionEscuelas() {
       setMsg({ text: 'Seleccione un depósito de origen', type: 'error' })
       return
     }
+    if (tipoEnvio === 'escuela_sede' && !selectedSede) {
+      setMsg({ text: 'Debe seleccionar una Escuela Sede cabecera', type: 'error' })
+      return
+    }
 
     const payloadEntregas = Object.entries(entregasEnvio)
       .map(([idSolicitud, productos]) => {
@@ -274,12 +307,14 @@ export default function DistribucionEscuelas() {
           id_deposito: Number(selectedDeposito),
           observaciones: `Distribución por envío - ${detalleDepartamento.departamento}`,
           entregas: payloadEntregas,
+          tipo_envio: tipoEnvio,
+          id_institucion_sede: tipoEnvio === 'escuela_sede' ? Number(selectedSede) : null,
         }),
       })
 
       if (res.ok) {
         const data = await res.json()
-        setMsg({ text: `Egreso por departamento registrado. Movimientos: ${data.movimientos_creados}`, type: 'success' })
+        setMsg({ text: `Egreso por departamento registrado. Lote: #${data.lote_id}`, type: 'success' })
         setDetalleDepartamento(null)
         setEntregasEnvio({})
         loadDepartamentosEnvio()
@@ -582,6 +617,35 @@ export default function DistribucionEscuelas() {
           </div>
         </div>
 
+        <div style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: 8, border: '1px solid #e2e8f0', marginBottom: 16, display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div>
+            <label style={{ fontSize: '0.9rem', fontWeight: 600, display: 'block', marginBottom: 6 }}>Metodología de Envío</label>
+            <div style={{ display: 'flex', gap: 16 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                <input type="radio" name="tipoEnvio" value="directo" checked={tipoEnvio === 'directo'} onChange={(e) => setTipoEnvio(e.target.value)} />
+                <span>Envío Directo a Escuelas</span>
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                <input type="radio" name="tipoEnvio" value="escuela_sede" checked={tipoEnvio === 'escuela_sede'} onChange={(e) => setTipoEnvio(e.target.value)} />
+                <span>Agrupado en Escuela Sede</span>
+              </label>
+            </div>
+          </div>
+          {tipoEnvio === 'escuela_sede' && (
+            <div style={{ flex: 1, minWidth: 250 }}>
+              <label style={{ fontSize: '0.9rem', fontWeight: 600, display: 'block', marginBottom: 6 }}>Seleccionar Escuela Sede (Cabecera)</label>
+              <select value={selectedSede} onChange={(e) => setSelectedSede(e.target.value)} style={{ padding: '8px 12px', borderRadius: 8, width: '100%', borderColor: '#cbd5e1' }}>
+                <option value="">-- Seleccionar Institución Sede --</option>
+                {(detalleDepartamento.sedes_posibles || []).map((inst) => (
+                  <option key={inst.id_institucion} value={inst.id_institucion}>
+                    {inst.nombre} {inst.establecimiento_cabecera ? `(Sede: ${inst.establecimiento_cabecera})` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+
         <h3 style={{ borderBottom: '2px solid var(--primary)', paddingBottom: 10, marginBottom: 10 }}>
           Departamento: {detalleDepartamento.departamento}
         </h3>
@@ -734,6 +798,76 @@ export default function DistribucionEscuelas() {
     )
   }
 
+  const handleEntregarSede = async (solicitudId) => {
+    if (!window.confirm('¿Confirmar la entrega final de esta solicitud desde la Sede?')) return
+    setSavingEnvio(true)
+    try {
+      const res = await apiFetch(`/api/entregas/sedes/${solicitudId}/entregar`, {
+        method: 'POST',
+        token
+      })
+      if (res.ok) {
+        setMsg({ text: 'Entrega confirmada correctamente.', type: 'success' })
+        loadSedes()
+      } else {
+        const data = await res.json().catch(() => ({}))
+        setMsg({ text: data.error || 'Error al confirmar la entrega', type: 'error' })
+      }
+    } catch {
+      setMsg({ text: 'Error de conexión', type: 'error' })
+    } finally {
+      setSavingEnvio(false)
+    }
+  }
+
+  const renderSedes = () => {
+    return (
+      <section>
+        <div style={{ marginBottom: 16 }}>
+          <h3>Solicitudes en Escuela Sede</h3>
+          <p style={{ color: 'var(--muted)', fontSize: '0.9rem', marginTop: 4 }}>
+            Estas solicitudes se encuentran físicamente en un Sub-depósito Sede. Haz clic en "Confirmar Entrega" cuando el responsable de la escuela periférica retire su pedido.
+          </p>
+        </div>
+
+        {loadingSedes ? (
+          <div className="spinner" style={{ margin: '40px auto' }}></div>
+        ) : solicitudesSede.length === 0 ? (
+          <div className="sv-empty-state">No hay solicitudes actualmente en estado "En Sede".</div>
+        ) : (
+          <div className="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>Solicitud #</th>
+                  <th>Institución Destino</th>
+                  <th>Sede Cabecera</th>
+                  <th>Fecha En Sede</th>
+                  <th style={{ textAlign: 'right' }}>Acción</th>
+                </tr>
+              </thead>
+              <tbody>
+                {solicitudesSede.map((sol) => (
+                  <tr key={sol.id}>
+                    <td>#{sol.id}</td>
+                    <td><strong style={{ display: 'block' }}>{sol.institucion_nombre}</strong></td>
+                    <td>{sol.sede_nombre}</td>
+                    <td>{new Date(sol.created_at).toLocaleDateString()}</td>
+                    <td style={{ textAlign: 'right' }}>
+                      <button className="primary" onClick={() => handleEntregarSede(sol.id)} disabled={savingEnvio}>
+                        Confirmar Entrega
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    )
+  }
+
   return (
     <div className="card" style={{ padding: 24, minHeight: 'auto' }}>
       <h2 style={{ marginTop: 0 }}>Distribución por Zonas (Egreso Múltiple)</h2>
@@ -758,6 +892,14 @@ export default function DistribucionEscuelas() {
         >
           Envíos por Departamento
         </button>
+        <button
+          type="button"
+          className={vista === 'sedes' ? 'primary' : 'secondary'}
+          onClick={() => setVista('sedes')}
+          style={{ width: 'auto', margin: 0 }}
+        >
+          Entregas desde Sede
+        </button>
       </div>
 
       {msg.text && (
@@ -766,7 +908,9 @@ export default function DistribucionEscuelas() {
         </div>
       )}
 
-      {vista === 'zonas' ? renderZonas() : renderEnviosDepartamento()}
+      {vista === 'zonas' && renderZonas()}
+      {vista === 'envios' && renderEnviosDepartamento()}
+      {vista === 'sedes' && renderSedes()}
     </div>
   )
 }

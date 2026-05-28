@@ -64,7 +64,7 @@ const TABS = [
   { key: 'proveedores', label: 'Proveedores', permission: 'proveedores.view', hideForRoles: ['supervisor', 'director_area'], roleFor: 'admin', icon: TruckIcon },
   { key: 'usuarios', label: 'Usuarios', permission: 'users.read', icon: UserIcon },
   { key: 'kits', label: 'Kits de Productos', permission: 'supervision.manage', roleFor: 'director_area', icon: BoxIcon },
-  { key: 'bajas', label: 'Bajas', permission: 'movimientos.view', roleFor: 'operador', icon: ShieldIcon },
+  { key: 'bajas', label: 'Bajas', permission: 'movimientos.view', hideForRoles: ['supervisor', 'director_area', 'directivo'], icon: ShieldIcon },
   { key: 'depositos', label: 'Depositos', permission: 'stock.view', roleFor: 'admin', icon: BuildingIcon },
   { key: 'diagnostico-stock', label: 'Diagnóstico de Stock', permission: 'stock.view', roleFor: 'admin', icon: ShieldIcon },
   { key: 'mi-cuenta', label: 'Mi cuenta', permission: null, icon: UserIcon },
@@ -169,6 +169,7 @@ export default function Dashboard() {
         'compras-adjudicacion',
         'compras-entregas',
         'proveedores',
+        'bajas',
       ].includes(tab.key))
     }
 

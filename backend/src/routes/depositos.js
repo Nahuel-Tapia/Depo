@@ -1,4 +1,4 @@
-const express = require("express");
+cconst express = require("express");
 const { authenticate, authorizePermissions } = require("../middleware/auth");
 const { PERMISSIONS } = require("../permissions");
 const depositoController = require("../controllers/depositoController");

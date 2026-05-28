@@ -101,15 +101,26 @@ async function initDatabaseSchema() {
       console.warn("[schemaManager] Warning altering table proveedor:", err.message);
     }
 
-    // 4. Movimiento Stock Alterations
+    // 4. Movimiento Stock y Deposito Alterations
     try {
       await client.query(`
         ALTER TABLE movimiento_stock ADD COLUMN IF NOT EXISTS fecha_vencimiento DATE;
         ALTER TABLE movimiento_stock ADD COLUMN IF NOT EXISTS id_deposito INT;
         ALTER TABLE movimiento_stock ADD COLUMN IF NOT EXISTS id_deposito_destino INT;
       `);
+      await client.query(`
+        ALTER TABLE deposito ADD COLUMN IF NOT EXISTS tipo_deposito VARCHAR(40) DEFAULT 'central';
+      `);
+      // Seed desguace deposit if it doesn't exist
+      await client.query(`
+        INSERT INTO deposito (nombre, tipo_deposito)
+        SELECT 'Depósito de Desguace (Scrap)', 'desguace'
+        WHERE NOT EXISTS (
+          SELECT 1 FROM deposito WHERE tipo_deposito = 'desguace'
+        );
+      `);
     } catch (err) {
-      console.warn("[schemaManager] Warning altering table movimiento_stock:", err.message);
+      console.warn("[schemaManager] Warning altering tables in step 4:", err.message);
     }
 
     // 5. Product Kit Table & Alterations
@@ -684,6 +695,8 @@ async function initDatabaseSchema() {
       await client.query(`
         ALTER TABLE public.baja_movimientos 
         ADD COLUMN IF NOT EXISTS id_deposito INTEGER;
+        ALTER TABLE public.baja_movimientos
+        ADD COLUMN IF NOT EXISTS estado VARCHAR(20) DEFAULT 'pendiente';
       `);
     } catch (err) {
       console.warn("[schemaManager] Warning creating table baja_movimientos:", err.message);

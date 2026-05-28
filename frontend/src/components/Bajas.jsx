@@ -35,7 +35,13 @@ export default function Bajas() {
   const [fotoModalSrc, setFotoModalSrc] = useState('')
   const [fotoModalError, setFotoModalError] = useState('')
 
+  // Historial
+  const [historyModalOpen, setHistoryModalOpen] = useState(false)
+  const [historialBaja, setHistorialBaja] = useState([])
+  const [loadingHistory, setLoadingHistory] = useState(false)
+
   const canCreate = hasPermission('movimientos.create')
+  const canAuthorize = hasPermission('bajas.authorize')
 
   // ─── Loaders ───
   const loadBajas = useCallback(async (opts = {}) => {
@@ -163,6 +169,11 @@ export default function Bajas() {
     const error = validarFormulario()
     if (error) { setMsg({ text: error, type: 'error' }); return }
 
+    if (!form.fotoFile) {
+      setMsg({ text: 'La fotografía de evidencia es obligatoria', type: 'error' }); 
+      return;
+    }
+
     setSubmitting(true)
     setMsg({ text: '', type: '' })
 
@@ -205,6 +216,49 @@ export default function Bajas() {
     setFotoModalError('')
     setFotoModalSrc(`${API_URL}${fotoPath}`)
     setFotoModalOpen(true)
+  }
+
+  const handleAuthorize = async (id, accion) => {
+    if (!window.confirm(`¿Estás seguro de ${accion} esta solicitud de baja?`)) return
+    
+    setLoading(true)
+    try {
+      const res = await apiFetch(`/api/movimientos/bajas/${id}/autorizar`, {
+        method: 'POST',
+        token,
+        body: JSON.stringify({ accion }),
+        headers: { 'Content-Type': 'application/json' }
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setMsg({ text: data.error || `Error al ${accion} la baja`, type: 'error' })
+      } else {
+        setMsg({ text: `Baja ${accion === 'aprobar' ? 'aprobada' : 'rechazada'} correctamente`, type: 'success' })
+        loadBajas()
+      }
+    } catch {
+      setMsg({ text: 'Error de red al autorizar la baja', type: 'error' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const loadHistorial = async (bajaId) => {
+    setLoadingHistory(true)
+    setHistoryModalOpen(true)
+    try {
+      const res = await apiFetch(`/api/movimientos/bajas/${bajaId}/historial`, { token })
+      if (res.ok) {
+        const data = await res.json()
+        setHistorialBaja(data.historial || [])
+      } else {
+        setHistorialBaja([])
+      }
+    } catch {
+      setHistorialBaja([])
+    } finally {
+      setLoadingHistory(false)
+    }
   }
 
   const fmtDate = (d) => d ? new Date(d).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'
@@ -304,13 +358,15 @@ export default function Bajas() {
               <th>Motivo</th>
               <th>Operador</th>
               <th>Foto</th>
+              <th>Estado</th>
+              <th>Acciones</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan="7" style={{ textAlign: 'center', padding: 32, color: 'var(--muted)' }}>Cargando...</td></tr>
+              <tr><td colSpan={canAuthorize ? "9" : "8"} style={{ textAlign: 'center', padding: 32, color: 'var(--muted)' }}>Cargando...</td></tr>
             ) : bajas.length === 0 ? (
-              <tr><td colSpan="7" style={{ textAlign: 'center', padding: 32, color: 'var(--muted)' }}>No hay bajas registradas</td></tr>
+              <tr><td colSpan={canAuthorize ? "9" : "8"} style={{ textAlign: 'center', padding: 32, color: 'var(--muted)' }}>No hay bajas registradas</td></tr>
             ) : (
               bajas.map(b => (
                 <tr key={b.id}>
@@ -343,6 +399,47 @@ export default function Bajas() {
                     ) : (
                       <span style={{ color: '#cbd5e1', fontSize: '0.85rem' }}>—</span>
                     )}
+                  </td>
+                  <td>
+                    <span className="badge" style={{
+                      background: b.estado === 'pendiente' ? '#fffbeb' : b.estado === 'aprobada' ? '#ecfdf5' : '#fef2f2',
+                      color: b.estado === 'pendiente' ? '#b45309' : b.estado === 'aprobada' ? '#065f46' : '#b91c1c',
+                      fontWeight: 700, textTransform: 'uppercase', fontSize: '0.75rem'
+                    }}>
+                      {b.estado || 'aprobada'}
+                    </span>
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button
+                        type="button"
+                        onClick={() => loadHistorial(b.id)}
+                        title="Ver Historial"
+                        style={{ background: '#f1f5f9', color: '#334155', border: '1px solid #cbd5e1', borderRadius: 4, padding: '4px 8px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600, width: 'auto', margin: 0, minHeight: 0 }}
+                      >
+                        🕒
+                      </button>
+                      {canAuthorize && b.estado === 'pendiente' && (
+                        <>
+                          <button
+                            type="button"
+                            title="Aprobar"
+                            onClick={() => handleAuthorize(b.id, 'aprobar')}
+                            style={{ background: '#059669', color: '#fff', border: 'none', borderRadius: 4, padding: '4px 8px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600, width: 'auto', margin: 0, minHeight: 0 }}
+                          >
+                            ✅
+                          </button>
+                          <button
+                            type="button"
+                            title="Rechazar"
+                            onClick={() => handleAuthorize(b.id, 'rechazar')}
+                            style={{ background: '#dc2626', color: '#fff', border: 'none', borderRadius: 4, padding: '4px 8px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600, width: 'auto', margin: 0, minHeight: 0 }}
+                          >
+                            ❌
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))
@@ -517,8 +614,8 @@ export default function Bajas() {
 
                 {/* Foto */}
                 <div style={{ gridColumn: '1 / -1' }}>
-                  <label>Foto de evidencia (opcional)</label>
-                  <input type="file" accept="image/*" onChange={handleFotoChange} />
+                  <label>Foto de evidencia (obligatoria)</label>
+                  <input type="file" accept="image/*" onChange={handleFotoChange} required />
                   {form.fotoFile && (
                     <div style={{ marginTop: 8 }}>
                       <img
@@ -553,7 +650,7 @@ export default function Bajas() {
                     background: '#b91c1c', opacity: submitting ? 0.6 : 1
                   }}
                 >
-                  {submitting ? 'Registrando...' : '🚫 Confirmar Baja'}
+                  {submitting ? 'Enviando...' : '🚫 Solicitar Baja'}
                 </button>
               </div>
             </form>
@@ -608,6 +705,75 @@ export default function Bajas() {
               alt="Foto de evidencia de daño"
               style={{ maxWidth: '85vw', maxHeight: '80vh', borderRadius: 8, objectFit: 'contain', display: fotoModalError ? 'none' : 'block' }}
             />
+          </div>
+        </div>
+      )}
+
+      {/* ─── Modal de Historial ─── */}
+      {historyModalOpen && (
+        <div
+          style={{
+            position: 'fixed', inset: 0,
+            background: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 1000, padding: 16
+          }}
+          onClick={e => { if (e.target === e.currentTarget) setHistoryModalOpen(false) }}
+        >
+          <div style={{
+            background: '#fff', padding: 0, borderRadius: 14, width: 'min(500px, 100%)',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+            maxHeight: '90vh', overflowY: 'auto'
+          }}>
+            <div style={{
+              padding: '18px 24px', borderBottom: '1px solid var(--border)',
+              background: '#f8fafc', borderRadius: '14px 14px 0 0',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+            }}>
+              <h3 style={{ margin: 0, fontSize: '1.1rem' }}>🕒 Historial de la Solicitud</h3>
+              <button
+                type="button"
+                onClick={() => setHistoryModalOpen(false)}
+                style={{
+                  background: 'none', border: 'none', fontSize: '1.4rem', cursor: 'pointer',
+                  color: 'var(--muted)', padding: 4, width: 36, height: 36,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  borderRadius: 6, margin: 0, minHeight: 0
+                }}
+              >×</button>
+            </div>
+            <div style={{ padding: 24 }}>
+              {loadingHistory ? (
+                <p style={{ textAlign: 'center', color: 'var(--muted)' }}>Cargando historial...</p>
+              ) : historialBaja.length === 0 ? (
+                <p style={{ textAlign: 'center', color: 'var(--muted)' }}>No hay historial registrado para esta baja.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {historialBaja.map((h, i) => (
+                    <div key={h.id} style={{ display: 'flex', gap: 12 }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <div style={{ width: 12, height: 12, borderRadius: '50%', background: 'var(--primary)', flexShrink: 0, marginTop: 4 }}></div>
+                        {i < historialBaja.length - 1 && <div style={{ width: 2, flexGrow: 1, background: 'var(--border)', margin: '4px 0' }}></div>}
+                      </div>
+                      <div style={{ paddingBottom: 16 }}>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: 4 }}>
+                          {fmtDate(h.created_at)}
+                        </div>
+                        <div style={{ fontWeight: 600, fontSize: '0.95rem', marginBottom: 4 }}>
+                          {h.estado_nuevo.toUpperCase()}
+                        </div>
+                        <div style={{ fontSize: '0.9rem', color: 'var(--dark)' }}>
+                          {h.comentarios}
+                        </div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--muted)', marginTop: 4 }}>
+                          👤 {h.usuario_nombre || 'Sistema'}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

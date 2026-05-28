@@ -118,4 +118,18 @@ router.get(
   entregaController.getHistorialEntregasPedido
 );
 
+// GET /api/entregas/sedes/en-sede - Solicitudes actualmente en la sede
+router.get(
+  "/sedes/en-sede",
+  authorizePermissions(PERMISSIONS.PEDIDOS_VIEW),
+  entregaController.listarEnSede
+);
+
+// POST /api/entregas/sedes/:id/entregar - Entregar finalmente desde la sede a la escuela periférica
+router.post(
+  "/sedes/:id/entregar",
+  authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE),
+  entregaController.entregarDesdeSede
+);
+
 module.exports = router;

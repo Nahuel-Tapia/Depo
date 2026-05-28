@@ -189,6 +189,27 @@ async function getHistorialEntregasPedido(req, res) {
   }
 }
 
+async function listarEnSede(req, res) {
+  try {
+    const solicitudes = await entregaService.listarEnSede(req.user.sub, req.user.role);
+    return res.json({ solicitudes });
+  } catch (err) {
+    console.error("Error al listar solicitudes en sede:", err);
+    return res.status(500).json({ error: "No se pudieron obtener las solicitudes en sede" });
+  }
+}
+
+async function entregarDesdeSede(req, res) {
+  try {
+    const result = await entregaService.entregarDesdeSede(req.user.sub, req.params.id);
+    return res.json(result);
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    console.error("Error al entregar desde sede:", err);
+    return res.status(500).json({ error: "No se pudo entregar desde sede" });
+  }
+}
+
 module.exports = {
   listarPedidosDisponibles,
   getProductosDisponiblesRetiro,
@@ -205,5 +226,7 @@ module.exports = {
   getComprobanteRetiro,
   entregarSolicitudRetiro,
   retirarPedido,
-  getHistorialEntregasPedido
+  getHistorialEntregasPedido,
+  listarEnSede,
+  entregarDesdeSede
 };

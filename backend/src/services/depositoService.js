@@ -82,7 +82,7 @@ async function listDepositos(user) {
       d.nombre,
       d.descripcion,
       d.ubicacion,
-      d.tipo,
+      COALESCE(d.tipo, d.tipo_deposito) as tipo,
       d.activo,
       d.deposito_padre_id,
       dp.nombre as nombre_padre
@@ -95,7 +95,7 @@ async function listDepositos(user) {
     query += " AND d.id_deposito IN (1, 2)";
   }
 
-  query += " ORDER BY d.tipo, d.id_deposito";
+  query += " ORDER BY COALESCE(d.tipo, d.tipo_deposito), d.id_deposito";
 
   return await all(query);
 }
@@ -130,7 +130,11 @@ async function getStockPorProducto(user) {
 
 async function getStockByDeposito(id, user) {
   const isEscolar = user.role === "operador_escolar";
-  const deposito = await get("SELECT * FROM deposito WHERE id_deposito = $1", [id]);
+  const deposito = await get(
+    `SELECT id_deposito, nombre, descripcion, ubicacion, COALESCE(tipo, tipo_deposito) as tipo, activo, deposito_padre_id 
+     FROM deposito WHERE id_deposito = $1`, 
+    [id]
+  );
   if (!deposito) {
     throw { status: 404, message: "Depósito no encontrado" };
   }

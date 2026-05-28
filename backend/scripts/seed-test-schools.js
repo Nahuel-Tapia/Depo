@@ -275,8 +275,8 @@ async function ensureTestUsers(client) {
   for (const user of TEST_USERS) {
     await client.query(
       `INSERT INTO usuario (
-        nombre, apellido, dni, email, password, telefono, id_institucion, role, activo, created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, NULL, NULL, $6, TRUE, NOW(), NOW())
+        nombre, apellido, dni, email, password, telefono, id_institucion, role, activo, created_at
+      ) VALUES ($1, $2, $3, $4, $5, NULL, NULL, $6, TRUE, NOW())
       ON CONFLICT (email)
       DO UPDATE SET
         nombre = EXCLUDED.nombre,
@@ -284,8 +284,7 @@ async function ensureTestUsers(client) {
         dni = EXCLUDED.dni,
         password = EXCLUDED.password,
         role = EXCLUDED.role,
-        activo = TRUE,
-        updated_at = NOW()`,
+        activo = TRUE`,
       [user.nombre, user.apellido, user.dni, user.email.toLowerCase(), passwordHash, user.role]
     );
   }

@@ -49,4 +49,10 @@ router.post("/directo", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), mo
 // Registrar baja por daño (subir foto opcional)
 router.post("/baja", authorizePermissions(PERMISSIONS.MOVIMIENTOS_CREATE), upload.single('foto'), movimientoController.registrarBaja);
 
+// Autorizar baja
+router.post("/bajas/:id(\\d+)/autorizar", authorizePermissions(PERMISSIONS.BAJAS_AUTHORIZE), movimientoController.autorizarBaja);
+
+// Historial de baja
+router.get("/bajas/:id(\\d+)/historial", authorizePermissions(PERMISSIONS.MOVIMIENTOS_VIEW), movimientoController.obtenerHistorialBaja);
+
 module.exports = router;

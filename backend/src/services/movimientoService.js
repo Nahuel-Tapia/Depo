@@ -375,15 +375,19 @@ async function registrarBaja(user, body, file) {
     if (isNaN(depositoId)) {
       throw { status: 400, message: 'Falta id_deposito o es inválido' };
     }
+    
+    // Validar foto obligatoria
+    if (!file) {
+      throw { status: 400, message: 'La fotografía es obligatoria para justificar la baja (rotura, vencimiento, etc.)' };
+    }
 
     const prodRes = await client.query(
-      'SELECT id_producto, nombre, COALESCE(stock_actual, 0) AS stock_actual FROM producto WHERE id_producto = $1',
+      'SELECT id_producto, nombre FROM producto WHERE id_producto = $1',
       [producto_id]
     );
     if (prodRes.rowCount === 0) {
       throw { status: 404, message: 'Producto no encontrado' };
     }
-    const producto = prodRes.rows[0];
 
     const stockDepRes = await client.query(
       'SELECT cantidad FROM stock_deposito WHERE id_deposito = $1 AND id_producto = $2',
@@ -392,37 +396,121 @@ async function registrarBaja(user, body, file) {
     const stockDisponible = stockDepRes.rows[0]?.cantidad || 0;
 
     if (stockDisponible < cantidadNum) {
-      throw { status: 400, message: `Stock insuficiente en el depósito. Disponible: ${stockDisponible}, solicitado: ${cantidadNum}` };
+      throw { status: 400, message: `Stock insuficiente en el depósito origen. Disponible: ${stockDisponible}, solicitado para baja: ${cantidadNum}` };
     }
 
     await client.query('BEGIN');
 
-    const fotoPath = file ? `/uploads/${file.filename}` : null;
+    const fotoPath = `/uploads/${file.filename}`;
 
     const bajaRes = await client.query(
-      'INSERT INTO baja_movimientos (id_producto, cantidad, motivo, foto_path, id_usuario, id_deposito) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
-      [producto_id, cantidadNum, motivo || null, fotoPath, user.sub, depositoId]
-    );
-
-    const movRes = await client.query(
-      `INSERT INTO movimiento_stock (id_producto, tipo, cantidad, estado_producto, id_usuario, motivo, id_deposito, fecha_movimiento)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW()) RETURNING id_movimiento`,
-      [producto_id, 'ajuste', cantidadNum, 'dañado', user.sub, motivo ? `Baja: ${motivo}` : 'Baja de mercadería', depositoId]
+      'INSERT INTO baja_movimientos (id_producto, cantidad, motivo, foto_path, id_usuario, id_deposito, estado) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
+      [producto_id, cantidadNum, motivo || null, fotoPath, user.sub, depositoId, 'pendiente']
     );
 
     await client.query(
-      'UPDATE stock_deposito SET cantidad = cantidad - $1 WHERE id_deposito = $2 AND id_producto = $3',
-      [cantidadNum, depositoId, producto_id]
-    );
-
-    await client.query(
-      'UPDATE producto SET stock_actual = COALESCE(stock_actual, 0) - $1 WHERE id_producto = $2',
-      [cantidadNum, producto_id]
+      'INSERT INTO baja_status_history (baja_id, estado_anterior, estado_nuevo, usuario_id, comentarios) VALUES ($1, $2, $3, $4, $5)',
+      [bajaRes.rows[0].id, null, 'pendiente', user.sub, 'Solicitud de baja creada']
     );
 
     await client.query('COMMIT');
 
-    return { baja_id: bajaRes.rows[0].id, movimiento_id: movRes.rows[0].id_movimiento };
+    return { baja_id: bajaRes.rows[0].id, estado: 'pendiente' };
+  } catch (err) {
+    try { await client.query('ROLLBACK'); } catch (_) { }
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+async function autorizarBaja(id_baja, user, accion) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // 1. Obtener la solicitud de baja
+    const bajaRes = await client.query('SELECT * FROM baja_movimientos WHERE id = $1 FOR UPDATE', [id_baja]);
+    if (bajaRes.rowCount === 0) {
+      throw { status: 404, message: 'Solicitud de baja no encontrada' };
+    }
+    const baja = bajaRes.rows[0];
+
+    if (baja.estado !== 'pendiente') {
+      throw { status: 400, message: `La solicitud no está pendiente (estado actual: ${baja.estado})` };
+    }
+
+    if (accion === 'rechazar') {
+      await client.query("UPDATE baja_movimientos SET estado = 'rechazada' WHERE id = $1", [id_baja]);
+      await client.query(
+        'INSERT INTO baja_status_history (baja_id, estado_anterior, estado_nuevo, usuario_id, comentarios) VALUES ($1, $2, $3, $4, $5)',
+        [id_baja, 'pendiente', 'rechazada', user.sub, 'Solicitud rechazada']
+      );
+      await client.query('COMMIT');
+      return { message: 'Baja rechazada' };
+    }
+
+    if (accion !== 'aprobar') {
+      throw { status: 400, message: 'Acción inválida' };
+    }
+
+    // 2. Verificar que existe el deposito de desguace
+    const depRes = await client.query("SELECT id_deposito FROM deposito WHERE tipo_deposito = 'desguace' LIMIT 1");
+    if (depRes.rowCount === 0) {
+      throw { status: 500, message: 'No existe un depósito de desguace configurado en el sistema' };
+    }
+    const idDesguace = depRes.rows[0].id_deposito;
+
+    // 3. Verificar stock nuevamente
+    const stockDepRes = await client.query(
+      'SELECT cantidad FROM stock_deposito WHERE id_deposito = $1 AND id_producto = $2',
+      [baja.id_deposito, baja.id_producto]
+    );
+    const stockDisponible = stockDepRes.rows[0]?.cantidad || 0;
+    if (stockDisponible < baja.cantidad) {
+      throw { status: 400, message: `Stock insuficiente en el depósito origen. Disponible: ${stockDisponible}, solicitado: ${baja.cantidad}` };
+    }
+
+    // 4. Actualizar estado de la baja
+    await client.query("UPDATE baja_movimientos SET estado = 'aprobada' WHERE id = $1", [id_baja]);
+
+    // 5. Registrar los movimientos físicos
+    // Egreso del deposito origen
+    const movSalida = await client.query(
+      `INSERT INTO movimiento_stock (id_producto, tipo, cantidad, estado_producto, id_usuario, motivo, id_deposito, id_deposito_destino, fecha_movimiento)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW()) RETURNING id_movimiento`,
+      [baja.id_producto, 'egreso', baja.cantidad, 'dañado', user.sub, `Aprobación Baja #${id_baja} (traslado a desguace): ${baja.motivo || ''}`, baja.id_deposito, idDesguace]
+    );
+
+    // Ingreso al deposito desguace
+    const movEntrada = await client.query(
+      `INSERT INTO movimiento_stock (id_producto, tipo, cantidad, estado_producto, id_usuario, motivo, id_deposito, fecha_movimiento)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW()) RETURNING id_movimiento`,
+      [baja.id_producto, 'ingreso', baja.cantidad, 'dañado', user.sub, `Ingreso por Baja #${id_baja}: ${baja.motivo || ''}`, idDesguace]
+    );
+
+    // 6. Actualizar stock por depósito (el stock general total en producto NO cambia, porque sigue en el ministerio, solo que en desguace)
+    await client.query(
+      'UPDATE stock_deposito SET cantidad = cantidad - $1 WHERE id_deposito = $2 AND id_producto = $3',
+      [baja.cantidad, baja.id_deposito, baja.id_producto]
+    );
+
+    // Sumar a desguace (upsert)
+    await client.query(
+      `INSERT INTO stock_deposito (id_deposito, id_producto, cantidad) 
+       VALUES ($1, $2, $3) 
+       ON CONFLICT (id_deposito, id_producto) 
+       DO UPDATE SET cantidad = stock_deposito.cantidad + $3`,
+      [idDesguace, baja.id_producto, baja.cantidad]
+    );
+
+    await client.query(
+      'INSERT INTO baja_status_history (baja_id, estado_anterior, estado_nuevo, usuario_id, comentarios) VALUES ($1, $2, $3, $4, $5)',
+      [id_baja, 'pendiente', 'aprobada', user.sub, 'Solicitud aprobada y enviada a desguace']
+    );
+
+    await client.query('COMMIT');
+    return { baja_id: id_baja, movimiento_salida: movSalida.rows[0].id_movimiento, movimiento_entrada: movEntrada.rows[0].id_movimiento };
   } catch (err) {
     try { await client.query('ROLLBACK'); } catch (_) { }
     throw err;
@@ -449,6 +537,7 @@ async function listarBajas(queryParams) {
       u.nombre as usuario_nombre,
       b.id_deposito,
       d.nombre as deposito_nombre,
+      b.estado,
       ${createdExpr} as created_at
     FROM baja_movimientos b
     LEFT JOIN producto p ON b.id_producto = p.id_producto
@@ -485,6 +574,16 @@ async function listarBajas(queryParams) {
   return await all(query, params);
 }
 
+async function obtenerHistorialBaja(id_baja) {
+  return await all(`
+    SELECT h.*, u.nombre as usuario_nombre
+    FROM baja_status_history h
+    LEFT JOIN usuario u ON h.usuario_id = u.id_usuario
+    WHERE h.baja_id = $1
+    ORDER BY h.created_at ASC
+  `, [id_baja]);
+}
+
 module.exports = {
   listarMovimientos,
   obtenerMovimiento,
@@ -493,5 +592,7 @@ module.exports = {
   crearMovimientoDirecto,
   obtenerStatsResumen,
   registrarBaja,
-  listarBajas
+  listarBajas,
+  autorizarBaja,
+  obtenerHistorialBaja
 };
