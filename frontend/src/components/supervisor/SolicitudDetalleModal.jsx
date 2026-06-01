@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import HistorialConsumoPanel from '../../HistorialConsumoPanel'
+import HistorialConsumoPanel from '../HistorialConsumoPanel'
 
 function formatEstado(estado) {
   if (estado === 'aclaracion') return 'Aclaracion solicitada'

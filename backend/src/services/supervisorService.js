@@ -772,6 +772,11 @@ async function getHistorialConsumoInstitucion(institucionId, user) {
   };
 }
 
+async function getHistorialInstitucion(id) {
+  const institucionService = require("./institucionService");
+  return institucionService.getHistorialInstitucion(id, {});
+}
+
 module.exports = {
   getInstituciones,
   getDashboardStats,
