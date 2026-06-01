@@ -25,6 +25,7 @@ import RecepcionLicitacion from '../components/RecepcionLicitacion'
 import DistribucionEscuelas from '../components/DistribucionEscuelas'
 import Bajas from '../components/Bajas'
 import DiagnosticoStock from '../components/DiagnosticoStock'
+import DepositoInstitucion from '../components/DepositoInstitucion'
 
 const LOGO_URL = '/logo-sidebar.png'
 
@@ -70,6 +71,7 @@ const TABS = [
   { key: 'mi-cuenta', label: 'Mi cuenta', permission: null, icon: UserIcon },
   { key: 'mi-stock', label: 'Mi stock', permission: 'pedidos.view', roleFor: 'directivo', icon: BoxIcon },
   { key: 'recepcion-mercaderia', label: 'Recepción de Mercadería', permission: 'pedidos.view', roleFor: 'directivo', icon: BoxIcon },
+  { key: 'deposito-institucion', label: 'Mi Depósito', permission: 'pedidos.view', roleFor: 'directivo', icon: BuildingIcon },
 ]
 
 export default function Dashboard() {
@@ -128,7 +130,7 @@ export default function Dashboard() {
     }
 
     if (user.role === 'directivo') {
-      return TABS.filter((tab) => ['inicio', 'pedidos', 'mi-stock', 'recepcion-mercaderia', 'mi-cuenta'].includes(tab.key))
+      return TABS.filter((tab) => ['inicio', 'pedidos', 'mi-stock', 'recepcion-mercaderia', 'deposito-institucion', 'mi-cuenta'].includes(tab.key))
     }
 
     if (user.role === 'operador') {
@@ -277,6 +279,8 @@ export default function Dashboard() {
         return <MiStock />
       case 'recepcion-mercaderia':
         return <RecepcionMercaderia />
+      case 'deposito-institucion':
+        return <DepositoInstitucion />
       case 'instituciones':
         return <Instituciones />
       case 'historial':

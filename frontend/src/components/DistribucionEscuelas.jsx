@@ -4,7 +4,7 @@ import { apiFetch } from '../api'
 
 export default function DistribucionEscuelas() {
   const { token } = useAuth()
-  const [vista, setVista] = useState('zonas')
+  const [vista, setVista] = useState('envios')
   const [zonas, setZonas] = useState([])
   const [detalleZona, setDetalleZona] = useState(null)
   const [departamentosEnvio, setDepartamentosEnvio] = useState([])
@@ -28,6 +28,8 @@ export default function DistribucionEscuelas() {
 
   const [solicitudesSede, setSolicitudesSede] = useState([])
   const [loadingSedes, setLoadingSedes] = useState(false)
+  const [loteImprimible, setLoteImprimible] = useState(null)
+  const [expandedSols, setExpandedSols] = useState({})
 
   const anioActual = new Date().getFullYear()
 
@@ -42,6 +44,178 @@ export default function DistribucionEscuelas() {
       return Object.values(items || {}).some((qty) => Number(qty) > 0)
     }).length
   }, [entregasEnvio])
+
+  const escuelasSede = useMemo(() => {
+    if (!detalleDepartamento?.solicitudes) return []
+    const unique = new Map()
+    for (const sol of detalleDepartamento.solicitudes) {
+      if (sol.id_institucion && !unique.has(sol.id_institucion)) {
+        unique.set(sol.id_institucion, {
+          id_institucion: sol.id_institucion,
+          nombre: sol.institucion_nombre,
+          cue: sol.cue,
+          establecimiento_cabecera: sol.establecimiento_cabecera
+        })
+      }
+    }
+    return Array.from(unique.values()).sort((a, b) => a.nombre.localeCompare(b.nombre))
+  }, [detalleDepartamento])
+
+  const resumenEgresos = useMemo(() => {
+    const map = new Map()
+    if (!detalleDepartamento?.solicitudes) return []
+    for (const sol of detalleDepartamento.solicitudes) {
+      for (const item of (sol.productos_pedido_anual || [])) {
+        if (!item.en_solicitud || !item.cantidad_solicitada_solicitud) continue
+        const qty = Number(item.cantidad_solicitada_solicitud)
+        if (qty <= 0) continue
+        const id = Number(item.producto_id)
+        if (!map.has(id)) {
+          map.set(id, {
+            producto_id: id,
+            producto_nombre: item.producto_nombre,
+            unidad_medida: item.unidad_medida,
+            cantidad: 0
+          })
+        }
+        map.get(id).cantidad += qty
+      }
+    }
+    return Array.from(map.values())
+  }, [detalleDepartamento])
+
+  const toggleSolicitudDetalle = (solicitudId) => {
+    setExpandedSols(prev => ({
+      ...prev,
+      [solicitudId]: !prev[solicitudId]
+    }))
+  }
+
+  const handlePrintLote = async (loteId) => {
+    try {
+      const res = await apiFetch(`/api/entregas/solicitudes-envio/seguimiento/${loteId}`, { token })
+      if (!res.ok) {
+        setMsg({ text: 'No se pudo cargar la información para imprimir el comprobante', type: 'error' })
+        return
+      }
+      const data = await res.json()
+      const { lote, instituciones } = data
+
+      if (!lote) {
+        setMsg({ text: 'Información del lote no encontrada', type: 'error' })
+        return
+      }
+
+      const printWindow = window.open('', '_blank', 'width=900,height=700')
+      if (!printWindow) return
+
+      const fmtDate = v => v ? new Date(v).toLocaleDateString('es-AR') : '-'
+
+      // Build resumen consolidado de productos
+      const resumenMap = {}
+      for (const inst of (instituciones || [])) {
+        for (const item of (inst.items || [])) {
+          const key = item.producto_nombre
+          if (!resumenMap[key]) resumenMap[key] = { nombre: key, unidad: item.unidad_medida || 'unidad', total: 0 }
+          resumenMap[key].total += Number(item.cantidad_planificada || 0)
+        }
+      }
+      const resumenList = Object.values(resumenMap)
+      let resumenHtml = resumenList.map(r =>
+        '<tr>' +
+        '<td style="border:1px solid #d1d5db;padding:6px 8px;font-weight:600">' + r.nombre + '</td>' +
+        '<td style="border:1px solid #d1d5db;padding:6px 8px;text-align:center;font-weight:bold;font-size:1.1rem;color:#ff8200">' + r.total + '</td>' +
+        '<td style="border:1px solid #d1d5db;padding:6px 8px;text-align:center;color:#555">' + r.unidad + '</td>' +
+        '</tr>'
+      ).join('')
+
+      let itemsHtml = ''
+      for (const inst of (instituciones || [])) {
+        const rowsHtml = (inst.items || []).map(item =>
+          '<tr>' +
+          '<td style="border:1px solid #d1d5db;padding:6px 8px">' + item.producto_nombre + '</td>' +
+          '<td style="border:1px solid #d1d5db;padding:6px 8px;text-align:center;font-weight:bold">' + item.cantidad_planificada + '</td>' +
+          '<td style="border:1px solid #d1d5db;padding:6px 8px;text-align:center;color:#555">' + (item.unidad_medida || 'unidad') + '</td>' +
+          '</tr>'
+        ).join('')
+        itemsHtml +=
+          '<div style="margin-top:20px;border:1px solid #e2e8f0;border-radius:8px;padding:12px;page-break-inside:avoid">' +
+          '<div style="font-weight:bold;font-size:1.05rem;border-bottom:1px solid #e2e8f0;padding-bottom:6px;margin-bottom:10px">' +
+          inst.institucion_nombre + ' (CUE: ' + (inst.cue || '-') + ')' +
+          '</div>' +
+          '<table style="width:100%;border-collapse:collapse">' +
+          '<thead><tr style="background:#f3f4f6">' +
+          '<th style="border:1px solid #d1d5db;padding:6px 8px;text-align:left">Producto</th>' +
+          '<th style="border:1px solid #d1d5db;padding:6px 8px;text-align:center;width:120px">Cantidad</th>' +
+          '<th style="border:1px solid #d1d5db;padding:6px 8px;text-align:center;width:120px">Unidad</th>' +
+          '</tr></thead>' +
+          '<tbody>' + rowsHtml + '</tbody>' +
+          '</table></div>'
+      }
+
+      const modalidad = lote.tipo_envio === 'escuela_sede' ? 'Agrupado en Escuela Sede' : 'Envío Directo a Escuelas'
+      const operador = ((lote.usuario_nombre || '') + ' ' + (lote.usuario_apellido || '')).trim()
+      const obsHtml = lote.observaciones
+        ? '<div style="grid-column:1/-1"><strong>Observaciones:</strong> ' + lote.observaciones + '</div>'
+        : ''
+
+      const html =
+        '<!DOCTYPE html><html><head>' +
+        '<title>Comprobante Lote #' + lote.lote_id + '</title>' +
+        '<style>' +
+        '* { box-sizing: border-box; font-family: Arial, sans-serif; }' +
+        'body { margin: 24px; color: #111827; font-size: 13px; }' +
+        'table { width: 100%; border-collapse: collapse; page-break-inside: avoid; }' +
+        '@media print { .no-print { display:none; } body { margin: 12px; } }' +
+        '</style></head><body>' +
+        // Header
+        '<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #FF8200;padding-bottom:12px;margin-bottom:18px">' +
+        '<div style="display:flex;align-items:center;gap:12px">' +
+        '<img src="/faviconmin.png" alt="Logo" style="height:44px;width:auto" />' +
+        '<div><strong style="font-size:1.1rem;display:block">San Juan Gobierno</strong>' +
+        '<span style="color:#666;font-size:0.85rem">Ministerio de Educación</span></div>' +
+        '</div>' +
+        '<div style="text-align:right">' +
+        '<strong style="font-size:1.1rem;display:block">Comprobante de Egreso Consolidado</strong>' +
+        '<span style="color:#666;font-size:0.9rem">Lote de Envío #' + lote.lote_id + '</span>' +
+        '</div></div>' +
+        // Datos del lote
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;background:#f8fafc;padding:12px;border-radius:6px;border:1px solid #e2e8f0">' +
+        '<div><strong>Departamento Destino:</strong> ' + (lote.departamento || '-') + '</div>' +
+        '<div><strong>Depósito de Origen:</strong> ' + (lote.deposito_nombre || '-') + '</div>' +
+        '<div><strong>Fecha Emisión:</strong> ' + fmtDate(lote.created_at) + '</div>' +
+        '<div><strong>Modalidad:</strong> ' + modalidad + '</div>' +
+        '<div style="grid-column:1/-1"><strong>Operador Emisor:</strong> ' + operador + '</div>' +
+        obsHtml +
+        '</div>' +
+        // Resumen consolidado
+        '<h3 style="margin-top:20px;border-bottom:2px solid #FF8200;padding-bottom:6px;color:#ff8200">Resumen Total de Productos a Egresar</h3>' +
+        '<table style="margin-bottom:20px">' +
+        '<thead><tr style="background:#fff7ed">' +
+        '<th style="border:1px solid #d1d5db;padding:6px 8px;text-align:left">Producto</th>' +
+        '<th style="border:1px solid #d1d5db;padding:6px 8px;text-align:center;width:120px">Total</th>' +
+        '<th style="border:1px solid #d1d5db;padding:6px 8px;text-align:center;width:120px">Unidad</th>' +
+        '</tr></thead>' +
+        '<tbody>' + resumenHtml + '</tbody>' +
+        '</table>' +
+        // Detalle por institución
+        '<h3 style="margin-top:20px;border-bottom:1px solid #e2e8f0;padding-bottom:6px;color:#ff8200">Detalle de Entregas por Institución</h3>' +
+        itemsHtml +
+        // Firmas
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:36px;margin-top:60px;page-break-inside:avoid">' +
+        '<div style="border-top:1px solid #111827;padding-top:8px;text-align:center">Firma de Operador de Depósito</div>' +
+        '<div style="border-top:1px solid #111827;padding-top:8px;text-align:center">Firma y Sello de Recepción</div>' +
+        '</div>' +
+        '</body></html>'
+
+      printWindow.document.write(html)
+      printWindow.document.close()
+      printWindow.focus()
+      setTimeout(() => { printWindow.print(); printWindow.close() }, 300)
+    } catch {
+      setMsg({ text: 'Error de conexión al cargar comprobante del lote', type: 'error' })
+    }
+  }
 
   const loadZonas = async () => {
     setLoading(true)
@@ -283,17 +457,18 @@ export default function DistribucionEscuelas() {
       return
     }
 
-    const payloadEntregas = Object.entries(entregasEnvio)
-      .map(([idSolicitud, productos]) => {
-        const items = Object.entries(productos || {})
-          .filter(([, qty]) => Number(qty) > 0)
-          .map(([idProducto, qty]) => ({ id_producto: Number(idProducto), cantidad: Number(qty) }))
-        return { id_solicitud: Number(idSolicitud), items }
+    // Armar payload directo desde los items solicitados (sin inputs del usuario)
+    const payloadEntregas = (detalleDepartamento.solicitudes || [])
+      .map((sol) => {
+        const items = (sol.productos_pedido_anual || [])
+          .filter(p => p.en_solicitud && Number(p.cantidad_solicitada_solicitud) > 0)
+          .map(p => ({ id_producto: Number(p.producto_id), cantidad: Number(p.cantidad_solicitada_solicitud) }))
+        return { id_solicitud: Number(sol.id), items }
       })
       .filter((row) => row.items.length > 0)
 
     if (payloadEntregas.length === 0) {
-      setMsg({ text: 'Cargue al menos una cantidad para una solicitud del departamento', type: 'error' })
+      setMsg({ text: 'No hay productos solicitados para egresar en este departamento', type: 'error' })
       return
     }
 
@@ -315,6 +490,7 @@ export default function DistribucionEscuelas() {
       if (res.ok) {
         const data = await res.json()
         setMsg({ text: `Egreso por departamento registrado. Lote: #${data.lote_id}`, type: 'success' })
+        setLoteImprimible(data.lote_id)
         setDetalleDepartamento(null)
         setEntregasEnvio({})
         loadDepartamentosEnvio()
@@ -636,9 +812,9 @@ export default function DistribucionEscuelas() {
               <label style={{ fontSize: '0.9rem', fontWeight: 600, display: 'block', marginBottom: 6 }}>Seleccionar Escuela Sede (Cabecera)</label>
               <select value={selectedSede} onChange={(e) => setSelectedSede(e.target.value)} style={{ padding: '8px 12px', borderRadius: 8, width: '100%', borderColor: '#cbd5e1' }}>
                 <option value="">-- Seleccionar Institución Sede --</option>
-                {(detalleDepartamento.sedes_posibles || []).map((inst) => (
+                {(escuelasSede || []).map((inst) => (
                   <option key={inst.id_institucion} value={inst.id_institucion}>
-                    {inst.nombre} {inst.establecimiento_cabecera ? `(Sede: ${inst.establecimiento_cabecera})` : ''}
+                    {inst.nombre} {inst.cue ? `(CUE: ${inst.cue})` : ''}
                   </option>
                 ))}
               </select>
@@ -665,80 +841,111 @@ export default function DistribucionEscuelas() {
           </div>
         </div>
 
-        {(detalleDepartamento.solicitudes || []).map((solicitud) => (
-          <div key={solicitud.id} style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: 14, marginBottom: 16 }}>
-            {(() => {
-              const totalSolicitado = (solicitud.items || []).reduce((acc, item) => acc + Number(item.cantidad_solicitada || 0), 0)
-              const totalEntregado = (solicitud.items || []).reduce((acc, item) => acc + Number(item.cantidad_entregada || 0), 0)
-              const totalPendiente = Math.max(0, totalSolicitado - totalEntregado)
-              return (
-                <div style={{ marginBottom: 10, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                  <span className="badge" style={{ background: '#f8fafc', color: '#334155' }}>
-                    Pedido solicitado: {totalSolicitado}
-                  </span>
-                  <span className="badge" style={{ background: '#ecfeff', color: '#155e75' }}>
-                    Ya entregado: {totalEntregado}
-                  </span>
-                  <span className="badge" style={{ background: '#fff7ed', color: '#9a3412' }}>
-                    Pendiente: {totalPendiente}
-                  </span>
-                </div>
-              )
-            })()}
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
-              <div>
-                <div style={{ fontWeight: 700 }}>{solicitud.institucion_nombre}</div>
-                <div style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>
-                  Solicitud #{solicitud.id} | CUE: {solicitud.cue || '-'}
-                </div>
-              </div>
-              <div style={{ textAlign: 'right', fontSize: '0.85rem', color: 'var(--muted)' }}>
-                <div>Estado: {solicitud.estado}</div>
-                <div>Fecha retiro: {solicitud.fecha_retiro ? new Date(solicitud.fecha_retiro).toLocaleDateString('es-AR') : '-'}</div>
-              </div>
-            </div>
-
+        {resumenEgresos.length > 0 && (
+          <div style={{ background: '#fff7ed', border: '2px solid #fb923c', borderRadius: 10, padding: 14, marginBottom: 20 }}>
+            <h4 style={{ margin: '0 0 10px 0', color: '#9a3412', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span>📦</span> Resumen consolidado de productos a egresar
+            </h4>
             <table style={{ marginBottom: 0 }}>
               <thead>
-                <tr style={{ background: '#f8fafc' }}>
-                  <th>Producto</th>
-                  <th style={{ textAlign: 'center' }}>Solicitado</th>
-                  <th style={{ textAlign: 'center' }}>Entregado</th>
-                  <th style={{ textAlign: 'center' }}>Pendiente</th>
-                  <th style={{ textAlign: 'center', width: 160 }}>Enviar Ahora</th>
+                <tr style={{ background: '#ffedd5' }}>
+                  <th style={{ textAlign: 'left' }}>Producto</th>
+                  <th style={{ textAlign: 'center', width: 120 }}>Total a enviar</th>
+                  <th style={{ textAlign: 'center', width: 120 }}>Unidad</th>
                 </tr>
               </thead>
               <tbody>
-                {(solicitud.items || []).map((item) => {
-                  const pendiente = Math.max(0, Number(item.cantidad_solicitada || 0) - Number(item.cantidad_entregada || 0))
-                  return (
-                    <tr key={`${solicitud.id}-${item.producto_id}`}>
-                      <td>
-                        <div style={{ fontWeight: 600 }}>{item.producto_nombre}</div>
-                        <div style={{ color: 'var(--muted)', fontSize: '0.82rem' }}>{item.unidad_medida || '-'}</div>
-                      </td>
-                      <td style={{ textAlign: 'center' }}>{item.cantidad_solicitada}</td>
-                      <td style={{ textAlign: 'center' }}>{item.cantidad_entregada}</td>
-                      <td style={{ textAlign: 'center', fontWeight: 700 }}>{pendiente}</td>
-                      <td style={{ textAlign: 'center' }}>
-                        <input
-                          type="number"
-                          min="0"
-                          max={pendiente}
-                          value={entregasEnvio[solicitud.id]?.[item.producto_id] || ''}
-                          placeholder={`0-${pendiente}`}
-                          onChange={(e) => handleQtyChangeEnvio(solicitud.id, item.producto_id, e.target.value)}
-                          style={{ width: 120, textAlign: 'center' }}
-                        />
-                      </td>
-                    </tr>
-                  )
-                })}
+                {resumenEgresos.map(p => (
+                  <tr key={p.producto_id}>
+                    <td style={{ fontWeight: 600 }}>{p.producto_nombre}</td>
+                    <td style={{ textAlign: 'center', fontWeight: 700, fontSize: '1.05rem', color: '#c2410c' }}>{p.cantidad}</td>
+                    <td style={{ textAlign: 'center', color: 'var(--muted)' }}>{p.unidad_medida}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
-        ))}
+        )}
+
+        {(detalleDepartamento.solicitudes || []).map((solicitud) => {
+          const isExpanded = !!expandedSols[solicitud.id]
+          const productosSolicitados = (solicitud.productos_pedido_anual || []).filter(p => p.en_solicitud && Number(p.cantidad_solicitada_solicitud) > 0)
+          const totalASolicitar = productosSolicitados.reduce((acc, p) => acc + Number(p.cantidad_solicitada_solicitud), 0)
+          return (
+            <div key={solicitud.id} style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: 14, marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap', marginBottom: 8 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: '1rem' }}>{solicitud.institucion_nombre}</div>
+                  <div style={{ fontSize: '0.85rem', color: 'var(--muted)', marginTop: 2 }}>
+                    Solicitud #{solicitud.id} | CUE: {solicitud.cue || '-'} | Estado: {solicitud.estado}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
+                    <span className="badge" style={{ background: '#dcfce7', color: '#166534' }}>
+                      A enviar: {totalASolicitar}
+                    </span>
+                    <span className="badge" style={{ background: '#f8fafc', color: '#334155' }}>
+                      {productosSolicitados.length} producto{productosSolicitados.length !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="secondary"
+                  style={{ width: 'auto', margin: 0, fontSize: '0.85rem', padding: '5px 12px' }}
+                  onClick={() => toggleSolicitudDetalle(solicitud.id)}
+                >
+                  {isExpanded ? '▲ Ocultar detalle' : '▼ Ver detalle de productos'}
+                </button>
+              </div>
+
+              {isExpanded && (
+                productosSolicitados.length === 0 ? (
+                  <div style={{ color: 'var(--muted)', fontSize: '0.85rem', fontStyle: 'italic', padding: '8px 0' }}>
+                    No hay productos solicitados en esta solicitud.
+                  </div>
+                ) : (
+                  <table style={{ marginBottom: 0 }}>
+                    <thead>
+                      <tr style={{ background: '#f0fdf4' }}>
+                        <th>Producto</th>
+                        <th style={{ textAlign: 'center' }}>Unidad</th>
+                        <th style={{ textAlign: 'center', width: 140 }}>Cantidad a enviar</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {productosSolicitados.map((item) => (
+                        <tr key={solicitud.id + '-' + item.producto_id}>
+                          <td style={{ fontWeight: 600 }}>{item.producto_nombre}</td>
+                          <td style={{ textAlign: 'center', color: 'var(--muted)' }}>{item.unidad_medida || '-'}</td>
+                          <td style={{ textAlign: 'center' }}>
+                            <span style={{
+                              display: 'inline-block',
+                              background: '#dcfce7',
+                              color: '#166534',
+                              fontWeight: 700,
+                              fontSize: '1rem',
+                              borderRadius: 6,
+                              padding: '4px 16px',
+                              minWidth: 60
+                            }}>
+                              {item.cantidad_solicitada_solicitud}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )
+              )}
+
+              {!isExpanded && (
+                <div style={{ color: 'var(--muted)', fontSize: '0.82rem', fontStyle: 'italic' }}>
+                  {productosSolicitados.length} producto{productosSolicitados.length !== 1 ? 's' : ''} — expandí para ver el detalle
+                </div>
+              )}
+            </div>
+          )
+        })}
 
         <div style={{ marginTop: 18, borderTop: '1px solid #e2e8f0', paddingTop: 16 }}>
           <h4 style={{ margin: '0 0 8px 0' }}>Instituciones del departamento sin solicitud de retiro</h4>
@@ -878,19 +1085,19 @@ export default function DistribucionEscuelas() {
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
         <button
           type="button"
-          className={vista === 'zonas' ? 'primary' : 'secondary'}
-          onClick={() => setVista('zonas')}
-          style={{ width: 'auto', margin: 0 }}
-        >
-          Distribución por Zonas
-        </button>
-        <button
-          type="button"
           className={vista === 'envios' ? 'primary' : 'secondary'}
           onClick={() => setVista('envios')}
           style={{ width: 'auto', margin: 0 }}
         >
           Envíos por Departamento
+        </button>
+        <button
+          type="button"
+          className={vista === 'zonas' ? 'primary' : 'secondary'}
+          onClick={() => setVista('zonas')}
+          style={{ width: 'auto', margin: 0 }}
+        >
+          Distribución por Zonas
         </button>
         <button
           type="button"
@@ -903,8 +1110,18 @@ export default function DistribucionEscuelas() {
       </div>
 
       {msg.text && (
-        <div className={`msg show ${msg.type === 'success' ? 'msg-success' : 'msg-error'}`} style={{ marginBottom: 20 }}>
-          {msg.text}
+        <div className={`msg show ${msg.type === 'success' ? 'msg-success' : 'msg-error'}`} style={{ marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+          <span>{msg.text}</span>
+          {msg.type === 'success' && loteImprimible && (
+            <button
+              type="button"
+              className="primary"
+              onClick={() => handlePrintLote(loteImprimible)}
+              style={{ width: 'auto', margin: 0, padding: '6px 12px', fontSize: '0.85rem', whiteSpace: 'nowrap' }}
+            >
+              🖨️ Imprimir Comprobante
+            </button>
+          )}
         </div>
       )}
 

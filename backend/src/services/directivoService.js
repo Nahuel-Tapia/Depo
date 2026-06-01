@@ -646,6 +646,211 @@ async function confirmarRecepcion(userId, loteId, items) {
   }
 }
 
+async function getDepositoInstitucion(userId) {
+  const context = await getDirectivoContext(userId);
+  const instId = Number(context.usuario.id_institucion);
+
+  // Mercadería recibida por lotes de distribución (confirmada por el directivo)
+  const recibidoLotes = await all(
+    `SELECT
+       li.id_producto AS producto_id,
+       p.nombre AS producto_nombre,
+       p.unidad_medida,
+       SUM(COALESCE(li.cantidad_recibida, 0)) AS total_recibido_lote
+     FROM distribucion_lote_item li
+     JOIN producto p ON p.id_producto = li.id_producto
+     WHERE li.id_institucion = $1
+       AND li.recibido_at IS NOT NULL
+       AND COALESCE(li.cantidad_recibida, 0) > 0
+     GROUP BY li.id_producto, p.nombre, p.unidad_medida`,
+    [instId]
+  );
+
+  // Mercadería recibida por retiros del depósito central (pedido_entrega)
+  const recibidoRetiros = await all(
+    `SELECT
+       pe.id_producto AS producto_id,
+       p.nombre AS producto_nombre,
+       p.unidad_medida,
+       SUM(COALESCE(pe.cantidad_entregada, 0)) AS total_recibido_retiro
+     FROM pedido_entrega pe
+     JOIN pedido pd ON pd.id_pedido = pe.id_pedido
+     JOIN producto p ON p.id_producto = pe.id_producto
+     WHERE pd.id_institucion = $1
+     GROUP BY pe.id_producto, p.nombre, p.unidad_medida`,
+    [instId]
+  );
+
+  // Consumos registrados por el directivo
+  const consumos = await all(
+    `SELECT
+       id_producto AS producto_id,
+       SUM(cantidad) AS total_consumido
+     FROM consumo_institucion
+     WHERE id_institucion = $1
+     GROUP BY id_producto`,
+    [instId]
+  );
+
+  // Merge todos los productos
+  const productoMap = new Map();
+
+  const ensureProducto = (pid, nombre, unidad) => {
+    if (!productoMap.has(pid)) {
+      productoMap.set(pid, {
+        producto_id: pid,
+        producto_nombre: nombre,
+        unidad_medida: unidad,
+        total_recibido: 0,
+        total_consumido: 0,
+      });
+    }
+  };
+
+  for (const r of recibidoLotes) {
+    const pid = Number(r.producto_id);
+    ensureProducto(pid, r.producto_nombre, r.unidad_medida);
+    productoMap.get(pid).total_recibido += Number(r.total_recibido_lote || 0);
+  }
+
+  for (const r of recibidoRetiros) {
+    const pid = Number(r.producto_id);
+    ensureProducto(pid, r.producto_nombre, r.unidad_medida);
+    productoMap.get(pid).total_recibido += Number(r.total_recibido_retiro || 0);
+  }
+
+  for (const c of consumos) {
+    const pid = Number(c.producto_id);
+    if (productoMap.has(pid)) {
+      productoMap.get(pid).total_consumido += Number(c.total_consumido || 0);
+    }
+  }
+
+  const items = Array.from(productoMap.values())
+    .map(item => ({
+      ...item,
+      stock_actual: Math.max(0, item.total_recibido - item.total_consumido),
+    }))
+    .filter(item => item.total_recibido > 0)
+    .sort((a, b) => a.producto_nombre.localeCompare(b.producto_nombre));
+
+  return { institucion: context.institucion, items };
+}
+
+async function getHistorialConsumos(userId, { limit = 50 } = {}) {
+  const context = await getDirectivoContext(userId);
+  const instId = Number(context.usuario.id_institucion);
+
+  const rows = await all(
+    `SELECT
+       c.id_consumo AS id,
+       c.id_producto AS producto_id,
+       p.nombre AS producto_nombre,
+       p.unidad_medida,
+       c.cantidad,
+       c.categoria,
+       c.motivo,
+       c.fecha,
+       u.nombre AS usuario_nombre,
+       u.apellido AS usuario_apellido
+     FROM consumo_institucion c
+     JOIN producto p ON p.id_producto = c.id_producto
+     LEFT JOIN usuario u ON u.id_usuario = c.id_usuario
+     WHERE c.id_institucion = $1
+     ORDER BY c.fecha DESC
+     LIMIT $2`,
+    [instId, limit]
+  );
+
+  return rows.map(r => ({
+    id: Number(r.id),
+    producto_id: Number(r.producto_id),
+    producto_nombre: r.producto_nombre,
+    unidad_medida: r.unidad_medida,
+    cantidad: Number(r.cantidad),
+    categoria: r.categoria || null,
+    motivo: r.motivo || null,
+    fecha: r.fecha,
+    usuario: r.usuario_nombre ? `${r.usuario_nombre} ${r.usuario_apellido || ''}`.trim() : 'Directivo',
+  }));
+}
+
+async function registrarConsumo(userId, items) {
+  const context = await getDirectivoContext(userId);
+  const instId = Number(context.usuario.id_institucion);
+
+  if (!Array.isArray(items) || items.length === 0) {
+    throw badRequest('Debe informar al menos un ítem de consumo');
+  }
+
+  // Calcular stock actual por producto para validar
+  const productoIds = items.map(i => Number(i.id_producto)).filter(Boolean);
+  if (productoIds.length === 0) throw badRequest('IDs de producto inválidos');
+
+  const recibidoLotes = await all(
+    `SELECT id_producto, SUM(COALESCE(cantidad_recibida, 0)) AS total
+     FROM distribucion_lote_item
+     WHERE id_institucion = $1 AND recibido_at IS NOT NULL AND id_producto = ANY($2::int[])
+     GROUP BY id_producto`,
+    [instId, productoIds]
+  );
+
+  const recibidoRetiros = await all(
+    `SELECT pe.id_producto, SUM(COALESCE(pe.cantidad_entregada, 0)) AS total
+     FROM pedido_entrega pe
+     JOIN pedido pd ON pd.id_pedido = pe.id_pedido
+     WHERE pd.id_institucion = $1 AND pe.id_producto = ANY($2::int[])
+     GROUP BY pe.id_producto`,
+    [instId, productoIds]
+  );
+
+  const consumosActuales = await all(
+    `SELECT id_producto, SUM(cantidad) AS total
+     FROM consumo_institucion
+     WHERE id_institucion = $1 AND id_producto = ANY($2::int[])
+     GROUP BY id_producto`,
+    [instId, productoIds]
+  );
+
+  const stockMap = new Map();
+  for (const pid of productoIds) stockMap.set(pid, 0);
+  for (const r of recibidoLotes) stockMap.set(Number(r.id_producto), (stockMap.get(Number(r.id_producto)) || 0) + Number(r.total));
+  for (const r of recibidoRetiros) stockMap.set(Number(r.id_producto), (stockMap.get(Number(r.id_producto)) || 0) + Number(r.total));
+  for (const r of consumosActuales) stockMap.set(Number(r.id_producto), (stockMap.get(Number(r.id_producto)) || 0) - Number(r.total));
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    for (const item of items) {
+      const pid = Number(item.id_producto);
+      const cantidad = Number(item.cantidad);
+      if (!pid || cantidad <= 0) continue;
+
+      const stockDisponible = stockMap.get(pid) || 0;
+      if (cantidad > stockDisponible) {
+        const prodRow = await get('SELECT nombre FROM producto WHERE id_producto = $1', [pid]);
+        throw badRequest(`Stock insuficiente para "${prodRow?.nombre || `Producto #${pid}`}": disponible ${stockDisponible}, intentó consumir ${cantidad}`);
+      }
+
+      const categoria = String(item.categoria || '').trim().slice(0, 60) || null;
+      const motivo = String(item.motivo || '').trim() || null;
+
+      await client.query(
+        `INSERT INTO consumo_institucion (id_institucion, id_producto, id_usuario, cantidad, categoria, motivo, fecha)
+         VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
+        [instId, pid, userId, cantidad, categoria, motivo]
+      );
+    }
+    await client.query('COMMIT');
+    return { ok: true, registrados: items.length };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 module.exports = {
   RequestValidationError,
   getDirectivoContext,
@@ -654,5 +859,8 @@ module.exports = {
   getHistorialRetiros,
   getDistribucionesPendientes,
   getDistribucionesHistorial,
-  confirmarRecepcion
+  confirmarRecepcion,
+  getDepositoInstitucion,
+  getHistorialConsumos,
+  registrarConsumo,
 };
