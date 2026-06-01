@@ -675,18 +675,101 @@ async function getSolicitudes(user, queryJurisdiccion) {
   return { solicitudes };
 }
 
-async function getHistorialInstitucion(institucionId) {
-  const eventos = await all(
-    `SELECT ms.fecha_movimiento AS fecha, pr.nombre AS producto, ms.cantidad, ms.tipo
-     FROM movimiento_stock ms
-     JOIN producto pr ON pr.id_producto = ms.id_producto
-     WHERE ms.id_institucion = ?
-     ORDER BY ms.fecha_movimiento DESC
-     LIMIT 50`,
+async function getHistorialConsumoInstitucion(institucionId, user) {
+  // Verificar que el supervisor tenga acceso a esta institución
+  if (user?.role === "supervisor" && !(await supervisorHasAssignedInstitution(user.sub, institucionId))) {
+    throw { status: 403, message: "No tenés acceso a esta institución" };
+  }
+
+  // Obtener pedidos anteriores (anuales y refuerzos aprobados/entregados)
+  const pedidos = await all(
+    `SELECT 
+       p.id_pedido AS id,
+       COALESCE(p.tipo, 'anual') AS tipo,
+       p.estado,
+       p.fecha_creacion AS fecha,
+       p.fecha_aprobacion_supervisor,
+       COALESCE(
+         p.kit_nombre,
+         STRING_AGG(pr.nombre || ' x' || dp.cantidad_solicitada::text, ', ' ORDER BY pr.nombre)
+       ) AS detalle,
+       u.nombre AS solicitante,
+       usup.nombre AS supervisor_nombre,
+       COUNT(dp.id_producto) AS cantidad_productos
+     FROM pedido p
+     LEFT JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido
+     LEFT JOIN producto pr ON pr.id_producto = dp.id_producto
+     LEFT JOIN usuario u ON u.id_usuario = p.id_usuario_solicitante
+     LEFT JOIN usuario usup ON usup.id_usuario = p.aprobado_por_supervisor_id
+     WHERE p.id_institucion = ?
+       AND p.estado::text IN ('aprobado', 'entregado', 'finalizado', 'pendiente_director')
+     GROUP BY p.id_pedido, p.tipo, p.estado, p.fecha_creacion, p.fecha_aprobacion_supervisor,
+              u.nombre, usup.nombre, p.kit_nombre
+     ORDER BY p.fecha_creacion DESC
+     LIMIT 20`,
     [institucionId]
   );
 
-  return { eventos };
+  // Obtener movimientos de egreso (entregas efectivas)
+  const movimientos = await all(
+    `SELECT 
+       ms.id_movimiento AS id,
+       ms.fecha_movimiento AS fecha,
+       pr.nombre AS producto,
+       ms.cantidad,
+       ms.tipo,
+       ms.estado_producto,
+       u.nombre AS usuario,
+       ms.observacion
+     FROM movimiento_stock ms
+     LEFT JOIN producto pr ON pr.id_producto = ms.id_producto
+     LEFT JOIN usuario u ON u.id_usuario = ms.id_usuario
+     WHERE ms.id_institucion = ?
+       AND ms.tipo = 'egreso'
+     ORDER BY ms.fecha_movimiento DESC
+     LIMIT 20`,
+    [institucionId]
+  );
+
+  // Calcular totales por producto (consumo histórico)
+  const consumoPorProducto = await all(
+    `SELECT 
+       pr.nombre AS producto,
+       pr.unidad_medida,
+       COALESCE(SUM(ms.cantidad), 0) AS total_consumido,
+       COUNT(ms.id_movimiento) AS cantidad_movimientos,
+       MAX(ms.fecha_movimiento) AS ultima_entrega
+     FROM movimiento_stock ms
+     JOIN producto pr ON pr.id_producto = ms.id_producto
+     WHERE ms.id_institucion = ?
+       AND ms.tipo = 'egreso'
+     GROUP BY pr.id_producto, pr.nombre, pr.unidad_medida
+     ORDER BY total_consumido DESC`,
+    [institucionId]
+  );
+
+  // Calcular resumen de pedidos por tipo
+  const resumenPedidos = await all(
+    `SELECT 
+       COALESCE(p.tipo, 'anual') AS tipo,
+       COUNT(*) AS total,
+       COUNT(CASE WHEN p.estado::text IN ('entregado', 'finalizado') THEN 1 END) AS entregados,
+       COUNT(CASE WHEN p.estado::text = 'aprobado' OR p.estado::text = 'pendiente_director' THEN 1 END) AS pendientes
+     FROM pedido p
+     WHERE p.id_institucion = ?
+     GROUP BY COALESCE(p.tipo, 'anual')`,
+    [institucionId]
+  );
+
+  return {
+    pedidos,
+    movimientos,
+    consumo_por_producto: consumoPorProducto,
+    resumen: {
+      pedidos_anuales: resumenPedidos.find(r => r.tipo === 'anual') || { total: 0, entregados: 0, pendientes: 0 },
+      pedidos_refuerzo: resumenPedidos.find(r => r.tipo === 'refuerzo') || { total: 0, entregados: 0, pendientes: 0 }
+    }
+  };
 }
 
 module.exports = {
@@ -695,5 +778,6 @@ module.exports = {
   updateInstitucionKit,
   getPedidosPendientes,
   getSolicitudes,
-  getHistorialInstitucion
+  getHistorialInstitucion,
+  getHistorialConsumoInstitucion
 };

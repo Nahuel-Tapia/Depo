@@ -43,6 +43,9 @@ function SupervisorPedidos() {
   const [motivoRechazo, setMotivoRechazo] = useState('')
   const [historialVisible, setHistorialVisible] = useState(null)
   const [historialData, setHistorialData] = useState([])
+  const [historialConsumoVisible, setHistorialConsumoVisible] = useState(null)
+  const [historialConsumoData, setHistorialConsumoData] = useState(null)
+  const [loadingHistorial, setLoadingHistorial] = useState(false)
   const [busqueda, setBusqueda] = useState('')
 
   const loadData = async () => {
@@ -116,20 +119,26 @@ function SupervisorPedidos() {
     setTimeout(() => setMsg({ text: '', type: '' }), 3000)
   }
 
-  const verHistorial = async (institucionId) => {
-    if (historialVisible === institucionId) { setHistorialVisible(null); setHistorialData([]); return }
+  const verHistorial = async (institucionId, institucionNombre) => {
+    if (historialConsumoVisible === institucionId) {
+      setHistorialConsumoVisible(null)
+      setHistorialConsumoData(null)
+      return
+    }
+    setLoadingHistorial(true)
     try {
-      const res = await apiFetch(`/api/supervisor/instituciones/${institucionId}/historial`, { token })
+      const res = await apiFetch(`/api/supervisor/instituciones/${institucionId}/historial-consumo`, { token })
       if (res.ok) {
         const data = await res.json()
-        setHistorialData(data.eventos || [])
+        setHistorialConsumoData({ ...data, institucionNombre })
       } else {
-        setHistorialData([])
+        setHistorialConsumoData(null)
       }
     } catch {
-      setHistorialData([])
+      setHistorialConsumoData(null)
     }
-    setHistorialVisible(institucionId)
+    setLoadingHistorial(false)
+    setHistorialConsumoVisible(institucionId)
   }
 
   const pedidosFiltrados = busqueda.trim()
@@ -233,27 +242,91 @@ function SupervisorPedidos() {
                 <span className="sv-inst-cue">CUE: {inst.cue}</span>
               </div>
               <div className="sv-inst-nombre">{inst.nombre}</div>
-              <button className="secondary sv-btn-historial" onClick={() => verHistorial(inst.id)}>
-                {historialVisible === inst.id ? 'Ocultar historial' : 'Ver historial de retiros'}
+              <button 
+                className="secondary sv-btn-historial" 
+                onClick={() => verHistorial(inst.id, inst.nombre)}
+              >
+                {historialConsumoVisible === inst.id ? 'Ocultar historial' : 'Ver historial de consumo'}
               </button>
-              {historialVisible === inst.id && (
-                <div className="sv-historial-panel">
-                  {historialData.length === 0 ? (
-                    <p style={{ color: 'var(--muted)', fontSize: '0.85rem', margin: '8px 0' }}>Sin registros</p>
+              {historialConsumoVisible === inst.id && (
+                <div className="sv-historial-panel" style={{ padding: 0, margin: '12px 0 0 0' }}>
+                  {loadingHistorial ? (
+                    <p style={{ color: 'var(--muted)', fontSize: '0.85rem', margin: '16px 0', textAlign: 'center' }}>Cargando historial...</p>
+                  ) : historialConsumoData ? (
+                    <div style={{ marginTop: 8 }}>
+                      {/* Resumen */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
+                        <div style={{ background: '#f0f9ff', padding: 8, borderRadius: 6, textAlign: 'center' }}>
+                          <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0369a1' }}>
+                            {historialConsumoData.resumen?.pedidos_anuales?.total || 0}
+                          </div>
+                          <div style={{ fontSize: '0.7rem', color: '#0369a1' }}>Pedidos Anuales</div>
+                        </div>
+                        <div style={{ background: '#f0fdf4', padding: 8, borderRadius: 6, textAlign: 'center' }}>
+                          <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#166534' }}>
+                            {historialConsumoData.resumen?.pedidos_refuerzo?.total || 0}
+                          </div>
+                          <div style={{ fontSize: '0.7rem', color: '#166534' }}>Pedidos Refuerzo</div>
+                        </div>
+                      </div>
+                      
+                      {/* Consumo por producto */}
+                      {historialConsumoData.consumo_por_producto && historialConsumoData.consumo_por_producto.length > 0 && (
+                        <div style={{ marginBottom: 12 }}>
+                          <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginBottom: 6 }}>Consumo por Producto:</div>
+                          <table className="sv-historial-table" style={{ fontSize: '0.8rem' }}>
+                            <thead>
+                              <tr>
+                                <th style={{ fontSize: '0.75rem' }}>Producto</th>
+                                <th style={{ fontSize: '0.75rem' }}>Total</th>
+                                <th style={{ fontSize: '0.75rem' }}>Entregas</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {historialConsumoData.consumo_por_producto.slice(0, 5).map((item, idx) => (
+                                <tr key={idx}>
+                                  <td>{item.producto}</td>
+                                  <td style={{ textAlign: 'center', fontWeight: 600 }}>{item.total_consumido}</td>
+                                  <td style={{ textAlign: 'center' }}>{item.cantidad_movimientos}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                      
+                      {/* Últimos movimientos */}
+                      {historialConsumoData.movimientos && historialConsumoData.movimientos.length > 0 && (
+                        <div>
+                          <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginBottom: 6 }}>Últimas Entregas:</div>
+                          <table className="sv-historial-table" style={{ fontSize: '0.8rem' }}>
+                            <thead>
+                              <tr>
+                                <th style={{ fontSize: '0.75rem' }}>Fecha</th>
+                                <th style={{ fontSize: '0.75rem' }}>Producto</th>
+                                <th style={{ fontSize: '0.75rem' }}>Cant.</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {historialConsumoData.movimientos.slice(0, 5).map((h, idx) => (
+                                <tr key={idx}>
+                                  <td>{new Date(h.fecha).toLocaleDateString('es-AR')}</td>
+                                  <td>{h.producto}</td>
+                                  <td style={{ textAlign: 'center', fontWeight: 600 }}>{h.cantidad}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                      
+                      {(!historialConsumoData.consumo_por_producto || historialConsumoData.consumo_por_producto.length === 0) && 
+                       (!historialConsumoData.movimientos || historialConsumoData.movimientos.length === 0) && (
+                        <p style={{ color: 'var(--muted)', fontSize: '0.85rem', margin: '8px 0' }}>Sin registros de consumo</p>
+                      )}
+                    </div>
                   ) : (
-                    <table className="sv-historial-table">
-                      <thead><tr><th>Fecha</th><th>Producto</th><th>Cantidad</th><th>Tipo</th></tr></thead>
-                      <tbody>
-                        {historialData.map((h, idx) => (
-                          <tr key={idx}>
-                            <td>{new Date(h.fecha).toLocaleDateString('es-AR')}</td>
-                            <td>{h.producto}</td>
-                            <td style={{ textAlign: 'center' }}>{h.cantidad}</td>
-                            <td><span className={`badge badge-${h.tipo.toLowerCase()}`}>{h.tipo}</span></td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                    <p style={{ color: 'var(--muted)', fontSize: '0.85rem', margin: '8px 0' }}>Error al cargar historial</p>
                   )}
                 </div>
               )}

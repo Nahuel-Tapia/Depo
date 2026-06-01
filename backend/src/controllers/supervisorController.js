@@ -68,11 +68,27 @@ async function getHistorialInstitucion(req, res) {
   }
 }
 
+async function getHistorialConsumo(req, res) {
+  try {
+    const institucionId = Number(req.params.id);
+    if (!Number.isInteger(institucionId) || institucionId <= 0) {
+      return res.status(400).json({ error: "Institución inválida" });
+    }
+    const result = await supervisorService.getHistorialConsumoInstitucion(institucionId, req.user);
+    return res.json(result);
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    console.error("Error al obtener historial de consumo:", err);
+    return res.status(500).json({ error: "Error interno del servidor" });
+  }
+}
+
 module.exports = {
   getInstituciones,
   getDashboardStats,
   updateInstitucionKit,
   getPedidosPendientes,
   getSolicitudes,
-  getHistorialInstitucion
+  getHistorialInstitucion,
+  getHistorialConsumo
 };

@@ -12,5 +12,6 @@ router.patch("/instituciones/:id/tipo-kit", supervisorController.updateInstituci
 router.get("/pedidos-pendientes", supervisorController.getPedidosPendientes);
 router.get("/solicitudes", supervisorController.getSolicitudes);
 router.get("/instituciones/:id/historial", supervisorController.getHistorialInstitucion);
+router.get("/instituciones/:id/historial-consumo", supervisorController.getHistorialConsumo);
 
 module.exports = router;
