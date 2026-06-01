@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import HistorialConsumoPanel from '../../HistorialConsumoPanel'
 
 function formatEstado(estado) {
   if (estado === 'aclaracion') return 'Aclaracion solicitada'
@@ -24,6 +25,7 @@ export default function SolicitudDetalleModal({
   const firstPending = solicitudes.find(item => item.estado === 'pendiente') || solicitudes[0]
   const [selectedId, setSelectedId] = useState(firstPending?.id)
   const [observacion, setObservacion] = useState('')
+  const [showConsumoPanel, setShowConsumoPanel] = useState(false)
 
   const selected = solicitudes.find(item => item.id === selectedId) || firstPending
   const canAct = selected.estado === 'pendiente'
@@ -131,7 +133,14 @@ export default function SolicitudDetalleModal({
           </div>
         )}
 
-        <h4 style={{ marginTop: 20 }}>Historial de pedidos de la escuela</h4>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h4 style={{ marginTop: 20 }}>Historial de pedidos de la escuela</h4>
+          <div>
+            <button className="secondary" style={{ marginLeft: 8 }} onClick={() => setShowConsumoPanel(true)}>
+              Ver historial de consumo
+            </button>
+          </div>
+        </div>
         {loadingHistorial ? (
           <p style={{ color: 'var(--muted)' }}>Cargando historial...</p>
         ) : historial.length === 0 ? (
@@ -159,6 +168,16 @@ export default function SolicitudDetalleModal({
           </table>
         )}
         </div>
+
+        {showConsumoPanel && (
+          <div style={{ marginTop: 18 }}>
+            <HistorialConsumoPanel
+              institucionId={selected.institucion_id}
+              institucionNombre={solicitud.escuela}
+              onClose={() => setShowConsumoPanel(false)}
+            />
+          </div>
+        )}
 
         <div className="inline-actions sv-modal-actions">
           <button disabled={disabled || !canAct} onClick={() => onApprove(selected)}>Aceptar solicitud</button>
