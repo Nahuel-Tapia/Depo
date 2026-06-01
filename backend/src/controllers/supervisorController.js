@@ -59,7 +59,7 @@ async function getSolicitudes(req, res) {
 
 async function getHistorialInstitucion(req, res) {
   try {
-    const result = await supervisorService.getHistorialInstitucion(req.params.id);
+    const result = await supervisorService.getHistorialInstitucion(req.params.id, req.user);
     return res.json(result);
   } catch (err) {
     if (err.status) return res.status(err.status).json({ error: err.message });

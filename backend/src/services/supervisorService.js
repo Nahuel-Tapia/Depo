@@ -675,6 +675,26 @@ async function getSolicitudes(user, queryJurisdiccion) {
   return { solicitudes };
 }
 
+async function getHistorialInstitucion(institucionId, user) {
+  await ensureSupervisorSchema();
+
+  const rows = await all(
+    `SELECT ms.id_movimiento as id, ms.tipo, ms.cantidad, ms.fecha_movimiento as created_at, ms.id_institucion, ms.id_producto as producto_id, pr.nombre AS producto_nombre, pr.unidad_medida, ms.estado_producto, ms.cargo_retira, ms.motivo, u.nombre as usuario_nombre
+     FROM movimiento_stock ms
+     LEFT JOIN producto pr ON ms.id_producto = pr.id_producto
+     LEFT JOIN usuario u ON ms.id_usuario = u.id_usuario
+     JOIN institucion i ON ms.id_institucion = i.id_institucion
+     WHERE ms.id_institucion = $1
+       AND ms.tipo = 'egreso'
+       AND ($2 != 'director_area' OR LOWER(TRIM(i.nivel_educativo)) = LOWER(TRIM($3)))
+     ORDER BY ms.fecha_movimiento DESC, ms.id_movimiento DESC
+     LIMIT 5`,
+    [institucionId, user?.role, user?.nivel_educativo || '']
+  );
+
+  return rows;
+}
+
 async function getHistorialConsumoInstitucion(institucionId, user) {
   // Verificar que el supervisor tenga acceso a esta institución
   if (user?.role === "supervisor" && !(await supervisorHasAssignedInstitution(user.sub, institucionId))) {
