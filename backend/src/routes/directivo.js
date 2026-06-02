@@ -11,5 +11,9 @@ router.get("/historial-retiros", directivoController.getHistorialRetiros);
 router.get("/distribuciones/pendientes", directivoController.getDistribucionesPendientes);
 router.get("/distribuciones/historial", directivoController.getDistribucionesHistorial);
 router.post("/distribuciones/:loteId/confirmar-recepcion", directivoController.confirmarRecepcion);
+router.get("/deposito", directivoController.getDepositoInstitucion);
+router.get("/deposito/historial", directivoController.getHistorialConsumos);
+router.post("/deposito/consumo", directivoController.registrarConsumo);
 
 module.exports = router;
+

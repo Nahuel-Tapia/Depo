@@ -722,6 +722,15 @@ async function initDatabaseSchema() {
       console.warn("[schemaManager] Warning creating performance indexes:", err.message);
     }
 
+    // 26. Consumo Institucion — agregar columna categoria si no existe
+    try {
+      await client.query(`ALTER TABLE consumo_institucion ADD COLUMN IF NOT EXISTS categoria VARCHAR(60)`);
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_consumo_institucion_inst ON consumo_institucion (id_institucion)`);
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_consumo_institucion_fecha ON consumo_institucion (fecha DESC)`);
+    } catch (err) {
+      console.warn("[schemaManager] Warning altering consumo_institucion:", err.message);
+    }
+
     console.log("[schemaManager] Database schema and migrations completed successfully!");
   } finally {
     client.release();

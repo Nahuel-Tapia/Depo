@@ -658,7 +658,60 @@ async function getDetalleSolicitudesEnvioDepartamento(departamentoParam, anioQue
   const solicitudes = [];
   for (const row of rows) {
     const solicitud = await getSolicitudRetiro(row.id);
-    if (solicitud) solicitudes.push(solicitud);
+    if (solicitud) {
+      // Fetch all items from the annual approved pedido and their current balances
+      const pedidoItems = await all(`
+        SELECT
+          dp.id_producto AS producto_id,
+          pr.nombre AS producto_nombre,
+          pr.unidad_medida,
+          pr.stock_actual,
+          dp.cantidad_solicitada AS cantidad_anual,
+          COALESCE(ent.total_entregado, 0) AS entregado_anual,
+          COALESCE(res.total_reservado, 0) AS reservado_anual
+        FROM detalle_pedido dp
+        JOIN producto pr ON pr.id_producto = dp.id_producto
+        LEFT JOIN (
+          SELECT id_pedido, id_producto, SUM(cantidad_entregada) AS total_entregado
+          FROM pedido_entrega
+          WHERE id_pedido = $1
+          GROUP BY id_pedido, id_producto
+        ) ent ON ent.id_producto = dp.id_producto
+        LEFT JOIN (
+          SELECT sr.id_pedido, srd.id_producto, SUM(srd.cantidad_solicitada) AS total_reservado
+          FROM solicitud_retiro sr
+          JOIN solicitud_retiro_detalle srd ON srd.id_solicitud_retiro = sr.id
+          WHERE sr.id_pedido = $1 AND sr.estado IN ('pendiente', 'aceptada')
+          GROUP BY sr.id_pedido, srd.id_producto
+        ) res ON res.id_producto = dp.id_producto
+        WHERE dp.id_pedido = $1
+        ORDER BY pr.nombre ASC
+      `, [solicitud.id_pedido]);
+
+      solicitud.productos_pedido_anual = pedidoItems.map((p) => {
+        const solItem = solicitud.items.find((item) => item.producto_id === p.producto_id);
+        const cantSol = solItem ? Number(solItem.cantidad_solicitada) : 0;
+        const cantEnt = solItem ? Number(solItem.cantidad_entregada) : 0;
+
+        const maxPermitido = Number(p.cantidad_anual) - Number(p.entregado_anual) - Number(p.reservado_anual) + cantSol - cantEnt;
+
+        return {
+          producto_id: Number(p.producto_id),
+          producto_nombre: p.producto_nombre,
+          unidad_medida: p.unidad_medida || "unidad",
+          stock_actual: Number(p.stock_actual || 0),
+          cantidad_anual: Number(p.cantidad_anual),
+          entregado_anual: Number(p.entregado_anual),
+          reservado_anual: Number(p.reservado_anual),
+          max_permitido: Math.max(0, maxPermitido),
+          en_solicitud: !!solItem,
+          cantidad_solicitada_solicitud: cantSol,
+          cantidad_entregada_solicitud: cantEnt
+        };
+      });
+
+      solicitudes.push(solicitud);
+    }
   }
 
   const faltantesSolicitud = await getInstitucionesFaltantesSolicitudPorDepartamento(departamento, anio);
@@ -835,15 +888,60 @@ async function registrarEgresoMultipleEnvio(userId, body) {
     }
 
     for (const [solicitudId, items] of porSolicitud.entries()) {
+      const solicitudData = solicitudesMap.get(solicitudId);
+      const idPedido = solicitudData.id_pedido;
+
+      // Fetch annual approved order items
+      const pedidoItemsRes = await client.query(`
+        SELECT
+          dp.id_producto,
+          dp.cantidad_solicitada AS cantidad_anual,
+          p.nombre AS producto_nombre
+        FROM detalle_pedido dp
+        JOIN producto p ON p.id_producto = dp.id_producto
+        WHERE dp.id_pedido = $1
+      `, [idPedido]);
+
+      const pedidoItemsMap = new Map(pedidoItemsRes.rows.map(r => [Number(r.id_producto), r]));
+
+      // Fetch already delivered quantity for this pedido
+      const entregasRes = await client.query(`
+        SELECT id_producto, SUM(cantidad_entregada) AS total_entregado
+        FROM pedido_entrega
+        WHERE id_pedido = $1
+        GROUP BY id_producto
+      `, [idPedido]);
+      const entregasMap = new Map(entregasRes.rows.map(r => [Number(r.id_producto), Number(r.total_entregado || 0)]));
+
+      // Fetch reservations in pending/accepted requests
+      const reservadoRes = await client.query(`
+        SELECT srd.id_producto, SUM(srd.cantidad_solicitada) AS total_reservado
+        FROM solicitud_retiro sr
+        JOIN solicitud_retiro_detalle srd ON srd.id_solicitud_retiro = sr.id
+        WHERE sr.id_pedido = $1 AND sr.estado IN ('pendiente', 'aceptada')
+        GROUP BY srd.id_producto
+      `, [idPedido]);
+      const reservadoMap = new Map(reservadoRes.rows.map(r => [Number(r.id_producto), Number(r.total_reservado || 0)]));
+
       for (const item of items) {
+        const pedItem = pedidoItemsMap.get(item.id_producto);
+        if (!pedItem) {
+          throw badRequest(`El producto ${item.id_producto} no pertenece al pedido anual aprobado de la escuela.`);
+        }
+
+        const cantAnual = Number(pedItem.cantidad_anual || 0);
+        const cantEntregadaAnual = Number(entregasMap.get(item.id_producto) || 0);
+        const cantReservadaAnual = Number(reservadoMap.get(item.id_producto) || 0);
+
         const key = `${solicitudId}:${item.id_producto}`;
         const detalle = detalleMap.get(key);
-        if (!detalle) {
-          throw badRequest(`El producto ${item.id_producto} no existe en la solicitud #${solicitudId}`);
-        }
-        const pendiente = Math.max(0, detalle.cantidad_solicitada - detalle.cantidad_entregada);
-        if (item.cantidad > pendiente) {
-          throw badRequest(`La cantidad para ${detalle.producto_nombre} en solicitud #${solicitudId} supera el pendiente (${pendiente})`);
+        const cantSolSolicitud = detalle ? Number(detalle.cantidad_solicitada || 0) : 0;
+        const cantEntregadaSolicitud = detalle ? Number(detalle.cantidad_entregada || 0) : 0;
+
+        const maxPermitido = cantAnual - cantEntregadaAnual - cantReservadaAnual + cantSolSolicitud - cantEntregadaSolicitud;
+
+        if (item.cantidad > maxPermitido) {
+          throw badRequest(`La cantidad (${item.cantidad}) para ${pedItem.producto_nombre} supera el saldo disponible del pedido anual (${maxPermitido})`);
         }
       }
     }
@@ -932,13 +1030,22 @@ async function registrarEgresoMultipleEnvio(userId, body) {
           ]
         );
 
-        await client.query(
+        const updateRes = await client.query(
           `UPDATE solicitud_retiro_detalle
            SET cantidad_entregada = COALESCE(cantidad_entregada, 0) + $1,
                id_movimiento = $2
            WHERE id_solicitud_retiro = $3 AND id_producto = $4`,
           [item.cantidad, movimientoId, solicitudId, item.id_producto]
         );
+
+        if (updateRes.rowCount === 0) {
+          await client.query(
+            `INSERT INTO solicitud_retiro_detalle
+               (id_solicitud_retiro, id_producto, cantidad_solicitada, cantidad_entregada, id_movimiento)
+             VALUES ($1, $2, 0, $3, $4)`,
+            [solicitudId, item.id_producto, item.cantidad, movimientoId]
+          );
+        }
 
         const loteKey = `${solicitudData.id_institucion}:${item.id_producto}`;
         loteItemsMap.set(loteKey, {
