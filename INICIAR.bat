@@ -31,7 +31,7 @@ if not exist "%ROOT%\frontend\package.json" (
 
 echo [0/3] Liberando puertos 4000 y 5173...
 for %%p in (4000 5173 5174 5175 5176) do (
-    for /f "tokens=5" %%a in ('netstat -ano ^| findstr :%%p') do (
+    for /f "tokens=5" %%a in ('netstat -ano ^| findstr /c:":%%p "') do (
         taskkill /F /PID %%a 2>nul
     )
 )

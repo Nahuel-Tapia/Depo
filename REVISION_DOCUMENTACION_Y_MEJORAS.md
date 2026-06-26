@@ -1,5 +1,17 @@
 # Revision de Documentacion y Mejoras Prioritarias
 
+## Actualización integral de documentación y testing (2026-06-25)
+
+Se ha completado la redacción del informe técnico final estructurado en 18 capítulos académicos, resolviendo la totalidad de las inconsistencias documentales previas.
+
+Hitos completados y verificados:
+- **Consolidación Académica**: Creación del documento consolidado unificado [documento_completo_depo.md](file:///C:/Users/Docente/Depo/docs/documento_completo_depo.md) en la carpeta `docs/`.
+- **Arranque en Windows**: Validación y corrección de los scripts de arranque (`INICIAR.bat`, `start-dev.ps1`) para iniciarse en los directorios de origen correctos y cerrarse de manera aislada sin afectar procesos de Node ajenos al proyecto.
+- **Testing y Automatización**: Configuración y paso exitoso de la suite de smoke tests de la API con Playwright (`npm run test`).
+- **Persistencia y Onboarding**: Documentación física del diccionario de datos y definición de modos de base de datos para desarrollo y producción.
+
+---
+
 ## Actualizacion de documentacion ejecutada (2026-05-15)
 
 Se realizo una actualizacion integral de la documentacion funcional y tecnica para alinear el contenido con el estado real del sistema.

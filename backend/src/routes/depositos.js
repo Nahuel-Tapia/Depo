@@ -3,6 +3,9 @@ const { authenticate, authorizePermissions } = require("../middleware/auth");
 const { PERMISSIONS } = require("../permissions");
 const depositoController = require("../controllers/depositoController");
 
+// Límite de body mayor para rutas que reciben imágenes base64
+const largeBodyParser = express.json({ limit: '10mb' });
+
 const router = express.Router();
 
 router.use(authenticate);
@@ -23,7 +26,7 @@ router.get("/licitacion/recepciones", authorizePermissions(PERMISSIONS.STOCK_VIE
 router.get("/licitacion/recepciones/:id", authorizePermissions(PERMISSIONS.STOCK_VIEW), depositoController.getDetalleRecepcion);
 router.post("/licitacion/registrar-ingreso", authorizePermissions(PERMISSIONS.STOCK_MOVEMENT_CREATE), depositoController.registrarIngresoLicitacion);
 router.post("/licitacion/cerrar/:id", authorizePermissions(PERMISSIONS.STOCK_MOVEMENT_CREATE), depositoController.cerrarLicitacion);
-router.post("/licitacion/danio/imagen", authorizePermissions(PERMISSIONS.STOCK_MOVEMENT_CREATE), depositoController.registrarDanioImagen);
+router.post("/licitacion/danio/imagen", largeBodyParser, authorizePermissions(PERMISSIONS.STOCK_MOVEMENT_CREATE), depositoController.registrarDanioImagen);
 router.get("/licitacion/recepciones/:id/remitos", authorizePermissions(PERMISSIONS.STOCK_VIEW), depositoController.getRemitosByLicitacion);
 router.get("/licitacion/remito-general/:id", authorizePermissions(PERMISSIONS.STOCK_VIEW), depositoController.getRemitoGeneralLicitacion);
 

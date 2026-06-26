@@ -263,6 +263,63 @@ export default function Bajas() {
 
   const fmtDate = (d) => d ? new Date(d).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'
 
+  const printReport = () => {
+    const printWindow = window.open('', '_blank', 'width=1000,height=700')
+    if (!printWindow) return
+
+    const rowsHtml = bajas.map(b => `
+      <tr>
+        <td>${fmtDate(b.created_at)}</td>
+        <td>${b.producto_nombre || '-'} ${b.unidad_medida ? `(${b.unidad_medida})` : ''}</td>
+        <td style="color:#b91c1c;font-weight:bold">-${b.cantidad}</td>
+        <td>${b.deposito_nombre || '-'}</td>
+        <td>${b.motivo || '-'}</td>
+        <td>${b.usuario_nombre || '-'}</td>
+        <td>${b.estado || 'aprobada'}</td>
+      </tr>
+    `).join('')
+
+    printWindow.document.write(`<!DOCTYPE html><html>
+      <head>
+        <title>Reporte de Bajas de Mercadería</title>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 30px; color: #111827; }
+          h2 { border-bottom: 2px solid #E03C31; padding-bottom: 10px; margin-bottom: 20px; color: #E03C31; }
+          .meta { margin-bottom: 20px; font-size: 0.9rem; color: #4b5563; }
+          table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+          th { background: #f3f4f6; border: 1px solid #d1d5db; padding: 10px; text-align: left; font-size: 0.85rem; font-weight: bold; }
+          td { border: 1px solid #d1d5db; padding: 10px; font-size: 0.85rem; }
+        </style>
+      </head>
+      <body>
+        <h2>Reporte de Bajas y Material Dañado</h2>
+        <div class="meta">
+          <strong>Fecha de generación:</strong> ${new Date().toLocaleString('es-AR')}<br>
+          <strong>Total de registros:</strong> ${bajas.length}
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Producto</th>
+              <th>Cantidad</th>
+              <th>Depósito</th>
+              <th>Motivo</th>
+              <th>Operador</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${bajas.length === 0 ? '<tr><td colspan="7" style="text-align:center">No hay registros</td></tr>' : rowsHtml}
+          </tbody>
+        </table>
+      </body>
+    </html>`)
+    printWindow.document.close()
+    printWindow.focus()
+    setTimeout(() => { printWindow.print(); printWindow.close() }, 250)
+  }
+
   // ─── Render ───
   return (
     <div>
@@ -274,17 +331,27 @@ export default function Bajas() {
             Registro de mercadería dañada, descartada o dada de baja del stock
           </p>
         </div>
-        {canCreate && (
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <button
             type="button"
-            className="mov-action-btn"
-            style={{ width: 'auto', margin: 0, padding: '14px 22px', fontSize: '1rem' }}
-            onClick={openModal}
+            className="secondary"
+            style={{ width: 'auto', margin: 0, padding: '14px 22px', fontSize: '1rem', minHeight: '44px', display: 'flex', alignItems: 'center', gap: 6 }}
+            onClick={printReport}
           >
-            <span aria-hidden="true" style={{ marginRight: 8, fontSize: '1.2rem' }}>🚫📦</span>
-            Registrar Baja
+            🖨️ Reporte
           </button>
-        )}
+          {canCreate && (
+            <button
+              type="button"
+              className="mov-action-btn"
+              style={{ width: 'auto', margin: 0, padding: '14px 22px', fontSize: '1rem' }}
+              onClick={openModal}
+            >
+              <span aria-hidden="true" style={{ marginRight: 8, fontSize: '1.2rem' }}>🚫📦</span>
+              Registrar Baja
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Mensaje */}

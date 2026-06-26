@@ -1,0 +1,173 @@
+/* ===== SAN JUAN GOBIERNO — Kit de Marca ===== */
+@import url('https://fonts.googleapis.com/css2?family=Ubuntu:wght@300;400;500;700&display=swap');
+@import 'leaflet/dist/leaflet.css';
+
+:root {
+  --yellow: #FBDD40;
+  --orange: #FF8200;
+  --red: #E03C31;
+  --dark: #1D252D;
+  --card: #ffffff;
+  --bg: #f5f5f5;
+  --text: #1D252D;
+  --muted: #6b7280;
+  --border: #e0e0e0;
+}
+
+* {
+  box-sizing: border-box;
+  font-family: 'Ubuntu', sans-serif;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.55;
+}
+
+/* ===== LAYOUT ===== */
+.container {
+  min-height: 100vh;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 24px;
+}
+
+.auth-container {
+  align-items: center;
+  padding-top: 40px;
+  padding-bottom: 24px;
+  background: #FF8200;
+  min-height: 100vh;
+  width: 100%;
+}
+
+.card {
+  width: 100%;
+  background: var(--card);
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  padding: 48px;
+  min-height: 90vh;
+}
+
+.auth-card {
+  width: min(440px, 100%);
+  min-height: auto;
+  padding: 40px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+}
+
+/* ===== TOPBAR ===== */
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: -40px -40px 32px -40px;
+  padding: 16px 40px;
+  background: var(--yellow);
+  gap: 16px;
+  border-radius: 10px 10px 0 0;
+}
+
+.logo-container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.logo-container img {
+  height: 44px;
+  width: auto;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+#currentUser {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--dark);
+  color: white;
+  font-weight: 700;
+  font-size: 14px;
+  border: none;
+}
+
+/* ===== TYPOGRAPHY ===== */
+h1,
+h2,
+h3,
+h4 {
+  margin: 0 0 16px;
+  color: var(--dark);
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+h1 {
+  font-size: 2rem;
+}
+
+h2 {
+  font-size: 1.6rem;
+  margin-top: 24px;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  color: var(--orange);
+  position: relative;
+  display: inline-block;
+}
+
+h3 {
+  font-size: 1.25rem;
+  margin-top: 16px;
+  padding-bottom: 6px;
+  position: relative;
+  display: inline-block;
+}
+
+h4 {
+  font-size: 1.05rem;
+  font-weight: 500;
+}
+
+h2::after,
+h3::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 1.5px;
+  background: var(--orange);
+  border-radius: 999px;
+}
+
+.subtitle {
+  margin: 0 0 24px;
+  color: var(--muted);
+  font-size: 1.05rem;
+  font-weight: 300;
+}
+
+p,
+td,
+input,
+select,
+button,
+label {
+  font-family: 'Ubuntu', sans-serif;
+}
+

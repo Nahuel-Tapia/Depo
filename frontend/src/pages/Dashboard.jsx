@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useRef } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../api'
 import Inicio from '../components/Inicio'
@@ -76,7 +77,10 @@ const TABS = [
 
 export default function Dashboard() {
   const { user, logout, hasPermission, token, masterDirectorAreaId, setMasterDirectorAreaId } = useAuth()
-  const [activeTab, setActiveTab] = useState('inicio')
+  const { tab } = useParams()
+  const navigate = useNavigate()
+  const activeTab = tab || 'inicio'
+  const setActiveTab = (newTab) => navigate(`/dashboard/${newTab}`)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [currentDate, setCurrentDate] = useState(() => new Date())
   const [directoresMaster, setDirectoresMaster] = useState([])

@@ -23,4 +23,10 @@ module.exports = defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
+  webServer: {
+    command: 'npm run start',
+    url: 'http://localhost:4000/api/health',
+    reuseExistingServer: true,
+    timeout: 10000
+  }
 });

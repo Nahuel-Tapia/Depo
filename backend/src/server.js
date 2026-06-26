@@ -26,6 +26,7 @@ const { initDb } = require("./db.pg");
 const { getDbConfigForLogs } = require("./config/database");
 const { ensureRbacSchemaAndSeed } = require("./services/rbac");
 const errorHandler = require("./middleware/errorHandler");
+const { authLimiter, apiLimiter } = require("./middleware/rateLimiter");
 const { initDatabaseSchema } = require("./services/schemaManager");
 
 const authRoutes = require("./routes/auth");
@@ -65,9 +66,14 @@ const entregasRoutes = require("./routes/entregas");
 const app = express();
 const PORT = process.env.PORT || 4000;
 
-app.use(cors());
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use(cors({
+  origin: process.env.CORS_ORIGINS
+    ? process.env.CORS_ORIGINS.split(',').map(s => s.trim())
+    : ['http://localhost:5173', 'http://localhost:4000'],
+  credentials: true
+}));
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ limit: '2mb', extended: true }));
 
 // Servir el build de React (frontend/dist)
 const frontendDistPath = path.join(__dirname, "..", "..", "frontend", "dist");
@@ -89,11 +95,14 @@ app.use('/uploads', (req, res) => {
   return res.status(404).json({ error: 'Archivo no encontrado' });
 });
 
+// Rate limiting global para la API
+app.use("/api", apiLimiter);
+
 app.get("/api/health", (req, res) => {
   res.json({ ok: true });
 });
 
-app.use("/api/auth", authRoutes);
+app.use("/api/auth", authLimiter, authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/roles", roleRoutes);
 app.use("/api/permissions", permissionsRoutes);

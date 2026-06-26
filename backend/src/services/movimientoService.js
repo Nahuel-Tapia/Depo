@@ -32,21 +32,26 @@ async function listarMovimientos(queryParams) {
       FROM compra_precio_historico cph
       JOIN proveedor prov ON prov.id_proveedor = cph.id_proveedor
       WHERE cph.id_producto = m.id_producto
-        AND cph.anio = (
-          CASE
-            WHEN substring(m.motivo from 'REMITO-([0-9]{4})-') IS NOT NULL
-              THEN CAST(substring(m.motivo from 'REMITO-([0-9]{4})-') AS INT)
-            WHEN substring(m.motivo from 'Licitación #([0-9]+)') IS NOT NULL
-              THEN (
-                SELECT lp.anio
-                FROM licitacion_publicada lp
-                WHERE lp.id = CAST(substring(m.motivo from 'Licitación #([0-9]+)') AS INT)
-                LIMIT 1
-              )
-            ELSE NULL
-          END
-        )
-      ORDER BY cph.updated_at DESC NULLS LAST, cph.id_proveedor
+      ORDER BY 
+        (CASE 
+          WHEN cph.anio = (
+            CASE
+              WHEN substring(m.motivo from 'REMITO-([0-9]{4})-') IS NOT NULL
+                THEN CAST(substring(m.motivo from 'REMITO-([0-9]{4})-') AS INT)
+              WHEN substring(m.motivo from 'Licitación #([0-9]+)') IS NOT NULL
+                THEN (
+                  SELECT lp.anio
+                  FROM licitacion_publicada lp
+                  WHERE lp.id = CAST(substring(m.motivo from 'Licitación #([0-9]+)') AS INT)
+                  LIMIT 1
+                )
+              ELSE NULL
+            END
+          ) THEN 1 
+          ELSE 0 
+        END) DESC,
+        cph.updated_at DESC NULLS LAST, 
+        cph.id_proveedor
       LIMIT 1
     ) pr_lic ON m.id_proveedor IS NULL
     LEFT JOIN deposito d ON m.id_deposito = d.id_deposito
@@ -114,21 +119,26 @@ async function obtenerMovimiento(id) {
       FROM compra_precio_historico cph
       JOIN proveedor prov ON prov.id_proveedor = cph.id_proveedor
       WHERE cph.id_producto = m.id_producto
-        AND cph.anio = (
-          CASE
-            WHEN substring(m.motivo from 'REMITO-([0-9]{4})-') IS NOT NULL
-              THEN CAST(substring(m.motivo from 'REMITO-([0-9]{4})-') AS INT)
-            WHEN substring(m.motivo from 'Licitación #([0-9]+)') IS NOT NULL
-              THEN (
-                SELECT lp.anio
-                FROM licitacion_publicada lp
-                WHERE lp.id = CAST(substring(m.motivo from 'Licitación #([0-9]+)') AS INT)
-                LIMIT 1
-              )
-            ELSE NULL
-          END
-        )
-      ORDER BY cph.updated_at DESC NULLS LAST, cph.id_proveedor
+      ORDER BY 
+        (CASE 
+          WHEN cph.anio = (
+            CASE
+              WHEN substring(m.motivo from 'REMITO-([0-9]{4})-') IS NOT NULL
+                THEN CAST(substring(m.motivo from 'REMITO-([0-9]{4})-') AS INT)
+              WHEN substring(m.motivo from 'Licitación #([0-9]+)') IS NOT NULL
+                THEN (
+                  SELECT lp.anio
+                  FROM licitacion_publicada lp
+                  WHERE lp.id = CAST(substring(m.motivo from 'Licitación #([0-9]+)') AS INT)
+                  LIMIT 1
+                )
+              ELSE NULL
+            END
+          ) THEN 1 
+          ELSE 0 
+        END) DESC,
+        cph.updated_at DESC NULLS LAST, 
+        cph.id_proveedor
       LIMIT 1
     ) pr_lic ON m.id_proveedor IS NULL
     WHERE m.id_movimiento = ?

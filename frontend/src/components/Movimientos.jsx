@@ -1040,16 +1040,28 @@ return (
               const isMulti = group.items.length > 1;
               const proveedoresResumen = [...new Set(group.items.map(item => item.proveedor_nombre).filter(Boolean))];
 
+              const uniqueEstados = [...new Set(group.items.map(item => item.estado_producto).filter(Boolean))];
+              const estadoDisplay = uniqueEstados.length === 1 ? uniqueEstados[0] : (uniqueEstados.length > 1 ? 'Varios' : '-');
+
               const totalCantidad = group.items.reduce((sum, item) => sum + Number(item.cantidad || 0), 0);
+
+              let proveedorDisplay = '-';
+              if (first.tipo === 'egreso') {
+                proveedorDisplay = first.institucion_nombre || '-';
+              } else if (first.tipo === 'ingreso') {
+                proveedorDisplay = proveedoresResumen.length > 0 ? proveedoresResumen.join(', ') : 'Sin proveedor';
+              } else {
+                proveedorDisplay = proveedoresResumen.length > 0 ? proveedoresResumen.join(', ') : '-';
+              }
 
               return (
                 <tr key={first.id || i}>
                   <td>{`#${first.id}`}</td>
                   <td><span className={`badge badge-${first.tipo}`}>{first.tipo}</span></td>
                   <td>{isMulti ? totalCantidad : first.cantidad}</td>
-                  <td>{isMulti ? 'Varios' : (first.estado_producto || '-')}</td>
+                  <td>{estadoDisplay}</td>
                   <td>{first.motivo || '-'}</td>
-                  <td>{proveedoresResumen.length > 0 ? proveedoresResumen.join(', ') : '-'}</td>
+                  <td>{proveedorDisplay}</td>
                   <td>{first.usuario_nombre || '-'}</td>
                   <td>{first.created_at ? new Date(first.created_at).toLocaleDateString() : '-'}</td>
                   <td style={{ textAlign: 'center' }}>
@@ -1067,7 +1079,7 @@ return (
                       <button
                         type="button"
                         className="secondary"
-                        onClick={() => { setDetalleData({ proveedor: proveedoresResumen.length > 0 ? proveedoresResumen.join(', ') : null, deposito: first.deposito_nombre, institucion: institucionCargo, productos: group.items }); setDetalleModalOpen(true) }}
+                        onClick={() => { setDetalleData({ proveedor: proveedoresResumen.length > 0 ? proveedoresResumen.join(', ') : (first.tipo === 'egreso' ? first.institucion_nombre : null), deposito: first.deposito_nombre, institucion: institucionCargo, productos: group.items }); setDetalleModalOpen(true) }}
                         title="Ver detalle"
                         aria-label="Ver detalle"
                         style={{ width: 'auto', margin: 0, minWidth: 36, padding: '6px 10px' }}

@@ -1,5 +1,13 @@
 # Plan de Mejoras para el Sistema de Depósito
 
+## Actualización y Cierre de Pendientes (2026-06-25)
+Se ha completado la revisión técnica de la base de código y la base de datos PostgreSQL, confirmando la correcta implementación y consistencia de:
+- **Gestión de Bajas e Imágenes**: Módulo transaccional de descarte de stock por roturas (`baja_movimientos`) con soporte para evidencias fotográficas en base64 (`recepcion_danio_imagen`).
+- **Historial de Precios**: Registro histórico automático de precios de licitación para auditoría comercial (`compra_precio_historico`).
+- **Logística Consolidada**: Tablero de control de envíos por departamento y egresos múltiples verificando stock disponible con códigos HTTP `400` para errores funcionales.
+
+---
+
 ## Actualizacion rapida (2026-05-15)
 
 Implementado en sistema y documentacion:

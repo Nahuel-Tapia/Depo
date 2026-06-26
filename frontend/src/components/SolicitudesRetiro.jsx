@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../api'
 
@@ -21,56 +21,81 @@ function buildRetiraLabel(solicitud) {
 function Comprobante({ solicitud }, ref) {
   if (!solicitud) return null
 
+  const copies = [
+    { key: 'original', label: 'Original - Receptor' },
+    { key: 'duplicado', label: 'Duplicado - Depósito' },
+    { key: 'triplicado', label: 'Triplicado - Tribunal de Cuentas' },
+  ]
+
   return (
-    <div ref={ref} style={{ background: '#fff', color: '#111827', padding: 24 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #FF8200', paddingBottom: 10, marginBottom: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <img src="/faviconmin.png" alt="Logo San Juan" style={{ height: 40, width: 'auto' }} />
-          <div>
-            <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>San Juan Gobierno</div>
-            <div style={{ fontSize: '0.9rem', color: '#666' }}>Ministerio de EducaciÃ³n</div>
+    <div ref={ref} style={{ background: '#fff', color: '#111827', padding: '16px 24px' }}>
+      {copies.map((copy, index) => (
+        <div
+          key={copy.key}
+          style={{
+            paddingBottom: 24,
+            marginBottom: index < 2 ? 32 : 0,
+            borderBottom: index < 2 ? '2px dashed #94a3b8' : 'none',
+            pageBreakAfter: index < 2 ? 'always' : 'auto'
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <span style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase' }}>
+              {copy.label}
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #FF8200', paddingBottom: 10, marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <img src="/faviconmin.png" alt="Logo San Juan" style={{ height: 40, width: 'auto' }} />
+              <div>
+                <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>San Juan Gobierno</div>
+                <div style={{ fontSize: '0.9rem', color: '#666' }}>Ministerio de Educación</div>
+              </div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>Comprobante de entrega</div>
+              <div style={{ fontSize: '0.9rem', color: '#666' }}>Solicitud #{solicitud.id}</div>
+            </div>
+          </div>
+
+          <div style={{ paddingBottom: 10, marginBottom: 14 }}>
+            <strong>Pedido {solicitud.tipo_pedido === 'refuerzo' ? 'refuerzo' : 'anual'} #{solicitud.id_pedido}</strong>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
+            <div><strong>Institucion:</strong> {solicitud.institucion_nombre}</div>
+            <div><strong>CUE:</strong> {solicitud.cue || '-'}</div>
+            <div><strong>Fecha solicitada de retiro:</strong> {formatDate(solicitud.fecha_retiro)}</div>
+            <div><strong>Fecha de entrega:</strong> {formatDate(solicitud.fecha_entrega) || '-'}</div>
+            <div style={{ gridColumn: '1 / -1' }}><strong>Retira:</strong> {buildRetiraLabel(solicitud)}</div>
+          </div>
+
+          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 28 }}>
+            <thead>
+              <tr>
+                <th style={thStyle}>Producto</th>
+                <th style={thStyle}>Cantidad</th>
+                <th style={thStyle}>Unidad</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(solicitud.items || []).map((item) => (
+                <tr key={item.producto_id}>
+                  <td style={tdStyle}>{item.producto_nombre}</td>
+                  <td style={tdStyle}>{item.cantidad_entregada || item.cantidad_solicitada}</td>
+                  <td style={tdStyle}>{item.unidad_medida || 'unidad'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 36, marginTop: 54 }}>
+            <div style={signatureStyle}>Firma de quien entrega</div>
+            <div style={signatureStyle}>Firma y sello del directivo</div>
           </div>
         </div>
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>Comprobante de entrega</div>
-          <div style={{ fontSize: '0.9rem', color: '#666' }}>Solicitud #{solicitud.id}</div>
-        </div>
-      </div>
-      <div style={{ paddingBottom: 10, marginBottom: 14 }}>
-        <strong>Pedido {solicitud.tipo_pedido === 'refuerzo' ? 'refuerzo' : 'anual'} #{solicitud.id_pedido}</strong>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
-        <div><strong>Institucion:</strong> {solicitud.institucion_nombre}</div>
-        <div><strong>CUE:</strong> {solicitud.cue || '-'}</div>
-        <div><strong>Fecha solicitada de retiro:</strong> {formatDate(solicitud.fecha_retiro)}</div>
-        <div><strong>Fecha de entrega:</strong> {formatDate(solicitud.fecha_entrega) || '-'}</div>
-        <div style={{ gridColumn: '1 / -1' }}><strong>Retira:</strong> {buildRetiraLabel(solicitud)}</div>
-      </div>
-
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 28 }}>
-        <thead>
-          <tr>
-            <th style={thStyle}>Producto</th>
-            <th style={thStyle}>Cantidad</th>
-            <th style={thStyle}>Unidad</th>
-          </tr>
-        </thead>
-        <tbody>
-          {(solicitud.items || []).map((item) => (
-            <tr key={item.producto_id}>
-              <td style={tdStyle}>{item.producto_nombre}</td>
-              <td style={tdStyle}>{item.cantidad_entregada || item.cantidad_solicitada}</td>
-              <td style={tdStyle}>{item.unidad_medida || 'unidad'}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 36, marginTop: 54 }}>
-        <div style={signatureStyle}>Firma de quien entrega</div>
-        <div style={signatureStyle}>Firma y sello del directivo</div>
-      </div>
+      ))}
     </div>
   )
 }
@@ -284,17 +309,25 @@ export default function SolicitudesRetiro({ embedded = false }) {
         <td style="border:1px solid #d1d5db;padding:8px 10px">${item.unidad_medida || 'unidad'}</td>
       </tr>`
     ).join('')
-    printWindow.document.write(`<!DOCTYPE html><html>
-      <head><title>Comprobante #${solicitud.id}</title>
-      <style>* { box-sizing: border-box; font-family: Arial, sans-serif; } body { margin: 24px; color: #111827; font-size: 13px; }</style>
-      </head><body>
+
+    const copies = [
+      { key: 'original', label: 'Original - Receptor' },
+      { key: 'duplicado', label: 'Duplicado - Depósito' },
+      { key: 'triplicado', label: 'Triplicado - Tribunal de Cuentas' },
+    ]
+
+    const bodyHtml = copies.map((copy, index) => `
+      <div style="padding-bottom:24px;margin-bottom:${index < 2 ? '32px' : '0'};border-bottom:${index < 2 ? '2px dashed #94a3b8' : 'none'};page-break-after:${index < 2 ? 'always' : 'auto'}">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <span style="font-size:0.85rem;font-weight:bold;color:#64748b;text-transform:uppercase">${copy.label}</span>
+        </div>
         <div style="display:flex;justify-content:space-between;border-bottom:2px solid #FF8200;padding-bottom:10px;margin-bottom:16px">
-          <div><strong style="font-size:1.1rem">San Juan Gobierno</strong><br><span style="color:#666">Ministerio de Educaci\u00f3n</span></div>
+          <div><strong style="font-size:1.1rem">San Juan Gobierno</strong><br><span style="color:#666">Ministerio de Educaci&oacute;n</span></div>
           <div style="text-align:right"><strong style="font-size:1.1rem">Comprobante de entrega</strong><br><span style="color:#666">Solicitud #${solicitud.id}</span></div>
         </div>
         <p><strong>Pedido ${solicitud.tipo_pedido === 'refuerzo' ? 'refuerzo' : 'anual'} #${solicitud.id_pedido}</strong></p>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
-          <div><strong>InstituciÃ³n:</strong> ${solicitud.institucion_nombre}</div>
+          <div><strong>Instituci&oacute;n:</strong> ${solicitud.institucion_nombre}</div>
           <div><strong>CUE:</strong> ${solicitud.cue || '-'}</div>
           <div><strong>Fecha solicitada de retiro:</strong> ${fmtDate(solicitud.fecha_retiro)}</div>
           <div><strong>Fecha de entrega:</strong> ${fmtDate(solicitud.fecha_entrega)}</div>
@@ -312,6 +345,14 @@ export default function SolicitudesRetiro({ embedded = false }) {
           <div style="border-top:1px solid #111827;padding-top:8px;text-align:center">Firma de quien entrega</div>
           <div style="border-top:1px solid #111827;padding-top:8px;text-align:center">Firma y sello del directivo</div>
         </div>
+      </div>
+    `).join('')
+
+    printWindow.document.write(`<!DOCTYPE html><html>
+      <head><title>Comprobante #${solicitud.id}</title>
+      <style>* { box-sizing: border-box; font-family: Arial, sans-serif; } body { margin: 24px; color: #111827; font-size: 13px; } table { page-break-inside: avoid; }</style>
+      </head><body>
+        ${bodyHtml}
       </body></html>`)
     printWindow.document.close()
     printWindow.focus()

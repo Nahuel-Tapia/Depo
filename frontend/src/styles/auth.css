@@ -1,0 +1,89 @@
+/* ===== AUTH PAGES ===== */
+.auth-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 24px 0;
+}
+
+.auth-alt-action {
+  text-align: center;
+  padding: 0;
+  background: none;
+  border: none;
+}
+
+.auth-alt-action h3 {
+  margin: 0 0 8px;
+}
+
+.auth-helper {
+  color: var(--muted);
+  margin: 0 0 12px;
+  font-size: 0.85rem;
+}
+
+.auth-switch-btn {
+  display: inline-flex;
+  justify-content: center;
+}
+
+.auth-switch-link {
+  text-decoration: none;
+  width: auto;
+}
+
+.auth-switch-link.secondary {
+  margin: 0;
+  padding: 10px 20px;
+  border-radius: 6px;
+  border: 1.5px solid var(--border);
+  background: #ffffff;
+  color: var(--dark);
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-decoration: none;
+  transition: border-color 0.2s ease;
+}
+
+.auth-switch-link.secondary:hover,
+.auth-switch-link.secondary:focus-visible {
+  border-color: var(--orange);
+}
+
+.register-institution-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 20px;
+  border-radius: 6px;
+  border: none;
+  color: white;
+  font-weight: 700;
+  font-size: 0.85rem;
+  background: var(--dark);
+  transition: opacity 0.2s ease;
+}
+
+.register-institution-btn::after {
+  content: "→";
+  font-size: 0.9rem;
+}
+
+.register-institution-btn:hover,
+.register-institution-btn:focus-visible {
+  opacity: 0.85;
+}
+
+
+  /* Auth ultra small */
+  .auth-container {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+
+  .auth-card {
+    padding: 22px 16px;
+    border-radius: 12px;
+  }
+

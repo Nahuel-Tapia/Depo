@@ -698,8 +698,19 @@ async function initDatabaseSchema() {
         ALTER TABLE public.baja_movimientos
         ADD COLUMN IF NOT EXISTS estado VARCHAR(20) DEFAULT 'pendiente';
       `);
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS public.baja_status_history (
+          id SERIAL PRIMARY KEY,
+          baja_id INTEGER REFERENCES public.baja_movimientos(id) ON DELETE CASCADE,
+          estado_anterior VARCHAR(50),
+          estado_nuevo VARCHAR(50) NOT NULL,
+          usuario_id INTEGER REFERENCES public.usuario(id_usuario) ON DELETE SET NULL,
+          comentarios TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
     } catch (err) {
-      console.warn("[schemaManager] Warning creating table baja_movimientos:", err.message);
+      console.warn("[schemaManager] Warning creating table baja_movimientos or history:", err.message);
     }
 
     // 25. Optimization Indexes (Performance and Scalability)

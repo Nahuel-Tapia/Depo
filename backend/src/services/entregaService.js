@@ -644,9 +644,37 @@ async function getDetalleSolicitudesEnvioDepartamento(departamentoParam, anioQue
     throw { status: 400, message: "Departamento inválido" };
   }
 
-  const rows = await all(
-    `SELECT sr.id
+  // 1. Fetch all matching solicitud_retiro headers
+  const solicitudHeaders = await all(
+    `SELECT
+      sr.id,
+      sr.id_pedido,
+      sr.id_institucion,
+      i.nombre AS institucion_nombre,
+      i.cue,
+      sr.id_usuario_solicitante,
+      us.nombre AS solicitante_nombre,
+      sr.id_usuario_acepta,
+      ua.nombre AS acepta_usuario_nombre,
+      sr.fecha_retiro,
+      sr.retira_tipo,
+      sr.retira_nombre,
+      sr.retira_dni,
+      COALESCE(sr.solicitar_envio, FALSE) AS solicitar_envio,
+      sr.departamento_envio,
+      sr.estado,
+      sr.id_usuario_entrega,
+      ue.nombre AS entrega_usuario_nombre,
+      sr.fecha_entrega,
+      sr.observaciones,
+      sr.created_at,
+      COALESCE(pd.tipo, 'anual') AS tipo_pedido
      FROM solicitud_retiro sr
+     JOIN institucion i ON i.id_institucion = sr.id_institucion
+     JOIN usuario us ON us.id_usuario = sr.id_usuario_solicitante
+     JOIN pedido pd ON pd.id_pedido = sr.id_pedido
+     LEFT JOIN usuario ue ON ue.id_usuario = sr.id_usuario_entrega
+     LEFT JOIN usuario ua ON ua.id_usuario = sr.id_usuario_acepta
      WHERE COALESCE(sr.solicitar_envio, FALSE) = TRUE
        AND sr.estado IN ('pendiente', 'aceptada')
        AND EXTRACT(YEAR FROM sr.fecha_retiro) = $1
@@ -656,40 +684,121 @@ async function getDetalleSolicitudesEnvioDepartamento(departamentoParam, anioQue
   );
 
   const solicitudes = [];
-  for (const row of rows) {
-    const solicitud = await getSolicitudRetiro(row.id);
-    if (solicitud) {
-      // Fetch all items from the annual approved pedido and their current balances
-      const pedidoItems = await all(`
-        SELECT
-          dp.id_producto AS producto_id,
-          pr.nombre AS producto_nombre,
-          pr.unidad_medida,
-          pr.stock_actual,
-          dp.cantidad_solicitada AS cantidad_anual,
-          COALESCE(ent.total_entregado, 0) AS entregado_anual,
-          COALESCE(res.total_reservado, 0) AS reservado_anual
-        FROM detalle_pedido dp
-        JOIN producto pr ON pr.id_producto = dp.id_producto
-        LEFT JOIN (
-          SELECT id_pedido, id_producto, SUM(cantidad_entregada) AS total_entregado
-          FROM pedido_entrega
-          WHERE id_pedido = $1
-          GROUP BY id_pedido, id_producto
-        ) ent ON ent.id_producto = dp.id_producto
-        LEFT JOIN (
-          SELECT sr.id_pedido, srd.id_producto, SUM(srd.cantidad_solicitada) AS total_reservado
-          FROM solicitud_retiro sr
-          JOIN solicitud_retiro_detalle srd ON srd.id_solicitud_retiro = sr.id
-          WHERE sr.id_pedido = $1 AND sr.estado IN ('pendiente', 'aceptada')
-          GROUP BY sr.id_pedido, srd.id_producto
-        ) res ON res.id_producto = dp.id_producto
-        WHERE dp.id_pedido = $1
-        ORDER BY pr.nombre ASC
-      `, [solicitud.id_pedido]);
 
+  if (solicitudHeaders.length > 0) {
+    const solicitudIds = solicitudHeaders.map(s => Number(s.id));
+    const pedidoIds = [...new Set(solicitudHeaders.map(s => Number(s.id_pedido)))];
+
+    // 2. Fetch all solicitud_retiro_detalle items in one query
+    const srdPlaceholders = solicitudIds.map((_, idx) => `$${idx + 1}`).join(", ");
+    const srdRows = await all(`
+      SELECT 
+        srd.id_solicitud_retiro,
+        srd.id_producto AS producto_id,
+        pr.nombre AS producto_nombre,
+        pr.unidad_medida,
+        pr.stock_actual,
+        srd.cantidad_solicitada,
+        srd.cantidad_entregada,
+        srd.id_movimiento
+      FROM solicitud_retiro_detalle srd
+      JOIN producto pr ON pr.id_producto = srd.id_producto
+      WHERE srd.id_solicitud_retiro IN (${srdPlaceholders})
+      ORDER BY pr.nombre ASC
+    `, solicitudIds);
+
+    // Group srdRows by id_solicitud_retiro
+    const itemsBySolicitudId = new Map();
+    for (const item of srdRows) {
+      const solId = Number(item.id_solicitud_retiro);
+      if (!itemsBySolicitudId.has(solId)) {
+        itemsBySolicitudId.set(solId, []);
+      }
+      itemsBySolicitudId.get(solId).push({
+        producto_id: Number(item.producto_id),
+        producto_nombre: item.producto_nombre,
+        unidad_medida: item.unidad_medida || "unidad",
+        stock_actual: Number(item.stock_actual || 0),
+        cantidad_solicitada: Number(item.cantidad_solicitada),
+        cantidad_entregada: item.cantidad_entregada !== null ? Number(item.cantidad_entregada) : null,
+        id_movimiento: item.id_movimiento ? Number(item.id_movimiento) : null
+      });
+    }
+
+    // 3. Fetch all pedidoItems in one query for all unique pedidoIds
+    const pedidoPlaceholders = pedidoIds.map((_, idx) => `$${idx + 1}`).join(", ");
+    const pedidoItemRows = await all(`
+      SELECT
+        dp.id_pedido,
+        dp.id_producto AS producto_id,
+        pr.nombre AS producto_nombre,
+        pr.unidad_medida,
+        pr.stock_actual,
+        dp.cantidad_solicitada AS cantidad_anual,
+        COALESCE(ent.total_entregado, 0) AS entregado_anual,
+        COALESCE(res.total_reservado, 0) AS reservado_anual
+      FROM detalle_pedido dp
+      JOIN producto pr ON pr.id_producto = dp.id_producto
+      LEFT JOIN (
+        SELECT id_pedido, id_producto, SUM(cantidad_entregada) AS total_entregado
+        FROM pedido_entrega
+        WHERE id_pedido IN (${pedidoPlaceholders})
+        GROUP BY id_pedido, id_producto
+      ) ent ON ent.id_pedido = dp.id_pedido AND ent.id_producto = dp.id_producto
+      LEFT JOIN (
+        SELECT sr.id_pedido, srd.id_producto, SUM(srd.cantidad_solicitada) AS total_reservado
+        FROM solicitud_retiro sr
+        JOIN solicitud_retiro_detalle srd ON srd.id_solicitud_retiro = sr.id
+        WHERE sr.id_pedido IN (${pedidoPlaceholders}) AND sr.estado IN ('pendiente', 'aceptada')
+        GROUP BY sr.id_pedido, srd.id_producto
+      ) res ON res.id_pedido = dp.id_pedido AND res.id_producto = dp.id_producto
+      WHERE dp.id_pedido IN (${pedidoPlaceholders})
+      ORDER BY pr.nombre ASC
+    `, pedidoIds);
+
+    // Group pedidoItems by id_pedido
+    const pedidoItemsByPedidoId = new Map();
+    for (const p of pedidoItemRows) {
+      const pId = Number(p.id_pedido);
+      if (!pedidoItemsByPedidoId.has(pId)) {
+        pedidoItemsByPedidoId.set(pId, []);
+      }
+      pedidoItemsByPedidoId.get(pId).push(p);
+    }
+
+    // 4. Assemble the solicitudes array
+    for (const header of solicitudHeaders) {
+      const solId = Number(header.id);
+      const items = itemsBySolicitudId.get(solId) || [];
+      const solicitud = {
+        id: solId,
+        id_pedido: Number(header.id_pedido),
+        id_institucion: Number(header.id_institucion),
+        institucion_nombre: header.institucion_nombre,
+        cue: header.cue || null,
+        id_usuario_solicitante: Number(header.id_usuario_solicitante),
+        solicitante_nombre: header.solicitante_nombre,
+        fecha_retiro: header.fecha_retiro,
+        retira_tipo: header.retira_tipo,
+        retira_nombre: header.retira_nombre,
+        retira_dni: header.retira_dni,
+        solicitar_envio: Boolean(header.solicitar_envio),
+        departamento_envio: header.departamento_envio || null,
+        estado: header.estado,
+        id_usuario_acepta: header.id_usuario_acepta ? Number(header.id_usuario_acepta) : null,
+        acepta_usuario_nombre: header.acepta_usuario_nombre || null,
+        id_usuario_entrega: header.id_usuario_entrega ? Number(header.id_usuario_entrega) : null,
+        entrega_usuario_nombre: header.entrega_usuario_nombre || null,
+        fecha_entrega: header.fecha_entrega,
+        observaciones: header.observaciones,
+        created_at: header.created_at,
+        tipo_pedido: header.tipo_pedido || "anual",
+        items
+      };
+
+      const pedidoItems = pedidoItemsByPedidoId.get(solicitud.id_pedido) || [];
       solicitud.productos_pedido_anual = pedidoItems.map((p) => {
-        const solItem = solicitud.items.find((item) => item.producto_id === p.producto_id);
+        const solItem = items.find((item) => item.producto_id === p.producto_id);
         const cantSol = solItem ? Number(solItem.cantidad_solicitada) : 0;
         const cantEnt = solItem ? Number(solItem.cantidad_entregada) : 0;
 

@@ -181,11 +181,13 @@ Notas operativas:
 
 Para revisar el estado actual del sistema usar:
 
-- `README.md` (vision general y arranque)
-- `backend/ENDPOINTS.md` (API actualizada)
-- `GUIA_ROLES_SISTEMA.md` (flujo operativo por rol)
-- `DIAGRAMA_Y_FLUJO_SISTEMA.md` (casos de uso y secuencias)
-- `ROLES_Y_PERMISOS.md` (restricciones de permisos)
+- `docs/documento_completo_depo.md` (Documento de Tesis/Informe Técnico Consolidado)
+- Carpeta `docs/` (Contiene los 18 capítulos individuales de la documentación técnica y académica)
+- `README.md` (visión general y arranque rápido)
+- `backend/ENDPOINTS.md` (referencia actualizada de la API)
+- `GUIA_ROLES_SISTEMA.md` (flujo operativo detallado por rol)
+- `DIAGRAMA_Y_FLUJO_SISTEMA.md` (diagramas de secuencias, flujos de envío y casos de uso)
+- `ROLES_Y_PERMISOS.md` (matriz de permisos y lógica RBAC)
 
 ## Build
 

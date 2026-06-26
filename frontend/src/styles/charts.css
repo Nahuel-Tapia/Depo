@@ -1,0 +1,48 @@
+/* ===== CHARTS STYLING ===== */
+.chart-container {
+  background: #fafafa;
+  padding: 20px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
+}
+
+.chart-container h4 {
+  text-align: center;
+  margin-bottom: 16px;
+  font-size: 1rem;
+  color: var(--muted);
+  margin-top: 0;
+}
+
+.chart-wrapper {
+  flex: 1;
+  min-height: 250px;
+  width: 100%;
+  position: relative;
+}
+
+@media (max-width: 768px) {
+  .chart-container {
+    min-height: 280px;
+  }
+
+  .chart-wrapper {
+    min-height: 220px;
+  }
+}
+
+@media (max-width: 480px) {
+  .chart-container {
+    min-height: 240px;
+    margin-bottom: 12px;
+    padding: 14px;
+  }
+
+  .chart-wrapper {
+    min-height: 190px;
+  }
+}
+
