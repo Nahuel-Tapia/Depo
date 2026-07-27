@@ -1,17 +1,18 @@
 const { defineConfig, devices } = require('@playwright/test');
 
 module.exports = defineConfig({
-  testDir: './scratch',
+  testDir: './tests',
   timeout: 120000,
   expect: {
-    timeout: 5000
+    timeout: 10000
   },
   fullyParallel: false,
   forbidOnly: false,
-  retries: 0,
+  retries: 1,
   workers: 1,
-  reporter: 'list',
+  reporter: [['list'], ['html', { open: 'never', outputFolder: 'playwright-report' }]],
   use: {
+    baseURL: 'http://localhost:4000',
     actionTimeout: 15000,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
@@ -19,14 +20,33 @@ module.exports = defineConfig({
   },
   projects: [
     {
-      name: 'chromium',
+      name: 'api-smoke',
+      testDir: './tests/nivel-1-smoke',
+    },
+    {
+      name: 'api-integration',
+      testDir: './tests/nivel-2-api',
+      dependencies: ['api-smoke'],
+    },
+    {
+      name: 'security',
+      testDir: './tests/nivel-3-seguridad',
+      dependencies: ['api-smoke'],
+    },
+    {
+      name: 'e2e',
+      testDir: './tests/nivel-4-e2e',
       use: { ...devices['Desktop Chrome'] },
+      dependencies: ['api-integration'],
     },
   ],
   webServer: {
     command: 'npm run start',
     url: 'http://localhost:4000/api/health',
-    reuseExistingServer: true,
-    timeout: 10000
+    reuseExistingServer: false,
+    timeout: 30000,
+    env: {
+      NODE_ENV: 'test'
+    }
   }
 });

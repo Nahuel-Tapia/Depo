@@ -185,7 +185,8 @@ async function crearLoteMovimientos(user, body) {
     throw { status: 403, message: "No tenés permisos para realizar movimientos manuales" };
   }
 
-  const { tipo, motivo, movimientos } = body;
+  const { tipo, motivo } = body;
+  const movimientos = body.movimientos || body.items;
 
   if (!tipo || !movimientos || !Array.isArray(movimientos) || movimientos.length === 0) {
     throw { status: 400, message: "Faltan campos obligatorios (tipo, movimientos array)" };
@@ -248,7 +249,10 @@ async function crearMovimientoDirecto(user, body) {
 
   // Validar cada producto
   for (const prod of productos) {
-    if (!prod.producto_id || !prod.cantidad || !prod.estado) {
+    if (!prod.estado) {
+      prod.estado = 'bueno';
+    }
+    if (!prod.producto_id || !prod.cantidad) {
       throw { status: 400, message: "Cada producto debe tener producto_id, cantidad y estado" };
     }
     const cantidadNum = parseInt(prod.cantidad);

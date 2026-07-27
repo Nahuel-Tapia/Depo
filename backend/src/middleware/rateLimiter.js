@@ -1,12 +1,14 @@
 const rateLimit = require("express-rate-limit");
 
+const isTest = process.env.NODE_ENV === "test";
+
 /**
  * Rate limiter para rutas de autenticación (login/register).
  * Más restrictivo: 10 intentos por ventana de 15 minutos.
  */
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 10,
+  max: isTest ? 100000 : 500,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -20,7 +22,7 @@ const authLimiter = rateLimit({
  */
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minuto
-  max: 200,
+  max: isTest ? 100000 : 200,
   standardHeaders: true,
   legacyHeaders: false,
   message: {

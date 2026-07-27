@@ -87,6 +87,11 @@ async function getCategorias() {
 }
 
 async function getProductoById(id, user) {
+  const idNum = parseInt(id, 10);
+  if (!Number.isInteger(idNum)) {
+    throw { status: 400, message: "ID de producto inválido" };
+  }
+
   const isEscolar = user.role === "operador_escolar";
 
   const producto = await get(`
@@ -102,7 +107,7 @@ async function getProductoById(id, user) {
     FROM producto p
     LEFT JOIN categoria c ON p.id_categoria = c.id_categoria
     WHERE p.id_producto = ?
-  `, [id]);
+  `, [idNum]);
   if (!producto) {
     throw { status: 404, message: "Producto no encontrado" };
   }
@@ -153,6 +158,10 @@ async function createProducto(user, body) {
       throw { status: 400, message: "El nombre es obligatorio" };
     }
 
+    if (nombre.length > 255) {
+      throw { status: 400, message: "El nombre es demasiado largo (máximo 255 caracteres)" };
+    }
+
     const stock_actual_val = parseInt(body.stock_actual) || 0;
 
     await client.query("BEGIN");
@@ -160,7 +169,7 @@ async function createProducto(user, body) {
     // Insertar producto
     const insertResult = await client.query(
       `INSERT INTO producto (nombre, unidad_medida, stock_actual, stock_minimo, id_categoria)
-       VALUES ($1, $2, $3, $4, $5, $6)
+       VALUES ($1, $2, $3, $4, $5)
        RETURNING id_producto`,
       [nombre, unidad_medida || 'unidad', stock_actual_val, parseInt(stock_minimo) || 0, id_categoria || null]
     );
@@ -227,6 +236,9 @@ async function updateProducto(id, body) {
     let paramIndex = 1;
 
     if (nombre !== undefined) {
+      if (nombre && nombre.length > 255) {
+        throw { status: 400, message: "El nombre es demasiado largo (máximo 255 caracteres)" };
+      }
       updates.push(`nombre = $${paramIndex++}`);
       params.push(nombre);
     }
@@ -312,6 +324,7 @@ async function deleteProducto(id) {
       ["detalle_ingreso", "id_producto"],
       ["detalle_pedido", "id_producto"],
       ["pedidos", "producto_id"],
+      ["stock_deposito", "id_producto"],
     ];
 
     const existingTablesRes = await client.query(

@@ -40,6 +40,8 @@ const ROLE_LABELS = {
   consulta: 'Consulta',
   control_ministerio: 'Control Ministerio',
   master: 'Master',
+  secretario_administrativo: 'Secretario Administrativo',
+  ministro_financiero: 'Ministro Financiero',
 }
 
 const TABS = [
@@ -133,72 +135,20 @@ export default function Dashboard() {
       return TABS
     }
 
-    if (user.role === 'directivo') {
-      return TABS.filter((tab) => ['inicio', 'pedidos', 'mi-stock', 'recepcion-mercaderia', 'deposito-institucion', 'mi-cuenta'].includes(tab.key))
-    }
-
-    if (user.role === 'operador') {
-      return TABS.filter((tab) => [
-        'inicio',
-        'mi-cuenta',
-        'productos',
-        'movimientos',
-        'bajas',
-        'proveedores',
-        'depositos',
-        'deposito-recepcion',
-        'deposito-distribucion',
-        'solicitudes-retiro',
-      ].includes(tab.key))
-    }
-
-    if (user.role === 'operador_escolar') {
-      return TABS.filter((tab) => [
-        'inicio',
-        'mi-cuenta',
-        'productos',
-        'movimientos',
-        'proveedores',
-        'pedidos',
-        'instituciones'
-      ].includes(tab.key))
-    }
-
-    if (user.role === 'area_compras') {
-      return TABS.filter((tab) => [
-        'inicio',
-        'mi-cuenta',
-        'productos',
-        'compras-licitacion',
-        'compras-listado-final',
-        'compras-refuerzos',
-        'compras-adjudicacion',
-        'compras-entregas',
-        'proveedores',
-        'bajas',
-      ].includes(tab.key))
-    }
-
-    if (user.role === 'admin') {
-      return TABS.filter((tab) => [
-        'inicio',
-        'productos',
-        'movimientos',
-        'bajas',
-        'instituciones',
-        'historial',
-        'proveedores',
-        'usuarios',
-        'depositos',
-        'diagnostico-stock',
-        'mi-cuenta'
-      ].includes(tab.key))
-    }
-
     return TABS.filter((tab) => {
+      // Excluir explícitamente según el rol
       if (tab.hideForRole && tab.hideForRole === user.role) return false
       if (tab.hideForRoles && tab.hideForRoles.includes(user.role)) return false
-      if (tab.roleFor && tab.roleFor !== user.role && tab.roleFor !== 'common') return false
+
+      // Si requiere un rol específico (y no es common), verificar
+      if (tab.roleFor && tab.roleFor !== user.role && tab.roleFor !== 'common') {
+        // Permitir acceso a admin para no romper consistencia
+        if (user.role !== 'admin') {
+          return false
+        }
+      }
+
+      // Validar permisos granulares del token JWT
       return !tab.permission || hasPermission(tab.permission)
     })
   }, [hasPermission, user])
