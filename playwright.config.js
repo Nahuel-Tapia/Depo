@@ -43,7 +43,7 @@ module.exports = defineConfig({
   webServer: {
     command: 'npm run start',
     url: 'http://localhost:4000/api/health',
-    reuseExistingServer: false,
+    reuseExistingServer: true,
     timeout: 30000,
     env: {
       NODE_ENV: 'test'

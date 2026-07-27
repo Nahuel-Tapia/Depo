@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:4000';
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
 test.describe('E2E Flujo Registro', () => {
   test('1. Página de registro es accesible', async ({ page }) => {

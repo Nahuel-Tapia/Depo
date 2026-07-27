@@ -199,10 +199,11 @@ async function createProducto(user, body) {
         // Verificar si existe la tabla movimiento_stock
         const hasMovimientoStock = await hasTable('movimiento_stock');
         if (hasMovimientoStock) {
+          const userId = user.id_usuario || user.sub || user.id || null;
           await client.query(
             `INSERT INTO movimiento_stock (id_producto, tipo, cantidad, motivo, id_usuario, id_deposito)
              VALUES ($1, 'ingreso', $2, 'Stock inicial catálogo', $3, $4)`,
-            [newId, stock_actual_val, user.sub, central.id_deposito]
+            [newId, stock_actual_val, userId, central.id_deposito]
           );
         }
       }

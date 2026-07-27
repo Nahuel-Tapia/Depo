@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 const { BASE_URL, TEST_USERS } = require('../../helpers/constants');
 
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:4000';
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
 test.describe.serial('E2E Flujo Admin', () => {
   let context;

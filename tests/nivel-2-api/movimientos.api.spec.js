@@ -117,7 +117,7 @@ test.describe.serial('API Movimientos Tests', () => {
     const response = await authPost(request, adminToken, '/movimientos/lote', {
       tipo: 'ingreso',
       motivo: 'lote test',
-      items: [{ producto_id: testProductId, cantidad: 2 }]
+      movimientos: [{ producto_id: parseInt(testProductId, 10), cantidad: 2 }]
     });
     expect([200, 201]).toContain(response.status());
   });
@@ -136,7 +136,7 @@ test.describe.serial('API Movimientos Tests', () => {
       tipo: 'ingreso',
       motivo: 'directo test',
       id_deposito: 1,
-      productos: [{ producto_id: testProductId, cantidad: 3 }]
+      productos: [{ producto_id: parseInt(testProductId, 10), cantidad: 3, estado: 'bueno' }]
     });
     expect([200, 201]).toContain(response.status());
   });

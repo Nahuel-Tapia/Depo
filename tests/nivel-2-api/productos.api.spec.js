@@ -34,7 +34,7 @@ test.describe.serial('API Productos Tests', () => {
       unidad_medida: 'unidad',
       stock_actual: 10,
       stock_minimo: 2,
-      id_categoria: 1
+      id_categoria: null
     };
 
     const response = await authPost(request, adminToken, '/productos', payload);
