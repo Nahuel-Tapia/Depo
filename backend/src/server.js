@@ -142,24 +142,48 @@ app.get("*", (req, res) => {
 // Middleware global de manejo de errores
 app.use(errorHandler);
 
-initDb()
-  .then(async () => {
-    await ensureRbacSchemaAndSeed();
-    await initDatabaseSchema();
-    console.log("Database initialized");
-    app.listen(PORT, () => {
-      console.log(`Servidor corriendo en http://localhost:${PORT}`);
-    });
-  })
-  .catch((err) => {
+let dbInitPromise = null;
+async function ensureDbInitialized() {
+  if (!dbInitPromise) {
+    dbInitPromise = (async () => {
+      await initDb();
+      await ensureRbacSchemaAndSeed();
+      await initDatabaseSchema();
+      console.log("Database initialized");
+    })();
+  }
+  return dbInitPromise;
+}
+
+// Middleware para asegurar inicialización de BD en entornos Serverless (Vercel)
+app.use(async (req, res, next) => {
+  try {
+    await ensureDbInitialized();
+    next();
+  } catch (err) {
     if (err && err.code === "28P01") {
       const cfg = getDbConfigForLogs();
       console.error("No se pudo conectar a PostgreSQL por credenciales inválidas (código 28P01).");
       console.error(
         `Conexión usada: host=${cfg.host} port=${cfg.port} db=${cfg.database} user=${cfg.user} password=${cfg.hasPassword ? "[definida]" : "[vacía]"}`
       );
-      console.error("Definí DB_PASSWORD (o PGPASSWORD) en el archivo .env de la raíz del proyecto.");
     }
     console.error("Error inicializando base de datos", err);
-    process.exit(1);
-  });
+    next(err);
+  }
+});
+
+if (require.main === module) {
+  ensureDbInitialized()
+    .then(() => {
+      app.listen(PORT, () => {
+        console.log(`Servidor corriendo en http://localhost:${PORT}`);
+      });
+    })
+    .catch((err) => {
+      console.error("Error inicializando servidor", err);
+      process.exit(1);
+    });
+}
+
+module.exports = app;

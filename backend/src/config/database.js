@@ -22,10 +22,15 @@ const baseConfig = {
 let dbConfig = {};
 
 if (process.env.DATABASE_URL) {
+  const isCloudOrProd =
+    process.env.NODE_ENV === "production" ||
+    process.env.VERCEL ||
+    process.env.DATABASE_URL.includes("supabase") ||
+    process.env.DATABASE_URL.includes("pooler");
   dbConfig = {
     ...baseConfig,
     connectionString: process.env.DATABASE_URL,
-    ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false
+    ssl: isCloudOrProd ? { rejectUnauthorized: false } : false
   };
 } else {
   dbConfig = {
