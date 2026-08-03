@@ -104,33 +104,33 @@ app.use('/uploads', (req, res) => {
 // Rate limiting global para la API
 app.use("/api", apiLimiter);
 
-app.get("/api/health", (req, res) => {
+app.get(["/api/health", "/health"], (req, res) => {
   res.json({ ok: true });
 });
 
-app.use("/api/auth", authLimiter, authRoutes);
-app.use("/api/users", userRoutes);
-app.use("/api/roles", roleRoutes);
-app.use("/api/permissions", permissionsRoutes);
-app.use("/api/productos", productosRoutes);
-app.use("/api/movimientos", movimientosRoutes);
-app.use("/api/ajustes", ajustesRoutes);
-app.use("/api/auditoria", auditoriaRoutes);
-app.use("/api/pedidos", pedidosRoutes);
-app.use("/api/instituciones", institucionesRoutes);
-app.use("/api/proveedores", proveedoresRoutes);
-app.use("/api/dashboard", dashboardRoutes);
-app.use("/api/supervisor", supervisorRoutes);
-app.use("/api/director-area", directorAreaRoutes);
-app.use("/api/compras", comprasRoutes);
-app.use("/api/directivo", directivoRoutes);
-app.use("/api/patrimonio", patrimonioRoutes);
-if (zonesRoutes) app.use("/api/zones", zonesRoutes);
-if (zoneSchoolsRoutes) app.use("/api/zones", zoneSchoolsRoutes);
-if (zoneSupervisorsRoutes) app.use("/api/zones", zoneSupervisorsRoutes);
-app.use("/api/entregas", entregasRoutes);
-app.use("/api/depositos", depositosRoutes);
-app.use("/api/stock-institucion", stockInstitucionRoutes);
+app.use(["/api/auth", "/auth"], authLimiter, authRoutes);
+app.use(["/api/users", "/users"], userRoutes);
+app.use(["/api/roles", "/roles"], roleRoutes);
+app.use(["/api/permissions", "/permissions"], permissionsRoutes);
+app.use(["/api/productos", "/productos"], productosRoutes);
+app.use(["/api/movimientos", "/movimientos"], movimientosRoutes);
+app.use(["/api/ajustes", "/ajustes"], ajustesRoutes);
+app.use(["/api/auditoria", "/auditoria"], auditoriaRoutes);
+app.use(["/api/pedidos", "/pedidos"], pedidosRoutes);
+app.use(["/api/instituciones", "/instituciones"], institucionesRoutes);
+app.use(["/api/proveedores", "/proveedores"], proveedoresRoutes);
+app.use(["/api/dashboard", "/dashboard"], dashboardRoutes);
+app.use(["/api/supervisor", "/supervisor"], supervisorRoutes);
+app.use(["/api/director-area", "/director-area"], directorAreaRoutes);
+app.use(["/api/compras", "/compras"], comprasRoutes);
+app.use(["/api/directivo", "/directivo"], directivoRoutes);
+app.use(["/api/patrimonio", "/patrimonio"], patrimonioRoutes);
+if (zonesRoutes) app.use(["/api/zones", "/zones"], zonesRoutes);
+if (zoneSchoolsRoutes) app.use(["/api/zones", "/zones"], zoneSchoolsRoutes);
+if (zoneSupervisorsRoutes) app.use(["/api/zones", "/zones"], zoneSupervisorsRoutes);
+app.use(["/api/entregas", "/entregas"], entregasRoutes);
+app.use(["/api/depositos", "/depositos"], depositosRoutes);
+app.use(["/api/stock-institucion", "/stock-institucion"], stockInstitucionRoutes);
 
 // Si una ruta /api no existe, devolver JSON en lugar de index.html
 app.use("/api", (req, res) => {
