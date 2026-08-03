@@ -1609,25 +1609,18 @@ institucionesTbody?.addEventListener("click", async (e) => {
     const data = await res.json();
     const asignaciones = data.asignaciones || [];
 
-    let html = `<h4>Historial de Consumo y Asignaciones: ${inst.nombre}</h4>`;
-    html += `<p style="margin-bottom:10px; color:#666;">Revise el consumo previo antes de autorizar nuevos pedidos de refuerzo.</p>`;
+    let html = `<h4>Asignaciones de ${inst.nombre} (CUE: ${inst.cue})</h4>`;
     if (asignaciones.length === 0) {
       html += "<p>No hay asignaciones registradas.</p>";
     } else {
-      html += "<table><thead><tr><th>Producto</th><th>Período</th><th>Asignado</th><th>Entregado</th><th>% Consumo</th><th>Estado</th></tr></thead><tbody>";
+      html += "<table><thead><tr><th>Producto</th><th>Período</th><th>Asignado</th><th>Entregado</th><th>Pendiente</th></tr></thead><tbody>";
       asignaciones.forEach(a => {
-        const porcentaje = a.cantidad_asignada > 0 
-          ? Math.round((a.cantidad_entregada / a.cantidad_asignada) * 100) 
-          : 0;
-        const alertStyle = porcentaje > 90 ? 'color: #ef4444; font-weight: bold;' : '';
-
         html += `<tr>
           <td>${a.producto_nombre}</td>
           <td>${a.periodo}</td>
           <td>${a.cantidad_asignada}</td>
           <td>${a.cantidad_entregada}</td>
-          <td style="${alertStyle}">${porcentaje}%</td>
-          <td><span class="badge">${porcentaje >= 100 ? 'Agotado' : 'Con Stock'}</span></td>
+          <td>${a.pendiente}</td>
         </tr>`;
       });
       html += "</tbody></table>";
