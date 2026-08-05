@@ -67,6 +67,7 @@ try {
 const entregasRoutes = require("./routes/entregas");
 
 const app = express();
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 4000;
 const isVercel = !!process.env.VERCEL;
 
