@@ -5,6 +5,11 @@ const dbConfig = require("./config/database");
 
 const pool = new Pool(dbConfig);
 
+// Capturar errores en clientes inactivos del pool para prevenir crashes fatales en Serverless
+pool.on("error", (err) => {
+  console.error("[PostgreSQL Pool Error]", err.message || err);
+});
+
 /**
  * Convierte placeholders SQLite (?) a PostgreSQL ($1, $2, ...)
  * @param {string} sql - Query con ? placeholders

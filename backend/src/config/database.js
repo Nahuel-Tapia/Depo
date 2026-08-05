@@ -25,10 +25,13 @@ const baseConfig = {
 
 let dbConfig = {};
 
-if (process.env.DATABASE_URL) {
+const defaultSupabaseUrl = "postgresql://postgres:nahuelpvp12@db.bqakxczfvizetjhszyze.supabase.co:5432/postgres";
+const effectiveDbUrl = process.env.DATABASE_URL || (isVercel ? defaultSupabaseUrl : null);
+
+if (effectiveDbUrl) {
   dbConfig = {
     ...baseConfig,
-    connectionString: process.env.DATABASE_URL,
+    connectionString: effectiveDbUrl,
     ssl: { rejectUnauthorized: false }
   };
 } else {
