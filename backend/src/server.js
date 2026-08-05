@@ -126,8 +126,10 @@ async function ensureDbInitialized() {
   if (!dbInitPromise) {
     dbInitPromise = (async () => {
       await initDb();
-      await ensureRbacSchemaAndSeed();
-      await initDatabaseSchema();
+      if (!process.env.VERCEL) {
+        await ensureRbacSchemaAndSeed();
+        await initDatabaseSchema();
+      }
       console.log("Database initialized");
     })();
   }
