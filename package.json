@@ -4,7 +4,7 @@
   "description": "Sistema base de control de stock para depósito",
   "main": "backend/src/server.js",
   "scripts": {
-    "build": "node --check backend/src/server.js && npm run build --prefix frontend",
+    "build": "node --check backend/src/server.js && npm run build --prefix frontend && node -e \"const fs=require('fs'); fs.cpSync('frontend/dist', 'dist', {recursive:true});\"",
     "start": "node backend/src/server.js",
     "dev": "node backend/src/server.js",
     "test": "playwright test scratch/api-smoke.spec.js",

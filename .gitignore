@@ -32,3 +32,4 @@ desktop.ini
 
 # Temporales de build
 frontend/backend/
+dist/
