@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "node copy-backend.cjs",
     "build": "vite build",
     "preview": "vite preview"
   },

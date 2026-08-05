@@ -29,3 +29,6 @@ desktop.ini
 *.njsproj
 *.sln
 *.sw?
+
+# Temporales de build
+frontend/backend/
