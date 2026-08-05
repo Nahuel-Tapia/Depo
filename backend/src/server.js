@@ -141,17 +141,14 @@ app.use(async (req, res, next) => {
     await ensureDbInitialized();
     next();
   } catch (err) {
-    // Permitir reintentar en la próxima petición
     dbInitPromise = null;
-    if (err && err.code === "28P01") {
-      const cfg = getDbConfigForLogs();
-      console.error("No se pudo conectar a PostgreSQL por credenciales inválidas (código 28P01).");
-      console.error(
-        `Conexión usada: host=${cfg.host} port=${cfg.port} db=${cfg.database} user=${cfg.user} password=${cfg.hasPassword ? "[definida]" : "[vacía]"}`
-      );
-    }
-    console.error("Error inicializando base de datos", err);
-    return res.status(500).json({ error: "Error de conexión a la base de datos" });
+    console.error("[Database Connection Failure]", err.message || err);
+    return res.status(500).json({ 
+      ok: false,
+      error: "Error de conexión a la base de datos PostgreSQL (Supabase)", 
+      details: err.message,
+      code: err.code || "DB_CONNECTION_ERROR"
+    });
   }
 });
 
