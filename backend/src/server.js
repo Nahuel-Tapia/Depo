@@ -16,8 +16,11 @@ if (envPath) {
 }
 
 if (!process.env.JWT_SECRET) {
-  console.error("[ERROR] JWT_SECRET no está definido. Definílo en el archivo .env antes de iniciar.");
-  process.exit(1);
+  console.error("[ERROR] JWT_SECRET no está definido. Definílo en el archivo .env o en las Environment Variables de la plataforma.");
+  // Solo salir en modo standalone, no en serverless (Vercel inyecta env vars por separado)
+  if (!process.env.VERCEL) {
+    process.exit(1);
+  }
 }
 
 const express = require("express");
@@ -65,89 +68,30 @@ const entregasRoutes = require("./routes/entregas");
 
 const app = express();
 const PORT = process.env.PORT || 4000;
+const isVercel = !!process.env.VERCEL;
 
+// --- 1. CORS ---
 app.use(cors({
   origin: (origin, callback) => {
+    // Permitir peticiones sin origin (curl, mobile, server-to-server)
     if (!origin) return callback(null, true);
+    // Si se definen orígenes específicos, validarlos
     if (process.env.CORS_ORIGINS) {
       const allowed = process.env.CORS_ORIGINS.split(',').map(s => s.trim());
       if (allowed.includes(origin)) return callback(null, true);
       return callback(new Error('No permitido por CORS'));
     }
+    // Por defecto permitir todo (Vercel usa el mismo dominio)
     return callback(null, true);
   },
   credentials: true
 }));
+
+// --- 2. Body parsers ---
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ limit: '2mb', extended: true }));
 
-// Servir el build de React (frontend/dist)
-const frontendDistPath = path.join(__dirname, "..", "..", "frontend", "dist");
-const frontendPublicPath = path.join(__dirname, "..", "..", "frontend", "public");
-const staticPath = fs.existsSync(frontendDistPath) ? frontendDistPath : frontendPublicPath;
-app.use(express.static(staticPath));
-
-// Servir fotos/evidencias subidas (uploads)
-const uploadsPath = path.join(__dirname, '..', '..', 'uploads');
-const legacyUploadsPath = path.join(__dirname, '..', 'uploads');
-for (const dir of [uploadsPath, legacyUploadsPath]) {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-}
-app.use('/uploads', express.static(uploadsPath, { fallthrough: true }));
-app.use('/uploads', express.static(legacyUploadsPath, { fallthrough: true }));
-app.use('/uploads', (req, res) => {
-  return res.status(404).json({ error: 'Archivo no encontrado' });
-});
-
-// Rate limiting global para la API
-app.use("/api", apiLimiter);
-
-app.get(["/api/health", "/health"], (req, res) => {
-  res.json({ ok: true });
-});
-
-app.use(["/api/auth", "/auth"], authLimiter, authRoutes);
-app.use(["/api/users", "/users"], userRoutes);
-app.use(["/api/roles", "/roles"], roleRoutes);
-app.use(["/api/permissions", "/permissions"], permissionsRoutes);
-app.use(["/api/productos", "/productos"], productosRoutes);
-app.use(["/api/movimientos", "/movimientos"], movimientosRoutes);
-app.use(["/api/ajustes", "/ajustes"], ajustesRoutes);
-app.use(["/api/auditoria", "/auditoria"], auditoriaRoutes);
-app.use(["/api/pedidos", "/pedidos"], pedidosRoutes);
-app.use(["/api/instituciones", "/instituciones"], institucionesRoutes);
-app.use(["/api/proveedores", "/proveedores"], proveedoresRoutes);
-app.use(["/api/dashboard", "/dashboard"], dashboardRoutes);
-app.use(["/api/supervisor", "/supervisor"], supervisorRoutes);
-app.use(["/api/director-area", "/director-area"], directorAreaRoutes);
-app.use(["/api/compras", "/compras"], comprasRoutes);
-app.use(["/api/directivo", "/directivo"], directivoRoutes);
-app.use(["/api/patrimonio", "/patrimonio"], patrimonioRoutes);
-if (zonesRoutes) app.use(["/api/zones", "/zones"], zonesRoutes);
-if (zoneSchoolsRoutes) app.use(["/api/zones", "/zones"], zoneSchoolsRoutes);
-if (zoneSupervisorsRoutes) app.use(["/api/zones", "/zones"], zoneSupervisorsRoutes);
-app.use(["/api/entregas", "/entregas"], entregasRoutes);
-app.use(["/api/depositos", "/depositos"], depositosRoutes);
-app.use(["/api/stock-institucion", "/stock-institucion"], stockInstitucionRoutes);
-
-// Si una ruta /api no existe, devolver JSON en lugar de index.html
-app.use("/api", (req, res) => {
-  return res.status(404).json({ error: "Ruta API no encontrada" });
-});
-
-app.get("/", (req, res) => {
-  res.sendFile(path.join(staticPath, "index.html"));
-});
-
-app.get("*", (req, res) => {
-  res.sendFile(path.join(staticPath, "index.html"));
-});
-
-// Middleware global de manejo de errores
-app.use(errorHandler);
-
+// --- 3. Inicialización de BD (ANTES de las rutas — crítico para serverless) ---
 let dbInitPromise = null;
 async function ensureDbInitialized() {
   if (!dbInitPromise) {
@@ -161,12 +105,13 @@ async function ensureDbInitialized() {
   return dbInitPromise;
 }
 
-// Middleware para asegurar inicialización de BD en entornos Serverless (Vercel)
 app.use(async (req, res, next) => {
   try {
     await ensureDbInitialized();
     next();
   } catch (err) {
+    // Permitir reintentar en la próxima petición
+    dbInitPromise = null;
     if (err && err.code === "28P01") {
       const cfg = getDbConfigForLogs();
       console.error("No se pudo conectar a PostgreSQL por credenciales inválidas (código 28P01).");
@@ -175,10 +120,82 @@ app.use(async (req, res, next) => {
       );
     }
     console.error("Error inicializando base de datos", err);
-    next(err);
+    return res.status(500).json({ error: "Error de conexión a la base de datos" });
   }
 });
 
+// --- 4. Archivos estáticos (solo en modo local, Vercel sirve estáticos por CDN) ---
+const frontendDistPath = path.join(__dirname, "..", "..", "frontend", "dist");
+const frontendPublicPath = path.join(__dirname, "..", "..", "frontend", "public");
+const staticPath = fs.existsSync(frontendDistPath) ? frontendDistPath : frontendPublicPath;
+
+if (!isVercel) {
+  app.use(express.static(staticPath));
+
+  // Servir fotos/evidencias subidas (uploads)
+  const uploadsPath = path.join(__dirname, '..', '..', 'uploads');
+  const legacyUploadsPath = path.join(__dirname, '..', 'uploads');
+  for (const dir of [uploadsPath, legacyUploadsPath]) {
+    if (!fs.existsSync(dir)) {
+      try { fs.mkdirSync(dir, { recursive: true }); } catch (e) { /* read-only fs */ }
+    }
+  }
+  app.use('/uploads', express.static(uploadsPath, { fallthrough: true }));
+  app.use('/uploads', express.static(legacyUploadsPath, { fallthrough: true }));
+}
+app.use('/uploads', (req, res) => {
+  return res.status(404).json({ error: 'Archivo no encontrado' });
+});
+
+// --- 5. Rate limiting ---
+app.use("/api", apiLimiter);
+
+// --- 6. Health check ---
+app.get("/api/health", (req, res) => {
+  res.json({ ok: true });
+});
+
+// --- 7. API Routes ---
+app.use("/api/auth", authLimiter, authRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api/roles", roleRoutes);
+app.use("/api/permissions", permissionsRoutes);
+app.use("/api/productos", productosRoutes);
+app.use("/api/movimientos", movimientosRoutes);
+app.use("/api/ajustes", ajustesRoutes);
+app.use("/api/auditoria", auditoriaRoutes);
+app.use("/api/pedidos", pedidosRoutes);
+app.use("/api/instituciones", institucionesRoutes);
+app.use("/api/proveedores", proveedoresRoutes);
+app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/supervisor", supervisorRoutes);
+app.use("/api/director-area", directorAreaRoutes);
+app.use("/api/compras", comprasRoutes);
+app.use("/api/directivo", directivoRoutes);
+app.use("/api/patrimonio", patrimonioRoutes);
+if (zonesRoutes) app.use("/api/zones", zonesRoutes);
+if (zoneSchoolsRoutes) app.use("/api/zones", zoneSchoolsRoutes);
+if (zoneSupervisorsRoutes) app.use("/api/zones", zoneSupervisorsRoutes);
+app.use("/api/entregas", entregasRoutes);
+app.use("/api/depositos", depositosRoutes);
+app.use("/api/stock-institucion", stockInstitucionRoutes);
+
+// --- 8. API 404 ---
+app.use("/api", (req, res) => {
+  return res.status(404).json({ error: "Ruta API no encontrada" });
+});
+
+// --- 9. SPA catch-all (solo modo local, Vercel maneja esto por CDN) ---
+if (!isVercel) {
+  app.get("*", (req, res) => {
+    res.sendFile(path.join(staticPath, "index.html"));
+  });
+}
+
+// --- 10. Error handler ---
+app.use(errorHandler);
+
+// --- 11. Iniciar servidor (solo modo standalone) ---
 if (require.main === module) {
   ensureDbInitialized()
     .then(() => {

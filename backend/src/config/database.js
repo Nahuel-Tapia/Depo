@@ -1,6 +1,7 @@
 /**
  * Configuración de conexión a PostgreSQL.
  * Prioriza variables DB_* y también soporta aliases estándar PG*.
+ * Optimizado para entornos serverless (Vercel) y standalone.
  */
 const host = process.env.DB_HOST || process.env.PGHOST || "localhost";
 const port = parseInt(process.env.DB_PORT || process.env.PGPORT, 10) || 5432;
@@ -12,25 +13,23 @@ const password =
   process.env.POSTGRES_PASSWORD ||
   "postgres";
 
+const isVercel = !!process.env.VERCEL;
+
 const baseConfig = {
-  // Pool config
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+  // En serverless cada instancia crea su propio pool, usar valores conservadores
+  max: isVercel ? 3 : 20,
+  idleTimeoutMillis: isVercel ? 10000 : 30000,
+  // Supabase/cloud puede tardar más en cold start
+  connectionTimeoutMillis: isVercel ? 10000 : 2000,
 };
 
 let dbConfig = {};
 
 if (process.env.DATABASE_URL) {
-  const isCloudOrProd =
-    process.env.NODE_ENV === "production" ||
-    process.env.VERCEL ||
-    process.env.DATABASE_URL.includes("supabase") ||
-    process.env.DATABASE_URL.includes("pooler");
   dbConfig = {
     ...baseConfig,
     connectionString: process.env.DATABASE_URL,
-    ssl: isCloudOrProd ? { rejectUnauthorized: false } : false
+    ssl: { rejectUnauthorized: false }
   };
 } else {
   dbConfig = {
