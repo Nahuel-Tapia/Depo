@@ -92,6 +92,38 @@ app.use(cors({
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ limit: '2mb', extended: true }));
 
+// --- 2.1 URL Normalization for Vercel Serverless ---
+app.use((req, res, next) => {
+  const pathOnly = (req.url || '').split('?')[0];
+  if (!pathOnly.startsWith('/api') && (
+    pathOnly.startsWith('/auth') ||
+    pathOnly.startsWith('/users') ||
+    pathOnly.startsWith('/roles') ||
+    pathOnly.startsWith('/permissions') ||
+    pathOnly.startsWith('/productos') ||
+    pathOnly.startsWith('/movimientos') ||
+    pathOnly.startsWith('/ajustes') ||
+    pathOnly.startsWith('/auditoria') ||
+    pathOnly.startsWith('/pedidos') ||
+    pathOnly.startsWith('/instituciones') ||
+    pathOnly.startsWith('/proveedores') ||
+    pathOnly.startsWith('/dashboard') ||
+    pathOnly.startsWith('/supervisor') ||
+    pathOnly.startsWith('/director-area') ||
+    pathOnly.startsWith('/compras') ||
+    pathOnly.startsWith('/directivo') ||
+    pathOnly.startsWith('/patrimonio') ||
+    pathOnly.startsWith('/zones') ||
+    pathOnly.startsWith('/entregas') ||
+    pathOnly.startsWith('/depositos') ||
+    pathOnly.startsWith('/stock-institucion') ||
+    pathOnly.startsWith('/health')
+  )) {
+    req.url = '/api' + req.url;
+  }
+  next();
+});
+
 // --- 3. Inicialización de BD (ANTES de las rutas — crítico para serverless) ---
 let dbInitPromise = null;
 async function ensureDbInitialized() {
