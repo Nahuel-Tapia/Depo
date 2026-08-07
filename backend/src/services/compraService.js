@@ -428,15 +428,20 @@ async function getEstadoDirectores({ anio }) {
 }
 
 async function getEnviadaStatus(user, query) {
-  const anio = Number(query.anio || new Date().getFullYear());
-  const directorUserId = await resolvePlanillaDirectorUserId(user, {}, query);
-  if (!directorUserId) return { sent: false, planilla: null };
-  const planilla = await get(
-    `SELECT id, estado, enviada_at, aceptada_at, motivo_devolucion FROM planilla_pedido_anual WHERE director_area_id = $1 AND anio = $2 ORDER BY created_at DESC, id DESC LIMIT 1`,
-    [directorUserId, anio]
-  );
-  const sent = !!planilla && ['enviada', 'aceptada', 'adjudicada', 'cerrada'].includes(String(planilla.estado || '').toLowerCase());
-  return { sent, planilla };
+  try {
+    const anio = Number(query.anio || new Date().getFullYear());
+    const directorUserId = await resolvePlanillaDirectorUserId(user, {}, query);
+    if (!directorUserId) return { sent: false, planilla: null };
+    const planilla = await get(
+      `SELECT id, estado, enviada_at, aceptada_at, motivo_devolucion FROM planilla_pedido_anual WHERE director_area_id = $1 AND anio = $2 ORDER BY created_at DESC, id DESC LIMIT 1`,
+      [directorUserId, anio]
+    );
+    const sent = !!planilla && ['enviada', 'aceptada', 'adjudicada', 'cerrada'].includes(String(planilla.estado || '').toLowerCase());
+    return { sent, planilla: planilla || null };
+  } catch (err) {
+    console.error("[getEnviadaStatus Error]", err.message);
+    return { sent: false, planilla: null };
+  }
 }
 
 async function getEscuelasPendientes(user, query) {
