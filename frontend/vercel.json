@@ -1,5 +1,12 @@
 {
   "outputDirectory": "dist",
+  "functions": {
+    "api/**/*.js": {
+      "includeFiles": "backend/**",
+      "memory": 1024,
+      "maxDuration": 15
+    }
+  },
   "rewrites": [
     {
       "source": "/api/(.*)",
