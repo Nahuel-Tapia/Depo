@@ -25,8 +25,13 @@ const baseConfig = {
 
 let dbConfig = {};
 
-const defaultSupabaseUrl = "postgresql://postgres:nahuelpvp12@db.bqakxczfvizetjhszyze.supabase.co:5432/postgres";
-const effectiveDbUrl = process.env.DATABASE_URL || (isVercel ? defaultSupabaseUrl : null);
+const defaultSupabasePoolerUrl = "postgresql://postgres.bqakxczfvizetjhszyze:nahuelpvp12@aws-0-sa-east-1.pooler.supabase.com:6543/postgres";
+let effectiveDbUrl = process.env.DATABASE_URL || (isVercel ? defaultSupabasePoolerUrl : null);
+
+// Redirigir dominios directos IPv6 de Supabase hacia el pooler IPv4 funcional
+if (effectiveDbUrl && (effectiveDbUrl.includes("db.bqakxczfvizetjhszyze.supabase.co") || isVercel)) {
+  effectiveDbUrl = defaultSupabasePoolerUrl;
+}
 
 if (effectiveDbUrl) {
   dbConfig = {
