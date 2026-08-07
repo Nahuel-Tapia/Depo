@@ -20,6 +20,7 @@ if (!process.env.JWT_SECRET) {
 }
 
 const express = require("express");
+const compression = require("compression");
 const cors = require("cors");
 const { initDb } = require("./db.pg");
 const { getDbConfigForLogs } = require("./config/database");
@@ -66,6 +67,9 @@ const app = express();
 app.set('trust proxy', 1);
 const PORT = process.env.PORT || 4000;
 const isVercel = !!process.env.VERCEL;
+
+// --- 0. Compresión de Respuestas Gzip/Brotli ---
+app.use(compression());
 
 // --- 1. CORS ---
 app.use(cors({
@@ -158,7 +162,14 @@ const frontendPublicPath = path.join(__dirname, "..", "..", "frontend", "public"
 const staticPath = fs.existsSync(frontendDistPath) ? frontendDistPath : frontendPublicPath;
 
 if (!isVercel) {
-  app.use(express.static(staticPath));
+  app.use(express.static(staticPath, {
+    maxAge: '1d',
+    setHeaders: (res, filePath) => {
+      if (filePath.includes('/assets/') || filePath.includes('\\assets\\')) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      }
+    }
+  }));
 
   // Servir fotos/evidencias subidas (uploads)
   const uploadsPath = path.join(__dirname, '..', '..', 'uploads');

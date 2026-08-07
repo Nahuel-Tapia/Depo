@@ -1,32 +1,74 @@
-import { useEffect, useMemo, useState, useRef } from 'react'
+import { useEffect, useMemo, useState, useRef, lazy, Suspense } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../api'
-import Inicio from '../components/Inicio'
-import Productos from '../components/Productos'
-import Movimientos from '../components/Movimientos'
-import Pedidos from '../components/Pedidos'
-import SolicitudesRetiro from '../components/SolicitudesRetiro'
-import Instituciones from '../components/Instituciones'
-import Proveedores from '../components/Proveedores'
-import Usuarios from '../components/Usuarios'
-import HistorialInstitucion from '../components/HistorialInstitucion'
-import SupervisorDashboard from '../components/SupervisorDashboard'
-import SupervisorStatsDashboard from '../components/SupervisorStatsDashboard'
-import AsignarKit from '../components/AsignarKit'
-import DirectorAreaPanel from '../components/DirectorAreaPanel'
-import MiStock from '../components/MiStock'
-import RecepcionMercaderia from '../components/RecepcionMercaderia'
-import ComprasPanel from '../components/ComprasPanel'
-import ProductKitsManager from '../components/ProductKitsManager'
-import MiCuenta from '../components/MiCuenta'
-import Depositos from '../components/Depositos'
-import LicitacionesCerradas from '../components/LicitacionesCerradas'
-import RecepcionLicitacion from '../components/RecepcionLicitacion'
-import DistribucionEscuelas from '../components/DistribucionEscuelas'
-import Bajas from '../components/Bajas'
-import DiagnosticoStock from '../components/DiagnosticoStock'
-import DepositoInstitucion from '../components/DepositoInstitucion'
+
+const Inicio = lazy(() => import('../components/Inicio'))
+const Productos = lazy(() => import('../components/Productos'))
+const Movimientos = lazy(() => import('../components/Movimientos'))
+const Pedidos = lazy(() => import('../components/Pedidos'))
+const SolicitudesRetiro = lazy(() => import('../components/SolicitudesRetiro'))
+const Instituciones = lazy(() => import('../components/Instituciones'))
+const Proveedores = lazy(() => import('../components/Proveedores'))
+const Usuarios = lazy(() => import('../components/Usuarios'))
+const HistorialInstitucion = lazy(() => import('../components/HistorialInstitucion'))
+const SupervisorDashboard = lazy(() => import('../components/SupervisorDashboard'))
+const SupervisorStatsDashboard = lazy(() => import('../components/SupervisorStatsDashboard'))
+const AsignarKit = lazy(() => import('../components/AsignarKit'))
+const DirectorAreaPanel = lazy(() => import('../components/DirectorAreaPanel'))
+const MiStock = lazy(() => import('../components/MiStock'))
+const RecepcionMercaderia = lazy(() => import('../components/RecepcionMercaderia'))
+const ComprasPanel = lazy(() => import('../components/ComprasPanel'))
+const ProductKitsManager = lazy(() => import('../components/ProductKitsManager'))
+const MiCuenta = lazy(() => import('../components/MiCuenta'))
+const Depositos = lazy(() => import('../components/Depositos'))
+const LicitacionesCerradas = lazy(() => import('../components/LicitacionesCerradas'))
+const RecepcionLicitacion = lazy(() => import('../components/RecepcionLicitacion'))
+const DistribucionEscuelas = lazy(() => import('../components/DistribucionEscuelas'))
+const Bajas = lazy(() => import('../components/Bajas'))
+const DiagnosticoStock = lazy(() => import('../components/DiagnosticoStock'))
+const DepositoInstitucion = lazy(() => import('../components/DepositoInstitucion'))
+
+function HeaderClock() {
+  const [currentDate, setCurrentDate] = useState(() => new Date())
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setCurrentDate(new Date())
+    }, 1000)
+
+    return () => window.clearInterval(intervalId)
+  }, [])
+
+  const formattedDate = new Intl.DateTimeFormat('es-AR', {
+    weekday: 'long',
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  }).format(currentDate)
+
+  const formattedTime = new Intl.DateTimeFormat('es-AR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).format(currentDate)
+
+  return (
+    <div className="dashboard-datetime">
+      <span className="dashboard-datetime-date">{formattedDate}</span>
+      <span className="dashboard-datetime-time">{formattedTime}</span>
+    </div>
+  )
+}
+
+function TabLoadingFallback() {
+  return (
+    <div style={{ padding: '40px 20px', textAlign: 'center', color: '#64748b' }}>
+      <div style={{ width: 32, height: 32, border: '3px solid #e2e8f0', borderTopColor: '#2563eb', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 12px' }} />
+      <p style={{ fontSize: '0.9rem' }}>Cargando sección...</p>
+    </div>
+  )
+}
 
 const LOGO_URL = '/logo-sidebar.png'
 
@@ -84,19 +126,10 @@ export default function Dashboard() {
   const activeTab = tab || 'inicio'
   const setActiveTab = (newTab) => navigate(`/dashboard/${newTab}`)
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [currentDate, setCurrentDate] = useState(() => new Date())
   const [directoresMaster, setDirectoresMaster] = useState([])
   const masterDirectorIdRef = useRef(masterDirectorAreaId)
 
   masterDirectorIdRef.current = masterDirectorAreaId
-
-  useEffect(() => {
-    const intervalId = window.setInterval(() => {
-      setCurrentDate(new Date())
-    }, 1000)
-
-    return () => window.clearInterval(intervalId)
-  }, [])
 
   useEffect(() => {
     if (user?.role !== 'master' || !token) {
@@ -169,19 +202,6 @@ export default function Dashboard() {
 
     return () => root.classList.remove('dashboard-nav-open')
   }, [sidebarOpen])
-
-  const formattedDate = new Intl.DateTimeFormat('es-AR', {
-    weekday: 'long',
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
-  }).format(currentDate)
-
-  const formattedTime = new Intl.DateTimeFormat('es-AR', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  }).format(currentDate)
 
   const closeSidebar = () => setSidebarOpen(false)
 
@@ -318,10 +338,7 @@ export default function Dashboard() {
                 <MenuIcon />
               </button>
 
-              <div className="dashboard-datetime">
-                <span className="dashboard-datetime-date">{formattedDate}</span>
-                <span className="dashboard-datetime-time">{formattedTime}</span>
-              </div>
+              <HeaderClock />
             </div>
 
             <div className="dashboard-header-center" />
@@ -391,7 +408,9 @@ export default function Dashboard() {
           <div className="dashboard-content">
             <div className="dashboard-view-frame">
               <section className="dashboard-module-card">
-                {renderTab()}
+                <Suspense fallback={<TabLoadingFallback />}>
+                  {renderTab()}
+                </Suspense>
               </section>
             </div>
           </div>

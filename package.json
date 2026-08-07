@@ -7,7 +7,7 @@
     "build": "node --check backend/src/server.js && npm run build --prefix frontend && node -e \"const fs=require('fs'); fs.cpSync('frontend/dist', 'dist', {recursive:true});\"",
     "start": "node backend/src/server.js",
     "dev": "node backend/src/server.js",
-    "test": "playwright test scratch/api-smoke.spec.js",
+    "test": "playwright test --project=api-smoke",
     "setup": "node backend/scripts/setup-database.js",
     "db:create": "node backend/scripts/create-database.js",
     "db:import": "node backend/scripts/import-data.js",
@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
+    "compression": "^1.8.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",

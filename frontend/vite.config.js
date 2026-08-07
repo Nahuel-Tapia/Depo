@@ -19,6 +19,7 @@ export default defineConfig({
         manualChunks: {
           vendor: ['react', 'react-dom', 'react-router-dom'],
           maps: ['leaflet', 'react-leaflet', 'leaflet.markercluster'],
+          charts: ['recharts'],
         }
       }
     }
