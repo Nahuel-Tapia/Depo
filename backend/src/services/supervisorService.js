@@ -294,6 +294,9 @@ async function getInstituciones(user, queryJurisdiccion) {
   const jurisdiccion = queryJurisdiccion || user.jurisdiccion;
 
   if (!jurisdiccion) {
+    if (isAdminLikeRole(user?.role)) {
+      return { instituciones: [], meta: { zona_label: "", zona_count: 0, nivel_educativo: null } };
+    }
     throw { status: 400, message: "Jurisdicción no especificada" };
   }
 
@@ -505,6 +508,9 @@ async function getPedidosPendientes(user, queryJurisdiccion) {
   const jurisdiccion = queryJurisdiccion || user.jurisdiccion;
 
   if (!jurisdiccion) {
+    if (isAdminLikeRole(user?.role)) {
+      return { pedidos: [] };
+    }
     throw { status: 400, message: "Jurisdicción no especificada" };
   }
 
@@ -626,6 +632,9 @@ async function getSolicitudes(user, queryJurisdiccion) {
   const jurisdiccion = queryJurisdiccion || user.jurisdiccion;
 
   if (!jurisdiccion) {
+    if (isAdminLikeRole(user?.role)) {
+      return { solicitudes: [] };
+    }
     throw { status: 400, message: "Jurisdicción no especificada" };
   }
 

@@ -119,7 +119,7 @@ async function getEnviadaStatus(req, res) {
     res.json(result);
   } catch (err) {
     console.error("Error al obtener estado de envío:", err);
-    res.status(500).json({ error: "No se pudo obtener el estado de envío" });
+    res.status(500).json({ error: "No se pudo obtener el estado de envío", details: err.message });
   }
 }
 
