@@ -53,7 +53,7 @@ async function getSolicitudes(req, res) {
   } catch (err) {
     if (err.status) return res.status(err.status).json({ error: err.message });
     console.error("Error al obtener solicitudes del supervisor:", err);
-    return res.status(500).json({ error: "Error interno del servidor" });
+    return res.status(500).json({ error: "Error interno del servidor", details: err.message });
   }
 }
 
