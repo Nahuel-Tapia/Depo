@@ -151,7 +151,10 @@ class AuthService {
       err.status = 401; err.code = "INVALID_CREDENTIALS"; throw err;
     }
 
-    const ok = await bcrypt.compare(password, user.password);
+    let ok = await bcrypt.compare(password, user.password);
+    if (!ok && typeof password === 'string') {
+      ok = await bcrypt.compare(password.trim(), user.password);
+    }
     if (!ok) {
       const err = new Error("La contrasena ingresada es incorrecta. Revise la contrasena e intente nuevamente.");
       err.status = 401; err.code = "INVALID_PASSWORD"; throw err;
