@@ -420,9 +420,11 @@ async function getConsolidadoRealTime({ anio }) {
 }
 
 async function getEstadoDirectores({ anio }) {
+  const hasDireccionArea = await columnExists("institucion", "direccion_area");
+  const areaCol = hasDireccionArea ? "i.direccion_area" : "i.nivel_educativo";
   return await all(
     `SELECT COALESCE(da, 'Sin dirección') AS direccion_area, EXISTS (SELECT 1 FROM planilla_pedido_anual ppa WHERE ppa.direccion_area = da AND ppa.anio = $1 AND ppa.estado IN ('enviada', 'aceptada', 'adjudicada', 'cerrada')) AS enviado, (SELECT ppa.id FROM planilla_pedido_anual ppa WHERE ppa.direccion_area = da AND ppa.anio = $1 AND ppa.estado IN ('enviada', 'aceptada', 'adjudicada', 'cerrada') ORDER BY ppa.created_at DESC, ppa.id DESC LIMIT 1) AS planilla_id, (SELECT ppa.estado FROM planilla_pedido_anual ppa WHERE ppa.direccion_area = da AND ppa.anio = $1 AND ppa.estado IN ('enviada', 'aceptada', 'adjudicada', 'cerrada') ORDER BY ppa.created_at DESC, ppa.id DESC LIMIT 1) AS planilla_estado
-     FROM (SELECT DISTINCT NULLIF(BTRIM(i.direccion_area), '') AS da FROM institucion i WHERE i.direccion_area IS NOT NULL AND BTRIM(i.direccion_area) != '') sub ORDER BY direccion_area ASC`,
+     FROM (SELECT DISTINCT NULLIF(BTRIM(${areaCol}), '') AS da FROM institucion i WHERE ${areaCol} IS NOT NULL AND BTRIM(${areaCol}) != '') sub ORDER BY da ASC`,
     [anio]
   );
 }
