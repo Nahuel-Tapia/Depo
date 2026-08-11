@@ -88,35 +88,35 @@ const ROLE_LABELS = {
 
 const TABS = [
   { key: 'inicio', label: 'Inicio', permission: null, icon: GridIcon },
-  { key: 'zonas', label: 'Gestion de Zonas', permission: 'supervision.manage', roleFor: 'director_area', icon: BuildingIcon },
-  { key: 'solicitud_anual', label: 'Pedidos', permission: 'supervision.manage', roleFor: 'director_area', icon: ClipboardIcon },
-  { key: 'resumen', label: 'Resumen Solicitud Anual', permission: 'supervision.manage', roleFor: 'director_area', icon: ListIcon },
-  { key: 'compras-licitacion', label: 'Licitacion Anual', permission: 'planilla.view', roleFor: 'area_compras', icon: DocumentIcon },
-  { key: 'compras-listado-final', label: 'Listado Final a Licitar', permission: 'planilla.view', roleFor: 'area_compras', icon: ListIcon },
-  { key: 'compras-refuerzos', label: 'Licitaciones Refuerzos', permission: 'planilla.view', roleFor: 'area_compras', icon: ClipboardIcon },
-  { key: 'compras-adjudicacion', label: 'Adjudicacion y Cierre', permission: 'planilla.manage', roleFor: 'area_compras', icon: ShieldIcon },
-  { key: 'compras-entregas', label: 'Gestion de Entregas', permission: 'planilla.view', roleFor: 'area_compras', icon: TruckIcon },
-  { key: 'deposito-recepcion', label: 'Recepcion Licitacion', permission: 'stock.movement.create', roleFor: 'operador', icon: DocumentIcon },
-  { key: 'deposito-distribucion', label: 'Distribucion a Escuelas', permission: 'stock.movement.create', roleFor: 'operador', icon: TruckIcon },
-  { key: 'solicitudes-retiro', label: 'Retiros Escolares', permission: 'stock.movement.create', roleFor: 'operador', icon: ClipboardIcon },
-  { key: 'supervisor', label: 'Patrimonio Escolar', permission: 'pedidos.manage', roleFor: 'supervisor', icon: ActivityIcon },
-  { key: 'asignar-kit', label: 'Asignar Kit', permission: 'pedidos.manage', roleFor: 'supervisor', icon: BoxIcon },
-  { key: 'mis-escuelas', label: 'Mis Escuelas', permission: 'instituciones.view', roleFor: 'supervisor', hideForRoles: ['admin'], icon: BuildingIcon },
-  { key: 'productos', label: 'Productos', permission: 'productos.view', hideForRoles: ['supervisor', 'director_area'], roleFor: 'admin', icon: BoxIcon },
-  { key: 'movimientos', label: 'Movimientos', permission: 'movimientos.view', hideForRoles: ['supervisor', 'director_area'], roleFor: 'admin', icon: ActivityIcon },
-  { key: 'pedidos', label: 'Pedidos', permission: 'pedidos.view', hideForRoles: ['admin', 'director_area'], roleFor: 'common', icon: ClipboardIcon },
-  { key: 'instituciones', label: 'Instituciones', permission: 'instituciones.view', hideForRoles: ['supervisor'], roleFor: 'admin', icon: BuildingIcon },
-  { key: 'historial', label: 'Historial', permission: 'instituciones.view', hideForRoles: ['supervisor', 'director_area'], roleFor: 'admin', icon: ListIcon },
-  { key: 'proveedores', label: 'Proveedores', permission: 'proveedores.view', hideForRoles: ['supervisor', 'director_area'], roleFor: 'admin', icon: TruckIcon },
-  { key: 'usuarios', label: 'Usuarios', permission: 'users.read', icon: UserIcon },
-  { key: 'kits', label: 'Kits de Productos', permission: 'supervision.manage', roleFor: 'director_area', icon: BoxIcon },
-  { key: 'bajas', label: 'Bajas', permission: 'movimientos.view', hideForRoles: ['supervisor', 'director_area', 'directivo'], icon: ShieldIcon },
-  { key: 'depositos', label: 'Depositos', permission: 'stock.view', roleFor: 'admin', icon: BuildingIcon },
-  { key: 'diagnostico-stock', label: 'Diagnóstico de Stock', permission: 'stock.view', roleFor: 'admin', icon: ShieldIcon },
+  { key: 'zonas', label: 'Gestion de Zonas', permission: 'supervision.manage', rolesAllowed: ['director_area', 'admin', 'master'], icon: BuildingIcon },
+  { key: 'solicitud_anual', label: 'Pedidos', permission: 'supervision.manage', rolesAllowed: ['director_area', 'admin', 'master'], icon: ClipboardIcon },
+  { key: 'resumen', label: 'Resumen Solicitud Anual', permission: 'supervision.manage', rolesAllowed: ['director_area', 'admin', 'master'], icon: ListIcon },
+  { key: 'kits', label: 'Kits de Productos', permission: 'supervision.manage', rolesAllowed: ['director_area', 'admin', 'master'], icon: BoxIcon },
+  { key: 'compras-licitacion', label: 'Licitacion Anual', permission: 'planilla.view', rolesAllowed: ['area_compras', 'admin', 'master'], icon: DocumentIcon },
+  { key: 'compras-listado-final', label: 'Listado Final a Licitar', permission: 'planilla.view', rolesAllowed: ['area_compras', 'admin', 'master'], icon: ListIcon },
+  { key: 'compras-refuerzos', label: 'Licitaciones Refuerzos', permission: 'planilla.view', rolesAllowed: ['area_compras', 'admin', 'master'], icon: ClipboardIcon },
+  { key: 'compras-adjudicacion', label: 'Adjudicacion y Cierre', permission: 'planilla.manage', rolesAllowed: ['area_compras', 'admin', 'master'], icon: ShieldIcon },
+  { key: 'compras-entregas', label: 'Gestion de Entregas', permission: 'planilla.view', rolesAllowed: ['area_compras', 'admin', 'master'], icon: TruckIcon },
+  { key: 'deposito-recepcion', label: 'Recepcion Licitacion', permission: 'stock.movement.create', rolesAllowed: ['operador', 'admin', 'master'], icon: DocumentIcon },
+  { key: 'deposito-distribucion', label: 'Distribucion a Escuelas', permission: 'stock.movement.create', rolesAllowed: ['operador', 'admin', 'master'], icon: TruckIcon },
+  { key: 'solicitudes-retiro', label: 'Retiros Escolares', permission: 'stock.movement.create', rolesAllowed: ['operador', 'admin', 'master'], icon: ClipboardIcon },
+  { key: 'supervisor', label: 'Patrimonio Escolar', permission: 'pedidos.manage', rolesAllowed: ['supervisor', 'admin', 'master'], icon: ActivityIcon },
+  { key: 'asignar-kit', label: 'Asignar Kit', permission: 'pedidos.manage', rolesAllowed: ['supervisor', 'admin', 'master'], icon: BoxIcon },
+  { key: 'mis-escuelas', label: 'Mis Escuelas', permission: 'instituciones.view', rolesAllowed: ['supervisor', 'admin', 'master'], icon: BuildingIcon },
+  { key: 'productos', label: 'Productos', permission: 'productos.view', rolesAllowed: ['admin', 'master', 'operador', 'area_compras', 'consulta'], icon: BoxIcon },
+  { key: 'movimientos', label: 'Movimientos', permission: 'movimientos.view', rolesAllowed: ['admin', 'master', 'operador', 'area_compras', 'consulta'], icon: ActivityIcon },
+  { key: 'pedidos', label: 'Pedidos', permission: 'pedidos.view', rolesAllowed: ['admin', 'master', 'director_area', 'supervisor', 'directivo', 'operador_escolar', 'operador', 'area_compras'], icon: ClipboardIcon },
+  { key: 'instituciones', label: 'Instituciones', permission: 'instituciones.view', rolesAllowed: ['admin', 'master', 'director_area', 'supervisor', 'area_compras'], icon: BuildingIcon },
+  { key: 'historial', label: 'Historial', permission: 'instituciones.view', rolesAllowed: ['admin', 'master', 'director_area', 'supervisor'], icon: ListIcon },
+  { key: 'proveedores', label: 'Proveedores', permission: 'proveedores.view', rolesAllowed: ['admin', 'master', 'area_compras', 'operador'], icon: TruckIcon },
+  { key: 'usuarios', label: 'Usuarios', permission: 'users.read', rolesAllowed: ['admin', 'master', 'director_area'], icon: UserIcon },
+  { key: 'bajas', label: 'Bajas', permission: 'movimientos.view', rolesAllowed: ['admin', 'master', 'operador', 'area_compras'], icon: ShieldIcon },
+  { key: 'depositos', label: 'Depositos', permission: 'stock.view', rolesAllowed: ['admin', 'master', 'operador'], icon: BuildingIcon },
+  { key: 'diagnostico-stock', label: 'Diagnóstico de Stock', permission: 'stock.view', rolesAllowed: ['admin', 'master', 'operador'], icon: ShieldIcon },
+  { key: 'mi-stock', label: 'Mi stock', permission: 'pedidos.view', rolesAllowed: ['directivo', 'operador_escolar'], icon: BoxIcon },
+  { key: 'recepcion-mercaderia', label: 'Recepción de Mercadería', permission: 'pedidos.view', rolesAllowed: ['directivo', 'operador_escolar'], icon: BoxIcon },
+  { key: 'deposito-institucion', label: 'Mi Depósito', permission: 'pedidos.view', rolesAllowed: ['directivo', 'operador_escolar'], icon: BuildingIcon },
   { key: 'mi-cuenta', label: 'Mi cuenta', permission: null, icon: UserIcon },
-  { key: 'mi-stock', label: 'Mi stock', permission: 'pedidos.view', roleFor: 'directivo', icon: BoxIcon },
-  { key: 'recepcion-mercaderia', label: 'Recepción de Mercadería', permission: 'pedidos.view', roleFor: 'directivo', icon: BoxIcon },
-  { key: 'deposito-institucion', label: 'Mi Depósito', permission: 'pedidos.view', roleFor: 'directivo', icon: BuildingIcon },
 ]
 
 export default function Dashboard() {
@@ -170,15 +170,11 @@ export default function Dashboard() {
 
     return TABS.filter((tab) => {
       // Excluir explícitamente según el rol
-      if (tab.hideForRole && tab.hideForRole === user.role) return false
       if (tab.hideForRoles && tab.hideForRoles.includes(user.role)) return false
 
-      // Si requiere un rol específico (y no es common), verificar
-      if (tab.roleFor && tab.roleFor !== user.role && tab.roleFor !== 'common') {
-        // Permitir acceso a admin para no romper consistencia
-        if (user.role !== 'admin') {
-          return false
-        }
+      // Verificar restricción estricta por rol
+      if (tab.rolesAllowed && !tab.rolesAllowed.includes(user.role)) {
+        return false
       }
 
       // Validar permisos granulares del token JWT
