@@ -73,9 +73,9 @@ async function ensureDepositosSchema() {
   // Centralized in schemaManager.js
 }
 
-async function listDepositos(user) {
+async function listDepositos(user = {}) {
   await ensureDepositosSchema();
-  const isEscolar = user.role === "operador_escolar";
+  const isEscolar = user?.role === "operador_escolar";
   let query = `
     SELECT 
       d.id_deposito as id,
