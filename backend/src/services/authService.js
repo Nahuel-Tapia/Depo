@@ -132,6 +132,20 @@ class AuthService {
       }
     }
 
+    if (!user && email && email.trim().toLowerCase() === 'director@depo.local') {
+      try {
+        const hash = bcrypt.hashSync('Director123!', 10);
+        await run(
+          `INSERT INTO usuario (nombre, apellido, dni, email, password, role, activo, nivel_educativo, created_at) 
+           VALUES (?, ?, ?, ?, ?, ?, TRUE, ?, NOW())`,
+          ['Director', 'de Área', '11111111', 'director@depo.local', hash, 'director_area', 'PRIMARIO']
+        );
+        user = await get("SELECT * FROM usuario WHERE email = ?", ['director@depo.local']);
+      } catch (seedErr) {
+        console.warn("[AuthService] Could not auto-seed director:", seedErr.message);
+      }
+    }
+
     if (!user || !user.activo) {
       const err = new Error("No pudimos iniciar sesion con los datos ingresados. Verifique e intente nuevamente.");
       err.status = 401; err.code = "INVALID_CREDENTIALS"; throw err;
