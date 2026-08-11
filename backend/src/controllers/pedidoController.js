@@ -58,11 +58,11 @@ async function deleteKit(req, res) {
 
 async function listarPedidos(req, res) {
   try {
-    const pedidos = await pedidoService.listarPedidos(req.user);
+    const pedidos = await pedidoService.listarPedidos(req.user, req.query);
     return res.json({ pedidos });
   } catch (err) {
     console.error("Error al listar pedidos:", err);
-    return res.status(500).json({ error: "No se pudo listar pedidos" });
+    return res.status(500).json({ error: "No se pudo listar pedidos", details: err.message });
   }
 }
 
