@@ -45,6 +45,11 @@ async function attachDirectorAreaActingContext(req, res, next) {
 
 router.use(attachDirectorAreaActingContext);
 
+router.get("/dashboard/resumen", directorAreaController.getInformes);
+router.get("/dashboard/escuelas", directorAreaController.getAsignaciones);
+router.get("/dashboard/pedidos-pendientes", directorAreaController.getSolicitudes);
+router.get("/dashboard/zonas", directorAreaController.getZonasEdificio);
+
 router.get("/catalogo", directorAreaController.getCatalogo);
 router.get("/asignaciones", directorAreaController.getAsignaciones);
 router.delete("/asignacion/:id", directorAreaController.deleteAsignacion);

@@ -13,6 +13,9 @@ router.get("/", authorizePermissions(PERMISSIONS.PRODUCTOS_VIEW), productoContro
 // Listar categorías (para dropdown)
 router.get("/categorias", authorizePermissions(PERMISSIONS.PRODUCTOS_VIEW), productoController.listarCategorias);
 
+// Alias para kits de productos
+router.get("/kits/all", authorizePermissions(PERMISSIONS.PRODUCTOS_VIEW), require("../controllers/pedidoController").listarKits);
+
 // Obtener un producto
 router.get("/:id", authorizePermissions(PERMISSIONS.PRODUCTOS_VIEW), productoController.obtenerProducto);
 
