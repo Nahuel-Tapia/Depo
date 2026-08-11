@@ -3,6 +3,19 @@ const { all, get, run, pool } = require("../db.pg");
 const { authenticate, authorizePermissions, isAdminLikeRole } = require("../middleware/auth");
 const { PERMISSIONS } = require("../permissions");
 
+const columnExistsCache = new Map();
+async function columnExists(tableName, columnName) {
+  const cacheKey = `${tableName}.${columnName}`;
+  if (columnExistsCache.has(cacheKey)) return columnExistsCache.get(cacheKey);
+  const row = await get(
+    `SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1 AND column_name = $2) AS col_exists`,
+    [tableName, columnName]
+  );
+  const exists = Boolean(row?.col_exists);
+  columnExistsCache.set(cacheKey, exists);
+  return exists;
+}
+
 const router = express.Router();
 router.use(authenticate);
 
@@ -575,7 +588,12 @@ async function deleteKit(id) {
 async function listarPedidos(user) {
   await ensurePedidosSchema();
 
-  let query = "SELECT p.id_pedido as id, CASE WHEN p.estado::text = 'finalizado' THEN 'entregado' ELSE p.estado::text END as estado, p.observaciones_generales as notas, p.motivo_supervisor, p.respuesta_supervisor_tipo, COALESCE(p.tipo, 'anual') as tipo, p.fecha_creacion as created_at, p.id_institucion, FALSE as requiere_licitacion, COALESCE(p.estado_abastecimiento, 'stock_disponible') as estado_abastecimiento, p.aprobado_por_supervisor_id, p.fecha_aprobacion_supervisor, p.kit_id, p.kit_nombre, p.kit_cantidad, dp.id_producto as detalle_producto_id, pr.nombre as detalle_producto_nombre, pr.unidad_medida as detalle_unidad_medida, pr.stock_actual as detalle_stock_actual, FALSE as detalle_requiere_licitacion, dp.stock_disponible_relevado as detalle_stock_disponible_relevado, dp.cantidad_solicitada as detalle_cantidad, p.aprobado_por_director_id, p.fecha_aprobacion_director, p.aprobado_director_area, u.nombre as usuario_nombre, i.nombre as institucion FROM pedido p LEFT JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido JOIN producto pr ON dp.id_producto = pr.id_producto JOIN usuario u ON p.id_usuario_solicitante = u.id_usuario LEFT JOIN institucion i ON p.id_institucion = i.id_institucion WHERE 1 = 1";
+  const hasEstadoAbastecimiento = await columnExists('pedido', 'estado_abastecimiento');
+  const estadoAbastecimientoExpr = hasEstadoAbastecimiento
+    ? "COALESCE(p.estado_abastecimiento, 'stock_disponible') as estado_abastecimiento"
+    : "'stock_disponible' as estado_abastecimiento";
+
+  let query = `SELECT p.id_pedido as id, CASE WHEN p.estado::text = 'finalizado' THEN 'entregado' ELSE p.estado::text END as estado, p.observaciones_generales as notas, p.motivo_supervisor, p.respuesta_supervisor_tipo, COALESCE(p.tipo, 'anual') as tipo, p.fecha_creacion as created_at, p.id_institucion, FALSE as requiere_licitacion, ${estadoAbastecimientoExpr}, p.aprobado_por_supervisor_id, p.fecha_aprobacion_supervisor, p.kit_id, p.kit_nombre, p.kit_cantidad, dp.id_producto as detalle_producto_id, pr.nombre as detalle_producto_nombre, pr.unidad_medida as detalle_unidad_medida, pr.stock_actual as detalle_stock_actual, FALSE as detalle_requiere_licitacion, dp.stock_disponible_relevado as detalle_stock_disponible_relevado, dp.cantidad_solicitada as detalle_cantidad, p.aprobado_por_director_id, p.fecha_aprobacion_director, p.aprobado_director_area, u.nombre as usuario_nombre, i.nombre as institucion FROM pedido p LEFT JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido JOIN producto pr ON dp.id_producto = pr.id_producto JOIN usuario u ON p.id_usuario_solicitante = u.id_usuario LEFT JOIN institucion i ON p.id_institucion = i.id_institucion WHERE 1 = 1`;
   const params = [];
 
   if (user.role === "directivo") {
@@ -834,19 +852,29 @@ async function createPedido(data, user) {
     detalleItems = routingData.detalleEvaluado;
   }
 
+  const hasEstadoAbastecimiento = await columnExists('pedido', 'estado_abastecimiento');
+  const insertFields = ["id_usuario_solicitante", "id_institucion", "observaciones_generales", "tipo", "kit_id", "kit_nombre", "kit_cantidad", "requiere_licitacion"];
+  const insertValues = [
+    user.sub,
+    usuario.id_institucion,
+    notas || null,
+    tipoValido,
+    kit?.id || null,
+    kit?.nombre || null,
+    kit ? cantidadSolicitada : null,
+    routingData.requiereLicitacion
+  ];
+
+  if (hasEstadoAbastecimiento) {
+    insertFields.push("estado_abastecimiento");
+    insertValues.push(routingData.estadoAbastecimiento);
+  }
+
+  const placeholders = insertValues.map(() => "?").join(", ");
+
   const pedidoResult = await run(
-    "INSERT INTO pedido (id_usuario_solicitante, id_institucion, observaciones_generales, tipo, kit_id, kit_nombre, kit_cantidad, requiere_licitacion, estado_abastecimiento) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    [
-      user.sub,
-      usuario.id_institucion,
-      notas || null,
-      tipoValido,
-      kit?.id || null,
-      kit?.nombre || null,
-      kit ? cantidadSolicitada : null,
-      routingData.requiereLicitacion,
-      routingData.estadoAbastecimiento
-    ]
+    `INSERT INTO pedido (${insertFields.join(", ")}) VALUES (${placeholders})`,
+    insertValues
   );
 
   for (const item of detalleItems) {
@@ -928,10 +956,18 @@ async function updateEstadoPedido(id, data, user) {
           [item.requiere_licitacion, item.stock_disponible_relevado, id, item.producto_id]
         );
       }
-      await run(
-        "UPDATE pedido SET requiere_licitacion = ?, estado_abastecimiento = ? WHERE id_pedido = ?",
-        [routingRefuerzo.requiereLicitacion, routingRefuerzo.estadoAbastecimiento, id]
-      );
+      const hasEstadoAbastecimiento = await columnExists('pedido', 'estado_abastecimiento');
+      if (hasEstadoAbastecimiento) {
+        await run(
+          "UPDATE pedido SET requiere_licitacion = ?, estado_abastecimiento = ? WHERE id_pedido = ?",
+          [routingRefuerzo.requiereLicitacion, routingRefuerzo.estadoAbastecimiento, id]
+        );
+      } else {
+        await run(
+          "UPDATE pedido SET requiere_licitacion = ? WHERE id_pedido = ?",
+          [routingRefuerzo.requiereLicitacion, id]
+        );
+      }
     }
 
     if (solicitaAclaracion) {
@@ -952,8 +988,13 @@ async function updateEstadoPedido(id, data, user) {
       [nuevoEstado, user.sub, estadoObjetivoDb === "rechazado" ? motivoSupervisor : null, estadoObjetivoDb === "rechazado" ? "rechazo" : "aprobacion", id]
     );
 
+    const hasEstadoAbastecimientoSelect = await columnExists('pedido', 'estado_abastecimiento');
+    const estadoAbastecimientoExpr = hasEstadoAbastecimientoSelect
+      ? "COALESCE(estado_abastecimiento, 'stock_disponible')"
+      : "'stock_disponible'";
+
     const pedidoActualizado = await get(
-      "SELECT COALESCE(requiere_licitacion, FALSE) AS requiere_licitacion, COALESCE(estado_abastecimiento, 'stock_disponible') AS estado_abastecimiento FROM pedido WHERE id_pedido = ?",
+      `SELECT COALESCE(requiere_licitacion, FALSE) AS requiere_licitacion, ${estadoAbastecimientoExpr} AS estado_abastecimiento FROM pedido WHERE id_pedido = ?`,
       [id]
     );
 
