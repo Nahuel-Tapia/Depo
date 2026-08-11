@@ -82,7 +82,7 @@ async function listDepositos(user = {}) {
       d.nombre,
       d.descripcion,
       d.ubicacion,
-      COALESCE(d.tipo, d.tipo_deposito) as tipo,
+      d.tipo as tipo,
       d.activo,
       d.deposito_padre_id,
       dp.nombre as nombre_padre
@@ -337,9 +337,8 @@ async function getRecepcionesLicitacion() {
             lp.anio,
             lp.fecha_publicacion,
             lp.estado,
-            lp.titulo,
-            lp.motivo,
-            COALESCE(NULLIF(BTRIM(lp.motivo), ''), NULLIF(BTRIM(lp.titulo), ''), 'Licitación Anual ' || lp.anio::text) AS titulo_display,
+            COALESCE(lp.motivo, 'Licitación Anual ' || lp.anio::text) AS motivo,
+            COALESCE(NULLIF(BTRIM(lp.motivo), ''), 'Licitación Anual ' || lp.anio::text) AS titulo_display,
             COALESCE(prov_data.proveedores, 'Sin proveedor asignado') AS proveedores
      FROM licitacion_publicada lp
      LEFT JOIN LATERAL (
