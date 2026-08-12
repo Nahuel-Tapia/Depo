@@ -1062,10 +1062,10 @@ return (
               <tr>
                 <th>Nº Movimiento</th>
                 <th>Tipo</th>
+                <th>Producto(s)</th>
                 <th>Cantidad</th>
-                <th>Estado</th>
                 <th>Motivo</th>
-                <th>Proveedor</th>
+                <th>Proveedor / Institución</th>
                 <th>Registrado por</th>
                 <th>Fecha</th>
                 <th style={{ textAlign: 'center' }}>Acciones</th>
@@ -1111,12 +1111,16 @@ return (
                     proveedorDisplay = proveedoresResumen.length > 0 ? proveedoresResumen.join(', ') : '-';
                   }
 
+                  const productosDisplay = isMulti
+                    ? [...new Set(group.items.map(item => item.producto_nombre).filter(Boolean))].join(', ')
+                    : (first.producto_nombre || '-');
+
                   return (
                     <tr key={first.id || i}>
                       <td>{`#${first.id}`}</td>
                       <td><span className={`badge badge-${first.tipo}`}>{first.tipo}</span></td>
+                      <td style={{ maxWidth: 200, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={productosDisplay}>{productosDisplay}</td>
                       <td>{isMulti ? totalCantidad : first.cantidad}</td>
-                      <td>{estadoDisplay}</td>
                       <td>{first.motivo || '-'}</td>
                       <td>{proveedorDisplay}</td>
                       <td>{first.usuario_nombre || '-'}</td>
