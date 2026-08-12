@@ -19,9 +19,6 @@ export default function Movimientos() {
   const [egresoModalOpen, setEgresoModalOpen] = useState(false)
   const [retirarPedidoModalOpen, setRetirarPedidoModalOpen] = useState(false)
 
-  // Baja (daño) state
-  const [bajaModalOpen, setBajaModalOpen] = useState(false)
-  const [bajaItem, setBajaItem] = useState({ productoId: '', cantidad: 1, motivo: '', fotoFile: null })
   // Detalle modal
   const [detalleModalOpen, setDetalleModalOpen] = useState(false)
   const [detalleData, setDetalleData] = useState(null)
@@ -371,40 +368,7 @@ export default function Movimientos() {
 
 
 // Baja handlers
-const handleBajaFileChange = (e) => {
-  setBajaItem(prev => ({ ...prev, fotoFile: e.target.files?.[0] || null }));
-}
 
-const handleBajaSubmit = async (e) => {
-  e.preventDefault()
-  setMsg({ text: '', type: '' })
-  if (!bajaItem.productoId) { setMsg({ text: 'Seleccione un producto para la baja', type: 'error' }); return }
-  const fd = new FormData()
-  fd.append('producto_id', bajaItem.productoId)
-  fd.append('cantidad', bajaItem.cantidad || 1)
-  fd.append('motivo', bajaItem.motivo || '')
-  if (bajaItem.fotoFile) fd.append('foto', bajaItem.fotoFile)
-
-  if (!token) { setMsg({ text: 'No autenticado: token no disponible', type: 'error' }); return }
-
-  const res = await apiFetch('/api/movimientos/baja', {
-    method: 'POST',
-    token,
-    body: fd
-  })
-
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}))
-    setMsg({ text: data.error || 'Error al registrar la baja', type: 'error' })
-    return
-  }
-
-  setBajaModalOpen(false)
-  setBajaItem({ productoId: '', cantidad: 1, motivo: '', fotoFile: null })
-  setMsg({ text: 'Baja registrada correctamente', type: 'success' })
-  loadMovimientos()
-  loadProductos()
-}
 
 const canCreate = hasPermission('movimientos.create')
 
@@ -556,15 +520,6 @@ return (
             >
               <span aria-hidden="true" style={{ marginRight: 8, fontSize: '1.2rem' }}>📋📦</span>
               Retirar Pedido Anual
-            </button>
-            <button
-              type="button"
-              className="mov-action-btn"
-              style={{ width: 'auto', margin: 0, padding: '14px 22px', fontSize: '1rem' }}
-              onClick={() => { setBajaModalOpen(true); setMsg({ text: '', type: '' }) }}
-            >
-              <span aria-hidden="true" style={{ marginRight: 8, fontSize: '1.2rem' }}>🔻📸</span>
-              Baja
             </button>
           </>
         )}
@@ -944,53 +899,7 @@ return (
           </div>
         )}
 
-        {/* BAJA */}
-        {bajaModalOpen && (
-          <div
-            style={{
-              position: 'fixed',
-              inset: 0,
-              background: 'rgba(0, 0, 0, 0.45)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 1000,
-              padding: 16
-            }}
-            onClick={e => { if (e.target === e.currentTarget) setBajaModalOpen(false) }}
-          >
-            <div style={{ background: '#fff7f7', padding: 24, borderRadius: 10, width: 'min(640px, 100%)' }}>
-              <h3>Baja de Mercadería (dañada)</h3>
-              <form onSubmit={handleBajaSubmit} className="grid">
-                <div>
-                  <label>Producto</label>
-                  <select value={bajaItem.productoId} onChange={e => setBajaItem({ ...bajaItem, productoId: e.target.value })}>
-                    <option value="">Seleccionar producto...</option>
-                    {productos.map(p => (
-                      <option key={p.id} value={p.id}>{p.nombre}{p.marca ? ` - ${p.marca}` : ''} ({p.unidad_medida || 'unidad'})</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label>Cantidad</label>
-                  <input type="number" min="1" value={bajaItem.cantidad} onChange={e => setBajaItem({ ...bajaItem, cantidad: e.target.value })} />
-                </div>
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <label>Detalle / Motivo</label>
-                  <textarea value={bajaItem.motivo} onChange={e => setBajaItem({ ...bajaItem, motivo: e.target.value })} rows={3} />
-                </div>
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <label>Foto (opcional)</label>
-                  <input type="file" accept="image/*" onChange={handleBajaFileChange} />
-                </div>
-                <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-                  <button type="button" className="secondary" onClick={() => setBajaModalOpen(false)}>Cancelar</button>
-                  <button type="submit">Registrar Baja</button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
+
 
         {/* RETIRAR PEDIDO ANUAL */}
         {retirarPedidoModalOpen && (

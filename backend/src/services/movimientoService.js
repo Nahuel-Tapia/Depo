@@ -351,6 +351,32 @@ async function obtenerStatsResumen() {
 }
 
 async function ensureBajaMovimientosSchema(client = pool) {
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS baja_movimientos (
+      id SERIAL PRIMARY KEY,
+      id_producto INTEGER NOT NULL,
+      cantidad INTEGER NOT NULL DEFAULT 1,
+      motivo TEXT,
+      foto_path TEXT,
+      id_usuario INTEGER,
+      id_deposito INTEGER,
+      estado VARCHAR(50) DEFAULT 'pendiente',
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )
+  `);
+
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS baja_status_history (
+      id SERIAL PRIMARY KEY,
+      baja_id INTEGER NOT NULL,
+      estado_anterior VARCHAR(50),
+      estado_nuevo VARCHAR(50),
+      usuario_id INTEGER,
+      comentarios TEXT,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    )
+  `);
+
   const columnsRes = await client.query(`
     SELECT column_name
     FROM information_schema.columns
@@ -370,7 +396,7 @@ async function ensureBajaMovimientosSchema(client = pool) {
   return {
     createdColumn: columns.has('createdAt')
       ? '"createdAt"'
-      : (columns.has('created_at') ? 'created_at' : null),
+      : 'created_at',
   };
 }
 
