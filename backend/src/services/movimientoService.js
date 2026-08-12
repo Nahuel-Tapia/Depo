@@ -145,12 +145,25 @@ async function obtenerMovimiento(id) {
   `, [id]);
 }
 
+async function resolveDefaultDepositoId(client = pool) {
+  try {
+    const res = await client.query(
+      `SELECT id_deposito FROM deposito 
+       ORDER BY (CASE WHEN (tipo = 'central' OR tipo_deposito = 'central' OR nombre ILIKE '%central%') THEN 0 ELSE 1 END), id_deposito ASC 
+       LIMIT 1`
+    );
+    return res.rows[0]?.id_deposito || 1;
+  } catch {
+    return 1;
+  }
+}
+
 async function crearMovimiento(user, body) {
   if (user.role === "operador_escolar") {
     throw { status: 403, message: "No tenés permisos para realizar movimientos manuales" };
   }
 
-  const { producto_id, tipo, cantidad, motivo } = body;
+  const { producto_id, tipo, cantidad, motivo, id_deposito } = body;
 
   if (!producto_id || !tipo || !cantidad) {
     throw { status: 400, message: "Faltan campos obligatorios (producto_id, tipo, cantidad)" };
@@ -160,24 +173,77 @@ async function crearMovimiento(user, body) {
     throw { status: 400, message: `Tipo inválido. Valores válidos: ${TIPOS_MOVIMIENTO.join(", ")}` };
   }
 
-  const cantidadNum = parseInt(cantidad);
+  const cantidadNum = parseInt(cantidad, 10);
   if (isNaN(cantidadNum) || cantidadNum <= 0) {
     throw { status: 400, message: "La cantidad debe ser un número mayor a 0" };
   }
 
-  // Verificar que el producto existe
-  const producto = await get("SELECT * FROM producto WHERE id_producto = ?", [producto_id]);
-  if (!producto) {
-    throw { status: 404, message: "Producto no encontrado" };
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const prodRes = await client.query(
+      "SELECT id_producto, nombre, COALESCE(stock_actual, 0) AS stock_actual FROM producto WHERE id_producto = $1",
+      [producto_id]
+    );
+    const producto = prodRes.rows[0];
+    if (!producto) {
+      throw { status: 404, message: "Producto no encontrado" };
+    }
+
+    const depositoId = id_deposito ? parseInt(id_deposito, 10) : await resolveDefaultDepositoId(client);
+
+    if (tipo === "egreso") {
+      if (Number(producto.stock_actual) < cantidadNum) {
+        throw { status: 400, message: `Stock insuficiente para ${producto.nombre}. Stock actual: ${producto.stock_actual}` };
+      }
+      if (depositoId) {
+        const sdRes = await client.query(
+          "SELECT COALESCE(cantidad, 0) as cantidad FROM stock_deposito WHERE id_deposito = $1 AND id_producto = $2",
+          [depositoId, producto_id]
+        );
+        const sdQty = Number(sdRes.rows[0]?.cantidad || 0);
+        if (sdQty < cantidadNum) {
+          throw { status: 400, message: `Stock insuficiente en depósito para ${producto.nombre}. Disponible: ${sdQty}` };
+        }
+        await client.query(
+          "UPDATE stock_deposito SET cantidad = cantidad - $1 WHERE id_deposito = $2 AND id_producto = $3",
+          [cantidadNum, depositoId, producto_id]
+        );
+      }
+      await client.query(
+        "UPDATE producto SET stock_actual = COALESCE(stock_actual, 0) - $1 WHERE id_producto = $2",
+        [cantidadNum, producto_id]
+      );
+    } else if (tipo === "ingreso") {
+      if (depositoId) {
+        await client.query(
+          `INSERT INTO stock_deposito (id_deposito, id_producto, cantidad)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (id_deposito, id_producto)
+           DO UPDATE SET cantidad = stock_deposito.cantidad + $3`,
+          [depositoId, producto_id, cantidadNum]
+        );
+      }
+      await client.query(
+        "UPDATE producto SET stock_actual = COALESCE(stock_actual, 0) + $1 WHERE id_producto = $2",
+        [cantidadNum, producto_id]
+      );
+    }
+
+    const result = await client.query(
+      "INSERT INTO movimiento_stock (id_producto, tipo, cantidad, id_usuario, motivo, id_deposito, fecha_movimiento) VALUES ($1, $2, $3, $4, $5, $6, NOW()) RETURNING id_movimiento",
+      [producto_id, tipo, cantidadNum, user.sub, motivo || null, depositoId]
+    );
+
+    await client.query("COMMIT");
+    return result.rows[0].id_movimiento;
+  } catch (err) {
+    try { await client.query("ROLLBACK"); } catch (_) {}
+    throw err;
+  } finally {
+    client.release();
   }
-
-  // Registrar movimiento
-  const result = await run(
-    "INSERT INTO movimiento_stock (id_producto, tipo, cantidad, id_usuario, motivo) VALUES (?, ?, ?, ?, ?)",
-    [producto_id, tipo, cantidadNum, user.sub, motivo || null]
-  );
-
-  return result.lastID;
 }
 
 async function crearLoteMovimientos(user, body) {
@@ -185,7 +251,7 @@ async function crearLoteMovimientos(user, body) {
     throw { status: 403, message: "No tenés permisos para realizar movimientos manuales" };
   }
 
-  const { tipo, motivo } = body;
+  const { tipo, motivo, id_deposito } = body;
   const movimientos = body.movimientos || body.items;
 
   if (!tipo || !movimientos || !Array.isArray(movimientos) || movimientos.length === 0) {
@@ -196,33 +262,83 @@ async function crearLoteMovimientos(user, body) {
     throw { status: 400, message: `Tipo inválido. Valores válidos: ${TIPOS_MOVIMIENTO.join(", ")}` };
   }
 
-  // Validar cada movimiento
-  for (const mov of movimientos) {
-    if (!mov.producto_id || !mov.cantidad) {
-      throw { status: 400, message: "Cada movimiento debe tener producto_id y cantidad" };
-    }
-    const cantidadNum = parseInt(mov.cantidad);
-    if (isNaN(cantidadNum) || cantidadNum <= 0) {
-      throw { status: 400, message: "La cantidad debe ser un número mayor a 0" };
-    }
-    // Verificar que el producto existe
-    const producto = await get("SELECT * FROM producto WHERE id_producto = ?", [mov.producto_id]);
-    if (!producto) {
-      throw { status: 404, message: `Producto con id ${mov.producto_id} no encontrado` };
-    }
-  }
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const depositoId = id_deposito ? parseInt(id_deposito, 10) : await resolveDefaultDepositoId(client);
+    const ids = [];
 
-  // Insertar movimientos
-  const ids = [];
-  for (const mov of movimientos) {
-    const result = await run(
-      "INSERT INTO movimiento_stock (id_producto, tipo, cantidad, id_usuario, motivo) VALUES (?, ?, ?, ?, ?)",
-      [mov.producto_id, tipo, parseInt(mov.cantidad), user.sub, motivo || null]
-    );
-    ids.push(result.lastID);
-  }
+    for (const mov of movimientos) {
+      if (!mov.producto_id || !mov.cantidad) {
+        throw { status: 400, message: "Cada movimiento debe tener producto_id y cantidad" };
+      }
+      const cantidadNum = parseInt(mov.cantidad, 10);
+      if (isNaN(cantidadNum) || cantidadNum <= 0) {
+        throw { status: 400, message: "La cantidad debe ser un número mayor a 0" };
+      }
 
-  return ids;
+      const prodRes = await client.query(
+        "SELECT id_producto, nombre, COALESCE(stock_actual, 0) AS stock_actual FROM producto WHERE id_producto = $1",
+        [mov.producto_id]
+      );
+      const producto = prodRes.rows[0];
+      if (!producto) {
+        throw { status: 404, message: `Producto con id ${mov.producto_id} no encontrado` };
+      }
+
+      if (tipo === "egreso") {
+        if (Number(producto.stock_actual) < cantidadNum) {
+          throw { status: 400, message: `Stock insuficiente para ${producto.nombre}. Stock actual: ${producto.stock_actual}` };
+        }
+        if (depositoId) {
+          const sdRes = await client.query(
+            "SELECT COALESCE(cantidad, 0) as cantidad FROM stock_deposito WHERE id_deposito = $1 AND id_producto = $2",
+            [depositoId, mov.producto_id]
+          );
+          const sdQty = Number(sdRes.rows[0]?.cantidad || 0);
+          if (sdQty < cantidadNum) {
+            throw { status: 400, message: `Stock insuficiente en depósito para ${producto.nombre}. Disponible: ${sdQty}` };
+          }
+          await client.query(
+            "UPDATE stock_deposito SET cantidad = cantidad - $1 WHERE id_deposito = $2 AND id_producto = $3",
+            [cantidadNum, depositoId, mov.producto_id]
+          );
+        }
+        await client.query(
+          "UPDATE producto SET stock_actual = COALESCE(stock_actual, 0) - $1 WHERE id_producto = $2",
+          [cantidadNum, mov.producto_id]
+        );
+      } else if (tipo === "ingreso") {
+        if (depositoId) {
+          await client.query(
+            `INSERT INTO stock_deposito (id_deposito, id_producto, cantidad)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (id_deposito, id_producto)
+             DO UPDATE SET cantidad = stock_deposito.cantidad + $3`,
+            [depositoId, mov.producto_id, cantidadNum]
+          );
+        }
+        await client.query(
+          "UPDATE producto SET stock_actual = COALESCE(stock_actual, 0) + $1 WHERE id_producto = $2",
+          [cantidadNum, mov.producto_id]
+        );
+      }
+
+      const result = await client.query(
+        "INSERT INTO movimiento_stock (id_producto, tipo, cantidad, id_usuario, motivo, id_deposito, fecha_movimiento) VALUES ($1, $2, $3, $4, $5, $6, NOW()) RETURNING id_movimiento",
+        [mov.producto_id, tipo, cantidadNum, user.sub, motivo || null, depositoId]
+      );
+      ids.push(result.rows[0].id_movimiento);
+    }
+
+    await client.query("COMMIT");
+    return ids;
+  } catch (err) {
+    try { await client.query("ROLLBACK"); } catch (_) {}
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 async function crearMovimientoDirecto(user, body) {
@@ -230,7 +346,7 @@ async function crearMovimientoDirecto(user, body) {
     throw { status: 403, message: "No tenés permisos para realizar movimientos manuales" };
   }
 
-  const { tipo, institucion_id, cargo_retira, proveedor_id, motivo, productos } = body;
+  const { tipo, institucion_id, cargo_retira, proveedor_id, motivo, productos, id_deposito } = body;
 
   if (!tipo || !productos || !Array.isArray(productos) || productos.length === 0) {
     throw { status: 400, message: "Faltan campos obligatorios (tipo, productos array)" };
@@ -255,20 +371,16 @@ async function crearMovimientoDirecto(user, body) {
     if (!prod.producto_id || !prod.cantidad) {
       throw { status: 400, message: "Cada producto debe tener producto_id, cantidad y estado" };
     }
-    const cantidadNum = parseInt(prod.cantidad);
+    const cantidadNum = parseInt(prod.cantidad, 10);
     if (isNaN(cantidadNum) || cantidadNum <= 0) {
       throw { status: 400, message: "La cantidad debe ser un número mayor a 0" };
-    }
-    // Verificar que el producto existe
-    const producto = await get("SELECT * FROM producto WHERE id_producto = ?", [prod.producto_id]);
-    if (!producto) {
-      throw { status: 404, message: `Producto con id ${prod.producto_id} no encontrado` };
     }
   }
 
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    const depositoId = id_deposito ? parseInt(id_deposito, 10) : await resolveDefaultDepositoId(client);
 
     // Insertar movimientos y actualizar stock
     const ids = [];
@@ -285,17 +397,54 @@ async function crearMovimientoDirecto(user, body) {
         throw { status: 404, message: `Producto con id ${prod.producto_id} no encontrado` };
       }
 
-      if (tipo === "egreso" && Number(producto.stock_actual) < cantidadNum) {
-        throw {
-          status: 400,
-          message: `Stock insuficiente para ${producto.nombre}. Stock actual: ${producto.stock_actual}, solicitado: ${cantidadNum}`
-        };
+      if (tipo === "egreso") {
+        if (Number(producto.stock_actual) < cantidadNum) {
+          throw {
+            status: 400,
+            message: `Stock insuficiente para ${producto.nombre}. Stock actual: ${producto.stock_actual}, solicitado: ${cantidadNum}`
+          };
+        }
+        if (depositoId) {
+          const sdRes = await client.query(
+            "SELECT COALESCE(cantidad, 0) as cantidad FROM stock_deposito WHERE id_deposito = $1 AND id_producto = $2",
+            [depositoId, prod.producto_id]
+          );
+          const sdQty = Number(sdRes.rows[0]?.cantidad || 0);
+          if (sdQty < cantidadNum) {
+            throw {
+              status: 400,
+              message: `Stock insuficiente en depósito para ${producto.nombre}. Disponible en depósito: ${sdQty}, solicitado: ${cantidadNum}`
+            };
+          }
+          await client.query(
+            "UPDATE stock_deposito SET cantidad = cantidad - $1 WHERE id_deposito = $2 AND id_producto = $3",
+            [cantidadNum, depositoId, prod.producto_id]
+          );
+        }
+        await client.query(
+          "UPDATE producto SET stock_actual = COALESCE(stock_actual, 0) - $1 WHERE id_producto = $2",
+          [cantidadNum, prod.producto_id]
+        );
+      } else if (tipo === "ingreso") {
+        if (depositoId) {
+          await client.query(
+            `INSERT INTO stock_deposito (id_deposito, id_producto, cantidad)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (id_deposito, id_producto)
+             DO UPDATE SET cantidad = stock_deposito.cantidad + $3`,
+            [depositoId, prod.producto_id, cantidadNum]
+          );
+        }
+        await client.query(
+          "UPDATE producto SET stock_actual = COALESCE(stock_actual, 0) + $1 WHERE id_producto = $2",
+          [cantidadNum, prod.producto_id]
+        );
       }
 
       const movRes = await client.query(
         `INSERT INTO movimiento_stock
-          (id_producto, tipo, cantidad, estado_producto, cargo_retira, id_institucion, id_proveedor, id_usuario, motivo, fecha_movimiento)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+          (id_producto, tipo, cantidad, estado_producto, cargo_retira, id_institucion, id_proveedor, id_usuario, motivo, id_deposito, fecha_movimiento)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
          RETURNING id_movimiento`,
         [
           prod.producto_id,
@@ -304,23 +453,12 @@ async function crearMovimientoDirecto(user, body) {
           prod.estado,
           tipo === "egreso" ? cargo_retira : null,
           tipo === "egreso" ? institucion_id : null,
-          tipo === "ingreso" ? proveedor_id : null,
+          tipo === "ingreso" ? (proveedor_id ? parseInt(proveedor_id, 10) : null) : null,
           user.sub,
-          motivo || null
+          motivo || null,
+          depositoId
         ]
       );
-
-      if (tipo === "ingreso") {
-        await client.query(
-          "UPDATE producto SET stock_actual = COALESCE(stock_actual, 0) + $1 WHERE id_producto = $2",
-          [cantidadNum, prod.producto_id]
-        );
-      } else if (tipo === "egreso") {
-        await client.query(
-          "UPDATE producto SET stock_actual = COALESCE(stock_actual, 0) - $1 WHERE id_producto = $2",
-          [cantidadNum, prod.producto_id]
-        );
-      }
 
       ids.push(movRes.rows[0].id_movimiento);
     }
