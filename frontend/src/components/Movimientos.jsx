@@ -43,6 +43,14 @@ export default function Movimientos() {
   const [filterUsuario, setFilterUsuario] = useState('')
   const [filterProveedor, setFilterProveedor] = useState('')
 
+  // Historial tab
+  const [historialTab, setHistorialTab] = useState('movimientos') // 'movimientos' | 'bajas'
+  const [bajas, setBajas] = useState([])
+  const [filterBajaDesde, setFilterBajaDesde] = useState('')
+  const [filterBajaHasta, setFilterBajaHasta] = useState('')
+  const [filterBajaDeposito, setFilterBajaDeposito] = useState('')
+  const [fotoModalUrl, setFotoModalUrl] = useState(null)
+
   // Depositos
   const [ingresoDeposito, setIngresoDeposito] = useState('')
   const [egresoDeposito, setEgresoDeposito] = useState('')
@@ -111,12 +119,33 @@ export default function Movimientos() {
     } catch { /* ignore */ }
   }
 
+  const loadBajas = async (opts = {}) => {
+    try {
+      const q = new URLSearchParams()
+      const desdeVal = opts.desde ?? filterBajaDesde
+      const hastaVal = opts.hasta ?? filterBajaHasta
+      const depVal = opts.id_deposito ?? filterBajaDeposito
+
+      if (desdeVal) q.append('desde', desdeVal)
+      if (hastaVal) q.append('hasta', hastaVal)
+      if (depVal) q.append('id_deposito', depVal)
+
+      const qs = q.toString() ? `?${q.toString()}` : ''
+      const res = await apiFetch(`/api/movimientos/bajas${qs}`, { token })
+      if (res.ok) {
+        const data = await res.json()
+        setBajas(data.bajas || [])
+      }
+    } catch { /* ignore */ }
+  }
+
   useEffect(() => {
     loadProductos()
     loadMovimientos()
     loadInstituciones()
     loadDepositos()
     loadProveedores()
+    loadBajas()
   }, [])
 
   useEffect(() => {
@@ -951,136 +980,291 @@ return (
     )}
 
     <div ref={printRef} style={{ marginTop: 20, overflowX: 'auto' }}>
-      <h3>Lista de Movimientos</h3>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
-        <div>
-          <label style={{ display: 'block', fontSize: '0.8rem' }}>Desde</label>
-          <input type="date" value={filterDesde} onChange={e => setFilterDesde(e.target.value)} />
-        </div>
-        <div>
-          <label style={{ display: 'block', fontSize: '0.8rem' }}>Hasta</label>
-          <input type="date" value={filterHasta} onChange={e => setFilterHasta(e.target.value)} />
-        </div>
-        <div>
-          <label style={{ display: 'block', fontSize: '0.8rem' }}>Tipo</label>
-          <select value={filterTipo} onChange={e => setFilterTipo(e.target.value)}>
-            <option value="">Todos</option>
-            <option value="ingreso">Ingreso</option>
-            <option value="egreso">Egreso</option>
-            <option value="ajuste">Ajuste</option>
-            <option value="devolucion">Devolución</option>
-          </select>
-        </div>
-        <div>
-          <label style={{ display: 'block', fontSize: '0.8rem' }}>Usuario</label>
-          <input placeholder="Nombre o id" value={filterUsuario} onChange={e => setFilterUsuario(e.target.value)} />
-        </div>
-        <div>
-          <label style={{ display: 'block', fontSize: '0.8rem' }}>Proveedor</label>
-          <input placeholder="Nombre o id" value={filterProveedor} onChange={e => setFilterProveedor(e.target.value)} />
-        </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
-          <button type="button" onClick={() => loadMovimientos()}>Buscar</button>
-          <button type="button" onClick={() => { setFilterDesde(''); setFilterHasta(''); setFilterTipo(''); setFilterUsuario(''); setFilterProveedor(''); loadMovimientos({}) }} className="secondary">Limpiar</button>
+      <h3>Historial de Movimientos</h3>
+
+      {/* ===== TABS ===== */}
+      <div style={{ display: 'flex', gap: 0, marginBottom: 16, borderBottom: '2px solid #e5e7eb' }}>
+        <button
+          type="button"
+          onClick={() => { setHistorialTab('movimientos'); loadMovimientos() }}
+          style={{
+            padding: '10px 20px',
+            border: 'none',
+            borderBottom: historialTab === 'movimientos' ? '3px solid #2563eb' : '3px solid transparent',
+            background: historialTab === 'movimientos' ? '#eff6ff' : 'transparent',
+            color: historialTab === 'movimientos' ? '#1d4ed8' : '#6b7280',
+            fontWeight: historialTab === 'movimientos' ? 700 : 500,
+            cursor: 'pointer',
+            fontSize: '0.95rem',
+            transition: 'all 0.2s',
+            borderRadius: '8px 8px 0 0',
+          }}
+        >
+          📦 Ingresos / Egresos
+        </button>
+        <button
+          type="button"
+          onClick={() => { setHistorialTab('bajas'); loadBajas() }}
+          style={{
+            padding: '10px 20px',
+            border: 'none',
+            borderBottom: historialTab === 'bajas' ? '3px solid #dc2626' : '3px solid transparent',
+            background: historialTab === 'bajas' ? '#fef2f2' : 'transparent',
+            color: historialTab === 'bajas' ? '#dc2626' : '#6b7280',
+            fontWeight: historialTab === 'bajas' ? 700 : 500,
+            cursor: 'pointer',
+            fontSize: '0.95rem',
+            transition: 'all 0.2s',
+            borderRadius: '8px 8px 0 0',
+          }}
+        >
+          🔻 Bajas
+        </button>
+      </div>
+
+      {/* ===== TAB: MOVIMIENTOS ===== */}
+      {historialTab === 'movimientos' && (
+        <>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.8rem' }}>Desde</label>
+              <input type="date" value={filterDesde} onChange={e => setFilterDesde(e.target.value)} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.8rem' }}>Hasta</label>
+              <input type="date" value={filterHasta} onChange={e => setFilterHasta(e.target.value)} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.8rem' }}>Tipo</label>
+              <select value={filterTipo} onChange={e => setFilterTipo(e.target.value)}>
+                <option value="">Todos</option>
+                <option value="ingreso">Ingreso</option>
+                <option value="egreso">Egreso</option>
+                <option value="ajuste">Ajuste</option>
+                <option value="devolucion">Devolución</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.8rem' }}>Usuario</label>
+              <input placeholder="Nombre o id" value={filterUsuario} onChange={e => setFilterUsuario(e.target.value)} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.8rem' }}>Proveedor</label>
+              <input placeholder="Nombre o id" value={filterProveedor} onChange={e => setFilterProveedor(e.target.value)} />
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+              <button type="button" onClick={() => loadMovimientos()}>Buscar</button>
+              <button type="button" onClick={() => { setFilterDesde(''); setFilterHasta(''); setFilterTipo(''); setFilterUsuario(''); setFilterProveedor(''); loadMovimientos({}) }} className="secondary">Limpiar</button>
+            </div>
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th>Nº Movimiento</th>
+                <th>Tipo</th>
+                <th>Cantidad</th>
+                <th>Estado</th>
+                <th>Motivo</th>
+                <th>Proveedor</th>
+                <th>Registrado por</th>
+                <th>Fecha</th>
+                <th style={{ textAlign: 'center' }}>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(() => {
+                const grouped = [];
+                let currentGroup = null;
+
+                movimientos.forEach((m) => {
+                  const timeStr = m.created_at ? new Date(m.created_at).toISOString().slice(0, 16) : '';
+                  const key = `${m.tipo}|${m.motivo || ''}|${m.institucion_nombre || ''}|${m.cargo_retira || ''}|${m.usuario_nombre || ''}|${timeStr}`;
+
+                  if (currentGroup && currentGroup.key === key) {
+                    currentGroup.items.push(m);
+                  } else {
+                    currentGroup = { key, items: [m] };
+                    grouped.push(currentGroup);
+                  }
+                });
+
+                return grouped.map((group, i) => {
+                  const first = group.items[0];
+                  const institucionCargo = first.institucion_nombre && first.cargo_retira
+                    ? `${first.institucion_nombre} (${first.cargo_retira})`
+                    : first.institucion_nombre || first.cargo_retira || '-';
+
+                  const isMulti = group.items.length > 1;
+                  const proveedoresResumen = [...new Set(group.items.map(item => item.proveedor_nombre).filter(Boolean))];
+
+                  const uniqueEstados = [...new Set(group.items.map(item => item.estado_producto).filter(Boolean))];
+                  const estadoDisplay = uniqueEstados.length === 1 ? uniqueEstados[0] : (uniqueEstados.length > 1 ? 'Varios' : '-');
+
+                  const totalCantidad = group.items.reduce((sum, item) => sum + Number(item.cantidad || 0), 0);
+
+                  let proveedorDisplay = '-';
+                  if (first.tipo === 'egreso') {
+                    proveedorDisplay = first.institucion_nombre || '-';
+                  } else if (first.tipo === 'ingreso') {
+                    proveedorDisplay = proveedoresResumen.length > 0 ? proveedoresResumen.join(', ') : 'Sin proveedor';
+                  } else {
+                    proveedorDisplay = proveedoresResumen.length > 0 ? proveedoresResumen.join(', ') : '-';
+                  }
+
+                  return (
+                    <tr key={first.id || i}>
+                      <td>{`#${first.id}`}</td>
+                      <td><span className={`badge badge-${first.tipo}`}>{first.tipo}</span></td>
+                      <td>{isMulti ? totalCantidad : first.cantidad}</td>
+                      <td>{estadoDisplay}</td>
+                      <td>{first.motivo || '-'}</td>
+                      <td>{proveedorDisplay}</td>
+                      <td>{first.usuario_nombre || '-'}</td>
+                      <td>{first.created_at ? new Date(first.created_at).toLocaleDateString() : '-'}</td>
+                      <td style={{ textAlign: 'center' }}>
+                        <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+                          <button
+                            type="button"
+                            className="secondary"
+                            onClick={() => handlePrintMovimiento(group.items)}
+                            title="Imprimir movimiento"
+                            aria-label="Imprimir movimiento"
+                            style={{ width: 'auto', margin: 0, minWidth: 36, padding: '6px 10px' }}
+                          >
+                            🖨️
+                          </button>
+                          <button
+                            type="button"
+                            className="secondary"
+                            onClick={() => { setDetalleData({ proveedor: proveedoresResumen.length > 0 ? proveedoresResumen.join(', ') : (first.tipo === 'egreso' ? first.institucion_nombre : null), deposito: first.deposito_nombre, institucion: institucionCargo, productos: group.items }); setDetalleModalOpen(true) }}
+                            title="Ver detalle"
+                            aria-label="Ver detalle"
+                            style={{ width: 'auto', margin: 0, minWidth: 36, padding: '6px 10px' }}
+                          >
+                            🔍
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })
+              })()}
+            </tbody>
+          </table>
+        </>
+      )}
+
+      {/* ===== TAB: BAJAS ===== */}
+      {historialTab === 'bajas' && (
+        <>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.8rem' }}>Desde</label>
+              <input type="date" value={filterBajaDesde} onChange={e => setFilterBajaDesde(e.target.value)} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.8rem' }}>Hasta</label>
+              <input type="date" value={filterBajaHasta} onChange={e => setFilterBajaHasta(e.target.value)} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.8rem' }}>Depósito</label>
+              <select value={filterBajaDeposito} onChange={e => setFilterBajaDeposito(e.target.value)}>
+                <option value="">Todos</option>
+                {depositos.map(d => (
+                  <option key={d.id} value={d.id}>{d.nombre}</option>
+                ))}
+              </select>
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+              <button type="button" onClick={() => loadBajas()}>Buscar</button>
+              <button type="button" onClick={() => { setFilterBajaDesde(''); setFilterBajaHasta(''); setFilterBajaDeposito(''); loadBajas({}) }} className="secondary">Limpiar</button>
+            </div>
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th>Nº Baja</th>
+                <th>Producto</th>
+                <th>Cantidad</th>
+                <th>Motivo</th>
+                <th>Estado</th>
+                <th>Depósito</th>
+                <th>Foto</th>
+                <th>Registrado por</th>
+                <th>Fecha</th>
+              </tr>
+            </thead>
+            <tbody>
+              {bajas.length === 0 ? (
+                <tr><td colSpan={9} style={{ textAlign: 'center', padding: 20, color: '#9ca3af' }}>No se encontraron bajas</td></tr>
+              ) : bajas.map((b, i) => {
+                const estadoColors = {
+                  pendiente: { bg: '#fef9c3', color: '#92400e', border: '#fde68a' },
+                  aprobada: { bg: '#dcfce7', color: '#166534', border: '#bbf7d0' },
+                  rechazada: { bg: '#fee2e2', color: '#991b1b', border: '#fecaca' },
+                }
+                const ec = estadoColors[b.estado] || { bg: '#f3f4f6', color: '#374151', border: '#e5e7eb' }
+                return (
+                  <tr key={b.id || i}>
+                    <td>{`#${b.id}`}</td>
+                    <td>{b.producto_nombre || '-'}</td>
+                    <td>{b.cantidad}</td>
+                    <td style={{ maxWidth: 200, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={b.motivo || ''}>{b.motivo || '-'}</td>
+                    <td>
+                      <span style={{
+                        display: 'inline-block',
+                        padding: '3px 10px',
+                        borderRadius: 12,
+                        fontSize: '0.8rem',
+                        fontWeight: 600,
+                        background: ec.bg,
+                        color: ec.color,
+                        border: `1px solid ${ec.border}`,
+                      }}>
+                        {b.estado ? b.estado.charAt(0).toUpperCase() + b.estado.slice(1) : '-'}
+                      </span>
+                    </td>
+                    <td>{b.deposito_nombre || '-'}</td>
+                    <td style={{ textAlign: 'center' }}>
+                      {b.foto_path ? (
+                        <button
+                          type="button"
+                          className="secondary"
+                          onClick={() => setFotoModalUrl(`${window.location.origin.replace(':5173', ':3000')}${b.foto_path}`)}
+                          style={{ width: 'auto', margin: 0, padding: '4px 10px', fontSize: '0.8rem' }}
+                        >
+                          📷 Ver
+                        </button>
+                      ) : (
+                        <span style={{ color: '#9ca3af' }}>—</span>
+                      )}
+                    </td>
+                    <td>{b.usuario_nombre || '-'}</td>
+                    <td>{b.created_at ? new Date(b.created_at).toLocaleDateString() : '-'}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </>
+      )}
+    </div>
+
+    {/* Modal foto baja */}
+    {fotoModalUrl && (
+      <div
+        style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200 }}
+        onClick={() => setFotoModalUrl(null)}
+      >
+        <div style={{ background: '#fff', padding: 16, borderRadius: 10, maxWidth: '90vw', maxHeight: '90vh' }} onClick={e => e.stopPropagation()}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <strong>Foto de la Baja</strong>
+            <button type="button" className="secondary" onClick={() => setFotoModalUrl(null)} style={{ margin: 0, padding: '4px 10px' }}>✕</button>
+          </div>
+          <img src={fotoModalUrl} alt="Foto de baja" style={{ maxWidth: '80vw', maxHeight: '70vh', objectFit: 'contain', borderRadius: 6 }} />
         </div>
       </div>
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead>
-          <tr>
-            <th>Nº Movimiento</th>
-            <th>Tipo</th>
-            <th>Cantidad</th>
-            <th>Estado</th>
-            <th>Motivo</th>
-            <th>Proveedor</th>
-            <th>Registrado por</th>
-            <th>Fecha</th>
-            <th style={{ textAlign: 'center' }}>Acciones</th>
-          </tr>
-        </thead>
-        <tbody>
-          {(() => {
-            const grouped = [];
-            let currentGroup = null;
-
-            // Sort is done by backend (usually DESC). We iterate and group adjacent or identical transaction rows.
-            movimientos.forEach((m) => {
-              // Create a grouping key based on the transaction metadata
-              const timeStr = m.created_at ? new Date(m.created_at).toISOString().slice(0, 16) : '';
-              const key = `${m.tipo}|${m.motivo || ''}|${m.institucion_nombre || ''}|${m.cargo_retira || ''}|${m.usuario_nombre || ''}|${timeStr}`;
-
-              if (currentGroup && currentGroup.key === key) {
-                currentGroup.items.push(m);
-              } else {
-                currentGroup = { key, items: [m] };
-                grouped.push(currentGroup);
-              }
-            });
-
-            return grouped.map((group, i) => {
-              const first = group.items[0];
-              const institucionCargo = first.institucion_nombre && first.cargo_retira
-                ? `${first.institucion_nombre} (${first.cargo_retira})`
-                : first.institucion_nombre || first.cargo_retira || '-';
-
-              const isMulti = group.items.length > 1;
-              const proveedoresResumen = [...new Set(group.items.map(item => item.proveedor_nombre).filter(Boolean))];
-
-              const uniqueEstados = [...new Set(group.items.map(item => item.estado_producto).filter(Boolean))];
-              const estadoDisplay = uniqueEstados.length === 1 ? uniqueEstados[0] : (uniqueEstados.length > 1 ? 'Varios' : '-');
-
-              const totalCantidad = group.items.reduce((sum, item) => sum + Number(item.cantidad || 0), 0);
-
-              let proveedorDisplay = '-';
-              if (first.tipo === 'egreso') {
-                proveedorDisplay = first.institucion_nombre || '-';
-              } else if (first.tipo === 'ingreso') {
-                proveedorDisplay = proveedoresResumen.length > 0 ? proveedoresResumen.join(', ') : 'Sin proveedor';
-              } else {
-                proveedorDisplay = proveedoresResumen.length > 0 ? proveedoresResumen.join(', ') : '-';
-              }
-
-              return (
-                <tr key={first.id || i}>
-                  <td>{`#${first.id}`}</td>
-                  <td><span className={`badge badge-${first.tipo}`}>{first.tipo}</span></td>
-                  <td>{isMulti ? totalCantidad : first.cantidad}</td>
-                  <td>{estadoDisplay}</td>
-                  <td>{first.motivo || '-'}</td>
-                  <td>{proveedorDisplay}</td>
-                  <td>{first.usuario_nombre || '-'}</td>
-                  <td>{first.created_at ? new Date(first.created_at).toLocaleDateString() : '-'}</td>
-                  <td style={{ textAlign: 'center' }}>
-                    <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
-                      <button
-                        type="button"
-                        className="secondary"
-                        onClick={() => handlePrintMovimiento(group.items)}
-                        title="Imprimir movimiento"
-                        aria-label="Imprimir movimiento"
-                        style={{ width: 'auto', margin: 0, minWidth: 36, padding: '6px 10px' }}
-                      >
-                        🖨️
-                      </button>
-                      <button
-                        type="button"
-                        className="secondary"
-                        onClick={() => { setDetalleData({ proveedor: proveedoresResumen.length > 0 ? proveedoresResumen.join(', ') : (first.tipo === 'egreso' ? first.institucion_nombre : null), deposito: first.deposito_nombre, institucion: institucionCargo, productos: group.items }); setDetalleModalOpen(true) }}
-                        title="Ver detalle"
-                        aria-label="Ver detalle"
-                        style={{ width: 'auto', margin: 0, minWidth: 36, padding: '6px 10px' }}
-                      >
-                        🔍
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              )
-            }) // closes map
-          })()}
-        </tbody>
-      </table>
-    </div>
+    )}
     {/* Detalle modal */}
     {detalleModalOpen && detalleData && (
       <div
