@@ -70,7 +70,7 @@ export default function PrintButton({ targetRef, title }) {
         cursor: 'pointer',
       }}
     >
-      🖨️ Imprimir
+      Imprimir
     </button>
   )
 }

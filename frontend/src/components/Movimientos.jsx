@@ -526,28 +526,25 @@ return (
             <button
               type="button"
               className="mov-action-btn"
-              style={{ width: 'auto', margin: 0, padding: '14px 22px', fontSize: '1rem' }}
+              style={{ width: 'auto', margin: 0, padding: '10px 18px', fontSize: '0.95rem' }}
               onClick={() => { setEgresoModalOpen(true); setMsg({ text: '', type: '' }) }}
             >
-              <span aria-hidden="true" style={{ marginRight: 8, fontSize: '1.2rem' }}>📦⬆️</span>
               Egreso
             </button>
             <button
               type="button"
               className="mov-action-btn"
-              style={{ width: 'auto', margin: 0, padding: '14px 22px', fontSize: '1rem' }}
+              style={{ width: 'auto', margin: 0, padding: '10px 18px', fontSize: '0.95rem' }}
               onClick={() => { setIngresoModalOpen(true); setMsg({ text: '', type: '' }) }}
             >
-              <span aria-hidden="true" style={{ marginRight: 8, fontSize: '1.2rem' }}>📦⬇️</span>
               Ingreso
             </button>
             <button
               type="button"
               className="mov-action-btn"
-              style={{ width: 'auto', margin: 0, padding: '14px 22px', fontSize: '1rem' }}
+              style={{ width: 'auto', margin: 0, padding: '10px 18px', fontSize: '0.95rem' }}
               onClick={() => { setRetirarPedidoModalOpen(true); setMsg({ text: '', type: '' }) }}
             >
-              <span aria-hidden="true" style={{ marginRight: 8, fontSize: '1.2rem' }}>📋📦</span>
               Retirar Pedido Anual
             </button>
           </>
@@ -1000,7 +997,7 @@ return (
             borderRadius: '8px 8px 0 0',
           }}
         >
-          📦 Ingresos / Egresos
+          Ingresos / Egresos
         </button>
         <button
           type="button"
@@ -1018,7 +1015,7 @@ return (
             borderRadius: '8px 8px 0 0',
           }}
         >
-          🔻 Bajas
+          Bajas
         </button>
       </div>
 
@@ -1135,7 +1132,7 @@ return (
                             aria-label="Imprimir movimiento"
                             style={{ width: 'auto', margin: 0, minWidth: 36, padding: '6px 10px' }}
                           >
-                            🖨️
+                            Imprimir
                           </button>
                           <button
                             type="button"
@@ -1145,7 +1142,7 @@ return (
                             aria-label="Ver detalle"
                             style={{ width: 'auto', margin: 0, minWidth: 36, padding: '6px 10px' }}
                           >
-                            🔍
+                            Detalle
                           </button>
                         </div>
                       </td>

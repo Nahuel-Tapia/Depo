@@ -625,7 +625,7 @@ export default function RecepcionLicitacion() {
                         <td>{r.usuario_nombre || '-'}</td>
                         <td style={{ textAlign: 'center' }}>
                           <button className="secondary" onClick={() => openDetalleRemito(r)} style={{ padding: '4px 10px', fontSize: '0.8rem' }}>
-                            🔍 Ver detalle
+                            Ver detalle
                           </button>
                         </td>
                       </tr>

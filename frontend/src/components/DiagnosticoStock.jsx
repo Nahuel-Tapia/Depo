@@ -92,7 +92,7 @@ export default function DiagnosticoStock() {
             disabled={loading || reconciliando}
             style={{ width: 'auto', margin: 0 }}
           >
-            {loading ? 'Consultando...' : '🔍 Ejecutar Diagnóstico'}
+            {loading ? 'Consultando...' : 'Ejecutar Diagnóstico'}
           </button>
           {canReconcile && diagnostico && diagnostico.productos_inconsistentes > 0 && (
             <button

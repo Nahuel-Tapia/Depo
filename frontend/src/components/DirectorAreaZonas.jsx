@@ -617,7 +617,7 @@ export default function DirectorAreaZonas({ nivelEducativo }) {
         {/* Columna Derecha: Listado de Zonas Registradas */}
         <section style={{ border: '1px solid var(--border)', borderRadius: 16, padding: 28, background: '#fff', boxShadow: 'var(--shadow-premium)' }}>
           <h3 style={{ marginBottom: 20, fontSize: '1.25rem', borderBottom: '1px solid #f1f5f9', paddingBottom: 12 }}>
-            📋 Zonas Registradas ({zonas.length})
+            Zonas Registradas ({zonas.length})
           </h3>
 
           {zonas.length === 0 ? (
