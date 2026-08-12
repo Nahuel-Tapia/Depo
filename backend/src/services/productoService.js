@@ -24,13 +24,13 @@ async function getProductos(user) {
         p.id_categoria,
         c.nombre as categoria_nombre,
         COALESCE(SUM(sd.cantidad), 0) as stock_total,
-        COALESCE(SUM(CASE WHEN d.tipo = 'central' THEN sd.cantidad ELSE 0 END), 0) as stock_central,
-        COALESCE(SUM(CASE WHEN d.tipo = 'centro_civico' THEN sd.cantidad ELSE 0 END), 0) as stock_centro_civico,
-        COALESCE(SUM(CASE WHEN d.tipo = 'capsula' THEN sd.cantidad ELSE 0 END), 0) as stock_capsula,
+        COALESCE(SUM(CASE WHEN COALESCE(d.tipo, d.tipo_deposito) = 'central' OR d.id_deposito = 1 THEN sd.cantidad ELSE 0 END), 0) as stock_central,
+        COALESCE(SUM(CASE WHEN COALESCE(d.tipo, d.tipo_deposito) = 'centro_civico' THEN sd.cantidad ELSE 0 END), 0) as stock_centro_civico,
+        COALESCE(SUM(CASE WHEN COALESCE(d.tipo, d.tipo_deposito) = 'capsula' THEN sd.cantidad ELSE 0 END), 0) as stock_capsula,
         CASE
-          WHEN COALESCE(SUM(CASE WHEN d.tipo = 'central' THEN sd.cantidad ELSE 0 END), 0) > 0 THEN 'Depósito Central'
-          WHEN COALESCE(SUM(CASE WHEN d.tipo = 'centro_civico' THEN sd.cantidad ELSE 0 END), 0) > 0 THEN 'Centro Cívico'
-          WHEN COALESCE(SUM(CASE WHEN d.tipo = 'capsula' THEN sd.cantidad ELSE 0 END), 0) > 0 THEN 'Cápsula'
+          WHEN COALESCE(SUM(CASE WHEN COALESCE(d.tipo, d.tipo_deposito) = 'central' OR d.id_deposito = 1 THEN sd.cantidad ELSE 0 END), 0) > 0 THEN 'Depósito Central'
+          WHEN COALESCE(SUM(CASE WHEN COALESCE(d.tipo, d.tipo_deposito) = 'centro_civico' THEN sd.cantidad ELSE 0 END), 0) > 0 THEN 'Centro Cívico'
+          WHEN COALESCE(SUM(CASE WHEN COALESCE(d.tipo, d.tipo_deposito) = 'capsula' THEN sd.cantidad ELSE 0 END), 0) > 0 THEN 'Cápsula'
           ELSE 'Depósito Central'
         END as deposito
       FROM producto p
@@ -61,7 +61,7 @@ async function getProductos(user) {
         p.stock_minimo,
         p.id_categoria,
         c.nombre as categoria_nombre,
-        0 as stock_central,
+        p.stock_actual as stock_central,
         0 as stock_centro_civico,
         0 as stock_capsula,
         'Depósito Central' as deposito

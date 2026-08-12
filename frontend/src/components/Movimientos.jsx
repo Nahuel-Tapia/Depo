@@ -127,21 +127,40 @@ export default function Movimientos() {
     setEgresoNivel(match?.nivel_educativo || '')
   }, [egresoInst, instituciones])
 
+  useEffect(() => {
+    if (egresoModalOpen && !egresoDeposito && depositos.length > 0) {
+      const central = depositos.find(d => (d.tipo || d.tipo_deposito) === 'central' || d.nombre?.toLowerCase().includes('central') || d.id == 1)
+      if (central) setEgresoDeposito(String(central.id))
+    }
+  }, [egresoModalOpen, depositos, egresoDeposito])
+
   const findProducto = (nombre) =>
-    productos.find(p => p.nombre.toLowerCase() === nombre.trim().toLowerCase())
+    productos.find(p => p.nombre.toLowerCase().trim() === (nombre || '').toLowerCase().trim())
 
   // Egreso handlers
   const addToEgreso = () => {
     const producto = findProducto(egresoItem.productoNombre)
-    if (!producto) return setMsg({ text: 'Seleccione un producto válido', type: 'error' })
-    const cantidad = parseInt(egresoItem.cantidad)
-    if (!cantidad || cantidad <= 0) return setMsg({ text: 'Ingrese una cantidad válida', type: 'error' })
+    if (!producto) return setMsg({ text: 'Seleccione un producto válido de la lista', type: 'error' })
+    
+    const stockDisp = Number(producto.stock_central ?? producto.stock_actual ?? 0)
+    if (stockDisp <= 0) {
+      return setMsg({ text: `🚨 ATENCIÓN: No hay stock disponible de "${producto.nombre}" en Depósito Central (Stock: 0)`, type: 'error' })
+    }
+
+    const cantidad = parseInt(egresoItem.cantidad, 10)
+    if (!cantidad || cantidad <= 0) return setMsg({ text: 'Ingrese una cantidad válida mayor a 0', type: 'error' })
+
+    if (cantidad > stockDisp) {
+      return setMsg({ text: `⚠️ La cantidad a egresar (${cantidad}) supera el stock disponible en Depósito Central (${stockDisp} ${producto.unidad_medida || 'unidades'})`, type: 'error' })
+    }
 
     setLoteEgreso(prev => [...prev, {
       producto_id: producto.id,
       nombre: producto.nombre,
       cantidad,
-      estado: egresoItem.estado
+      estado: egresoItem.estado,
+      stock_disponible: stockDisp,
+      unidad_medida: producto.unidad_medida || 'unidad'
     }])
     setEgresoItem({ productoNombre: '', cantidad: '', estado: 'nuevo' })
     setMsg({ text: '', type: '' })
@@ -641,10 +660,52 @@ return (
                         autoComplete="off"
                       />
                       <datalist id="egresoProductoList">
-                        {productos.map(p => (
-                          <option key={p.id} value={p.nombre}>{p.nombre}{p.marca ? ` - ${p.marca}` : ''} ({p.unidad_medida || 'unidad'})</option>
-                        ))}
+                        {productos.map(p => {
+                          const stockDisp = Number(p.stock_central ?? p.stock_actual ?? 0)
+                          const stockLabel = stockDisp > 0 ? `(Stock Central: ${stockDisp} ${p.unidad_medida || 'unidades'})` : '(⚠️ SIN STOCK Central)'
+                          return (
+                            <option key={p.id} value={p.nombre}>{p.nombre}{p.marca ? ` - ${p.marca}` : ''} {stockLabel}</option>
+                          )
+                        })}
                       </datalist>
+
+                      {(() => {
+                        const inputVal = egresoItem.productoNombre.trim()
+                        if (!inputVal) {
+                          return (
+                            <div style={{ marginTop: 6, fontSize: '0.8rem', color: '#6b7280' }}>
+                              ℹ️ Busque un producto para verificar su stock en Depósito Central.
+                            </div>
+                          )
+                        }
+                        const selectedProd = findProducto(inputVal)
+                        if (!selectedProd) {
+                          return (
+                            <div style={{ marginTop: 6, fontSize: '0.8rem', color: '#dc2626' }}>
+                              ⚠️ Producto no encontrado en el catálogo.
+                            </div>
+                          )
+                        }
+                        const stockDisp = Number(selectedProd.stock_central ?? selectedProd.stock_actual ?? 0)
+                        if (stockDisp > 0) {
+                          return (
+                            <div style={{ marginTop: 6, padding: '8px 12px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span style={{ fontSize: '1.1rem' }}>📦</span>
+                              <span style={{ fontSize: '0.85rem', color: '#166534', fontWeight: 600 }}>
+                                Stock disponible (Depósito Central): <strong>{stockDisp}</strong> {selectedProd.unidad_medida || 'unidades'}
+                              </span>
+                            </div>
+                          )
+                        }
+                        return (
+                          <div style={{ marginTop: 6, padding: '8px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: '1.1rem' }}>🚨</span>
+                            <span style={{ fontSize: '0.85rem', color: '#991b1b', fontWeight: 700 }}>
+                              ⚠️ ADVERTENCIA: No hay stock disponible en Depósito Central (0 {selectedProd.unidad_medida || 'unidades'})
+                            </span>
+                          </div>
+                        )
+                      })()}
                     </div>
                     <div>
                       <label>Cantidad</label>
@@ -677,7 +738,8 @@ return (
                       <thead>
                         <tr style={{ background: '#f0f0f0' }}>
                           <th style={{ border: '1px solid #ddd', padding: 8 }}>Producto</th>
-                          <th style={{ border: '1px solid #ddd', padding: 8 }}>Cantidad</th>
+                          <th style={{ border: '1px solid #ddd', padding: 8 }}>Stock Central</th>
+                          <th style={{ border: '1px solid #ddd', padding: 8 }}>Cantidad A Egresar</th>
                           <th style={{ border: '1px solid #ddd', padding: 8 }}>Estado</th>
                           <th style={{ border: '1px solid #ddd', padding: 8 }}>Acción</th>
                         </tr>
@@ -686,7 +748,8 @@ return (
                         {loteEgreso.map((item, idx) => (
                           <tr key={idx}>
                             <td style={{ border: '1px solid #ddd', padding: 8 }}>{item.nombre}</td>
-                            <td style={{ border: '1px solid #ddd', padding: 8 }}>{item.cantidad}</td>
+                            <td style={{ border: '1px solid #ddd', padding: 8, color: '#15803d', fontWeight: 600 }}>{item.stock_disponible} {item.unidad_medida}</td>
+                            <td style={{ border: '1px solid #ddd', padding: 8, fontWeight: 700 }}>{item.cantidad}</td>
                             <td style={{ border: '1px solid #ddd', padding: 8 }}>{item.estado}</td>
                             <td style={{ border: '1px solid #ddd', padding: 8 }}>
                               <button type="button" className="secondary" onClick={() => removeFromEgreso(idx)} style={{ margin: 0 }}>Remover</button>
@@ -762,10 +825,24 @@ return (
                         onChange={e => setIngresoItem({ ...ingresoItem, productoId: e.target.value })}
                       >
                         <option value="">Seleccionar producto...</option>
-                        {productos.map(p => (
-                          <option key={p.id} value={p.id}>{p.nombre}{p.marca ? ` - ${p.marca}` : ''} ({p.unidad_medida || 'unidad'})</option>
-                        ))}
+                        {productos.map(p => {
+                          const stockDisp = Number(p.stock_central ?? p.stock_actual ?? 0)
+                          const stockText = stockDisp > 0 ? `(Stock Central: ${stockDisp} ${p.unidad_medida || 'unidades'})` : '(⚠️ SIN STOCK Central)'
+                          return (
+                            <option key={p.id} value={p.id}>{p.nombre}{p.marca ? ` - ${p.marca}` : ''} {stockText}</option>
+                          )
+                        })}
                       </select>
+                      {(() => {
+                        const selectedProd = productos.find(p => String(p.id) === String(ingresoItem.productoId))
+                        if (!selectedProd) return null
+                        const stockDisp = Number(selectedProd.stock_central ?? selectedProd.stock_actual ?? 0)
+                        return (
+                          <div style={{ marginTop: 6, padding: '6px 10px', background: stockDisp === 0 ? '#fffbe6' : '#f0fdf4', border: `1px solid ${stockDisp === 0 ? '#ffe58f' : '#bbf7d0'}`, borderRadius: 6, fontSize: '0.82rem', color: stockDisp === 0 ? '#d48806' : '#166534', fontWeight: 600 }}>
+                            📦 Stock actual en Depósito Central: <strong>{stockDisp}</strong> {selectedProd.unidad_medida || 'unidades'} {stockDisp === 0 ? '⚠️ (Actualmente sin stock)' : ''}
+                          </div>
+                        )
+                      })()}
                     </div>
                     <div>
                       <label>Origen (Proveedor o Depósito)</label>
