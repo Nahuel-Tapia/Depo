@@ -1,5 +1,30 @@
 const { all, get, run, pool } = require("../db.pg");
 
+const columnExistsCache = new Map();
+
+async function columnExists(tableName, columnName) {
+  const cacheKey = `${tableName}.${columnName}`;
+  if (columnExistsCache.has(cacheKey)) return columnExistsCache.get(cacheKey);
+
+  try {
+    const row = await get(
+      `SELECT EXISTS (
+         SELECT 1
+         FROM information_schema.columns
+         WHERE table_schema = 'public'
+           AND table_name = $1
+           AND column_name = $2
+       ) AS column_exists`,
+      [tableName, columnName]
+    );
+    const exists = Boolean(row?.column_exists);
+    columnExistsCache.set(cacheKey, exists);
+    return exists;
+  } catch (err) {
+    return false;
+  }
+}
+
 async function hasTable(tableName) {
   const row = await get(`SELECT to_regclass($1) AS regclass`, [`public.${tableName}`]);
   return Boolean(row?.regclass);
@@ -7,10 +32,21 @@ async function hasTable(tableName) {
 
 async function getProductos(user) {
   const isEscolar = user.role === "operador_escolar";
-  const [hasStockDeposito, hasDeposito] = await Promise.all([
+  const [hasStockDeposito, hasDeposito, hasTipo, hasTipoDeposito] = await Promise.all([
     hasTable('stock_deposito'),
-    hasTable('deposito')
+    hasTable('deposito'),
+    columnExists('deposito', 'tipo'),
+    columnExists('deposito', 'tipo_deposito')
   ]);
+
+  let tipoExpr = "'central'";
+  if (hasTipo && hasTipoDeposito) {
+    tipoExpr = "COALESCE(d.tipo, d.tipo_deposito)";
+  } else if (hasTipo) {
+    tipoExpr = "d.tipo";
+  } else if (hasTipoDeposito) {
+    tipoExpr = "d.tipo_deposito";
+  }
 
   let productos;
   if (hasStockDeposito && hasDeposito) {
@@ -24,13 +60,13 @@ async function getProductos(user) {
         p.id_categoria,
         c.nombre as categoria_nombre,
         COALESCE(SUM(sd.cantidad), 0) as stock_total,
-        COALESCE(SUM(CASE WHEN COALESCE(d.tipo, d.tipo_deposito) = 'central' OR d.id_deposito = 1 THEN sd.cantidad ELSE 0 END), 0) as stock_central,
-        COALESCE(SUM(CASE WHEN COALESCE(d.tipo, d.tipo_deposito) = 'centro_civico' THEN sd.cantidad ELSE 0 END), 0) as stock_centro_civico,
-        COALESCE(SUM(CASE WHEN COALESCE(d.tipo, d.tipo_deposito) = 'capsula' THEN sd.cantidad ELSE 0 END), 0) as stock_capsula,
+        COALESCE(SUM(CASE WHEN ${tipoExpr} = 'central' OR d.id_deposito = 1 THEN sd.cantidad ELSE 0 END), 0) as stock_central,
+        COALESCE(SUM(CASE WHEN ${tipoExpr} = 'centro_civico' THEN sd.cantidad ELSE 0 END), 0) as stock_centro_civico,
+        COALESCE(SUM(CASE WHEN ${tipoExpr} = 'capsula' THEN sd.cantidad ELSE 0 END), 0) as stock_capsula,
         CASE
-          WHEN COALESCE(SUM(CASE WHEN COALESCE(d.tipo, d.tipo_deposito) = 'central' OR d.id_deposito = 1 THEN sd.cantidad ELSE 0 END), 0) > 0 THEN 'Depósito Central'
-          WHEN COALESCE(SUM(CASE WHEN COALESCE(d.tipo, d.tipo_deposito) = 'centro_civico' THEN sd.cantidad ELSE 0 END), 0) > 0 THEN 'Centro Cívico'
-          WHEN COALESCE(SUM(CASE WHEN COALESCE(d.tipo, d.tipo_deposito) = 'capsula' THEN sd.cantidad ELSE 0 END), 0) > 0 THEN 'Cápsula'
+          WHEN COALESCE(SUM(CASE WHEN ${tipoExpr} = 'central' OR d.id_deposito = 1 THEN sd.cantidad ELSE 0 END), 0) > 0 THEN 'Depósito Central'
+          WHEN COALESCE(SUM(CASE WHEN ${tipoExpr} = 'centro_civico' THEN sd.cantidad ELSE 0 END), 0) > 0 THEN 'Centro Cívico'
+          WHEN COALESCE(SUM(CASE WHEN ${tipoExpr} = 'capsula' THEN sd.cantidad ELSE 0 END), 0) > 0 THEN 'Cápsula'
           ELSE 'Depósito Central'
         END as deposito
       FROM producto p
