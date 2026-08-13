@@ -663,8 +663,19 @@ export default function Productos() {
         >
           <div style={{ background: '#f9fafb', padding: 24, borderRadius: 10, width: 'min(720px, 100%)', maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <h3 style={{ margin: 0 }}>Ubicación y Vencimientos — {detailModal.producto_nombre}</h3>
+              <h3 style={{ margin: 0 }}>
+                {detailModal.producto?.nombre} 
+                <span style={{ fontSize: '1.1rem', color: 'var(--muted)', marginLeft: 8 }}>
+                  ({detailModal.producto?.codigo_sku || `#${detailModal.producto?.id}`})
+                </span>
+              </h3>
               <button className="secondary" onClick={() => setDetailModal(null)} style={{ margin: 0, padding: '6px 12px' }}>✕</button>
+            </div>
+            
+            <div style={{ background: '#fff', padding: 16, borderRadius: 8, border: '1px solid var(--border)', marginBottom: 20 }}>
+              <p style={{ margin: '0 0 8px 0' }}><strong>Marca:</strong> {detailModal.producto?.marca || '-'}</p>
+              <p style={{ margin: '0 0 8px 0' }}><strong>Categoría:</strong> {detailModal.producto?.categoria_nombre || '-'}</p>
+              <p style={{ margin: 0 }}><strong>Descripción:</strong> {detailModal.producto?.descripcion || '-'}</p>
             </div>
 
             <h4>📦 Distribución por Depósito</h4>
