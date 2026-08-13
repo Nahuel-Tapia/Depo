@@ -85,6 +85,48 @@ export default function Productos() {
     } catch { /* ignore */ }
   }
 
+  // Scanner state
+  const barcodeBuffer = useRef('')
+  const lastKeyTime = useRef(0)
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Ignorar si el foco está en un input, textarea o select (el usuario está escribiendo normalmente)
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) {
+        return
+      }
+      
+      const currentTime = new Date().getTime()
+      
+      // Si pasó mucho tiempo desde la última tecla (>50ms suele ser manual), reiniciamos el buffer
+      if (currentTime - lastKeyTime.current > 50) {
+        barcodeBuffer.current = ''
+      }
+      lastKeyTime.current = currentTime
+      
+      if (e.key === 'Enter') {
+        if (barcodeBuffer.current.length > 0) {
+          const scannedCode = barcodeBuffer.current
+          barcodeBuffer.current = '' // reset
+          
+          // Buscar el producto con el código escaneado
+          const producto = productos.find(p => String(p.codigo_sku) === String(scannedCode))
+          if (producto) {
+            loadDetail(producto.id)
+            setMsg({ text: `Producto escaneado: ${producto.nombre}`, type: 'success' })
+          } else {
+            setMsg({ text: `Producto no encontrado (Código: ${scannedCode})`, type: 'error' })
+          }
+        }
+      } else if (e.key.length === 1) {
+        barcodeBuffer.current += e.key
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [productos])
+
   useEffect(() => {
     loadCategorias()
     loadProductos()
