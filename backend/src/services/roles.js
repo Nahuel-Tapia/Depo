@@ -1,4 +1,4 @@
-const { all, get, run } = require("../db.pg");
+const { all, get, run, pool } = require("../db.pg");
 const { DEFAULT_ROLE_PERMISSIONS } = require("../permissions");
 
 function normalizeRoleName(role) {
@@ -15,6 +15,11 @@ let roleSeededReady = false;
 
 async function ensureRoleTableSeeded() {
   if (roleSeededReady) return;
+  // En Vercel la BD ya está seeded — skip para evitar errores de pool
+  if (process.env.VERCEL) {
+    roleSeededReady = true;
+    return;
+  }
   const defaults = getDefaultRoleNames();
   const client = await pool.connect();
   try {
@@ -48,18 +53,24 @@ async function getAllRoles() {
     console.error("[getAllRoles error]", err.message || err);
   }
 
-  const { DEFAULT_ROLE_PERMISSIONS } = require("../permissions");
   return Object.keys(DEFAULT_ROLE_PERMISSIONS).map((r, idx) => ({ id: idx + 1, nombre: r }));
 }
 
 async function roleExists(role) {
   const normalized = normalizeRoleName(role);
   if (!normalized) return false;
-  await ensureRoleTableSeeded();
-  const found = await get("SELECT id_rol FROM rol WHERE LOWER(nombre) = ?", [
-    normalized,
-  ]);
-  return Boolean(found);
+
+  // Primero intentar la BD
+  try {
+    await ensureRoleTableSeeded();
+    const found = await get("SELECT id_rol FROM rol WHERE LOWER(nombre) = $1", [normalized]);
+    if (found !== undefined) return Boolean(found);
+  } catch (err) {
+    console.error("[roleExists DB error]", err.message || err);
+  }
+
+  // Fallback: verificar contra permisos conocidos
+  return getDefaultRoleNames().includes(normalized);
 }
 
 async function createRole(role) {
