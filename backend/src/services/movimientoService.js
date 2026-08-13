@@ -469,7 +469,7 @@ async function autorizarBaja(id_baja, user, accion) {
     }
 
     // 2. Verificar que existe el deposito de desguace
-    const depRes = await client.query("SELECT id_deposito FROM deposito WHERE tipo_deposito = 'desguace' LIMIT 1");
+    const depRes = await client.query("SELECT id_deposito FROM deposito WHERE COALESCE(tipo, tipo_deposito) = 'desguace' LIMIT 1");
     if (depRes.rowCount === 0) {
       throw { status: 500, message: 'No existe un depósito de desguace configurado en el sistema' };
     }

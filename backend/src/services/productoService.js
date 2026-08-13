@@ -24,13 +24,13 @@ async function getProductos(user) {
         p.id_categoria,
         c.nombre as categoria_nombre,
         COALESCE(SUM(sd.cantidad), 0) as stock_total,
-        COALESCE(SUM(CASE WHEN d.tipo = 'central' THEN sd.cantidad ELSE 0 END), 0) as stock_central,
-        COALESCE(SUM(CASE WHEN d.tipo = 'centro_civico' THEN sd.cantidad ELSE 0 END), 0) as stock_centro_civico,
-        COALESCE(SUM(CASE WHEN d.tipo = 'capsula' THEN sd.cantidad ELSE 0 END), 0) as stock_capsula,
+        COALESCE(SUM(CASE WHEN COALESCE(d.tipo, d.tipo_deposito) = 'central' THEN sd.cantidad ELSE 0 END), 0) as stock_central,
+        COALESCE(SUM(CASE WHEN COALESCE(d.tipo, d.tipo_deposito) = 'centro_civico' THEN sd.cantidad ELSE 0 END), 0) as stock_centro_civico,
+        COALESCE(SUM(CASE WHEN COALESCE(d.tipo, d.tipo_deposito) = 'capsula' THEN sd.cantidad ELSE 0 END), 0) as stock_capsula,
         CASE
-          WHEN COALESCE(SUM(CASE WHEN d.tipo = 'central' THEN sd.cantidad ELSE 0 END), 0) > 0 THEN 'Depósito Central'
-          WHEN COALESCE(SUM(CASE WHEN d.tipo = 'centro_civico' THEN sd.cantidad ELSE 0 END), 0) > 0 THEN 'Centro Cívico'
-          WHEN COALESCE(SUM(CASE WHEN d.tipo = 'capsula' THEN sd.cantidad ELSE 0 END), 0) > 0 THEN 'Cápsula'
+          WHEN COALESCE(SUM(CASE WHEN COALESCE(d.tipo, d.tipo_deposito) = 'central' THEN sd.cantidad ELSE 0 END), 0) > 0 THEN 'Depósito Central'
+          WHEN COALESCE(SUM(CASE WHEN COALESCE(d.tipo, d.tipo_deposito) = 'centro_civico' THEN sd.cantidad ELSE 0 END), 0) > 0 THEN 'Centro Cívico'
+          WHEN COALESCE(SUM(CASE WHEN COALESCE(d.tipo, d.tipo_deposito) = 'capsula' THEN sd.cantidad ELSE 0 END), 0) > 0 THEN 'Cápsula'
           ELSE 'Depósito Central'
         END as deposito
       FROM producto p
@@ -179,7 +179,7 @@ async function createProducto(user, body) {
     // Sincronizar con Depósito Central si hay stock inicial
     if (stock_actual_val > 0) {
       const centralResult = await client.query(
-        "SELECT id_deposito FROM deposito WHERE tipo = 'central' LIMIT 1"
+        "SELECT id_deposito FROM deposito WHERE COALESCE(tipo, tipo_deposito) = 'central' LIMIT 1"
       );
       const central = centralResult.rows[0];
 
@@ -275,7 +275,7 @@ async function updateProducto(id, body) {
     if (body.stock_actual !== undefined) {
       const stock_val = parseInt(body.stock_actual) || 0;
       const centralResult = await client.query(
-        "SELECT id_deposito FROM deposito WHERE tipo = 'central' LIMIT 1"
+        "SELECT id_deposito FROM deposito WHERE COALESCE(tipo, tipo_deposito) = 'central' LIMIT 1"
       );
       const central = centralResult.rows[0];
 

@@ -113,10 +113,10 @@ async function initDatabaseSchema() {
       `);
       // Seed desguace deposit if it doesn't exist
       await client.query(`
-        INSERT INTO deposito (nombre, tipo_deposito)
+        INSERT INTO deposito (nombre, tipo)
         SELECT 'Depósito de Desguace (Scrap)', 'desguace'
         WHERE NOT EXISTS (
-          SELECT 1 FROM deposito WHERE tipo_deposito = 'desguace'
+          SELECT 1 FROM deposito WHERE COALESCE(tipo, tipo_deposito) = 'desguace'
         );
       `);
     } catch (err) {

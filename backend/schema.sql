@@ -46,13 +46,18 @@ CREATE TABLE edificio (
 );
 
 CREATE TABLE deposito (
-    id SERIAL PRIMARY KEY,
+    id_deposito SERIAL PRIMARY KEY,
     nombre VARCHAR(120) NOT NULL,
-    tipo_deposito VARCHAR(40) DEFAULT 'central'
+    descripcion TEXT,
+    ubicacion VARCHAR(200),
+    tipo VARCHAR(50) DEFAULT 'central',
+    activo BOOLEAN DEFAULT TRUE,
+    deposito_padre_id INTEGER,
+    created_at TIMESTAMP DEFAULT NOW()
 );
 
 -- Seed de depósito de desguace
-INSERT INTO deposito (nombre, tipo_deposito) VALUES 
+INSERT INTO deposito (nombre, tipo) VALUES 
 ('Depósito de Desguace (Scrap)', 'desguace')
 ON CONFLICT DO NOTHING;
 
@@ -347,7 +352,7 @@ CREATE TABLE remito_licitacion (
     id SERIAL PRIMARY KEY,
     numero VARCHAR(30) NOT NULL UNIQUE,
     licitacion_id INT NOT NULL, -- Generalmente apunta a licitacion_publicada
-    id_deposito INT REFERENCES deposito(id) ON DELETE SET NULL,
+    id_deposito INT REFERENCES deposito(id_deposito) ON DELETE SET NULL,
     usuario_id INT REFERENCES usuario(id_usuario) ON DELETE SET NULL,
     observaciones TEXT,
     created_at TIMESTAMP DEFAULT NOW()
@@ -384,7 +389,7 @@ CREATE TABLE distribucion_lote (
     id SERIAL PRIMARY KEY,
     anio INT NOT NULL,
     zona_id INT REFERENCES zona(id) ON DELETE SET NULL,
-    id_deposito INT NOT NULL REFERENCES deposito(id) ON DELETE RESTRICT,
+    id_deposito INT NOT NULL REFERENCES deposito(id_deposito) ON DELETE RESTRICT,
     estado VARCHAR(30) NOT NULL DEFAULT 'en_transito',
     observaciones TEXT,
     usuario_id INT REFERENCES usuario(id_usuario) ON DELETE SET NULL,
@@ -453,7 +458,7 @@ CREATE TABLE entrega_anual (
     anio INT NOT NULL,
     id_producto INT NOT NULL REFERENCES producto(id_producto) ON DELETE RESTRICT,
     cantidad_entregada NUMERIC(12,2) NOT NULL,
-    id_deposito INT REFERENCES deposito(id) ON DELETE SET NULL,
+    id_deposito INT REFERENCES deposito(id_deposito) ON DELETE SET NULL,
     id_usuario INT REFERENCES usuario(id_usuario) ON DELETE SET NULL,
     observaciones TEXT,
     created_at TIMESTAMP DEFAULT NOW()
@@ -477,8 +482,8 @@ CREATE TABLE movimiento_stock (
     id_proveedor INT REFERENCES proveedor(id_proveedor) ON DELETE RESTRICT, 
     motivo TEXT, 
     fecha_vencimiento DATE,
-    id_deposito INT REFERENCES deposito(id) ON DELETE SET NULL,
-    id_deposito_destino INT REFERENCES deposito(id) ON DELETE SET NULL
+    id_deposito INT REFERENCES deposito(id_deposito) ON DELETE SET NULL,
+    id_deposito_destino INT REFERENCES deposito(id_deposito) ON DELETE SET NULL
 );
 
 CREATE TABLE pedido_entrega (
@@ -555,7 +560,7 @@ CREATE TABLE baja_movimientos (
     motivo TEXT,
     foto_path VARCHAR(255),
     id_usuario INTEGER NOT NULL REFERENCES usuario(id_usuario) ON DELETE RESTRICT,
-    id_deposito INTEGER REFERENCES deposito(id) ON DELETE SET NULL,
+    id_deposito INTEGER REFERENCES deposito(id_deposito) ON DELETE SET NULL,
     estado VARCHAR(20) DEFAULT 'pendiente',
     "createdAt" TIMESTAMP DEFAULT NOW(),
     "updatedAt" TIMESTAMP DEFAULT NOW()
@@ -572,7 +577,16 @@ CREATE TABLE baja_status_history (
 );
 
 
--- 18. OPTIMIZACIÓN DE ÍNDICES
+-- 18. STOCK POR DEPÓSITO
+CREATE TABLE stock_deposito (
+    id_deposito INTEGER NOT NULL REFERENCES deposito(id_deposito) ON DELETE CASCADE,
+    id_producto INTEGER NOT NULL REFERENCES producto(id_producto) ON DELETE CASCADE,
+    cantidad INTEGER DEFAULT 0 NOT NULL,
+    PRIMARY KEY (id_deposito, id_producto)
+);
+
+
+-- 19. OPTIMIZACIÓN DE ÍNDICES
 CREATE INDEX idx_detalle_pedido_pedido ON detalle_pedido (id_pedido);
 CREATE INDEX idx_detalle_pedido_producto ON detalle_pedido (id_producto);
 CREATE INDEX idx_movimiento_stock_deposito ON movimiento_stock (id_deposito);

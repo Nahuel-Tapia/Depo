@@ -20,10 +20,6 @@ function getDefaultPermissionCodes() {
 
 async function ensureRbacSchemaAndSeed() {
   if (rbacReady) return;
-  if (process.env.VERCEL) {
-    rbacReady = true;
-    return;
-  }
 
   await ensureRoleTableSeeded();
 

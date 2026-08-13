@@ -15,10 +15,6 @@ let roleSeededReady = false;
 
 async function ensureRoleTableSeeded() {
   if (roleSeededReady) return;
-  if (process.env.VERCEL) {
-    roleSeededReady = true;
-    return;
-  }
   const defaults = getDefaultRoleNames();
   for (const role of defaults) {
     if (!role) continue;
