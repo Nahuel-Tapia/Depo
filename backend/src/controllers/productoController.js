@@ -81,6 +81,21 @@ async function eliminarProducto(req, res) {
   }
 }
 
+async function importarProductos(req, res) {
+  try {
+    const productosArray = req.body;
+    const result = await productoService.importarProductosMasivo(req.user, productosArray);
+    return res.status(201).json(result);
+  } catch (err) {
+    console.error("[importar-productos] Error:", err.message);
+    const status = err.status || 500;
+    return res.status(status).json({
+      error: err.message || "Error al importar productos",
+      errores: err.errores || []
+    });
+  }
+}
+
 module.exports = {
   listarProductos,
   listarCategorias,
@@ -88,5 +103,6 @@ module.exports = {
   obtenerProductoStockDetalle,
   crearProducto,
   editarProducto,
-  eliminarProducto
+  eliminarProducto,
+  importarProductos
 };

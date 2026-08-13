@@ -475,6 +475,107 @@ async function deleteProducto(id) {
   }
 }
 
+async function importarProductosMasivo(user, productosArray) {
+  if (!Array.isArray(productosArray) || productosArray.length === 0) {
+    throw { status: 400, message: "El array de productos está vacío o es inválido" };
+  }
+
+  const client = await pool.connect();
+  let importados = 0;
+  let errores = [];
+
+  try {
+    await client.query("BEGIN");
+
+    // Verificar repositorio central y tablas de stock antes de empezar
+    const centralResult = await client.query(
+      "SELECT id_deposito FROM deposito WHERE COALESCE(tipo, tipo_deposito) = 'central' LIMIT 1"
+    );
+    const central = centralResult.rows[0];
+    const hasStockDeposito = await hasTable('stock_deposito');
+    const hasMovimientoStock = await hasTable('movimiento_stock');
+    const userId = user.id_usuario || user.sub || user.id || null;
+
+    for (let i = 0; i < productosArray.length; i++) {
+      const p = productosArray[i];
+      try {
+        const nombre = p.nombre ? String(p.nombre).trim() : '';
+        if (!nombre) {
+          throw new Error("El nombre es obligatorio");
+        }
+        if (nombre.length > 255) {
+          throw new Error("El nombre es demasiado largo (máximo 255 caracteres)");
+        }
+
+        // Parse defaults
+        const unidad_medida = p.unidad_medida ? String(p.unidad_medida).trim() : 'unidad';
+        const stock_actual_val = parseInt(p.stock_actual) || 0;
+        const stock_minimo = parseInt(p.stock_minimo) || 0;
+        const id_categoria = p.id_categoria ? parseInt(p.id_categoria) : null;
+        const codigo_sku = p.codigo_sku ? String(p.codigo_sku).trim() : null;
+        const marca = p.marca ? String(p.marca).trim() : null;
+        const precio_unitario = parseFloat(p.precio_unitario) || 0;
+        const ubicacion_estante = p.ubicacion_estante ? String(p.ubicacion_estante).trim() : null;
+        const descripcion = p.descripcion ? String(p.descripcion).trim() : null;
+        const es_perecedero = Boolean(p.es_perecedero);
+
+        // Insertar
+        const insertResult = await client.query(
+          `INSERT INTO producto (
+            nombre, unidad_medida, stock_actual, stock_minimo, id_categoria,
+            codigo_sku, marca, precio_unitario, ubicacion_estante, descripcion, es_perecedero
+           )
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+           RETURNING id_producto`,
+          [
+            nombre, unidad_medida, stock_actual_val, stock_minimo, id_categoria,
+            codigo_sku, marca, precio_unitario, ubicacion_estante, descripcion, es_perecedero
+          ]
+        );
+
+        const newId = insertResult.rows[0].id_producto;
+
+        // Stock
+        if (stock_actual_val > 0 && central) {
+          if (hasStockDeposito) {
+            await client.query(
+              `INSERT INTO stock_deposito (id_deposito, id_producto, cantidad)
+               VALUES ($1, $2, $3)
+               ON CONFLICT (id_deposito, id_producto)
+               DO UPDATE SET cantidad = stock_deposito.cantidad + EXCLUDED.cantidad`,
+              [central.id_deposito, newId, stock_actual_val]
+            );
+          }
+          if (hasMovimientoStock) {
+            await client.query(
+              `INSERT INTO movimiento_stock (id_producto, tipo, cantidad, motivo, id_usuario, id_deposito)
+               VALUES ($1, 'ingreso', $2, 'Importación inicial masiva', $3, $4)`,
+              [newId, stock_actual_val, userId, central.id_deposito]
+            );
+          }
+        }
+        importados++;
+      } catch (err) {
+        errores.push({ fila: i + 2, producto: p.nombre, error: err.message });
+      }
+    }
+
+    if (errores.length > 0 && importados === 0) {
+      // Si todos fallaron, cancelamos transacción
+      await client.query("ROLLBACK");
+      throw { status: 400, message: "Ningún producto pudo ser importado", errores };
+    }
+
+    await client.query("COMMIT");
+    return { importados, errores };
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 module.exports = {
   getProductos,
   getCategorias,
@@ -482,5 +583,6 @@ module.exports = {
   getProductoStockDetalle,
   createProducto,
   updateProducto,
-  deleteProducto
+  deleteProducto,
+  importarProductosMasivo
 };

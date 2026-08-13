@@ -25,6 +25,9 @@ router.get("/:id/stock-detalle", authorizePermissions(PERMISSIONS.PRODUCTOS_VIEW
 // Crear producto
 router.post("/", authorizePermissions(PERMISSIONS.PRODUCTOS_CREATE), productoController.crearProducto);
 
+// Importar productos masivamente
+router.post("/bulk", authorizePermissions(PERMISSIONS.PRODUCTOS_CREATE), productoController.importarProductos);
+
 // Editar producto
 router.patch("/:id", authorizePermissions(PERMISSIONS.PRODUCTOS_EDIT), productoController.editarProducto);
 

@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../api'
 import PrintButton from './PrintButton'
 import FilterSortButton from './FilterSortButton'
+import * as XLSX from 'xlsx'
 
 export default function Productos() {
   const { token, user, hasPermission } = useAuth()
@@ -11,6 +12,9 @@ export default function Productos() {
   const [categorias, setCategorias] = useState([])
   const [msg, setMsg] = useState({ text: '', type: '' })
   const [formOpen, setFormOpen] = useState(false)
+  const [importModalOpen, setImportModalOpen] = useState(false)
+  const [importLoading, setImportLoading] = useState(false)
+  const fileInputRef = useRef(null)
   const [editModal, setEditModal] = useState(null)
   const [deleteModal, setDeleteModal] = useState(null)
   const [detailModal, setDetailModal] = useState(null)
@@ -179,7 +183,74 @@ export default function Productos() {
     loadProductos()
   }
 
-  const handleEdit = async (id) => {
+  const handleImportExcel = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+
+    setImportLoading(true)
+    try {
+      const reader = new FileReader()
+      reader.onload = async (evt) => {
+        try {
+          const data = new Uint8Array(evt.target.result)
+          const wb = XLSX.read(data, { type: 'array' })
+          const ws = wb.Sheets[wb.SheetNames[0]]
+          const jsonData = XLSX.utils.sheet_to_json(ws)
+
+          const parsedProducts = jsonData.map(row => {
+            const findCol = (names) => {
+              const key = Object.keys(row).find(k => names.includes(k.toLowerCase().trim()))
+              return key ? row[key] : null
+            }
+            return {
+              nombre: findCol(['nombre', 'producto', 'name', 'descripción']),
+              codigo_sku: findCol(['sku', 'código', 'codigo', 'codigo sku']),
+              marca: findCol(['marca', 'fabricante']),
+              stock_actual: parseInt(findCol(['stock', 'stock actual', 'cantidad', 'cantidad actual'])) || 0,
+              stock_minimo: parseInt(findCol(['minimo', 'stock minimo', 'alerta'])) || 0,
+              precio_unitario: parseFloat(findCol(['precio', 'costo'])) || 0,
+              unidad_medida: findCol(['unidad', 'medida', 'uom']) || 'unidad',
+              ubicacion_estante: findCol(['ubicacion', 'estante', 'pasillo', 'deposito']),
+              descripcion: findCol(['detalle', 'observaciones']),
+              es_perecedero: ['si', 'sí', 'true', '1'].includes(String(findCol(['perecedero', 'vence'])).toLowerCase())
+            }
+          }).filter(p => p.nombre) 
+
+          if (parsedProducts.length === 0) {
+            setMsg({ text: 'No se encontraron productos válidos o falta la columna "Nombre" en el archivo.', type: 'error' })
+            setImportLoading(false)
+            return
+          }
+
+          const res = await apiFetch('/api/productos/bulk', {
+            token,
+            method: 'POST',
+            body: JSON.stringify(parsedProducts)
+          })
+
+          const result = await res.json()
+          if (!res.ok) {
+            setMsg({ text: result.error || 'Error en la importación masiva', type: 'error' })
+          } else {
+            setMsg({ text: `Se importaron ${result.importados} productos correctamente. ${result.errores?.length > 0 ? `Hubo ${result.errores.length} errores (filas ignoradas).` : ''}`, type: 'success' })
+            setImportModalOpen(false)
+            loadProductos()
+          }
+        } catch (err) {
+          console.error(err)
+          setMsg({ text: 'Error procesando el archivo Excel', type: 'error' })
+        }
+        setImportLoading(false)
+        if (fileInputRef.current) fileInputRef.current.value = ''
+      }
+      reader.readAsArrayBuffer(file)
+    } catch (err) {
+      setImportLoading(false)
+      setMsg({ text: 'Error al leer el archivo', type: 'error' })
+    }
+  }
+
+  const handleEdit = (id) => {
     const producto = productos.find(p => p.id === id)
     if (!producto) return
 
@@ -353,13 +424,21 @@ export default function Productos() {
       </div>
 
       {hasPermission('productos.create') && (
-        <div style={{ marginBottom: 24 }}>
+        <div style={{ marginBottom: 24, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
           <button
             type="button"
             style={{ width: 'auto', margin: 0, padding: '10px 18px' }}
             onClick={() => setFormOpen(true)}
           >
             Crear producto
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            style={{ width: 'auto', margin: 0, padding: '10px 18px', background: '#f8fafc', color: '#0f172a' }}
+            onClick={() => setImportModalOpen(true)}
+          >
+            Importar Excel
           </button>
         </div>
       )}
@@ -668,6 +747,41 @@ export default function Productos() {
             )}
           </div>
         )}
+      </Modal>
+
+      <Modal isOpen={importModalOpen} onClose={() => !importLoading && setImportModalOpen(false)} title="Importar Productos (Excel / CSV)" maxWidth={600}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.95rem' }}>
+            Selecciona un archivo Excel (<code>.xlsx</code>) o CSV para cargar múltiples productos. 
+            El archivo debe tener al menos una columna llamada <strong>"Nombre"</strong>.
+          </p>
+          <ul style={{ margin: 0, color: 'var(--muted)', fontSize: '0.85rem', paddingLeft: 20 }}>
+            <li>Otras columnas detectadas automáticamente: <code>SKU</code>, <code>Marca</code>, <code>Stock Actual</code>, <code>Minimo</code>, <code>Categoria</code>, <code>Unidad</code>, <code>Ubicacion</code>, <code>Precio</code>, <code>Perecedero</code>, <code>Descripcion</code>.</li>
+            <li>Si el producto tiene stock actual, se ingresará como un movimiento de ingreso automático.</li>
+          </ul>
+
+          <div style={{ background: '#f8fafc', padding: 24, borderRadius: 8, border: '2px dashed var(--border)', textAlign: 'center', marginTop: 10 }}>
+            <input 
+              type="file" 
+              accept=".xlsx, .xls, .csv"
+              ref={fileInputRef}
+              onChange={handleImportExcel}
+              style={{ display: 'none' }}
+              id="excel-upload"
+              disabled={importLoading}
+            />
+            <label htmlFor="excel-upload" style={{ cursor: importLoading ? 'wait' : 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: '2rem' }}>📊</span>
+              <span style={{ fontWeight: 600, color: 'var(--blue)' }}>
+                {importLoading ? 'Procesando archivo...' : 'Haz clic para seleccionar el archivo'}
+              </span>
+            </label>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
+            <button type="button" className="secondary" onClick={() => setImportModalOpen(false)} disabled={importLoading}>Cancelar</button>
+          </div>
+        </div>
       </Modal>
     </div>
   )
