@@ -92,6 +92,12 @@ CREATE TABLE producto (
     stock_actual INT DEFAULT 0 CHECK (stock_actual >= 0),
     stock_minimo INT DEFAULT 0 CHECK (stock_minimo >= 0),
     id_categoria INT,
+    codigo_sku VARCHAR(100),
+    marca VARCHAR(100),
+    precio_unitario NUMERIC(12,2) DEFAULT 0,
+    ubicacion_estante VARCHAR(100),
+    descripcion TEXT,
+    es_perecedero BOOLEAN DEFAULT FALSE,
     FOREIGN KEY (id_categoria) REFERENCES categoria(id_categoria)
 );
 
