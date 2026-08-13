@@ -22,7 +22,6 @@ export default function Productos() {
     nombre: '',
     marca: '',
     unidad_medida: 'unidad',
-    precio_unitario: '',
     ubicacion_estante: '',
     stock_minimo: 0,
     id_categoria: '',
@@ -102,7 +101,6 @@ export default function Productos() {
       nombre: form.nombre.trim(),
       marca: form.marca.trim() || '',
       unidad_medida: form.unidad_medida.trim() || 'unidad',
-      precio_unitario: parseFloat(form.precio_unitario) || 0,
       ubicacion_estante: form.ubicacion_estante.trim() || '',
       stock_minimo: parseInt(form.stock_minimo) || 0,
       id_categoria: form.id_categoria || null,
@@ -127,7 +125,6 @@ export default function Productos() {
       nombre: '',
       marca: '',
       unidad_medida: 'unidad',
-      precio_unitario: '',
       ubicacion_estante: '',
       stock_minimo: 0,
       id_categoria: '',
@@ -149,7 +146,6 @@ export default function Productos() {
       nombre: producto.nombre || '',
       marca: producto.marca || '',
       unidad_medida: producto.unidad_medida || 'unidad',
-      precio_unitario: producto.precio_unitario ?? '',
       ubicacion_estante: producto.ubicacion_estante || '',
       stock_minimo: producto.stock_minimo ?? 0,
       id_categoria: producto.id_categoria || '',
@@ -167,7 +163,6 @@ export default function Productos() {
       nombre: String(editModal.nombre || '').trim(),
       marca: String(editModal.marca || '').trim() || '',
       unidad_medida: String(editModal.unidad_medida || '').trim() || 'unidad',
-      precio_unitario: parseFloat(editModal.precio_unitario) || 0,
       ubicacion_estante: String(editModal.ubicacion_estante || '').trim() || '',
       stock_minimo: parseInt(editModal.stock_minimo, 10) || 0,
       id_categoria: editModal.id_categoria || null,
@@ -339,7 +334,6 @@ export default function Productos() {
               <th>Nombre</th>
               <th>Marca</th>
               <th>Categoría</th>
-              <th>Precio ($)</th>
               <th>Ubicación</th>
               <th>Stock Total</th>
               <th>Estado</th>
@@ -355,7 +349,6 @@ export default function Productos() {
               <td>{p.nombre}</td>
               <td>{p.marca || '-'}</td>
               <td>{p.categoria_nombre || '-'}</td>
-              <td>{p.precio_unitario ? `$${Number(p.precio_unitario).toLocaleString('es-AR', { minimumFractionDigits: 2 })}` : '-'}</td>
               <td>{p.ubicacion_estante || '-'}</td>
               <td><strong>{p.stock_total ?? 0}</strong> <span style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>{p.unidad_medida || 'un'}</span></td>
               <td>
@@ -460,14 +453,10 @@ export default function Productos() {
                 <input type="text" value={form.unidad_medida} onChange={e => setForm({ ...form, unidad_medida: e.target.value })} placeholder="Ej: unidad, litro, kg, pack" />
               </div>
               <div>
-                <label>Precio Unitario ($)</label>
-                <input type="number" step="0.01" value={form.precio_unitario} onChange={e => setForm({ ...form, precio_unitario: e.target.value })} placeholder="0.00" min="0" />
-              </div>
-              <div>
                 <label>Stock mínimo (alerta)</label>
                 <input type="number" value={form.stock_minimo} onChange={e => setForm({ ...form, stock_minimo: e.target.value })} placeholder="0" min="0" />
               </div>
-              <div>
+              <div style={{ gridColumn: '1 / -1' }}>
                 <label>Ubicación en Depósito</label>
                 <input type="text" value={form.ubicacion_estante} onChange={e => setForm({ ...form, ubicacion_estante: e.target.value })} placeholder="Ej: Pasillo 2 - Estante B" />
               </div>
@@ -547,14 +536,10 @@ export default function Productos() {
                 <input type="text" value={editModal.unidad_medida} onChange={e => setEditModal({ ...editModal, unidad_medida: e.target.value })} placeholder="Ej: unidad, litro, kg, pack" />
               </div>
               <div>
-                <label>Precio Unitario ($)</label>
-                <input type="number" step="0.01" value={editModal.precio_unitario} onChange={e => setEditModal({ ...editModal, precio_unitario: e.target.value })} placeholder="0.00" min="0" />
-              </div>
-              <div>
                 <label>Stock mínimo (alerta)</label>
                 <input type="number" value={editModal.stock_minimo} onChange={e => setEditModal({ ...editModal, stock_minimo: e.target.value })} placeholder="0" min="0" />
               </div>
-              <div>
+              <div style={{ gridColumn: '1 / -1' }}>
                 <label>Ubicación en Depósito</label>
                 <input type="text" value={editModal.ubicacion_estante} onChange={e => setEditModal({ ...editModal, ubicacion_estante: e.target.value })} placeholder="Ej: Pasillo 2 - Estante B" />
               </div>
