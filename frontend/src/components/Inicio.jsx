@@ -1,5 +1,6 @@
 import { useAuth } from '../context/AuthContext'
 import { useEffect, useRef, useState } from 'react'
+import { motion } from 'framer-motion'
 import { apiFetch } from '../api'
 import PrintButton from './PrintButton'
 import {
@@ -126,7 +127,12 @@ export default function Inicio({ onNavigate }) {
       </div>
 
       <div ref={printRef} className="dashboard-stack">
-        <section className="dashboard-hero">
+        <motion.section 
+          className="dashboard-hero"
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: 'easeOut' }}
+        >
           <div className="dashboard-hero-copy">
             <span className="dashboard-hero-chip">Panel administrativo</span>
             <h2>Bienvenido, {user?.nombre || 'Usuario'}</h2>
@@ -149,7 +155,7 @@ export default function Inicio({ onNavigate }) {
               </div>
             </div>
           </div>
-        </section>
+        </motion.section>
 
         <div className="dashboard-section-grid">
           <section className="dashboard-section-card dashboard-section-card--span-8 dashboard-highlight">
@@ -514,7 +520,12 @@ function SupervisorInicio({ onNavigate, token, user }) {
 
   return (
     <div className="dashboard-stack">
-      <section className="dashboard-hero">
+      <motion.section 
+        className="dashboard-hero"
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, ease: 'easeOut' }}
+      >
         <div className="dashboard-hero-copy">
           <span className="dashboard-hero-chip">Supervisor</span>
           <h2>Bienvenido, {user?.nombre || 'Usuario'}</h2>
@@ -537,7 +548,7 @@ function SupervisorInicio({ onNavigate, token, user }) {
             </div>
           </div>
         </div>
-      </section>
+      </motion.section>
 
       <section className="dashboard-section-card">
         <div className="dashboard-stats-grid">
@@ -654,7 +665,12 @@ function DirectivoInicio({ onNavigate, token, user }) {
 
   return (
     <div className="dashboard-stack">
-      <section className="dashboard-hero">
+      <motion.section 
+        className="dashboard-hero"
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, ease: 'easeOut' }}
+      >
         <div className="dashboard-hero-copy">
           <span className="dashboard-hero-chip">Directivo</span>
           <h2>{institucion?.nombre || 'Tu institucion'}</h2>
@@ -673,7 +689,7 @@ function DirectivoInicio({ onNavigate, token, user }) {
             </div>
           </div>
         </div>
-      </section>
+      </motion.section>
 
       <section className="dashboard-section-card">
         <div className="dashboard-stats-grid">
