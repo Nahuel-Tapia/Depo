@@ -443,8 +443,12 @@ export default function RecepcionLicitacion() {
                 value={selectedDeposito} 
                 onChange={e => setSelectedDeposito(e.target.value)}
                 style={{ padding: '8px 12px', borderRadius: 8, minWidth: 220 }}
+                disabled
               >
-                {depositos.map(d => <option key={d.id} value={d.id}>{d.nombre}</option>)}
+                {depositos
+                  .filter(d => (d.tipo || d.tipo_deposito) === 'central' || String(d.id) === '1' || String(d.nombre || '').toLowerCase().includes('central'))
+                  .map(d => <option key={d.id} value={d.id}>{d.nombre}</option>)
+                }
               </select>
             </div>
           </div>

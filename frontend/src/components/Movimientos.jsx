@@ -148,17 +148,23 @@ export default function Movimientos() {
     loadBajas()
   }, [])
 
+  const depositosDisponibles = useMemo(() => {
+    const filtrados = depositos.filter(d => 
+      (d.tipo || d.tipo_deposito) === 'central' || String(d.id) === '1' || String(d.nombre).toLowerCase().includes('central')
+    )
+    return filtrados.length > 0 ? filtrados : [{ id: 1, nombre: 'Depósito Central', ubicacion: 'Casa Central' }]
+  }, [depositos])
+
+  useEffect(() => {
+    const centralId = String(depositosDisponibles[0]?.id || 1)
+    if (egresoDeposito !== centralId) setEgresoDeposito(centralId)
+    if (ingresoDeposito !== centralId) setIngresoDeposito(centralId)
+  }, [depositosDisponibles, egresoModalOpen, ingresoModalOpen])
+
   useEffect(() => {
     const match = instituciones.find(i => i.nombre.toLowerCase() === egresoInst.trim().toLowerCase())
     setEgresoNivel(match?.nivel_educativo || '')
   }, [egresoInst, instituciones])
-
-  useEffect(() => {
-    if (egresoModalOpen && !egresoDeposito && depositos.length > 0) {
-      const central = depositos.find(d => (d.tipo || d.tipo_deposito) === 'central' || d.nombre?.toLowerCase().includes('central') || d.id == 1)
-      if (central) setEgresoDeposito(String(central.id))
-    }
-  }, [egresoModalOpen, depositos, egresoDeposito])
 
   const findProducto = (nombre) =>
     productos.find(p => p.nombre.toLowerCase().trim() === (nombre || '').toLowerCase().trim())
@@ -576,10 +582,9 @@ return (
               <h3>➖ Egreso de Productos</h3>
               <div style={{ marginBottom: 16, padding: 12, background: '#fff3e0', borderRadius: 6 }}>
                 <label><strong>Depósito origen:</strong></label>
-                <select value={egresoDeposito} onChange={e => setEgresoDeposito(e.target.value)} style={{ marginLeft: 8 }}>
-                  <option value="">-- Depósito del stock --</option>
-                  {depositos.map(d => (
-                    <option key={d.id} value={d.id}>{d.nombre} ({d.ubicacion})</option>
+                <select value={egresoDeposito} onChange={e => setEgresoDeposito(e.target.value)} style={{ marginLeft: 8 }} disabled>
+                  {depositosDisponibles.map(d => (
+                    <option key={d.id} value={d.id}>{d.nombre} ({d.ubicacion || 'Casa Central'})</option>
                   ))}
                 </select>
               </div>
@@ -783,17 +788,11 @@ return (
               <h3>Ingreso de Productos</h3>
               <div style={{ marginBottom: 16, padding: 12, background: '#e8f5e9', borderRadius: 6 }}>
                 <label><strong>Depósito destino:</strong></label>
-                <select value={ingresoDeposito} onChange={e => setIngresoDeposito(e.target.value)} style={{ marginLeft: 8 }}>
-                  <option value="">-- Seleccionar depósito --</option>
-                  {depositos.map(d => (
-                    <option key={d.id} value={d.id}>{d.nombre} ({d.ubicacion})</option>
+                <select value={ingresoDeposito} onChange={e => setIngresoDeposito(e.target.value)} style={{ marginLeft: 8 }} disabled>
+                  {depositosDisponibles.map(d => (
+                    <option key={d.id} value={d.id}>{d.nombre} ({d.ubicacion || 'Casa Central'})</option>
                   ))}
                 </select>
-                {ingresoDeposito && (
-                  <span style={{ marginLeft: 12, fontSize: '0.8rem', color: '#666' }}>
-                    {depositos.find(dd => dd.id == ingresoDeposito)?.tipo === 'capsula' ? '⚠️ Requiere autorización' : 'Normal'}
-                  </span>
-                )}
               </div>
               <form onSubmit={handleIngresoSubmit} className="grid">
                 <div style={{ gridColumn: '1 / -1' }}>

@@ -556,14 +556,16 @@ export default function Bajas() {
                 <div>
                   <label>Depósito de origen</label>
                   <select
-                    value={form.depositoId}
+                    value={form.depositoId || '1'}
                     onChange={e => setForm(prev => ({ ...prev, depositoId: e.target.value }))}
-                    required
+                    disabled
                   >
-                    <option value="">Seleccionar depósito...</option>
-                    {depositos.map(d => (
-                      <option key={d.id} value={d.id}>{d.nombre}</option>
-                    ))}
+                    {depositos
+                      .filter(d => (d.tipo || d.tipo_deposito) === 'central' || String(d.id) === '1' || String(d.nombre || '').toLowerCase().includes('central'))
+                      .map(d => (
+                        <option key={d.id} value={d.id}>{d.nombre}</option>
+                      ))
+                    }
                   </select>
                 </div>
 
