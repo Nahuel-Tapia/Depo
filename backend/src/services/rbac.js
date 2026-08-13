@@ -21,6 +21,12 @@ function getDefaultPermissionCodes() {
 async function ensureRbacSchemaAndSeed() {
   if (rbacReady) return;
 
+  // En Vercel las tablas ya existen y están seeded — solo marcar como listo
+  if (process.env.VERCEL) {
+    rbacReady = true;
+    return;
+  }
+
   await ensureRoleTableSeeded();
 
   const client = await pool.connect();
