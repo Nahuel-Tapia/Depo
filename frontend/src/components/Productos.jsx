@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import Modal from './ui/Modal'
 import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../api'
 import PrintButton from './PrintButton'
@@ -450,239 +451,176 @@ export default function Productos() {
       </table>
       </div>
 
-      {formOpen && hasPermission('productos.create') && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0, 0, 0, 0.4)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-            padding: 16
-          }}
-          onClick={e => {
-            if (e.target === e.currentTarget) setFormOpen(false)
-          }}
-        >
-          <div style={{ background: '#ffffff', padding: 28, borderRadius: 8, width: 'min(760px, 100%)', border: '1px solid var(--border)', maxHeight: '92vh', overflowY: 'auto' }}>
-            <h3 style={{ marginTop: 0, marginBottom: 18 }}>Crear nuevo producto</h3>
-            <form onSubmit={handleCreate} style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14 }}>
-              <div>
-                <label>Código / SKU</label>
-                <input type="text" value={form.codigo_sku} onChange={e => setForm({ ...form, codigo_sku: e.target.value })} placeholder="Ej: ART-001" />
-              </div>
-              <div>
-                <label>Nombre del producto *</label>
-                <input type="text" value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Ej: Resma A4 75g" required />
-              </div>
-              <div>
-                <label>Marca / Fabricante</label>
-                <input type="text" value={form.marca} onChange={e => setForm({ ...form, marca: e.target.value })} placeholder="Ej: Ledesma" />
-              </div>
-              <div>
-                <label>Categoría</label>
-                <select value={form.id_categoria} onChange={e => setForm({ ...form, id_categoria: e.target.value })}>
-                  <option value="">-- Sin categoría --</option>
-                  {categorias.map(cat => (
-                    <option key={cat.id} value={cat.id}>{cat.nombre}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label>Unidad de medida</label>
-                <input type="text" value={form.unidad_medida} onChange={e => setForm({ ...form, unidad_medida: e.target.value })} placeholder="Ej: unidad, litro, kg, pack" />
-              </div>
-              <div>
-                <label>Stock mínimo (alerta)</label>
-                <input type="number" value={form.stock_minimo} onChange={e => setForm({ ...form, stock_minimo: e.target.value })} placeholder="0" min="0" />
-              </div>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <label>Ubicación en Depósito</label>
-                <input type="text" value={form.ubicacion_estante} onChange={e => setForm({ ...form, ubicacion_estante: e.target.value })} placeholder="Ej: Pasillo 2 - Estante B" />
-              </div>
-              <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                <input
-                  type="checkbox"
-                  id="create-es-perecedero"
-                  checked={form.es_perecedero}
-                  onChange={e => setForm({ ...form, es_perecedero: e.target.checked })}
-                  style={{ width: 'auto', minHeight: 'auto', cursor: 'pointer' }}
-                />
-                <label htmlFor="create-es-perecedero" style={{ margin: 0, textTransform: 'none', cursor: 'pointer', fontSize: '0.9rem' }}>
-                  Es producto perecedero (requiere control de fecha de vencimiento)
-                </label>
-              </div>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <label>Descripción / Observaciones</label>
-                <textarea
-                  value={form.descripcion}
-                  onChange={e => setForm({ ...form, descripcion: e.target.value })}
-                  placeholder="Detalles adicionales, contenido o especificaciones técnicas..."
-                  rows={3}
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', fontFamily: 'Ubuntu, sans-serif', fontSize: '0.9rem' }}
-                />
-              </div>
-              <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 10 }}>
-                <button type="button" className="secondary" onClick={() => setFormOpen(false)}>Cancelar</button>
-                <button type="submit" style={{ width: 'auto', margin: 0, padding: '8px 18px' }}>Guardar producto</button>
-              </div>
-            </form>
+      <Modal isOpen={formOpen && hasPermission('productos.create')} onClose={() => setFormOpen(false)} title="Crear nuevo producto" maxWidth={760}>
+        <form onSubmit={handleCreate} style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14 }}>
+          <div>
+            <label>Código / SKU</label>
+            <input type="text" value={form.codigo_sku} onChange={e => setForm({ ...form, codigo_sku: e.target.value })} placeholder="Ej: ART-001" />
           </div>
-        </div>
-      )}
-
-      {editModal && hasPermission('productos.edit') && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0, 0, 0, 0.4)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-            padding: 16
-          }}
-          onClick={e => {
-            if (e.target === e.currentTarget) setEditModal(null)
-          }}
-        >
-          <div style={{ background: '#ffffff', padding: 28, borderRadius: 8, width: 'min(760px, 100%)', border: '1px solid var(--border)', maxHeight: '92vh', overflowY: 'auto' }}>
-            <h3 style={{ marginTop: 0, marginBottom: 18 }}>Editar producto</h3>
-            <form onSubmit={handleEditSave} style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14 }}>
-              <div>
-                <label>Código / SKU</label>
-                <input type="text" value={editModal.codigo_sku} onChange={e => setEditModal({ ...editModal, codigo_sku: e.target.value })} placeholder="Ej: ART-001" />
-              </div>
-              <div>
-                <label>Nombre del producto *</label>
-                <input type="text" value={editModal.nombre} onChange={e => setEditModal({ ...editModal, nombre: e.target.value })} placeholder="Ej: Resma A4 75g" required />
-              </div>
-              <div>
-                <label>Marca / Fabricante</label>
-                <input type="text" value={editModal.marca} onChange={e => setEditModal({ ...editModal, marca: e.target.value })} placeholder="Ej: Ledesma" />
-              </div>
-              <div>
-                <label>Categoría</label>
-                <select value={editModal.id_categoria} onChange={e => setEditModal({ ...editModal, id_categoria: e.target.value })}>
-                  <option value="">-- Sin categoría --</option>
-                  {categorias.map(cat => (
-                    <option key={cat.id} value={cat.id}>{cat.nombre}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label>Unidad de medida</label>
-                <input type="text" value={editModal.unidad_medida} onChange={e => setEditModal({ ...editModal, unidad_medida: e.target.value })} placeholder="Ej: unidad, litro, kg, pack" />
-              </div>
-              <div>
-                <label>Stock mínimo (alerta)</label>
-                <input type="number" value={editModal.stock_minimo} onChange={e => setEditModal({ ...editModal, stock_minimo: e.target.value })} placeholder="0" min="0" />
-              </div>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <label>Ubicación en Depósito</label>
-                <input type="text" value={editModal.ubicacion_estante} onChange={e => setEditModal({ ...editModal, ubicacion_estante: e.target.value })} placeholder="Ej: Pasillo 2 - Estante B" />
-              </div>
-              <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                <input
-                  type="checkbox"
-                  id="edit-es-perecedero"
-                  checked={editModal.es_perecedero}
-                  onChange={e => setEditModal({ ...editModal, es_perecedero: e.target.checked })}
-                  style={{ width: 'auto', minHeight: 'auto', cursor: 'pointer' }}
-                />
-                <label htmlFor="edit-es-perecedero" style={{ margin: 0, textTransform: 'none', cursor: 'pointer', fontSize: '0.9rem' }}>
-                  Es producto perecedero (requiere control de fecha de vencimiento)
-                </label>
-              </div>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <label>Descripción / Observaciones</label>
-                <textarea
-                  value={editModal.descripcion}
-                  onChange={e => setEditModal({ ...editModal, descripcion: e.target.value })}
-                  placeholder="Detalles adicionales, contenido o especificaciones técnicas..."
-                  rows={3}
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', fontFamily: 'Ubuntu, sans-serif', fontSize: '0.9rem' }}
-                />
-              </div>
-              <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 10 }}>
-                <button type="button" className="secondary" onClick={() => setEditModal(null)}>Cancelar</button>
-                <button type="submit" style={{ width: 'auto', margin: 0, padding: '8px 18px' }}>Guardar cambios</button>
-              </div>
-            </form>
+          <div>
+            <label>Nombre del producto *</label>
+            <input type="text" value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Ej: Resma A4 75g" required />
           </div>
-        </div>
-      )}
+          <div>
+            <label>Marca / Fabricante</label>
+            <input type="text" value={form.marca} onChange={e => setForm({ ...form, marca: e.target.value })} placeholder="Ej: Ledesma" />
+          </div>
+          <div>
+            <label>Categoría</label>
+            <select value={form.id_categoria} onChange={e => setForm({ ...form, id_categoria: e.target.value })}>
+              <option value="">-- Sin categoría --</option>
+              {categorias.map(cat => (
+                <option key={cat.id} value={cat.id}>{cat.nombre}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label>Unidad de medida</label>
+            <input type="text" value={form.unidad_medida} onChange={e => setForm({ ...form, unidad_medida: e.target.value })} placeholder="Ej: unidad, litro, kg, pack" />
+          </div>
+          <div>
+            <label>Stock mínimo (alerta)</label>
+            <input type="number" value={form.stock_minimo} onChange={e => setForm({ ...form, stock_minimo: e.target.value })} placeholder="0" min="0" />
+          </div>
+          <div style={{ gridColumn: '1 / -1' }}>
+            <label>Ubicación en Depósito</label>
+            <input type="text" value={form.ubicacion_estante} onChange={e => setForm({ ...form, ubicacion_estante: e.target.value })} placeholder="Ej: Pasillo 2 - Estante B" />
+          </div>
+          <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+            <input
+              type="checkbox"
+              id="create-es-perecedero"
+              checked={form.es_perecedero}
+              onChange={e => setForm({ ...form, es_perecedero: e.target.checked })}
+              style={{ width: 'auto', minHeight: 'auto', cursor: 'pointer' }}
+            />
+            <label htmlFor="create-es-perecedero" style={{ margin: 0, textTransform: 'none', cursor: 'pointer', fontSize: '0.9rem' }}>
+              Es producto perecedero (requiere control de fecha de vencimiento)
+            </label>
+          </div>
+          <div style={{ gridColumn: '1 / -1' }}>
+            <label>Descripción / Observaciones</label>
+            <textarea
+              value={form.descripcion}
+              onChange={e => setForm({ ...form, descripcion: e.target.value })}
+              placeholder="Detalles adicionales, contenido o especificaciones técnicas..."
+              rows={3}
+              style={{ width: '100%', padding: '8px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', fontFamily: 'Ubuntu, sans-serif', fontSize: '0.9rem' }}
+            />
+          </div>
+          <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 10 }}>
+            <button type="button" className="secondary" onClick={() => setFormOpen(false)}>Cancelar</button>
+            <button type="submit" style={{ width: 'auto', margin: 0, padding: '8px 18px' }}>Guardar producto</button>
+          </div>
+        </form>
+      </Modal>
 
-      {deleteModal && canDeleteProductos && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0, 0, 0, 0.45)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-            padding: 16
-          }}
-          onClick={e => {
-            if (e.target === e.currentTarget) setDeleteModal(null)
-          }}
-        >
-          <div style={{ background: '#f9fafb', padding: 24, borderRadius: 10, width: 'min(520px, 100%)' }}>
-            <h3>Confirmar eliminación</h3>
+      <Modal isOpen={!!editModal && hasPermission('productos.edit')} onClose={() => setEditModal(null)} title="Editar producto" maxWidth={760}>
+        {editModal && (
+          <form onSubmit={handleEditSave} style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14 }}>
+            <div>
+              <label>Código / SKU</label>
+              <input type="text" value={editModal.codigo_sku} onChange={e => setEditModal({ ...editModal, codigo_sku: e.target.value })} placeholder="Ej: ART-001" />
+            </div>
+            <div>
+              <label>Nombre del producto *</label>
+              <input type="text" value={editModal.nombre} onChange={e => setEditModal({ ...editModal, nombre: e.target.value })} placeholder="Ej: Resma A4 75g" required />
+            </div>
+            <div>
+              <label>Marca / Fabricante</label>
+              <input type="text" value={editModal.marca} onChange={e => setEditModal({ ...editModal, marca: e.target.value })} placeholder="Ej: Ledesma" />
+            </div>
+            <div>
+              <label>Categoría</label>
+              <select value={editModal.id_categoria} onChange={e => setEditModal({ ...editModal, id_categoria: e.target.value })}>
+                <option value="">-- Sin categoría --</option>
+                {categorias.map(cat => (
+                  <option key={cat.id} value={cat.id}>{cat.nombre}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label>Unidad de medida</label>
+              <input type="text" value={editModal.unidad_medida} onChange={e => setEditModal({ ...editModal, unidad_medida: e.target.value })} placeholder="Ej: unidad, litro, kg, pack" />
+            </div>
+            <div>
+              <label>Stock mínimo (alerta)</label>
+              <input type="number" value={editModal.stock_minimo} onChange={e => setEditModal({ ...editModal, stock_minimo: e.target.value })} placeholder="0" min="0" />
+            </div>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label>Ubicación en Depósito</label>
+              <input type="text" value={editModal.ubicacion_estante} onChange={e => setEditModal({ ...editModal, ubicacion_estante: e.target.value })} placeholder="Ej: Pasillo 2 - Estante B" />
+            </div>
+            <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+              <input
+                type="checkbox"
+                id="edit-es-perecedero"
+                checked={editModal.es_perecedero}
+                onChange={e => setEditModal({ ...editModal, es_perecedero: e.target.checked })}
+                style={{ width: 'auto', minHeight: 'auto', cursor: 'pointer' }}
+              />
+              <label htmlFor="edit-es-perecedero" style={{ margin: 0, textTransform: 'none', cursor: 'pointer', fontSize: '0.9rem' }}>
+                Es producto perecedero (requiere control de fecha de vencimiento)
+              </label>
+            </div>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label>Descripción / Observaciones</label>
+              <textarea
+                value={editModal.descripcion}
+                onChange={e => setEditModal({ ...editModal, descripcion: e.target.value })}
+                placeholder="Detalles adicionales, contenido o especificaciones técnicas..."
+                rows={3}
+                style={{ width: '100%', padding: '8px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', fontFamily: 'Ubuntu, sans-serif', fontSize: '0.9rem' }}
+              />
+            </div>
+            <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 10 }}>
+              <button type="button" className="secondary" onClick={() => setEditModal(null)}>Cancelar</button>
+              <button type="submit" style={{ width: 'auto', margin: 0, padding: '8px 18px' }}>Guardar cambios</button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      <Modal isOpen={!!deleteModal && canDeleteProductos} onClose={() => setDeleteModal(null)} title="Confirmar eliminación" maxWidth={520}>
+        {deleteModal && (
+          <div>
             <p style={{ marginTop: 8, marginBottom: 20 }}>
               ¿Está seguro que quiere eliminar "{deleteModal.nombre}"?
             </p>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
               <button type="button" className="secondary" onClick={() => setDeleteModal(null)}>No</button>
-              <button type="button" onClick={confirmDelete} style={{ width: 'auto', margin: 0, padding: '10px 18px' }}>Sí</button>
+              <button type="button" onClick={confirmDelete} style={{ width: 'auto', margin: 0, padding: '10px 18px', background: 'var(--red)' }}>Sí, eliminar</button>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
 
-      {detailModal && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0, 0, 0, 0.45)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-            padding: 16
-          }}
-          onClick={e => {
-            if (e.target === e.currentTarget) setDetailModal(null)
-          }}
-        >
-          <div style={{ background: '#f9fafb', padding: 24, borderRadius: 10, width: 'min(720px, 100%)', maxHeight: '90vh', overflowY: 'auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <h3 style={{ margin: 0 }}>
-                {detailModal.producto?.nombre} 
-                <span style={{ fontSize: '1.1rem', color: 'var(--muted)', marginLeft: 8 }}>
-                  ({detailModal.producto?.codigo_sku || `#${detailModal.producto?.id}`})
-                </span>
-              </h3>
-              <button className="secondary" onClick={() => setDetailModal(null)} style={{ margin: 0, padding: '6px 12px' }}>✕</button>
-            </div>
-            
-            <div style={{ background: '#fff', padding: 16, borderRadius: 8, border: '1px solid var(--border)', marginBottom: 20 }}>
+      <Modal 
+        isOpen={!!detailModal} 
+        onClose={() => setDetailModal(null)} 
+        title={
+          <span>
+            {detailModal?.producto?.nombre} 
+            <span style={{ fontSize: '1rem', color: 'var(--muted)', marginLeft: 8, fontWeight: 'normal' }}>
+              ({detailModal?.producto?.codigo_sku || `#${detailModal?.producto?.id}`})
+            </span>
+          </span>
+        } 
+        maxWidth={720}
+      >
+        {detailModal && (
+          <div>
+            <div style={{ background: '#f8fafc', padding: 16, borderRadius: 8, border: '1px solid var(--border)', marginBottom: 20 }}>
               <p style={{ margin: '0 0 8px 0' }}><strong>Marca:</strong> {detailModal.producto?.marca || '-'}</p>
               <p style={{ margin: '0 0 8px 0' }}><strong>Categoría:</strong> {detailModal.producto?.categoria_nombre || '-'}</p>
               <p style={{ margin: 0 }}><strong>Descripción:</strong> {detailModal.producto?.descripcion || '-'}</p>
             </div>
 
-            <h4>📦 Distribución por Depósito</h4>
+            <h4 style={{ marginBottom: 12 }}>📦 Distribución por Depósito</h4>
             {detailModal.depositos?.length === 0 ? (
-              <p style={{ color: 'var(--muted)' }}>No hay stock registrado en ningún depósito.</p>
+              <p style={{ color: 'var(--muted)', fontSize: '0.9rem' }}>No hay stock registrado en ningún depósito.</p>
             ) : (
-              <table style={{ marginBottom: 20 }}>
+              <table style={{ marginBottom: 24 }}>
                 <thead>
                   <tr style={{ background: '#f1f5f9' }}>
                     <th>Depósito</th>
@@ -693,16 +631,16 @@ export default function Productos() {
                   {detailModal.depositos.map((d, idx) => (
                     <tr key={idx}>
                       <td>{d.deposito}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 700 }}>{d.cantidad}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--blue)' }}>{d.cantidad}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             )}
 
-            <h4>📅 Fechas de Vencimiento</h4>
+            <h4 style={{ marginBottom: 12 }}>📅 Fechas de Vencimiento</h4>
             {detailModal.vencimientos?.length === 0 ? (
-              <p style={{ color: 'var(--muted)' }}>No hay fechas de vencimiento registradas.</p>
+              <p style={{ color: 'var(--muted)', fontSize: '0.9rem' }}>No hay fechas de vencimiento registradas.</p>
             ) : (
               <table>
                 <thead>
@@ -713,19 +651,24 @@ export default function Productos() {
                   </tr>
                 </thead>
                 <tbody>
-                  {detailModal.vencimientos.map((v, idx) => (
-                    <tr key={idx}>
-                      <td>{v.deposito}</td>
-                      <td>{new Date(v.fecha_vencimiento).toLocaleDateString()}</td>
-                      <td style={{ textAlign: 'right' }}>{v.cantidad}</td>
-                    </tr>
-                  ))}
+                  {detailModal.vencimientos.map((v, idx) => {
+                    const isExpired = new Date(v.fecha_vencimiento) < new Date()
+                    return (
+                      <tr key={idx}>
+                        <td>{v.deposito}</td>
+                        <td style={{ color: isExpired ? 'var(--red)' : 'inherit', fontWeight: isExpired ? 'bold' : 'normal' }}>
+                          {new Date(v.fecha_vencimiento).toLocaleDateString()} {isExpired && ' (Vencido)'}
+                        </td>
+                        <td style={{ textAlign: 'right' }}>{v.cantidad}</td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             )}
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
     </div>
   )
 }
