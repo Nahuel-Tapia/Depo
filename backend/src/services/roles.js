@@ -38,8 +38,18 @@ async function ensureRoleTableSeeded() {
 }
 
 async function getAllRoles() {
-  await ensureRoleTableSeeded();
-  return all("SELECT id_rol AS id, nombre FROM rol ORDER BY nombre ASC");
+  try {
+    await ensureRoleTableSeeded();
+    const rows = await all("SELECT id_rol AS id, nombre FROM rol ORDER BY nombre ASC");
+    if (Array.isArray(rows) && rows.length > 0) {
+      return rows;
+    }
+  } catch (err) {
+    console.error("[getAllRoles error]", err.message || err);
+  }
+
+  const { DEFAULT_ROLE_PERMISSIONS } = require("../permissions");
+  return Object.keys(DEFAULT_ROLE_PERMISSIONS).map((r, idx) => ({ id: idx + 1, nombre: r }));
 }
 
 async function roleExists(role) {

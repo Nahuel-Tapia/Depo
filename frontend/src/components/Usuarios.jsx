@@ -122,7 +122,22 @@ export default function Usuarios() {
     loadRoles()
   }, [])
 
-  let availableRoles = roles.length ? roles : ['consulta', 'operador', 'operador_escolar', 'supervisor', 'director_area', 'directivo', 'admin']
+  const ALL_SYSTEM_ROLES = [
+    'admin',
+    'master',
+    'directivo',
+    'director_area',
+    'supervisor',
+    'operador',
+    'operador_escolar',
+    'area_compras',
+    'control_ministerio',
+    'secretario_administrativo',
+    'ministro_financiero',
+    'consulta'
+  ]
+
+  let availableRoles = roles.length ? roles : ALL_SYSTEM_ROLES
   if (isDirectorArea) {
     availableRoles = ['supervisor']
   }
@@ -154,11 +169,16 @@ export default function Usuarios() {
     const normalized = String(roleName || '').toLowerCase()
     const labels = {
       admin: 'Administrador',
+      master: 'Super Administrador (Master)',
       supervisor: 'Supervisor',
-      director_area: 'Director de Area',
+      director_area: 'Director de Área',
       directivo: 'Directivo',
-      operador: 'Operador',
+      operador: 'Operador Depósito',
       operador_escolar: 'Operador Escolar',
+      control_ministerio: 'Control Ministerio',
+      area_compras: 'Área Compras / Licitaciones',
+      secretario_administrativo: 'Secretario Administrativo',
+      ministro_financiero: 'Ministro Financiero / Hacienda',
       consulta: 'Consulta'
     }
     return labels[normalized] || normalized.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
