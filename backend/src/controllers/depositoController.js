@@ -7,7 +7,7 @@ async function listDepositos(req, res) {
   } catch (err) {
     if (err.status) return res.status(err.status).json({ error: err.message });
     console.error("Error listando depósitos:", err);
-    return res.status(500).json({ error: "No se pudo listar depósitos" });
+    return res.status(500).json({ error: "No se pudo listar depósitos", details: err.message });
   }
 }
 
@@ -137,7 +137,7 @@ async function getRecepcionesLicitacion(req, res) {
   } catch (err) {
     if (err.status) return res.status(err.status).json({ error: err.message });
     console.error("Error al obtener recepciones:", err);
-    return res.status(500).json({ error: "Error al obtener recepciones" });
+    return res.status(500).json({ error: "Error al obtener recepciones", details: err.message });
   }
 }
 

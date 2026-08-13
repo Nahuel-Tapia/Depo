@@ -73,16 +73,16 @@ async function ensureDepositosSchema() {
   // Centralized in schemaManager.js
 }
 
-async function listDepositos(user) {
+async function listDepositos(user = {}) {
   await ensureDepositosSchema();
-  const isEscolar = user.role === "operador_escolar";
+  const isEscolar = user?.role === "operador_escolar";
   let query = `
     SELECT 
       d.id_deposito as id,
       d.nombre,
       d.descripcion,
       d.ubicacion,
-      COALESCE(d.tipo, d.tipo_deposito) as tipo,
+      d.tipo as tipo,
       d.activo,
       d.deposito_padre_id,
       dp.nombre as nombre_padre
@@ -95,7 +95,9 @@ async function listDepositos(user) {
     query += " AND d.id_deposito IN (1, 2)";
   }
 
-  query += " ORDER BY COALESCE(d.tipo, d.tipo_deposito), d.id_deposito";
+  const hasTipoDeposito = await columnExists('deposito', 'tipo_deposito');
+  const orderExpr = hasTipoDeposito ? 'COALESCE(d.tipo, d.tipo_deposito)' : 'd.tipo';
+  query += ` ORDER BY ${orderExpr}, d.id_deposito`;
 
   return await all(query);
 }
@@ -130,8 +132,10 @@ async function getStockPorProducto(user) {
 
 async function getStockByDeposito(id, user) {
   const isEscolar = user.role === "operador_escolar";
+  const hasTipoDeposito = await columnExists('deposito', 'tipo_deposito');
+  const tipoExpr = hasTipoDeposito ? 'COALESCE(tipo, tipo_deposito)' : 'tipo';
   const deposito = await get(
-    `SELECT id_deposito, nombre, descripcion, ubicacion, COALESCE(tipo, tipo_deposito) as tipo, activo, deposito_padre_id 
+    `SELECT id_deposito, nombre, descripcion, ubicacion, ${tipoExpr} as tipo, activo, deposito_padre_id 
      FROM deposito WHERE id_deposito = $1`, 
     [id]
   );
@@ -332,14 +336,17 @@ async function registrarEgreso({ id, id_producto, cantidad, id_institucion, moti
 
 async function getRecepcionesLicitacion() {
   await ensureDepositosSchema();
+  const hasMotivo = await columnExists('licitacion_publicada', 'motivo');
+  const motivoExpr = hasMotivo ? "COALESCE(lp.motivo, 'Licitación Anual ' || lp.anio::text)" : "'Licitación Anual ' || lp.anio::text";
+  const tituloDisplayExpr = hasMotivo ? "COALESCE(NULLIF(BTRIM(lp.motivo), ''), 'Licitación Anual ' || lp.anio::text)" : "'Licitación Anual ' || lp.anio::text";
+
   return await all(
     `SELECT lp.id,
             lp.anio,
             lp.fecha_publicacion,
             lp.estado,
-            lp.titulo,
-            lp.motivo,
-            COALESCE(NULLIF(BTRIM(lp.motivo), ''), NULLIF(BTRIM(lp.titulo), ''), 'Licitación Anual ' || lp.anio::text) AS titulo_display,
+            ${motivoExpr} AS motivo,
+            ${tituloDisplayExpr} AS titulo_display,
             COALESCE(prov_data.proveedores, 'Sin proveedor asignado') AS proveedores
      FROM licitacion_publicada lp
      LEFT JOIN LATERAL (

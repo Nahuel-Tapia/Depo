@@ -17,7 +17,17 @@ export default function Productos() {
   const [filterCategoria, setFilterCategoria] = useState('')
   const [filterEstado, setFilterEstado] = useState('')
   const [sortBy, setSortBy] = useState('nombre_asc')
-  const [form, setForm] = useState({ nombre: '', marca: '', unidad_medida: 'unidad', stock_minimo: 0, id_categoria: '' })
+  const [form, setForm] = useState({
+    codigo_sku: '',
+    nombre: '',
+    marca: '',
+    unidad_medida: 'unidad',
+    ubicacion_estante: '',
+    stock_minimo: 0,
+    id_categoria: '',
+    descripcion: '',
+    es_perecedero: false
+  })
   const [vencimientosProximos, setVencimientosProximos] = useState(new Set())
   const canDeleteProductos = hasPermission('productos.delete') || user?.role === 'admin' || user?.role === 'master'
 
@@ -36,7 +46,6 @@ export default function Productos() {
       const res = await apiFetch('/api/productos', { token })
       if (res.ok) {
         const data = await res.json()
-        // Nuevamente, esperamos que data.productos incluya deposito en cada item
         setProductos(data.productos || [])
       }
     } catch { /* ignore */ }
@@ -60,7 +69,7 @@ export default function Productos() {
       if (res.ok) {
         const data = await res.json()
         const prod = productos.find(p => p.id === id)
-        setDetailModal({ ...data, producto_nombre: prod?.nombre || 'Producto' })
+        setDetailModal({ ...data, producto: prod })
       }
     } catch { /* ignore */ }
   }
@@ -88,11 +97,15 @@ export default function Productos() {
     setMsg({ text: '', type: '' })
 
     const payload = {
+      codigo_sku: form.codigo_sku.trim() || '',
       nombre: form.nombre.trim(),
       marca: form.marca.trim() || '',
       unidad_medida: form.unidad_medida.trim() || 'unidad',
+      ubicacion_estante: form.ubicacion_estante.trim() || '',
       stock_minimo: parseInt(form.stock_minimo) || 0,
-      id_categoria: form.id_categoria || null
+      id_categoria: form.id_categoria || null,
+      descripcion: form.descripcion.trim() || '',
+      es_perecedero: Boolean(form.es_perecedero)
     }
 
     const res = await apiFetch('/api/productos', {
@@ -107,9 +120,19 @@ export default function Productos() {
       return
     }
 
-    setForm({ nombre: '', marca: '', unidad_medida: 'unidad', stock_minimo: 0, id_categoria: '' })
+    setForm({
+      codigo_sku: '',
+      nombre: '',
+      marca: '',
+      unidad_medida: 'unidad',
+      ubicacion_estante: '',
+      stock_minimo: 0,
+      id_categoria: '',
+      descripcion: '',
+      es_perecedero: false
+    })
     setFormOpen(false)
-    setMsg({ text: 'Producto creado', type: 'success' })
+    setMsg({ text: 'Producto creado exitosamente', type: 'success' })
     loadProductos()
   }
 
@@ -119,11 +142,15 @@ export default function Productos() {
 
     setEditModal({
       id: producto.id,
+      codigo_sku: producto.codigo_sku || '',
       nombre: producto.nombre || '',
       marca: producto.marca || '',
       unidad_medida: producto.unidad_medida || 'unidad',
+      ubicacion_estante: producto.ubicacion_estante || '',
       stock_minimo: producto.stock_minimo ?? 0,
-      id_categoria: producto.id_categoria || ''
+      id_categoria: producto.id_categoria || '',
+      descripcion: producto.descripcion || '',
+      es_perecedero: Boolean(producto.es_perecedero)
     })
   }
 
@@ -132,11 +159,15 @@ export default function Productos() {
     if (!editModal) return
 
     const payload = {
+      codigo_sku: String(editModal.codigo_sku || '').trim() || '',
       nombre: String(editModal.nombre || '').trim(),
       marca: String(editModal.marca || '').trim() || '',
       unidad_medida: String(editModal.unidad_medida || '').trim() || 'unidad',
+      ubicacion_estante: String(editModal.ubicacion_estante || '').trim() || '',
       stock_minimo: parseInt(editModal.stock_minimo, 10) || 0,
-      id_categoria: editModal.id_categoria || null
+      id_categoria: editModal.id_categoria || null,
+      descripcion: String(editModal.descripcion || '').trim() || '',
+      es_perecedero: Boolean(editModal.es_perecedero)
     }
 
     if (!payload.nombre) {
@@ -203,8 +234,10 @@ export default function Productos() {
       .filter((producto) => {
         const matchesSearch = !search || [
           producto.nombre,
+          producto.codigo_sku,
           producto.marca,
           producto.unidad_medida,
+          producto.ubicacion_estante,
           producto.deposito,
           producto.categoria_nombre,
         ].some((value) => String(value || '').toLowerCase().includes(search))
@@ -231,7 +264,7 @@ export default function Productos() {
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <FilterSortButton
             searchValue={searchText}
-            searchPlaceholder="Buscar producto, deposito o categoria..."
+            searchPlaceholder="Buscar por nombre, SKU, marca, deposito o categoria..."
             onSearchChange={setSearchText}
             filters={[
               {
@@ -295,27 +328,29 @@ export default function Productos() {
       <div ref={printRef}>
       <h3>Inventario de Productos</h3>
       <table className="productos-table">
-<thead>
+        <thead>
             <tr>
-              <th>ID</th>
+              <th>SKU / ID</th>
               <th>Nombre</th>
-              <th>Unidad</th>
-        <th>Stock Total</th>
-        <th>Depósito</th>
+              <th>Marca</th>
               <th>Categoría</th>
+              <th>Ubicación</th>
+              <th>Stock Total</th>
               <th>Estado</th>
-              <th style={{ background: '#f0f9ff', width: '120px' }}>Acciones</th>
+              <th style={{ background: '#f8fafc', width: '130px' }}>Acciones</th>
             </tr>
           </thead>
         <tbody>
           {productosVista.map(p => (
             <tr key={p.id}>
-              <td>{p.id}</td>
+              <td>
+                <span style={{ fontWeight: 600, color: 'var(--dark)' }}>{p.codigo_sku || `#${p.id}`}</span>
+              </td>
               <td>{p.nombre}</td>
-              <td>{p.unidad_medida || 'unidad'}</td>
-              <td>{p.stock_total ?? 0}</td>
-              <td>{p.deposito || '-'}</td>
+              <td>{p.marca || '-'}</td>
               <td>{p.categoria_nombre || '-'}</td>
+              <td>{p.ubicacion_estante || '-'}</td>
+              <td><strong>{p.stock_total ?? 0}</strong> <span style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>{p.unidad_medida || 'un'}</span></td>
               <td>
                 {(() => {
                   const stock = p.stock_total ?? p.stock_actual ?? 0
@@ -327,9 +362,9 @@ export default function Productos() {
                       <span style={{
                         display: 'inline-flex', alignItems: 'center', gap: 5,
                         background: '#fef2f2', color: '#b91c1c', border: '1px solid #fca5a5',
-                        borderRadius: 6, padding: '3px 9px', fontWeight: 600, fontSize: 12
+                        borderRadius: 4, padding: '2px 8px', fontWeight: 600, fontSize: 11
                       }}>
-                        <span style={{ fontSize: 10 }}>●</span> Stock bajo
+                        Stock bajo
                       </span>
                     )
                   }
@@ -338,9 +373,9 @@ export default function Productos() {
                       <span style={{
                         display: 'inline-flex', alignItems: 'center', gap: 5,
                         background: '#fffbeb', color: '#92400e', border: '1px solid #fcd34d',
-                        borderRadius: 6, padding: '3px 9px', fontWeight: 600, fontSize: 12
+                        borderRadius: 4, padding: '2px 8px', fontWeight: 600, fontSize: 11
                       }}>
-                        <span style={{ fontSize: 10 }}>●</span> Próximo a vencer
+                        Próximo a vencer
                       </span>
                     )
                   }
@@ -348,9 +383,9 @@ export default function Productos() {
                     <span style={{
                       display: 'inline-flex', alignItems: 'center', gap: 5,
                       background: '#ecfdf5', color: '#065f46', border: '1px solid #6ee7b7',
-                      borderRadius: 6, padding: '3px 9px', fontWeight: 600, fontSize: 12
+                      borderRadius: 4, padding: '2px 8px', fontWeight: 600, fontSize: 11
                     }}>
-                      <span style={{ fontSize: 10 }}>●</span> OK
+                      OK
                     </span>
                   )
                 })()}
@@ -358,12 +393,12 @@ export default function Productos() {
               
               <td>
                 <div className="inline-actions">
-                  <button onClick={() => loadDetail(p.id)} style={{ background: '#e0f2fe', color: '#0369a1' }}>Detalle</button>
+                  <button onClick={() => loadDetail(p.id)} className="secondary" style={{ padding: '4px 8px', fontSize: '0.78rem' }}>Detalle</button>
                   {hasPermission('productos.edit') && (
-                    <button onClick={() => handleEdit(p.id)}>Editar</button>
+                    <button onClick={() => handleEdit(p.id)} style={{ padding: '4px 8px', fontSize: '0.78rem' }}>Editar</button>
                   )}
                   {canDeleteProductos && (
-                    <button onClick={() => handleDelete(p.id)}>Eliminar</button>
+                    <button onClick={() => handleDelete(p.id)} className="secondary" style={{ padding: '4px 8px', fontSize: '0.78rem', color: '#dc2626', borderColor: '#fca5a5' }}>Eliminar</button>
                   )}
                 </div>
               </td>
@@ -378,7 +413,7 @@ export default function Productos() {
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(0, 0, 0, 0.45)',
+            background: 'rgba(0, 0, 0, 0.4)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -389,20 +424,20 @@ export default function Productos() {
             if (e.target === e.currentTarget) setFormOpen(false)
           }}
         >
-          <div style={{ background: '#f9fafb', padding: 24, borderRadius: 10, width: 'min(720px, 100%)' }}>
-            <h3>Crear producto</h3>
-            <form onSubmit={handleCreate} className="grid">
+          <div style={{ background: '#ffffff', padding: 28, borderRadius: 8, width: 'min(760px, 100%)', border: '1px solid var(--border)', maxHeight: '92vh', overflowY: 'auto' }}>
+            <h3 style={{ marginTop: 0, marginBottom: 18 }}>Crear nuevo producto</h3>
+            <form onSubmit={handleCreate} style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14 }}>
               <div>
-                <label>Nombre del producto</label>
-                <input type="text" value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Ej: Resma A4" required />
+                <label>Código / SKU</label>
+                <input type="text" value={form.codigo_sku} onChange={e => setForm({ ...form, codigo_sku: e.target.value })} placeholder="Ej: ART-001" />
               </div>
               <div>
-                <label>Unidad de medida</label>
-                <input type="text" value={form.unidad_medida} onChange={e => setForm({ ...form, unidad_medida: e.target.value })} placeholder="Ej: unidad, kg, litro" />
+                <label>Nombre del producto *</label>
+                <input type="text" value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Ej: Resma A4 75g" required />
               </div>
               <div>
-                <label>Stock mínimo</label>
-                <input type="number" value={form.stock_minimo} onChange={e => setForm({ ...form, stock_minimo: e.target.value })} placeholder="0" min="0" />
+                <label>Marca / Fabricante</label>
+                <input type="text" value={form.marca} onChange={e => setForm({ ...form, marca: e.target.value })} placeholder="Ej: Ledesma" />
               </div>
               <div>
                 <label>Categoría</label>
@@ -413,9 +448,43 @@ export default function Productos() {
                   ))}
                 </select>
               </div>
-              <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <div>
+                <label>Unidad de medida</label>
+                <input type="text" value={form.unidad_medida} onChange={e => setForm({ ...form, unidad_medida: e.target.value })} placeholder="Ej: unidad, litro, kg, pack" />
+              </div>
+              <div>
+                <label>Stock mínimo (alerta)</label>
+                <input type="number" value={form.stock_minimo} onChange={e => setForm({ ...form, stock_minimo: e.target.value })} placeholder="0" min="0" />
+              </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label>Ubicación en Depósito</label>
+                <input type="text" value={form.ubicacion_estante} onChange={e => setForm({ ...form, ubicacion_estante: e.target.value })} placeholder="Ej: Pasillo 2 - Estante B" />
+              </div>
+              <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                <input
+                  type="checkbox"
+                  id="create-es-perecedero"
+                  checked={form.es_perecedero}
+                  onChange={e => setForm({ ...form, es_perecedero: e.target.checked })}
+                  style={{ width: 'auto', minHeight: 'auto', cursor: 'pointer' }}
+                />
+                <label htmlFor="create-es-perecedero" style={{ margin: 0, textTransform: 'none', cursor: 'pointer', fontSize: '0.9rem' }}>
+                  Es producto perecedero (requiere control de fecha de vencimiento)
+                </label>
+              </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label>Descripción / Observaciones</label>
+                <textarea
+                  value={form.descripcion}
+                  onChange={e => setForm({ ...form, descripcion: e.target.value })}
+                  placeholder="Detalles adicionales, contenido o especificaciones técnicas..."
+                  rows={3}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', fontFamily: 'Ubuntu, sans-serif', fontSize: '0.9rem' }}
+                />
+              </div>
+              <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 10 }}>
                 <button type="button" className="secondary" onClick={() => setFormOpen(false)}>Cancelar</button>
-                <button type="submit" style={{ width: 'auto', margin: 0, padding: '10px 18px' }}>Guardar producto</button>
+                <button type="submit" style={{ width: 'auto', margin: 0, padding: '8px 18px' }}>Guardar producto</button>
               </div>
             </form>
           </div>
@@ -427,7 +496,7 @@ export default function Productos() {
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(0, 0, 0, 0.45)',
+            background: 'rgba(0, 0, 0, 0.4)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -438,20 +507,20 @@ export default function Productos() {
             if (e.target === e.currentTarget) setEditModal(null)
           }}
         >
-          <div style={{ background: '#f9fafb', padding: 24, borderRadius: 10, width: 'min(720px, 100%)' }}>
-            <h3>Editar producto</h3>
-            <form onSubmit={handleEditSave} className="grid">
+          <div style={{ background: '#ffffff', padding: 28, borderRadius: 8, width: 'min(760px, 100%)', border: '1px solid var(--border)', maxHeight: '92vh', overflowY: 'auto' }}>
+            <h3 style={{ marginTop: 0, marginBottom: 18 }}>Editar producto</h3>
+            <form onSubmit={handleEditSave} style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14 }}>
               <div>
-                <label>Nombre del producto</label>
-                <input type="text" value={editModal.nombre} onChange={e => setEditModal({ ...editModal, nombre: e.target.value })} placeholder="Ej: Resma A4" required />
+                <label>Código / SKU</label>
+                <input type="text" value={editModal.codigo_sku} onChange={e => setEditModal({ ...editModal, codigo_sku: e.target.value })} placeholder="Ej: ART-001" />
               </div>
               <div>
-                <label>Unidad de medida</label>
-                <input type="text" value={editModal.unidad_medida} onChange={e => setEditModal({ ...editModal, unidad_medida: e.target.value })} placeholder="Ej: unidad, kg, litro" />
+                <label>Nombre del producto *</label>
+                <input type="text" value={editModal.nombre} onChange={e => setEditModal({ ...editModal, nombre: e.target.value })} placeholder="Ej: Resma A4 75g" required />
               </div>
               <div>
-                <label>Stock mínimo</label>
-                <input type="number" value={editModal.stock_minimo} onChange={e => setEditModal({ ...editModal, stock_minimo: e.target.value })} placeholder="0" min="0" />
+                <label>Marca / Fabricante</label>
+                <input type="text" value={editModal.marca} onChange={e => setEditModal({ ...editModal, marca: e.target.value })} placeholder="Ej: Ledesma" />
               </div>
               <div>
                 <label>Categoría</label>
@@ -462,9 +531,43 @@ export default function Productos() {
                   ))}
                 </select>
               </div>
-              <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <div>
+                <label>Unidad de medida</label>
+                <input type="text" value={editModal.unidad_medida} onChange={e => setEditModal({ ...editModal, unidad_medida: e.target.value })} placeholder="Ej: unidad, litro, kg, pack" />
+              </div>
+              <div>
+                <label>Stock mínimo (alerta)</label>
+                <input type="number" value={editModal.stock_minimo} onChange={e => setEditModal({ ...editModal, stock_minimo: e.target.value })} placeholder="0" min="0" />
+              </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label>Ubicación en Depósito</label>
+                <input type="text" value={editModal.ubicacion_estante} onChange={e => setEditModal({ ...editModal, ubicacion_estante: e.target.value })} placeholder="Ej: Pasillo 2 - Estante B" />
+              </div>
+              <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                <input
+                  type="checkbox"
+                  id="edit-es-perecedero"
+                  checked={editModal.es_perecedero}
+                  onChange={e => setEditModal({ ...editModal, es_perecedero: e.target.checked })}
+                  style={{ width: 'auto', minHeight: 'auto', cursor: 'pointer' }}
+                />
+                <label htmlFor="edit-es-perecedero" style={{ margin: 0, textTransform: 'none', cursor: 'pointer', fontSize: '0.9rem' }}>
+                  Es producto perecedero (requiere control de fecha de vencimiento)
+                </label>
+              </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label>Descripción / Observaciones</label>
+                <textarea
+                  value={editModal.descripcion}
+                  onChange={e => setEditModal({ ...editModal, descripcion: e.target.value })}
+                  placeholder="Detalles adicionales, contenido o especificaciones técnicas..."
+                  rows={3}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', fontFamily: 'Ubuntu, sans-serif', fontSize: '0.9rem' }}
+                />
+              </div>
+              <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 10 }}>
                 <button type="button" className="secondary" onClick={() => setEditModal(null)}>Cancelar</button>
-                <button type="submit" style={{ width: 'auto', margin: 0, padding: '10px 18px' }}>Guardar cambios</button>
+                <button type="submit" style={{ width: 'auto', margin: 0, padding: '8px 18px' }}>Guardar cambios</button>
               </div>
             </form>
           </div>

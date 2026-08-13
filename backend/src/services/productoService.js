@@ -1,5 +1,30 @@
 const { all, get, run, pool } = require("../db.pg");
 
+const columnExistsCache = new Map();
+
+async function columnExists(tableName, columnName) {
+  const cacheKey = `${tableName}.${columnName}`;
+  if (columnExistsCache.has(cacheKey)) return columnExistsCache.get(cacheKey);
+
+  try {
+    const row = await get(
+      `SELECT EXISTS (
+         SELECT 1
+         FROM information_schema.columns
+         WHERE table_schema = 'public'
+           AND table_name = $1
+           AND column_name = $2
+       ) AS column_exists`,
+      [tableName, columnName]
+    );
+    const exists = Boolean(row?.column_exists);
+    columnExistsCache.set(cacheKey, exists);
+    return exists;
+  } catch (err) {
+    return false;
+  }
+}
+
 async function hasTable(tableName) {
   const row = await get(`SELECT to_regclass($1) AS regclass`, [`public.${tableName}`]);
   return Boolean(row?.regclass);
@@ -7,10 +32,21 @@ async function hasTable(tableName) {
 
 async function getProductos(user) {
   const isEscolar = user.role === "operador_escolar";
-  const [hasStockDeposito, hasDeposito] = await Promise.all([
+  const [hasStockDeposito, hasDeposito, hasTipo, hasTipoDeposito] = await Promise.all([
     hasTable('stock_deposito'),
-    hasTable('deposito')
+    hasTable('deposito'),
+    columnExists('deposito', 'tipo'),
+    columnExists('deposito', 'tipo_deposito')
   ]);
+
+  let tipoExpr = "'central'";
+  if (hasTipo && hasTipoDeposito) {
+    tipoExpr = "COALESCE(d.tipo, d.tipo_deposito)";
+  } else if (hasTipo) {
+    tipoExpr = "d.tipo";
+  } else if (hasTipoDeposito) {
+    tipoExpr = "d.tipo_deposito";
+  }
 
   let productos;
   if (hasStockDeposito && hasDeposito) {
@@ -22,15 +58,21 @@ async function getProductos(user) {
         p.stock_actual,
         p.stock_minimo,
         p.id_categoria,
+        p.codigo_sku,
+        p.marca,
+        p.precio_unitario,
+        p.ubicacion_estante,
+        p.descripcion,
+        p.es_perecedero,
         c.nombre as categoria_nombre,
         COALESCE(SUM(sd.cantidad), 0) as stock_total,
-        COALESCE(SUM(CASE WHEN COALESCE(d.tipo, d.tipo_deposito) = 'central' THEN sd.cantidad ELSE 0 END), 0) as stock_central,
-        COALESCE(SUM(CASE WHEN COALESCE(d.tipo, d.tipo_deposito) = 'centro_civico' THEN sd.cantidad ELSE 0 END), 0) as stock_centro_civico,
-        COALESCE(SUM(CASE WHEN COALESCE(d.tipo, d.tipo_deposito) = 'capsula' THEN sd.cantidad ELSE 0 END), 0) as stock_capsula,
+        COALESCE(SUM(CASE WHEN ${tipoExpr} = 'central' OR d.id_deposito = 1 THEN sd.cantidad ELSE 0 END), 0) as stock_central,
+        COALESCE(SUM(CASE WHEN ${tipoExpr} = 'centro_civico' THEN sd.cantidad ELSE 0 END), 0) as stock_centro_civico,
+        COALESCE(SUM(CASE WHEN ${tipoExpr} = 'capsula' THEN sd.cantidad ELSE 0 END), 0) as stock_capsula,
         CASE
-          WHEN COALESCE(SUM(CASE WHEN COALESCE(d.tipo, d.tipo_deposito) = 'central' THEN sd.cantidad ELSE 0 END), 0) > 0 THEN 'Depósito Central'
-          WHEN COALESCE(SUM(CASE WHEN COALESCE(d.tipo, d.tipo_deposito) = 'centro_civico' THEN sd.cantidad ELSE 0 END), 0) > 0 THEN 'Centro Cívico'
-          WHEN COALESCE(SUM(CASE WHEN COALESCE(d.tipo, d.tipo_deposito) = 'capsula' THEN sd.cantidad ELSE 0 END), 0) > 0 THEN 'Cápsula'
+          WHEN COALESCE(SUM(CASE WHEN ${tipoExpr} = 'central' OR d.id_deposito = 1 THEN sd.cantidad ELSE 0 END), 0) > 0 THEN 'Depósito Central'
+          WHEN COALESCE(SUM(CASE WHEN ${tipoExpr} = 'centro_civico' THEN sd.cantidad ELSE 0 END), 0) > 0 THEN 'Centro Cívico'
+          WHEN COALESCE(SUM(CASE WHEN ${tipoExpr} = 'capsula' THEN sd.cantidad ELSE 0 END), 0) > 0 THEN 'Cápsula'
           ELSE 'Depósito Central'
         END as deposito
       FROM producto p
@@ -46,7 +88,7 @@ async function getProductos(user) {
     }
 
     query += `
-      GROUP BY p.id_producto, p.nombre, p.unidad_medida, p.stock_actual, p.stock_minimo, p.id_categoria, c.nombre
+      GROUP BY p.id_producto, p.nombre, p.unidad_medida, p.stock_actual, p.stock_minimo, p.id_categoria, p.codigo_sku, p.marca, p.precio_unitario, p.ubicacion_estante, p.descripcion, p.es_perecedero, c.nombre
       ORDER BY p.id_producto DESC
     `;
     
@@ -60,8 +102,14 @@ async function getProductos(user) {
         p.stock_actual,
         p.stock_minimo,
         p.id_categoria,
+        p.codigo_sku,
+        p.marca,
+        p.precio_unitario,
+        p.ubicacion_estante,
+        p.descripcion,
+        p.es_perecedero,
         c.nombre as categoria_nombre,
-        0 as stock_central,
+        p.stock_actual as stock_central,
         0 as stock_centro_civico,
         0 as stock_capsula,
         'Depósito Central' as deposito
@@ -102,12 +150,19 @@ async function getProductoById(id, user) {
       p.stock_actual,
       p.stock_minimo,
       p.id_categoria,
+      p.codigo_sku,
+      p.marca,
+      p.precio_unitario,
+      p.ubicacion_estante,
+      p.descripcion,
+      p.es_perecedero,
       p.requiere_autorizacion,
       c.nombre as categoria_nombre
     FROM producto p
     LEFT JOIN categoria c ON p.id_categoria = c.id_categoria
     WHERE p.id_producto = ?
   `, [idNum]);
+
   if (!producto) {
     throw { status: 404, message: "Producto no encontrado" };
   }
@@ -152,7 +207,18 @@ async function getProductoStockDetalle(id, user) {
 async function createProducto(user, body) {
   const client = await pool.connect();
   try {
-    const { nombre, unidad_medida, stock_minimo, id_categoria } = body;
+    const {
+      nombre,
+      unidad_medida,
+      stock_minimo,
+      id_categoria,
+      codigo_sku,
+      marca,
+      precio_unitario,
+      ubicacion_estante,
+      descripcion,
+      es_perecedero
+    } = body;
 
     if (!nombre) {
       throw { status: 400, message: "El nombre es obligatorio" };
@@ -166,12 +232,27 @@ async function createProducto(user, body) {
 
     await client.query("BEGIN");
 
-    // Insertar producto
+    // Insertar producto con campos extendidos de catálogo
     const insertResult = await client.query(
-      `INSERT INTO producto (nombre, unidad_medida, stock_actual, stock_minimo, id_categoria)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO producto (
+        nombre, unidad_medida, stock_actual, stock_minimo, id_categoria,
+        codigo_sku, marca, precio_unitario, ubicacion_estante, descripcion, es_perecedero
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING id_producto`,
-      [nombre, unidad_medida || 'unidad', stock_actual_val, parseInt(stock_minimo) || 0, id_categoria || null]
+      [
+        nombre.trim(),
+        unidad_medida ? unidad_medida.trim() : 'unidad',
+        stock_actual_val,
+        parseInt(stock_minimo) || 0,
+        id_categoria || null,
+        codigo_sku ? codigo_sku.trim() : null,
+        marca ? marca.trim() : null,
+        parseFloat(precio_unitario) || 0,
+        ubicacion_estante ? ubicacion_estante.trim() : null,
+        descripcion ? descripcion.trim() : null,
+        Boolean(es_perecedero)
+      ]
     );
 
     const newId = insertResult.rows[0].id_producto;
@@ -222,7 +303,18 @@ async function createProducto(user, body) {
 async function updateProducto(id, body) {
   const client = await pool.connect();
   try {
-    const { nombre, unidad_medida, stock_minimo, id_categoria } = body;
+    const {
+      nombre,
+      unidad_medida,
+      stock_minimo,
+      id_categoria,
+      codigo_sku,
+      marca,
+      precio_unitario,
+      ubicacion_estante,
+      descripcion,
+      es_perecedero
+    } = body;
 
     const productoResult = await client.query(
       "SELECT * FROM producto WHERE id_producto = $1",
@@ -241,11 +333,11 @@ async function updateProducto(id, body) {
         throw { status: 400, message: "El nombre es demasiado largo (máximo 255 caracteres)" };
       }
       updates.push(`nombre = $${paramIndex++}`);
-      params.push(nombre);
+      params.push(nombre.trim());
     }
     if (unidad_medida !== undefined) {
       updates.push(`unidad_medida = $${paramIndex++}`);
-      params.push(unidad_medida);
+      params.push(unidad_medida ? unidad_medida.trim() : 'unidad');
     }
     if (stock_minimo !== undefined) {
       updates.push(`stock_minimo = $${paramIndex++}`);
@@ -254,6 +346,30 @@ async function updateProducto(id, body) {
     if (id_categoria !== undefined) {
       updates.push(`id_categoria = $${paramIndex++}`);
       params.push(id_categoria || null);
+    }
+    if (codigo_sku !== undefined) {
+      updates.push(`codigo_sku = $${paramIndex++}`);
+      params.push(codigo_sku ? codigo_sku.trim() : null);
+    }
+    if (marca !== undefined) {
+      updates.push(`marca = $${paramIndex++}`);
+      params.push(marca ? marca.trim() : null);
+    }
+    if (precio_unitario !== undefined) {
+      updates.push(`precio_unitario = $${paramIndex++}`);
+      params.push(parseFloat(precio_unitario) || 0);
+    }
+    if (ubicacion_estante !== undefined) {
+      updates.push(`ubicacion_estante = $${paramIndex++}`);
+      params.push(ubicacion_estante ? ubicacion_estante.trim() : null);
+    }
+    if (descripcion !== undefined) {
+      updates.push(`descripcion = $${paramIndex++}`);
+      params.push(descripcion ? descripcion.trim() : null);
+    }
+    if (es_perecedero !== undefined) {
+      updates.push(`es_perecedero = $${paramIndex++}`);
+      params.push(Boolean(es_perecedero));
     }
     if (body.stock_actual !== undefined) {
       updates.push(`stock_actual = $${paramIndex++}`);

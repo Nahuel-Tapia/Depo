@@ -615,6 +615,12 @@ async function getSolicitudesEnvioDepartamentos(anioQuery) {
   await ensureEntregasSchema();
   const anio = Number(anioQuery || new Date().getFullYear());
 
+  const hasDepto = await columnExists('solicitud_retiro', 'departamento_envio');
+  const hasSolicitar = await columnExists('solicitud_retiro', 'solicitar_envio');
+  if (!hasDepto || !hasSolicitar) {
+    return { anio, departamentos: [] };
+  }
+
   const rows = await all(
     `SELECT
        COALESCE(NULLIF(TRIM(sr.departamento_envio), ''), 'SIN_DEPARTAMENTO') AS departamento,
@@ -1247,6 +1253,23 @@ async function getSeguimientoEnvios(query) {
   const anioValue = Number(query.anio || new Date().getFullYear());
   const departamento = String(query.departamento || "").trim();
   const estadoLote = String(query.estado_lote || "").trim().toLowerCase();
+
+  const hasDepto = await columnExists('distribucion_lote', 'departamento');
+  const hasOrigen = await columnExists('distribucion_lote', 'origen');
+
+  if (!hasDepto || !hasOrigen) {
+    return {
+      anio: anioValue,
+      resumen: {
+        total_lotes: 0,
+        en_transito: 0,
+        parcialmente_recibidos: 0,
+        con_reclamos: 0,
+        recibidos_totales: 0,
+      },
+      lotes: [],
+    };
+  }
 
   const clauses = ["l.origen = 'solicitud_envio'", "l.anio = $1"];
   const params = [anioValue];

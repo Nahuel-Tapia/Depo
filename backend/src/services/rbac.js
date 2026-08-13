@@ -75,19 +75,29 @@ async function getPermissionsForRole(roleName) {
   const normalizedRole = String(roleName || "").trim().toLowerCase();
   if (!normalizedRole) return [];
 
-  await ensureRbacSchemaAndSeed();
+  const defaultPerms = DEFAULT_ROLE_PERMISSIONS[normalizedRole] || [];
 
-  const rows = await all(
-    `SELECT p.codigo
-     FROM rol r
-     JOIN rol_permiso rp ON rp.id_rol = r.id_rol
-     JOIN permiso p ON p.id_permiso = rp.id_permiso
-     WHERE LOWER(r.nombre) = ?
-     ORDER BY p.codigo ASC`,
-    [normalizedRole]
-  );
+  try {
+    await ensureRbacSchemaAndSeed();
 
-  return rows.map((row) => row.codigo);
+    const rows = await all(
+      `SELECT p.codigo
+       FROM rol r
+       JOIN rol_permiso rp ON rp.id_rol = r.id_rol
+       JOIN permiso p ON p.id_permiso = rp.id_permiso
+       WHERE LOWER(r.nombre) = $1
+       ORDER BY p.codigo ASC`,
+      [normalizedRole]
+    );
+
+    if (rows && rows.length > 0) {
+      return rows.map((row) => row.codigo);
+    }
+  } catch (err) {
+    console.error(`[RBAC] Error fetching permissions for role '${normalizedRole}', using defaults:`, err.message);
+  }
+
+  return defaultPerms;
 }
 
 async function hasPermissionsForRole(roleName, requiredPermissions = []) {

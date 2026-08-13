@@ -350,7 +350,7 @@ export default function LicitacionesCerradas() {
                           onClick={() => setSelectedLic(lic)}
                           style={{ whiteSpace: 'nowrap' }}
                         >
-                          📋 Ver remitos
+                          Ver remitos
                         </button>
                       )}
                       {lic.estado === 'adjudicada' && (

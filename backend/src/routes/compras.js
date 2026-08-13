@@ -31,16 +31,18 @@ router.get("/licitacion/anual/publicada-status", authorizePermissions(PERMISSION
 router.post("/licitacion/anual/publicar", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), compraController.publicarLicitacion);
 router.delete("/licitacion/anual/publicar/:id(\\d+)", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), compraController.reabrirLicitacion);
 
-// Licitaciones Cerradas & Adjudicación
+// Licitaciones Cerradas & Adjudicación (con alias)
 router.get("/licitacion/anual/cerradas", authorizePermissions(PERMISSIONS.PLANILLA_VIEW), compraController.getLicitacionesCerradas);
+router.get("/licitaciones/cerradas", authorizePermissions(PERMISSIONS.PLANILLA_VIEW), compraController.getLicitacionesCerradas);
 router.post("/licitacion/anual/enviar-deposito", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), compraController.enviarADeposito);
 
 // Refuerzos
 router.get("/refuerzos/pendientes-licitacion", authorizePermissions(PERMISSIONS.PLANILLA_VIEW), compraController.getRefuerzosPendientesLicitacion);
 
-// Adjudicacion
+// Adjudicacion (con alias)
 router.get("/adjudicacion", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), compraController.getAdjudicacion);
 router.post("/adjudicacion", authorizePermissions(PERMISSIONS.PLANILLA_MANAGE), compraController.adjudicar);
 router.get("/adjudicacion/historial", authorizePermissions(PERMISSIONS.PLANILLA_VIEW), compraController.getAdjudicacionHistorial);
+router.get("/licitacion/adjudicaciones/historial", authorizePermissions(PERMISSIONS.PLANILLA_VIEW), compraController.getAdjudicacionHistorial);
 
 module.exports = router;

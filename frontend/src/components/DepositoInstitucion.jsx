@@ -153,13 +153,12 @@ export default function DepositoInstitucion() {
       {/* Métricas resumen */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16, marginBottom: 24 }}>
         {[
-          { label: 'Total recibido', value: totalRecibido, color: '#1e3a8a', bg: 'rgba(30,58,138,0.06)', icon: '📦' },
-          { label: 'Consumido', value: totalConsumido, color: '#d97706', bg: 'rgba(217,119,6,0.06)', icon: '📤' },
-          { label: 'En stock ahora', value: totalStock, color: '#059669', bg: 'rgba(5,150,105,0.08)', icon: '✅', bold: true },
-          { label: 'Productos disponibles', value: productosConStock, color: '#7c3aed', bg: 'rgba(124,58,237,0.06)', icon: '📋' },
+          { label: 'Total recibido', value: totalRecibido, color: '#1e3a8a', bg: 'rgba(30,58,138,0.06)' },
+          { label: 'Consumido', value: totalConsumido, color: '#d97706', bg: 'rgba(217,119,6,0.06)' },
+          { label: 'En stock ahora', value: totalStock, color: '#059669', bg: 'rgba(5,150,105,0.08)', bold: true },
+          { label: 'Productos disponibles', value: productosConStock, color: '#7c3aed', bg: 'rgba(124,58,237,0.06)' },
         ].map(m => (
           <div key={m.label} style={{ background: m.bg, border: `1px solid ${m.color}22`, borderRadius: 12, padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 14 }}>
-            <span style={{ fontSize: '1.6rem' }}>{m.icon}</span>
             <div>
               <div style={{ fontSize: '0.75rem', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.3px' }}>{m.label}</div>
               <div style={{ fontSize: m.bold ? '1.6rem' : '1.4rem', fontWeight: 800, color: m.color, lineHeight: 1.1 }}>{m.value}</div>
@@ -356,7 +355,7 @@ export default function DepositoInstitucion() {
               {/* Resumen antes de guardar */}
               {Object.values(consumos).some(v => Number(v.cantidad) > 0) && (
                 <div style={{ background: '#fff7ed', border: '2px solid #fb923c', borderRadius: 10, padding: '14px 18px', marginBottom: 20 }}>
-                  <div style={{ fontWeight: 700, color: '#9a3412', marginBottom: 8 }}>📋 Resumen del consumo a registrar:</div>
+                  <div style={{ fontWeight: 700, color: '#9a3412', marginBottom: 8 }}>Resumen del consumo a registrar:</div>
                   {Object.entries(consumos)
                     .filter(([, v]) => Number(v.cantidad) > 0)
                     .map(([pid, v]) => {
@@ -378,7 +377,7 @@ export default function DepositoInstitucion() {
                   disabled={saving || Object.values(consumos).every(v => Number(v.cantidad) <= 0)}
                   style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
                 >
-                  {saving ? 'Guardando...' : '💾 Guardar Consumo'}
+                  {saving ? 'Guardando...' : 'Guardar Consumo'}
                 </button>
                 <button
                   className="secondary"
@@ -404,7 +403,6 @@ export default function DepositoInstitucion() {
             <div style={{ textAlign: 'center', padding: 40, color: 'var(--muted)' }}>Cargando historial...</div>
           ) : historial.length === 0 ? (
             <div className="sv-empty-state">
-              <span style={{ fontSize: '2.5rem', marginBottom: 8 }}>📋</span>
               <p>No hay consumos registrados todavía.</p>
             </div>
           ) : (

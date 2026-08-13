@@ -335,19 +335,18 @@ export default function Bajas() {
           <button
             type="button"
             className="secondary"
-            style={{ width: 'auto', margin: 0, padding: '14px 22px', fontSize: '1rem', minHeight: '44px', display: 'flex', alignItems: 'center', gap: 6 }}
+            style={{ width: 'auto', margin: 0, padding: '10px 18px', fontSize: '0.95rem', minHeight: '40px', display: 'flex', alignItems: 'center', gap: 6 }}
             onClick={printReport}
           >
-            🖨️ Reporte
+            Imprimir Reporte
           </button>
           {canCreate && (
             <button
               type="button"
               className="mov-action-btn"
-              style={{ width: 'auto', margin: 0, padding: '14px 22px', fontSize: '1rem' }}
+              style={{ width: 'auto', margin: 0, padding: '10px 18px', fontSize: '0.95rem' }}
               onClick={openModal}
             >
-              <span aria-hidden="true" style={{ marginRight: 8, fontSize: '1.2rem' }}>🚫📦</span>
               Registrar Baja
             </button>
           )}
@@ -557,14 +556,16 @@ export default function Bajas() {
                 <div>
                   <label>Depósito de origen</label>
                   <select
-                    value={form.depositoId}
+                    value={form.depositoId || '1'}
                     onChange={e => setForm(prev => ({ ...prev, depositoId: e.target.value }))}
-                    required
+                    disabled
                   >
-                    <option value="">Seleccionar depósito...</option>
-                    {depositos.map(d => (
-                      <option key={d.id} value={d.id}>{d.nombre}</option>
-                    ))}
+                    {depositos
+                      .filter(d => (d.tipo || d.tipo_deposito) === 'central' || String(d.id) === '1' || String(d.nombre || '').toLowerCase().includes('central'))
+                      .map(d => (
+                        <option key={d.id} value={d.id}>{d.nombre}</option>
+                      ))
+                    }
                   </select>
                 </div>
 
@@ -594,7 +595,6 @@ export default function Bajas() {
                       background: stockDisponible === 0 ? '#fef2f2' : '#f0fdf4',
                       border: `1px solid ${stockDisponible === 0 ? '#fecaca' : '#bbf7d0'}`
                     }}>
-                      <span style={{ fontSize: '1.2rem' }}>{loadingStock ? '⏳' : stockDisponible === 0 ? '⚠️' : '📦'}</span>
                       <span style={{ fontWeight: 600, fontSize: '0.9rem', color: stockDisponible === 0 ? '#b91c1c' : '#065f46' }}>
                         {loadingStock ? 'Consultando stock...' : `Stock disponible en depósito: ${stockDisponible ?? '—'} unidades`}
                       </span>

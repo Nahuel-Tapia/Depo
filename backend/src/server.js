@@ -17,6 +17,14 @@ if (envPath) {
 
 if (!process.env.JWT_SECRET) {
   process.env.JWT_SECRET = "depo_stock_jwt_secret_key_2026";
+  if (process.env.VERCEL) {
+    console.warn("[SECURITY WARNING] JWT_SECRET no definido en variables de entorno de Vercel. Usando fallback. Configure JWT_SECRET en el panel de Vercel para producción.");
+  }
+}
+
+// Configurar CORS_ORIGINS por defecto en Vercel si no está definido
+if (process.env.VERCEL && !process.env.CORS_ORIGINS) {
+  process.env.CORS_ORIGINS = "https://depo-lilac-omega.vercel.app";
 }
 
 const express = require("express");

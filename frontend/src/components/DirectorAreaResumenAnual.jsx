@@ -279,7 +279,7 @@ export default function DirectorAreaResumenAnual({ solicitudes, submissionStatus
                               gap: 6
                             }}
                           >
-                            🔍 Ver detalle
+                            Ver detalle
                           </button>
                         </td>
                       </tr>

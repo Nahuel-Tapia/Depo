@@ -1,0 +1,1 @@
+﻿const { get } = require('./backend/src/db.pg'); get(SELECT column_name FROM information_schema.columns WHERE table_name = 'licitacion_publicada' AND column_name = 'tipo').then(console.log).catch(console.error);

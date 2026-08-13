@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../api'
 import PrintButton from './PrintButton'
@@ -19,9 +19,6 @@ export default function Movimientos() {
   const [egresoModalOpen, setEgresoModalOpen] = useState(false)
   const [retirarPedidoModalOpen, setRetirarPedidoModalOpen] = useState(false)
 
-  // Baja (daño) state
-  const [bajaModalOpen, setBajaModalOpen] = useState(false)
-  const [bajaItem, setBajaItem] = useState({ productoId: '', cantidad: 1, motivo: '', fotoFile: null })
   // Detalle modal
   const [detalleModalOpen, setDetalleModalOpen] = useState(false)
   const [detalleData, setDetalleData] = useState(null)
@@ -45,6 +42,14 @@ export default function Movimientos() {
   const [filterTipo, setFilterTipo] = useState('')
   const [filterUsuario, setFilterUsuario] = useState('')
   const [filterProveedor, setFilterProveedor] = useState('')
+
+  // Historial tab
+  const [historialTab, setHistorialTab] = useState('movimientos') // 'movimientos' | 'bajas'
+  const [bajas, setBajas] = useState([])
+  const [filterBajaDesde, setFilterBajaDesde] = useState('')
+  const [filterBajaHasta, setFilterBajaHasta] = useState('')
+  const [filterBajaDeposito, setFilterBajaDeposito] = useState('')
+  const [fotoModalUrl, setFotoModalUrl] = useState(null)
 
   // Depositos
   const [ingresoDeposito, setIngresoDeposito] = useState('')
@@ -114,13 +119,47 @@ export default function Movimientos() {
     } catch { /* ignore */ }
   }
 
+  const loadBajas = async (opts = {}) => {
+    try {
+      const q = new URLSearchParams()
+      const desdeVal = opts.desde ?? filterBajaDesde
+      const hastaVal = opts.hasta ?? filterBajaHasta
+      const depVal = opts.id_deposito ?? filterBajaDeposito
+
+      if (desdeVal) q.append('desde', desdeVal)
+      if (hastaVal) q.append('hasta', hastaVal)
+      if (depVal) q.append('id_deposito', depVal)
+
+      const qs = q.toString() ? `?${q.toString()}` : ''
+      const res = await apiFetch(`/api/movimientos/bajas${qs}`, { token })
+      if (res.ok) {
+        const data = await res.json()
+        setBajas(data.bajas || [])
+      }
+    } catch { /* ignore */ }
+  }
+
   useEffect(() => {
     loadProductos()
     loadMovimientos()
     loadInstituciones()
     loadDepositos()
     loadProveedores()
+    loadBajas()
   }, [])
+
+  const depositosDisponibles = useMemo(() => {
+    const filtrados = depositos.filter(d => 
+      (d.tipo || d.tipo_deposito) === 'central' || String(d.id) === '1' || String(d.nombre).toLowerCase().includes('central')
+    )
+    return filtrados.length > 0 ? filtrados : [{ id: 1, nombre: 'Depósito Central', ubicacion: 'Casa Central' }]
+  }, [depositos])
+
+  useEffect(() => {
+    const centralId = String(depositosDisponibles[0]?.id || 1)
+    if (egresoDeposito !== centralId) setEgresoDeposito(centralId)
+    if (ingresoDeposito !== centralId) setIngresoDeposito(centralId)
+  }, [depositosDisponibles, egresoModalOpen, ingresoModalOpen])
 
   useEffect(() => {
     const match = instituciones.find(i => i.nombre.toLowerCase() === egresoInst.trim().toLowerCase())
@@ -128,20 +167,32 @@ export default function Movimientos() {
   }, [egresoInst, instituciones])
 
   const findProducto = (nombre) =>
-    productos.find(p => p.nombre.toLowerCase() === nombre.trim().toLowerCase())
+    productos.find(p => p.nombre.toLowerCase().trim() === (nombre || '').toLowerCase().trim())
 
   // Egreso handlers
   const addToEgreso = () => {
     const producto = findProducto(egresoItem.productoNombre)
-    if (!producto) return setMsg({ text: 'Seleccione un producto válido', type: 'error' })
-    const cantidad = parseInt(egresoItem.cantidad)
-    if (!cantidad || cantidad <= 0) return setMsg({ text: 'Ingrese una cantidad válida', type: 'error' })
+    if (!producto) return setMsg({ text: 'Seleccione un producto válido de la lista', type: 'error' })
+    
+    const stockDisp = Number(producto.stock_central ?? producto.stock_actual ?? 0)
+    if (stockDisp <= 0) {
+      return setMsg({ text: `🚨 ATENCIÓN: No hay stock disponible de "${producto.nombre}" en Depósito Central (Stock: 0)`, type: 'error' })
+    }
+
+    const cantidad = parseInt(egresoItem.cantidad, 10)
+    if (!cantidad || cantidad <= 0) return setMsg({ text: 'Ingrese una cantidad válida mayor a 0', type: 'error' })
+
+    if (cantidad > stockDisp) {
+      return setMsg({ text: `⚠️ La cantidad a egresar (${cantidad}) supera el stock disponible en Depósito Central (${stockDisp} ${producto.unidad_medida || 'unidades'})`, type: 'error' })
+    }
 
     setLoteEgreso(prev => [...prev, {
       producto_id: producto.id,
       nombre: producto.nombre,
       cantidad,
-      estado: egresoItem.estado
+      estado: egresoItem.estado,
+      stock_disponible: stockDisp,
+      unidad_medida: producto.unidad_medida || 'unidad'
     }])
     setEgresoItem({ productoNombre: '', cantidad: '', estado: 'nuevo' })
     setMsg({ text: '', type: '' })
@@ -352,40 +403,7 @@ export default function Movimientos() {
 
 
 // Baja handlers
-const handleBajaFileChange = (e) => {
-  setBajaItem(prev => ({ ...prev, fotoFile: e.target.files?.[0] || null }));
-}
 
-const handleBajaSubmit = async (e) => {
-  e.preventDefault()
-  setMsg({ text: '', type: '' })
-  if (!bajaItem.productoId) { setMsg({ text: 'Seleccione un producto para la baja', type: 'error' }); return }
-  const fd = new FormData()
-  fd.append('producto_id', bajaItem.productoId)
-  fd.append('cantidad', bajaItem.cantidad || 1)
-  fd.append('motivo', bajaItem.motivo || '')
-  if (bajaItem.fotoFile) fd.append('foto', bajaItem.fotoFile)
-
-  if (!token) { setMsg({ text: 'No autenticado: token no disponible', type: 'error' }); return }
-
-  const res = await apiFetch('/api/movimientos/baja', {
-    method: 'POST',
-    token,
-    body: fd
-  })
-
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}))
-    setMsg({ text: data.error || 'Error al registrar la baja', type: 'error' })
-    return
-  }
-
-  setBajaModalOpen(false)
-  setBajaItem({ productoId: '', cantidad: 1, motivo: '', fotoFile: null })
-  setMsg({ text: 'Baja registrada correctamente', type: 'success' })
-  loadMovimientos()
-  loadProductos()
-}
 
 const canCreate = hasPermission('movimientos.create')
 
@@ -514,38 +532,26 @@ return (
             <button
               type="button"
               className="mov-action-btn"
-              style={{ width: 'auto', margin: 0, padding: '14px 22px', fontSize: '1rem' }}
+              style={{ width: 'auto', margin: 0, padding: '10px 18px', fontSize: '0.95rem' }}
               onClick={() => { setEgresoModalOpen(true); setMsg({ text: '', type: '' }) }}
             >
-              <span aria-hidden="true" style={{ marginRight: 8, fontSize: '1.2rem' }}>📦⬆️</span>
               Egreso
             </button>
             <button
               type="button"
               className="mov-action-btn"
-              style={{ width: 'auto', margin: 0, padding: '14px 22px', fontSize: '1rem' }}
+              style={{ width: 'auto', margin: 0, padding: '10px 18px', fontSize: '0.95rem' }}
               onClick={() => { setIngresoModalOpen(true); setMsg({ text: '', type: '' }) }}
             >
-              <span aria-hidden="true" style={{ marginRight: 8, fontSize: '1.2rem' }}>📦⬇️</span>
               Ingreso
             </button>
             <button
               type="button"
               className="mov-action-btn"
-              style={{ width: 'auto', margin: 0, padding: '14px 22px', fontSize: '1rem' }}
+              style={{ width: 'auto', margin: 0, padding: '10px 18px', fontSize: '0.95rem' }}
               onClick={() => { setRetirarPedidoModalOpen(true); setMsg({ text: '', type: '' }) }}
             >
-              <span aria-hidden="true" style={{ marginRight: 8, fontSize: '1.2rem' }}>📋📦</span>
               Retirar Pedido Anual
-            </button>
-            <button
-              type="button"
-              className="mov-action-btn"
-              style={{ width: 'auto', margin: 0, padding: '14px 22px', fontSize: '1rem' }}
-              onClick={() => { setBajaModalOpen(true); setMsg({ text: '', type: '' }) }}
-            >
-              <span aria-hidden="true" style={{ marginRight: 8, fontSize: '1.2rem' }}>🔻📸</span>
-              Baja
             </button>
           </>
         )}
@@ -576,10 +582,9 @@ return (
               <h3>➖ Egreso de Productos</h3>
               <div style={{ marginBottom: 16, padding: 12, background: '#fff3e0', borderRadius: 6 }}>
                 <label><strong>Depósito origen:</strong></label>
-                <select value={egresoDeposito} onChange={e => setEgresoDeposito(e.target.value)} style={{ marginLeft: 8 }}>
-                  <option value="">-- Depósito del stock --</option>
-                  {depositos.map(d => (
-                    <option key={d.id} value={d.id}>{d.nombre} ({d.ubicacion})</option>
+                <select value={egresoDeposito} onChange={e => setEgresoDeposito(e.target.value)} style={{ marginLeft: 8 }} disabled>
+                  {depositosDisponibles.map(d => (
+                    <option key={d.id} value={d.id}>{d.nombre} ({d.ubicacion || 'Casa Central'})</option>
                   ))}
                 </select>
               </div>
@@ -641,10 +646,52 @@ return (
                         autoComplete="off"
                       />
                       <datalist id="egresoProductoList">
-                        {productos.map(p => (
-                          <option key={p.id} value={p.nombre}>{p.nombre}{p.marca ? ` - ${p.marca}` : ''} ({p.unidad_medida || 'unidad'})</option>
-                        ))}
+                        {productos.map(p => {
+                          const stockDisp = Number(p.stock_central ?? p.stock_actual ?? 0)
+                          const stockLabel = stockDisp > 0 ? `(Stock Central: ${stockDisp} ${p.unidad_medida || 'unidades'})` : '(⚠️ SIN STOCK Central)'
+                          return (
+                            <option key={p.id} value={p.nombre}>{p.nombre}{p.marca ? ` - ${p.marca}` : ''} {stockLabel}</option>
+                          )
+                        })}
                       </datalist>
+
+                      {(() => {
+                        const inputVal = egresoItem.productoNombre.trim()
+                        if (!inputVal) {
+                          return (
+                            <div style={{ marginTop: 6, fontSize: '0.8rem', color: '#6b7280' }}>
+                              ℹ️ Busque un producto para verificar su stock en Depósito Central.
+                            </div>
+                          )
+                        }
+                        const selectedProd = findProducto(inputVal)
+                        if (!selectedProd) {
+                          return (
+                            <div style={{ marginTop: 6, fontSize: '0.8rem', color: '#dc2626' }}>
+                              ⚠️ Producto no encontrado en el catálogo.
+                            </div>
+                          )
+                        }
+                        const stockDisp = Number(selectedProd.stock_central ?? selectedProd.stock_actual ?? 0)
+                        if (stockDisp > 0) {
+                          return (
+                            <div style={{ marginTop: 6, padding: '8px 12px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span style={{ fontSize: '1.1rem' }}>📦</span>
+                              <span style={{ fontSize: '0.85rem', color: '#166534', fontWeight: 600 }}>
+                                Stock disponible (Depósito Central): <strong>{stockDisp}</strong> {selectedProd.unidad_medida || 'unidades'}
+                              </span>
+                            </div>
+                          )
+                        }
+                        return (
+                          <div style={{ marginTop: 6, padding: '8px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: '1.1rem' }}>🚨</span>
+                            <span style={{ fontSize: '0.85rem', color: '#991b1b', fontWeight: 700 }}>
+                              ⚠️ ADVERTENCIA: No hay stock disponible en Depósito Central (0 {selectedProd.unidad_medida || 'unidades'})
+                            </span>
+                          </div>
+                        )
+                      })()}
                     </div>
                     <div>
                       <label>Cantidad</label>
@@ -677,7 +724,8 @@ return (
                       <thead>
                         <tr style={{ background: '#f0f0f0' }}>
                           <th style={{ border: '1px solid #ddd', padding: 8 }}>Producto</th>
-                          <th style={{ border: '1px solid #ddd', padding: 8 }}>Cantidad</th>
+                          <th style={{ border: '1px solid #ddd', padding: 8 }}>Stock Central</th>
+                          <th style={{ border: '1px solid #ddd', padding: 8 }}>Cantidad A Egresar</th>
                           <th style={{ border: '1px solid #ddd', padding: 8 }}>Estado</th>
                           <th style={{ border: '1px solid #ddd', padding: 8 }}>Acción</th>
                         </tr>
@@ -686,7 +734,8 @@ return (
                         {loteEgreso.map((item, idx) => (
                           <tr key={idx}>
                             <td style={{ border: '1px solid #ddd', padding: 8 }}>{item.nombre}</td>
-                            <td style={{ border: '1px solid #ddd', padding: 8 }}>{item.cantidad}</td>
+                            <td style={{ border: '1px solid #ddd', padding: 8, color: '#15803d', fontWeight: 600 }}>{item.stock_disponible} {item.unidad_medida}</td>
+                            <td style={{ border: '1px solid #ddd', padding: 8, fontWeight: 700 }}>{item.cantidad}</td>
                             <td style={{ border: '1px solid #ddd', padding: 8 }}>{item.estado}</td>
                             <td style={{ border: '1px solid #ddd', padding: 8 }}>
                               <button type="button" className="secondary" onClick={() => removeFromEgreso(idx)} style={{ margin: 0 }}>Remover</button>
@@ -739,17 +788,11 @@ return (
               <h3>Ingreso de Productos</h3>
               <div style={{ marginBottom: 16, padding: 12, background: '#e8f5e9', borderRadius: 6 }}>
                 <label><strong>Depósito destino:</strong></label>
-                <select value={ingresoDeposito} onChange={e => setIngresoDeposito(e.target.value)} style={{ marginLeft: 8 }}>
-                  <option value="">-- Seleccionar depósito --</option>
-                  {depositos.map(d => (
-                    <option key={d.id} value={d.id}>{d.nombre} ({d.ubicacion})</option>
+                <select value={ingresoDeposito} onChange={e => setIngresoDeposito(e.target.value)} style={{ marginLeft: 8 }} disabled>
+                  {depositosDisponibles.map(d => (
+                    <option key={d.id} value={d.id}>{d.nombre} ({d.ubicacion || 'Casa Central'})</option>
                   ))}
                 </select>
-                {ingresoDeposito && (
-                  <span style={{ marginLeft: 12, fontSize: '0.8rem', color: '#666' }}>
-                    {depositos.find(dd => dd.id == ingresoDeposito)?.tipo === 'capsula' ? '⚠️ Requiere autorización' : 'Normal'}
-                  </span>
-                )}
               </div>
               <form onSubmit={handleIngresoSubmit} className="grid">
                 <div style={{ gridColumn: '1 / -1' }}>
@@ -762,10 +805,24 @@ return (
                         onChange={e => setIngresoItem({ ...ingresoItem, productoId: e.target.value })}
                       >
                         <option value="">Seleccionar producto...</option>
-                        {productos.map(p => (
-                          <option key={p.id} value={p.id}>{p.nombre}{p.marca ? ` - ${p.marca}` : ''} ({p.unidad_medida || 'unidad'})</option>
-                        ))}
+                        {productos.map(p => {
+                          const stockDisp = Number(p.stock_central ?? p.stock_actual ?? 0)
+                          const stockText = stockDisp > 0 ? `(Stock Central: ${stockDisp} ${p.unidad_medida || 'unidades'})` : '(⚠️ SIN STOCK Central)'
+                          return (
+                            <option key={p.id} value={p.id}>{p.nombre}{p.marca ? ` - ${p.marca}` : ''} {stockText}</option>
+                          )
+                        })}
                       </select>
+                      {(() => {
+                        const selectedProd = productos.find(p => String(p.id) === String(ingresoItem.productoId))
+                        if (!selectedProd) return null
+                        const stockDisp = Number(selectedProd.stock_central ?? selectedProd.stock_actual ?? 0)
+                        return (
+                          <div style={{ marginTop: 6, padding: '6px 10px', background: stockDisp === 0 ? '#fffbe6' : '#f0fdf4', border: `1px solid ${stockDisp === 0 ? '#ffe58f' : '#bbf7d0'}`, borderRadius: 6, fontSize: '0.82rem', color: stockDisp === 0 ? '#d48806' : '#166534', fontWeight: 600 }}>
+                            📦 Stock actual en Depósito Central: <strong>{stockDisp}</strong> {selectedProd.unidad_medida || 'unidades'} {stockDisp === 0 ? '⚠️ (Actualmente sin stock)' : ''}
+                          </div>
+                        )
+                      })()}
                     </div>
                     <div>
                       <label>Origen (Proveedor o Depósito)</label>
@@ -867,53 +924,7 @@ return (
           </div>
         )}
 
-        {/* BAJA */}
-        {bajaModalOpen && (
-          <div
-            style={{
-              position: 'fixed',
-              inset: 0,
-              background: 'rgba(0, 0, 0, 0.45)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 1000,
-              padding: 16
-            }}
-            onClick={e => { if (e.target === e.currentTarget) setBajaModalOpen(false) }}
-          >
-            <div style={{ background: '#fff7f7', padding: 24, borderRadius: 10, width: 'min(640px, 100%)' }}>
-              <h3>Baja de Mercadería (dañada)</h3>
-              <form onSubmit={handleBajaSubmit} className="grid">
-                <div>
-                  <label>Producto</label>
-                  <select value={bajaItem.productoId} onChange={e => setBajaItem({ ...bajaItem, productoId: e.target.value })}>
-                    <option value="">Seleccionar producto...</option>
-                    {productos.map(p => (
-                      <option key={p.id} value={p.id}>{p.nombre}{p.marca ? ` - ${p.marca}` : ''} ({p.unidad_medida || 'unidad'})</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label>Cantidad</label>
-                  <input type="number" min="1" value={bajaItem.cantidad} onChange={e => setBajaItem({ ...bajaItem, cantidad: e.target.value })} />
-                </div>
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <label>Detalle / Motivo</label>
-                  <textarea value={bajaItem.motivo} onChange={e => setBajaItem({ ...bajaItem, motivo: e.target.value })} rows={3} />
-                </div>
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <label>Foto (opcional)</label>
-                  <input type="file" accept="image/*" onChange={handleBajaFileChange} />
-                </div>
-                <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-                  <button type="button" className="secondary" onClick={() => setBajaModalOpen(false)}>Cancelar</button>
-                  <button type="submit">Registrar Baja</button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
+
 
         {/* RETIRAR PEDIDO ANUAL */}
         {retirarPedidoModalOpen && (
@@ -965,136 +976,295 @@ return (
     )}
 
     <div ref={printRef} style={{ marginTop: 20, overflowX: 'auto' }}>
-      <h3>Lista de Movimientos</h3>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
-        <div>
-          <label style={{ display: 'block', fontSize: '0.8rem' }}>Desde</label>
-          <input type="date" value={filterDesde} onChange={e => setFilterDesde(e.target.value)} />
-        </div>
-        <div>
-          <label style={{ display: 'block', fontSize: '0.8rem' }}>Hasta</label>
-          <input type="date" value={filterHasta} onChange={e => setFilterHasta(e.target.value)} />
-        </div>
-        <div>
-          <label style={{ display: 'block', fontSize: '0.8rem' }}>Tipo</label>
-          <select value={filterTipo} onChange={e => setFilterTipo(e.target.value)}>
-            <option value="">Todos</option>
-            <option value="ingreso">Ingreso</option>
-            <option value="egreso">Egreso</option>
-            <option value="ajuste">Ajuste</option>
-            <option value="devolucion">Devolución</option>
-          </select>
-        </div>
-        <div>
-          <label style={{ display: 'block', fontSize: '0.8rem' }}>Usuario</label>
-          <input placeholder="Nombre o id" value={filterUsuario} onChange={e => setFilterUsuario(e.target.value)} />
-        </div>
-        <div>
-          <label style={{ display: 'block', fontSize: '0.8rem' }}>Proveedor</label>
-          <input placeholder="Nombre o id" value={filterProveedor} onChange={e => setFilterProveedor(e.target.value)} />
-        </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
-          <button type="button" onClick={() => loadMovimientos()}>Buscar</button>
-          <button type="button" onClick={() => { setFilterDesde(''); setFilterHasta(''); setFilterTipo(''); setFilterUsuario(''); setFilterProveedor(''); loadMovimientos({}) }} className="secondary">Limpiar</button>
+      <h3>Historial de Movimientos</h3>
+
+      {/* ===== TABS ===== */}
+      <div style={{ display: 'flex', gap: 0, marginBottom: 16, borderBottom: '2px solid #e5e7eb' }}>
+        <button
+          type="button"
+          onClick={() => { setHistorialTab('movimientos'); loadMovimientos() }}
+          style={{
+            padding: '10px 20px',
+            border: 'none',
+            borderBottom: historialTab === 'movimientos' ? '3px solid #2563eb' : '3px solid transparent',
+            background: historialTab === 'movimientos' ? '#eff6ff' : 'transparent',
+            color: historialTab === 'movimientos' ? '#1d4ed8' : '#6b7280',
+            fontWeight: historialTab === 'movimientos' ? 700 : 500,
+            cursor: 'pointer',
+            fontSize: '0.95rem',
+            transition: 'all 0.2s',
+            borderRadius: '8px 8px 0 0',
+          }}
+        >
+          Ingresos / Egresos
+        </button>
+        <button
+          type="button"
+          onClick={() => { setHistorialTab('bajas'); loadBajas() }}
+          style={{
+            padding: '10px 20px',
+            border: 'none',
+            borderBottom: historialTab === 'bajas' ? '3px solid #dc2626' : '3px solid transparent',
+            background: historialTab === 'bajas' ? '#fef2f2' : 'transparent',
+            color: historialTab === 'bajas' ? '#dc2626' : '#6b7280',
+            fontWeight: historialTab === 'bajas' ? 700 : 500,
+            cursor: 'pointer',
+            fontSize: '0.95rem',
+            transition: 'all 0.2s',
+            borderRadius: '8px 8px 0 0',
+          }}
+        >
+          Bajas
+        </button>
+      </div>
+
+      {/* ===== TAB: MOVIMIENTOS ===== */}
+      {historialTab === 'movimientos' && (
+        <>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.8rem' }}>Desde</label>
+              <input type="date" value={filterDesde} onChange={e => setFilterDesde(e.target.value)} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.8rem' }}>Hasta</label>
+              <input type="date" value={filterHasta} onChange={e => setFilterHasta(e.target.value)} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.8rem' }}>Tipo</label>
+              <select value={filterTipo} onChange={e => setFilterTipo(e.target.value)}>
+                <option value="">Todos</option>
+                <option value="ingreso">Ingreso</option>
+                <option value="egreso">Egreso</option>
+                <option value="ajuste">Ajuste</option>
+                <option value="devolucion">Devolución</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.8rem' }}>Usuario</label>
+              <input placeholder="Nombre o id" value={filterUsuario} onChange={e => setFilterUsuario(e.target.value)} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.8rem' }}>Proveedor</label>
+              <input placeholder="Nombre o id" value={filterProveedor} onChange={e => setFilterProveedor(e.target.value)} />
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+              <button type="button" onClick={() => loadMovimientos()}>Buscar</button>
+              <button type="button" onClick={() => { setFilterDesde(''); setFilterHasta(''); setFilterTipo(''); setFilterUsuario(''); setFilterProveedor(''); loadMovimientos({}) }} className="secondary">Limpiar</button>
+            </div>
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th>Nº Movimiento</th>
+                <th>Tipo</th>
+                <th>Producto(s)</th>
+                <th>Cantidad</th>
+                <th>Motivo</th>
+                <th>Proveedor / Institución</th>
+                <th>Registrado por</th>
+                <th>Fecha</th>
+                <th style={{ textAlign: 'center' }}>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(() => {
+                const grouped = [];
+                let currentGroup = null;
+
+                movimientos.forEach((m) => {
+                  const timeStr = m.created_at ? new Date(m.created_at).toISOString().slice(0, 16) : '';
+                  const key = `${m.tipo}|${m.motivo || ''}|${m.institucion_nombre || ''}|${m.cargo_retira || ''}|${m.usuario_nombre || ''}|${timeStr}`;
+
+                  if (currentGroup && currentGroup.key === key) {
+                    currentGroup.items.push(m);
+                  } else {
+                    currentGroup = { key, items: [m] };
+                    grouped.push(currentGroup);
+                  }
+                });
+
+                return grouped.map((group, i) => {
+                  const first = group.items[0];
+                  const institucionCargo = first.institucion_nombre && first.cargo_retira
+                    ? `${first.institucion_nombre} (${first.cargo_retira})`
+                    : first.institucion_nombre || first.cargo_retira || '-';
+
+                  const isMulti = group.items.length > 1;
+                  const proveedoresResumen = [...new Set(group.items.map(item => item.proveedor_nombre).filter(Boolean))];
+
+                  const uniqueEstados = [...new Set(group.items.map(item => item.estado_producto).filter(Boolean))];
+                  const estadoDisplay = uniqueEstados.length === 1 ? uniqueEstados[0] : (uniqueEstados.length > 1 ? 'Varios' : '-');
+
+                  const totalCantidad = group.items.reduce((sum, item) => sum + Number(item.cantidad || 0), 0);
+
+                  let proveedorDisplay = '-';
+                  if (first.tipo === 'egreso') {
+                    proveedorDisplay = first.institucion_nombre || '-';
+                  } else if (first.tipo === 'ingreso') {
+                    proveedorDisplay = proveedoresResumen.length > 0 ? proveedoresResumen.join(', ') : 'Sin proveedor';
+                  } else {
+                    proveedorDisplay = proveedoresResumen.length > 0 ? proveedoresResumen.join(', ') : '-';
+                  }
+
+                  const productosDisplay = isMulti
+                    ? [...new Set(group.items.map(item => item.producto_nombre).filter(Boolean))].join(', ')
+                    : (first.producto_nombre || '-');
+
+                  return (
+                    <tr key={first.id || i}>
+                      <td>{`#${first.id}`}</td>
+                      <td><span className={`badge badge-${first.tipo}`}>{first.tipo}</span></td>
+                      <td style={{ maxWidth: 200, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={productosDisplay}>{productosDisplay}</td>
+                      <td>{isMulti ? totalCantidad : first.cantidad}</td>
+                      <td>{first.motivo || '-'}</td>
+                      <td>{proveedorDisplay}</td>
+                      <td>{first.usuario_nombre || '-'}</td>
+                      <td>{first.created_at ? new Date(first.created_at).toLocaleDateString() : '-'}</td>
+                      <td style={{ textAlign: 'center' }}>
+                        <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+                          <button
+                            type="button"
+                            className="secondary"
+                            onClick={() => handlePrintMovimiento(group.items)}
+                            title="Imprimir movimiento"
+                            aria-label="Imprimir movimiento"
+                            style={{ width: 'auto', margin: 0, minWidth: 36, padding: '6px 10px' }}
+                          >
+                            Imprimir
+                          </button>
+                          <button
+                            type="button"
+                            className="secondary"
+                            onClick={() => { setDetalleData({ proveedor: proveedoresResumen.length > 0 ? proveedoresResumen.join(', ') : (first.tipo === 'egreso' ? first.institucion_nombre : null), deposito: first.deposito_nombre, institucion: institucionCargo, productos: group.items }); setDetalleModalOpen(true) }}
+                            title="Ver detalle"
+                            aria-label="Ver detalle"
+                            style={{ width: 'auto', margin: 0, minWidth: 36, padding: '6px 10px' }}
+                          >
+                            Detalle
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })
+              })()}
+            </tbody>
+          </table>
+        </>
+      )}
+
+      {/* ===== TAB: BAJAS ===== */}
+      {historialTab === 'bajas' && (
+        <>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.8rem' }}>Desde</label>
+              <input type="date" value={filterBajaDesde} onChange={e => setFilterBajaDesde(e.target.value)} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.8rem' }}>Hasta</label>
+              <input type="date" value={filterBajaHasta} onChange={e => setFilterBajaHasta(e.target.value)} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.8rem' }}>Depósito</label>
+              <select value={filterBajaDeposito} onChange={e => setFilterBajaDeposito(e.target.value)}>
+                <option value="">Todos</option>
+                {depositos.map(d => (
+                  <option key={d.id} value={d.id}>{d.nombre}</option>
+                ))}
+              </select>
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+              <button type="button" onClick={() => loadBajas()}>Buscar</button>
+              <button type="button" onClick={() => { setFilterBajaDesde(''); setFilterBajaHasta(''); setFilterBajaDeposito(''); loadBajas({}) }} className="secondary">Limpiar</button>
+            </div>
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th>Nº Baja</th>
+                <th>Producto</th>
+                <th>Cantidad</th>
+                <th>Motivo</th>
+                <th>Estado</th>
+                <th>Depósito</th>
+                <th>Foto</th>
+                <th>Registrado por</th>
+                <th>Fecha</th>
+              </tr>
+            </thead>
+            <tbody>
+              {bajas.length === 0 ? (
+                <tr><td colSpan={9} style={{ textAlign: 'center', padding: 20, color: '#9ca3af' }}>No se encontraron bajas</td></tr>
+              ) : bajas.map((b, i) => {
+                const estadoColors = {
+                  pendiente: { bg: '#fef9c3', color: '#92400e', border: '#fde68a' },
+                  aprobada: { bg: '#dcfce7', color: '#166534', border: '#bbf7d0' },
+                  rechazada: { bg: '#fee2e2', color: '#991b1b', border: '#fecaca' },
+                }
+                const ec = estadoColors[b.estado] || { bg: '#f3f4f6', color: '#374151', border: '#e5e7eb' }
+                return (
+                  <tr key={b.id || i}>
+                    <td>{`#${b.id}`}</td>
+                    <td>{b.producto_nombre || '-'}</td>
+                    <td>{b.cantidad}</td>
+                    <td style={{ maxWidth: 200, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={b.motivo || ''}>{b.motivo || '-'}</td>
+                    <td>
+                      <span style={{
+                        display: 'inline-block',
+                        padding: '3px 10px',
+                        borderRadius: 12,
+                        fontSize: '0.8rem',
+                        fontWeight: 600,
+                        background: ec.bg,
+                        color: ec.color,
+                        border: `1px solid ${ec.border}`,
+                      }}>
+                        {b.estado ? b.estado.charAt(0).toUpperCase() + b.estado.slice(1) : '-'}
+                      </span>
+                    </td>
+                    <td>{b.deposito_nombre || '-'}</td>
+                    <td style={{ textAlign: 'center' }}>
+                      {b.foto_path ? (
+                        <button
+                          type="button"
+                          className="secondary"
+                          onClick={() => setFotoModalUrl(`${window.location.origin.replace(':5173', ':3000')}${b.foto_path}`)}
+                          style={{ width: 'auto', margin: 0, padding: '4px 10px', fontSize: '0.8rem' }}
+                        >
+                          📷 Ver
+                        </button>
+                      ) : (
+                        <span style={{ color: '#9ca3af' }}>—</span>
+                      )}
+                    </td>
+                    <td>{b.usuario_nombre || '-'}</td>
+                    <td>{b.created_at ? new Date(b.created_at).toLocaleDateString() : '-'}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </>
+      )}
+    </div>
+
+    {/* Modal foto baja */}
+    {fotoModalUrl && (
+      <div
+        style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200 }}
+        onClick={() => setFotoModalUrl(null)}
+      >
+        <div style={{ background: '#fff', padding: 16, borderRadius: 10, maxWidth: '90vw', maxHeight: '90vh' }} onClick={e => e.stopPropagation()}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <strong>Foto de la Baja</strong>
+            <button type="button" className="secondary" onClick={() => setFotoModalUrl(null)} style={{ margin: 0, padding: '4px 10px' }}>✕</button>
+          </div>
+          <img src={fotoModalUrl} alt="Foto de baja" style={{ maxWidth: '80vw', maxHeight: '70vh', objectFit: 'contain', borderRadius: 6 }} />
         </div>
       </div>
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead>
-          <tr>
-            <th>Nº Movimiento</th>
-            <th>Tipo</th>
-            <th>Cantidad</th>
-            <th>Estado</th>
-            <th>Motivo</th>
-            <th>Proveedor</th>
-            <th>Registrado por</th>
-            <th>Fecha</th>
-            <th style={{ textAlign: 'center' }}>Acciones</th>
-          </tr>
-        </thead>
-        <tbody>
-          {(() => {
-            const grouped = [];
-            let currentGroup = null;
-
-            // Sort is done by backend (usually DESC). We iterate and group adjacent or identical transaction rows.
-            movimientos.forEach((m) => {
-              // Create a grouping key based on the transaction metadata
-              const timeStr = m.created_at ? new Date(m.created_at).toISOString().slice(0, 16) : '';
-              const key = `${m.tipo}|${m.motivo || ''}|${m.institucion_nombre || ''}|${m.cargo_retira || ''}|${m.usuario_nombre || ''}|${timeStr}`;
-
-              if (currentGroup && currentGroup.key === key) {
-                currentGroup.items.push(m);
-              } else {
-                currentGroup = { key, items: [m] };
-                grouped.push(currentGroup);
-              }
-            });
-
-            return grouped.map((group, i) => {
-              const first = group.items[0];
-              const institucionCargo = first.institucion_nombre && first.cargo_retira
-                ? `${first.institucion_nombre} (${first.cargo_retira})`
-                : first.institucion_nombre || first.cargo_retira || '-';
-
-              const isMulti = group.items.length > 1;
-              const proveedoresResumen = [...new Set(group.items.map(item => item.proveedor_nombre).filter(Boolean))];
-
-              const uniqueEstados = [...new Set(group.items.map(item => item.estado_producto).filter(Boolean))];
-              const estadoDisplay = uniqueEstados.length === 1 ? uniqueEstados[0] : (uniqueEstados.length > 1 ? 'Varios' : '-');
-
-              const totalCantidad = group.items.reduce((sum, item) => sum + Number(item.cantidad || 0), 0);
-
-              let proveedorDisplay = '-';
-              if (first.tipo === 'egreso') {
-                proveedorDisplay = first.institucion_nombre || '-';
-              } else if (first.tipo === 'ingreso') {
-                proveedorDisplay = proveedoresResumen.length > 0 ? proveedoresResumen.join(', ') : 'Sin proveedor';
-              } else {
-                proveedorDisplay = proveedoresResumen.length > 0 ? proveedoresResumen.join(', ') : '-';
-              }
-
-              return (
-                <tr key={first.id || i}>
-                  <td>{`#${first.id}`}</td>
-                  <td><span className={`badge badge-${first.tipo}`}>{first.tipo}</span></td>
-                  <td>{isMulti ? totalCantidad : first.cantidad}</td>
-                  <td>{estadoDisplay}</td>
-                  <td>{first.motivo || '-'}</td>
-                  <td>{proveedorDisplay}</td>
-                  <td>{first.usuario_nombre || '-'}</td>
-                  <td>{first.created_at ? new Date(first.created_at).toLocaleDateString() : '-'}</td>
-                  <td style={{ textAlign: 'center' }}>
-                    <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
-                      <button
-                        type="button"
-                        className="secondary"
-                        onClick={() => handlePrintMovimiento(group.items)}
-                        title="Imprimir movimiento"
-                        aria-label="Imprimir movimiento"
-                        style={{ width: 'auto', margin: 0, minWidth: 36, padding: '6px 10px' }}
-                      >
-                        🖨️
-                      </button>
-                      <button
-                        type="button"
-                        className="secondary"
-                        onClick={() => { setDetalleData({ proveedor: proveedoresResumen.length > 0 ? proveedoresResumen.join(', ') : (first.tipo === 'egreso' ? first.institucion_nombre : null), deposito: first.deposito_nombre, institucion: institucionCargo, productos: group.items }); setDetalleModalOpen(true) }}
-                        title="Ver detalle"
-                        aria-label="Ver detalle"
-                        style={{ width: 'auto', margin: 0, minWidth: 36, padding: '6px 10px' }}
-                      >
-                        🔍
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              )
-            }) // closes map
-          })()}
-        </tbody>
-      </table>
-    </div>
+    )}
     {/* Detalle modal */}
     {detalleModalOpen && detalleData && (
       <div

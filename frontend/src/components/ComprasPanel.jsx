@@ -804,7 +804,7 @@ export default function ComprasPanel({ section = 'pedidos', onNavigate }) {
                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', flex: 1, justifyContent: 'flex-end', maxWidth: '600px' }}>
                   <input
                     type="text"
-                    placeholder="🔍 Buscar producto consolidado..."
+                    placeholder="Buscar producto consolidado..."
                     value={consolidadoSearch}
                     onChange={e => setConsolidadoSearch(e.target.value)}
                     style={{
@@ -1427,7 +1427,7 @@ export default function ComprasPanel({ section = 'pedidos', onNavigate }) {
             <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
               <input
                 type="text"
-                placeholder="🔍 Buscar por producto o institución..."
+                placeholder="Buscar por producto o institución..."
                 value={detalleSearch}
                 onChange={e => setDetalleSearch(e.target.value)}
                 style={{

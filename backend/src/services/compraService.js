@@ -2,6 +2,14 @@ const { all, get, run, pool } = require("../db.pg");
 const { isAdminLikeRole } = require("../middleware/auth");
 
 // Shared Helpers
+async function columnExists(tableName, columnName) {
+  const row = await get(
+    `SELECT 1 as "exists" FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1 AND column_name = $2`,
+    [tableName, columnName]
+  );
+  return !!row?.exists;
+}
+
 async function getInstitucionNivelColumn() {
   const row = await get(`
     SELECT CASE
@@ -420,11 +428,19 @@ async function getConsolidadoRealTime({ anio }) {
 }
 
 async function getEstadoDirectores({ anio }) {
-  return await all(
-    `SELECT COALESCE(da, 'Sin dirección') AS direccion_area, EXISTS (SELECT 1 FROM planilla_pedido_anual ppa WHERE ppa.direccion_area = da AND ppa.anio = $1 AND ppa.estado IN ('enviada', 'aceptada', 'adjudicada', 'cerrada')) AS enviado, (SELECT ppa.id FROM planilla_pedido_anual ppa WHERE ppa.direccion_area = da AND ppa.anio = $1 AND ppa.estado IN ('enviada', 'aceptada', 'adjudicada', 'cerrada') ORDER BY ppa.created_at DESC, ppa.id DESC LIMIT 1) AS planilla_id, (SELECT ppa.estado FROM planilla_pedido_anual ppa WHERE ppa.direccion_area = da AND ppa.anio = $1 AND ppa.estado IN ('enviada', 'aceptada', 'adjudicada', 'cerrada') ORDER BY ppa.created_at DESC, ppa.id DESC LIMIT 1) AS planilla_estado
-     FROM (SELECT DISTINCT NULLIF(BTRIM(i.direccion_area), '') AS da FROM institucion i WHERE i.direccion_area IS NOT NULL AND BTRIM(i.direccion_area) != '') sub ORDER BY direccion_area ASC`,
-    [anio]
-  );
+  try {
+    const hasDireccionArea = await columnExists('planilla_pedido_anual', 'direccion_area');
+    if (!hasDireccionArea) return [];
+    
+    const areaCol = await getInstitucionNivelColumn();
+    return await all(
+      `SELECT COALESCE(da, 'Sin dirección') AS direccion_area, EXISTS (SELECT 1 FROM planilla_pedido_anual ppa WHERE ppa.direccion_area = da AND ppa.anio = $1 AND ppa.estado IN ('enviada', 'aceptada', 'adjudicada', 'cerrada')) AS enviado, (SELECT ppa.id FROM planilla_pedido_anual ppa WHERE ppa.direccion_area = da AND ppa.anio = $1 AND ppa.estado IN ('enviada', 'aceptada', 'adjudicada', 'cerrada') ORDER BY ppa.created_at DESC, ppa.id DESC LIMIT 1) AS planilla_id, (SELECT ppa.estado FROM planilla_pedido_anual ppa WHERE ppa.direccion_area = da AND ppa.anio = $1 AND ppa.estado IN ('enviada', 'aceptada', 'adjudicada', 'cerrada') ORDER BY ppa.created_at DESC, ppa.id DESC LIMIT 1) AS planilla_estado
+       FROM (SELECT DISTINCT NULLIF(BTRIM(i.${areaCol}), '') AS da FROM institucion i WHERE i.${areaCol} IS NOT NULL AND BTRIM(i.${areaCol}) != '') sub ORDER BY da ASC`,
+      [anio]
+    );
+  } catch (err) {
+    return [];
+  }
 }
 
 async function getEnviadaStatus(user, query) {
@@ -546,14 +562,31 @@ async function getFinalItems(anio) {
 }
 
 async function getLicitacionesByAnio(anio, tipo = null) {
-  const params = [anio];
-  const where = [`lp.anio = $1`];
-  if (tipo) { params.push(tipo); where.push(`COALESCE(lp.tipo, 'anual') = $${params.length}`); }
-  return all(
-    `SELECT lp.id, lp.anio, lp.fecha_publicacion, lp.estado, COALESCE(lp.tipo, 'anual') AS tipo, lp.titulo, lp.motivo, lp.items, lp.usuario_id, u.nombre, u.apellido
-     FROM licitacion_publicada lp LEFT JOIN usuario u ON u.id_usuario = lp.usuario_id WHERE ${where.join(' AND ')} ORDER BY lp.fecha_publicacion DESC, lp.id DESC`,
-    params
-  );
+  try {
+    const hasTipo = await columnExists('licitacion_publicada', 'tipo');
+    const params = [anio];
+    const where = [`lp.anio = $1`];
+    
+    if (tipo && hasTipo) { 
+      params.push(tipo); 
+      where.push(`COALESCE(lp.tipo, 'anual') = $${params.length}`); 
+    } else if (tipo) {
+      // If filtering by tipo but column doesn't exist, we assume 'anual' is the only type.
+      // If they want 'refuerzo' and it doesn't exist, return nothing.
+      if (tipo !== 'anual') return [];
+    }
+    
+    const selectTipo = hasTipo ? "COALESCE(lp.tipo, 'anual') AS tipo" : "'anual' AS tipo";
+    
+    return await all(
+      `SELECT lp.id, lp.anio, lp.fecha_publicacion, lp.estado, ${selectTipo}, lp.titulo, lp.motivo, lp.items, lp.usuario_id, u.nombre, u.apellido
+       FROM licitacion_publicada lp LEFT JOIN usuario u ON u.id_usuario = lp.usuario_id WHERE ${where.join(' AND ')} ORDER BY lp.fecha_publicacion DESC, lp.id DESC`,
+      params
+    );
+  } catch (err) {
+    console.error("Error in getLicitacionesByAnio:", err);
+    return [];
+  }
 }
 
 async function buildLicitacionHistoryRows({ anio = null } = {}) {

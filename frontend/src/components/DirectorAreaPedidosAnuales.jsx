@@ -183,7 +183,7 @@ export default function DirectorAreaPedidosAnuales({ solicitudes, isSent }) {
       </section>
 
       <section>
-        <TableHeader title="Historial General" icon="📋" color="#64748b" />
+        <TableHeader title="Historial General" icon="" color="#64748b" />
         
         {/* Contenedor de filtros */}
         <div style={{

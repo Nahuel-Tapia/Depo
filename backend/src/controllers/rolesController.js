@@ -47,9 +47,19 @@ async function updateRolePermissions(req, res) {
   }
 }
 
+async function getPermissionMatrix(req, res) {
+  try {
+    const { DEFAULT_ROLE_PERMISSIONS, PERMISSIONS } = require("../permissions");
+    return res.json({ roles: DEFAULT_ROLE_PERMISSIONS, permissions: PERMISSIONS });
+  } catch (err) {
+    return res.status(500).json({ error: "No se pudo obtener la matriz de permisos" });
+  }
+}
+
 module.exports = {
   listRoles,
   createRole,
   getRolePermissions,
-  updateRolePermissions
+  updateRolePermissions,
+  getPermissionMatrix
 };
