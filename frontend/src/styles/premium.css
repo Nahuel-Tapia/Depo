@@ -85,13 +85,15 @@
   }
 }
 
-/* Rediseño de botones premium */
+/* Rediseño de botones flat */
 button:not(.secondary) {
-  letter-spacing: 0.3px;
+  letter-spacing: 0.2px;
+  box-shadow: none !important;
 }
 
 button:not(.secondary):hover {
-  box-shadow: var(--shadow-orange);
+  box-shadow: none !important;
+  transform: none !important;
 }
 
 /* Progress Indicators */
