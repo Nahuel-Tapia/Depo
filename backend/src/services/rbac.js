@@ -23,52 +23,64 @@ async function ensureRbacSchemaAndSeed() {
 
   await ensureRoleTableSeeded();
 
-  await run(`
-    CREATE TABLE IF NOT EXISTS permiso (
-      id_permiso SERIAL PRIMARY KEY,
-      codigo VARCHAR(120) NOT NULL UNIQUE,
-      descripcion VARCHAR(255)
-    )
-  `);
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
 
-  await run(`
-    CREATE TABLE IF NOT EXISTS rol_permiso (
-      id_rol INT NOT NULL REFERENCES rol(id_rol) ON DELETE CASCADE,
-      id_permiso INT NOT NULL REFERENCES permiso(id_permiso) ON DELETE CASCADE,
-      PRIMARY KEY (id_rol, id_permiso)
-    )
-  `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS permiso (
+        id_permiso SERIAL PRIMARY KEY,
+        codigo VARCHAR(120) NOT NULL UNIQUE,
+        descripcion VARCHAR(255)
+      )
+    `);
 
-  const permissionCodes = getDefaultPermissionCodes();
-  for (const code of permissionCodes) {
-    if (!code) continue;
-    await pool.query(
-      "INSERT INTO permiso (codigo, descripcion) VALUES ($1, $2) ON CONFLICT (codigo) DO NOTHING",
-      [code, code]
-    );
-  }
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS rol_permiso (
+        id_rol INT NOT NULL REFERENCES rol(id_rol) ON DELETE CASCADE,
+        id_permiso INT NOT NULL REFERENCES permiso(id_permiso) ON DELETE CASCADE,
+        PRIMARY KEY (id_rol, id_permiso)
+      )
+    `);
 
-  const roles = await all("SELECT id_rol, LOWER(nombre) AS nombre FROM rol");
-  const roleIdByName = new Map(roles.map((r) => [r.nombre, r.id_rol]));
-
-  for (const [roleName, permissions] of Object.entries(DEFAULT_ROLE_PERMISSIONS)) {
-    const roleId = roleIdByName.get(String(roleName).toLowerCase());
-    if (!roleId) continue;
-
-    for (const permissionCode of permissions) {
-      const normalizedCode = normalizePermissionCode(permissionCode);
-      await pool.query(
-        `INSERT INTO rol_permiso (id_rol, id_permiso)
-         SELECT $1, p.id_permiso
-         FROM permiso p
-         WHERE p.codigo = $2
-         ON CONFLICT (id_rol, id_permiso) DO NOTHING`,
-        [roleId, normalizedCode]
+    const permissionCodes = getDefaultPermissionCodes();
+    for (const code of permissionCodes) {
+      if (!code) continue;
+      await client.query(
+        "INSERT INTO permiso (codigo, descripcion) VALUES ($1, $2) ON CONFLICT (codigo) DO NOTHING",
+        [code, code]
       );
     }
-  }
 
-  rbacReady = true;
+    const rolesRes = await client.query("SELECT id_rol, LOWER(nombre) AS nombre FROM rol");
+    const roleIdByName = new Map(rolesRes.rows.map((r) => [r.nombre, r.id_rol]));
+
+    for (const [roleName, permissions] of Object.entries(DEFAULT_ROLE_PERMISSIONS)) {
+      const roleId = roleIdByName.get(String(roleName).toLowerCase());
+      if (!roleId) continue;
+
+      for (const permissionCode of permissions) {
+        const normalizedCode = normalizePermissionCode(permissionCode);
+        await client.query(
+          `INSERT INTO rol_permiso (id_rol, id_permiso)
+           SELECT $1, p.id_permiso
+           FROM permiso p
+           WHERE p.codigo = $2
+           ON CONFLICT (id_rol, id_permiso) DO NOTHING`,
+          [roleId, normalizedCode]
+        );
+      }
+    }
+
+    await client.query("COMMIT");
+    rbacReady = true;
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    console.error("Error seeding RBAC database:", err);
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 async function getPermissionsForRole(roleName) {

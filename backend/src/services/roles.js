@@ -16,12 +16,24 @@ let roleSeededReady = false;
 async function ensureRoleTableSeeded() {
   if (roleSeededReady) return;
   const defaults = getDefaultRoleNames();
-  for (const role of defaults) {
-    if (!role) continue;
-    await run(
-      "INSERT INTO rol (nombre) VALUES (?) ON CONFLICT (nombre) DO NOTHING RETURNING id_rol AS id",
-      [role]
-    );
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    for (const role of defaults) {
+      if (!role) continue;
+      await client.query(
+        "INSERT INTO rol (nombre) VALUES ($1) ON CONFLICT (nombre) DO NOTHING",
+        [role]
+      );
+    }
+    await client.query("COMMIT");
+    roleSeededReady = true;
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    console.error("Error seeding roles table:", err);
+    throw err;
+  } finally {
+    client.release();
   }
 }
 
