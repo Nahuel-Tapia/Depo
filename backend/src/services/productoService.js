@@ -487,9 +487,21 @@ async function importarProductosMasivo(user, productosArray) {
   try {
     await client.query("BEGIN");
 
+    // Verificar si las columnas tipo o tipo_deposito existen
+    const hasTipo = await columnExists('deposito', 'tipo');
+    const hasTipoDeposito = await columnExists('deposito', 'tipo_deposito');
+    let tipoExpr = "'central'";
+    if (hasTipo && hasTipoDeposito) {
+      tipoExpr = "COALESCE(tipo, tipo_deposito)";
+    } else if (hasTipo) {
+      tipoExpr = "tipo";
+    } else if (hasTipoDeposito) {
+      tipoExpr = "tipo_deposito";
+    }
+
     // Verificar repositorio central y tablas de stock antes de empezar
     const centralResult = await client.query(
-      "SELECT id_deposito FROM deposito WHERE COALESCE(tipo, tipo_deposito) = 'central' LIMIT 1"
+      `SELECT id_deposito FROM deposito WHERE ${tipoExpr} = 'central' LIMIT 1`
     );
     const central = centralResult.rows[0];
     const hasStockDeposito = await hasTable('stock_deposito');
