@@ -4,6 +4,75 @@ import { apiFetch } from '../api'
 
 const FALLBACK_NIVELES = ['INICIAL', 'PRIMARIO', 'SECUNDARIO', 'SUPERIOR']
 
+const DIRECCIONES_DE_AREA = [
+  {
+    label: 'Dirección de Educación Inicial',
+    value: 'Inicial',
+    subniveles: ['INICIAL']
+  },
+  {
+    label: 'Dirección de Educación Primaria',
+    value: 'Primario',
+    subniveles: ['PRIMARIO', 'ALBERGUE']
+  },
+  {
+    label: 'Dirección de Educación Secundaria',
+    value: 'Secundario',
+    subniveles: ['SECUNDARIO', 'NO FORMAL']
+  },
+  {
+    label: 'Dirección de Educación Técnica y Formación Profesional',
+    value: 'Tecnica',
+    subniveles: ['AGROTECNICA', 'TECNICO', 'MONOTECNICA', 'FOR. PROF. EDUC. NO FORMAL', 'TEC. CAP. LABORAL']
+  },
+  {
+    label: 'Dirección de Educación de Adultos',
+    value: 'Adultos',
+    subniveles: ['CENS', 'UEPA', 'PROPAA']
+  },
+  {
+    label: 'Dirección de Educación Especial',
+    value: 'Especial',
+    subniveles: ['EDUCACION ESPECIAL', 'EDUCACION HOSPITALARIA']
+  },
+  {
+    label: 'Dirección de Educación Superior',
+    value: 'Superior',
+    subniveles: ['SUPERIOR']
+  }
+]
+
+function renderDireccionAreaSelectOptions(role) {
+  if (role === 'director_area') {
+    return (
+      <>
+        <option value="">-- Seleccionar Dirección de Área --</option>
+        {DIRECCIONES_DE_AREA.map((d) => (
+          <option key={d.value} value={d.value}>
+            {d.label} ({d.value})
+          </option>
+        ))}
+      </>
+    )
+  }
+
+  return (
+    <>
+      <option value="">-- Seleccionar Dirección de Área / Nivel --</option>
+      {DIRECCIONES_DE_AREA.map((group) => (
+        <optgroup key={group.value} label={group.label}>
+          <option value={group.value}>👉 {group.label} ({group.value})</option>
+          {group.subniveles.map((sub) => (
+            <option key={sub} value={sub}>
+              &nbsp;&nbsp;• {sub}
+            </option>
+          ))}
+        </optgroup>
+      ))}
+    </>
+  )
+}
+
 const INITIAL_FORM = {
   nombre: '',
   email: '',
@@ -596,12 +665,9 @@ export default function Usuarios() {
 
               {form.role === 'director_area' && (
                 <div>
-                  <label>Nivel educativo</label>
+                  <label>Dirección de Área</label>
                   <select value={form.nivel} onChange={(e) => setForm({ ...form, nivel: e.target.value })} required>
-                    <option value="">-- Seleccionar nivel --</option>
-                    {nivelesDisponibles.map((nivel) => (
-                      <option key={nivel} value={nivel}>{nivel}</option>
-                    ))}
+                    {renderDireccionAreaSelectOptions('director_area')}
                   </select>
                 </div>
               )}
@@ -631,24 +697,17 @@ export default function Usuarios() {
                   )}
                   {user?.role === 'director_area' ? (
                     <div>
-                      <label>Nivel educativo</label>
+                      <label>Dirección de Área / Nivel</label>
                       <select value={user.nivel_educativo || ''} disabled>
-                        {nivelesDisponibles
-                          .filter((nivel) => nivel === normalizeText(user.nivel_educativo))
-                          .map((nivel) => (
-                            <option key={nivel} value={nivel}>{nivel}</option>
-                          ))}
+                        <option value={user.nivel_educativo || ''}>{user.nivel_educativo}</option>
                       </select>
                       <input type="hidden" name="nivel" value={user.nivel_educativo || ''} />
                     </div>
                   ) : (
                     <div>
-                      <label>Nivel educativo</label>
+                      <label>Dirección de Área / Nivel</label>
                       <select value={form.nivel} onChange={(e) => setForm({ ...form, nivel: e.target.value })} required>
-                        <option value="">-- Seleccionar nivel --</option>
-                        {nivelesDisponibles.map((nivel) => (
-                          <option key={nivel} value={nivel}>{nivel}</option>
-                        ))}
+                        {renderDireccionAreaSelectOptions('supervisor')}
                       </select>
                     </div>
                   )}
@@ -718,10 +777,7 @@ export default function Usuarios() {
                   </select>
                 ) : (
                   <select value={editModal.nivel || ''} onChange={(e) => setEditModal({ ...editModal, nivel: e.target.value, error: '' })}>
-                    <option value="">-- Seleccionar nivel --</option>
-                    {nivelesDisponibles.map((nivel) => (
-                      <option key={nivel} value={nivel}>{nivel}</option>
-                    ))}
+                    {renderDireccionAreaSelectOptions(editModal.role)}
                   </select>
                 )}
               </div>
@@ -793,12 +849,9 @@ export default function Usuarios() {
 
             {(roleModal.role === 'director_area' || roleModal.role === 'supervisor') && (
               <div style={{ marginTop: 16 }}>
-                <label>Nivel educativo</label>
+                <label>Dirección de Área / Nivel</label>
                 <select value={roleModal.nivel || ''} onChange={(e) => setRoleModal({ ...roleModal, nivel: e.target.value, error: '' })}>
-                  <option value="">-- Seleccionar nivel --</option>
-                  {nivelesDisponibles.map((nivel) => (
-                    <option key={nivel} value={nivel}>{nivel}</option>
-                  ))}
+                  {renderDireccionAreaSelectOptions(roleModal.role)}
                 </select>
               </div>
             )}
