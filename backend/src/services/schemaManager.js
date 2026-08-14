@@ -149,12 +149,13 @@ async function initDatabaseSchema() {
         ALTER TABLE institucion ADD COLUMN IF NOT EXISTS tipo_escuela VARCHAR(40);
         ALTER TABLE institucion ADD COLUMN IF NOT EXISTS matriculados INT DEFAULT 0;
         ALTER TABLE institucion ADD COLUMN IF NOT EXISTS kit_id INT REFERENCES producto_kit(id);
+        ALTER TABLE institucion ADD COLUMN IF NOT EXISTS direccion_area VARCHAR(100);
       `);
     } catch (err) {
       console.warn("[schemaManager] Warning altering table institucion:", err.message);
     }
 
-    // 7. Seed/Update Institucion tipo_escuela
+    // 7. Seed/Update Institucion tipo_escuela & direccion_area
     try {
       await client.query(`
         UPDATE institucion
@@ -164,9 +165,21 @@ async function initDatabaseSchema() {
           WHEN LOWER(COALESCE(categoria, '')) LIKE '%jornada%' OR LOWER(COALESCE(ambito, '')) LIKE '%jornada%' THEN 'jornada_extendida'
           ELSE 'normal'
         END;
+
+        UPDATE institucion SET direccion_area = CASE
+          WHEN UPPER(COALESCE(nivel_educativo, '')) IN ('CENS', 'PROPAA', 'UEPA') THEN 'Adultos'
+          WHEN UPPER(COALESCE(nivel_educativo, '')) IN ('EDUCACION ESPECIAL', 'EDUCACION HOSPITALARIA') THEN 'Especial'
+          WHEN UPPER(COALESCE(nivel_educativo, '')) IN ('INICIAL') THEN 'Inicial'
+          WHEN UPPER(COALESCE(nivel_educativo, '')) IN ('SECUNDARIO', 'NO FORMAL') THEN 'Secundario'
+          WHEN UPPER(COALESCE(nivel_educativo, '')) IN ('SUPERIOR') THEN 'Superior'
+          WHEN UPPER(COALESCE(nivel_educativo, '')) IN ('AGROTECNICA', 'FOR. PROF. EDUC. NO FORMAL', 'MONOTECNICA', 'TECNICA', 'TECNICO', 'TEC. CAP. LABORAL') THEN 'Tecnica'
+          WHEN UPPER(COALESCE(nivel_educativo, '')) IN ('PRIMARIO', 'ALBERGUE') THEN 'Primario'
+          ELSE 'Otra'
+        END
+        WHERE direccion_area IS NULL OR BTRIM(direccion_area) = '';
       `);
     } catch (err) {
-      console.warn("[schemaManager] Warning updating institucion tipo_escuela:", err.message);
+      console.warn("[schemaManager] Warning updating institucion tipo_escuela/direccion_area:", err.message);
     }
 
     // 8. Pedido Alterations
