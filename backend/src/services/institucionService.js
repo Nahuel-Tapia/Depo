@@ -1,4 +1,5 @@
 const { all, get, run, pool } = require("../db.pg");
+const { getInstitucionNivelColumn, columnExists, tableExists } = require("../utils/schemaCache");
 
 const NIVELES = ["inicial", "primario", "secundario", "superior", "especial", "adultos", "otro"];
 const TIPOS = ["publica", "privada", "municipal"];
@@ -40,27 +41,6 @@ function calcularFactorAsignacion(matriculados) {
 function calcularCantidadAsignada(matriculados, cantidadBase = 10) {
   const factor = calcularFactorAsignacion(matriculados);
   return Math.ceil(cantidadBase * factor);
-}
-
-async function getInstitucionNivelColumn() {
-  const row = await get(`
-    SELECT CASE
-      WHEN EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'institucion' AND column_name = 'direccion_area'
-      ) THEN 'direccion_area'
-      WHEN EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'institucion' AND column_name = 'nivel_educativo'
-      ) THEN 'nivel_educativo'
-      WHEN EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'institucion' AND column_name = 'nivel'
-      ) THEN 'nivel'
-      ELSE NULL
-    END AS col
-  `);
-  return row?.col || null;
 }
 
 function validationError(message, status = 400) {

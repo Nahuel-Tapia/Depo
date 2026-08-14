@@ -1,27 +1,5 @@
 const { all, get, run } = require("../db.pg");
-
-const columnExistsCache = new Map();
-
-async function columnExists(tableName, columnName) {
-  const cacheKey = `${tableName}.${columnName}`;
-  if (columnExistsCache.has(cacheKey)) {
-    return columnExistsCache.get(cacheKey);
-  }
-
-  const row = await get(
-    `SELECT EXISTS (
-       SELECT 1
-       FROM information_schema.columns
-       WHERE table_schema = 'public'
-         AND table_name = $1
-         AND column_name = $2
-     ) AS column_exists`,
-    [tableName, columnName]
-  );
-  const exists = Boolean(row?.column_exists);
-  columnExistsCache.set(cacheKey, exists);
-  return exists;
-}
+const { columnExists } = require("../utils/schemaCache");
 
 async function getInstitucionNivelColumn() {
   const row = await get(`

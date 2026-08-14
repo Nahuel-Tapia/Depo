@@ -1,34 +1,5 @@
 const { all, get, run, pool } = require("../db.pg");
-
-const columnExistsCache = new Map();
-
-async function columnExists(tableName, columnName) {
-  const cacheKey = `${tableName}.${columnName}`;
-  if (columnExistsCache.has(cacheKey)) return columnExistsCache.get(cacheKey);
-
-  try {
-    const row = await get(
-      `SELECT EXISTS (
-         SELECT 1
-         FROM information_schema.columns
-         WHERE table_schema = 'public'
-           AND table_name = $1
-           AND column_name = $2
-       ) AS column_exists`,
-      [tableName, columnName]
-    );
-    const exists = Boolean(row?.column_exists);
-    columnExistsCache.set(cacheKey, exists);
-    return exists;
-  } catch (err) {
-    return false;
-  }
-}
-
-async function hasTable(tableName) {
-  const row = await get(`SELECT to_regclass($1) AS regclass`, [`public.${tableName}`]);
-  return Boolean(row?.regclass);
-}
+const { columnExists, tableExists: hasTable } = require("../utils/schemaCache");
 
 async function getProductos(user) {
   const isEscolar = user.role === "operador_escolar";

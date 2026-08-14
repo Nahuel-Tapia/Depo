@@ -1,0 +1,27 @@
+{
+  "allowedValues": [
+    {
+      "table": "solicitudes",
+      "column": "estado",
+      "values": [
+        "borrador",
+        "metodologia_cargada",
+        "escuelas_cargadas",
+        "validado",
+        "sede_confirmada",
+        "ejecutado"
+      ]
+    },
+    {
+      "table": "licitaciones",
+      "column": "estado",
+      "values": [
+        "pendiente_supervisor",
+        "pendiente_director",
+        "aprobada",
+        "enviado_compras",
+        "licitacion_publicada"
+      ]
+    }
+  ]
+}

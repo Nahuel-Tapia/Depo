@@ -1,0 +1,46 @@
+{
+  "allowedValues": [
+    {
+      "table": "movimiento_stock",
+      "column": "tipo",
+      "values": [
+        "ingreso",
+        "egreso",
+        "ajuste",
+        "devolucion",
+        "traslado"
+      ]
+    },
+    {
+      "table": "baja_movimientos",
+      "column": "estado",
+      "values": [
+        "pendiente",
+        "aprobada",
+        "rechazada"
+      ]
+    },
+    {
+      "table": "categoria",
+      "column": "tipo_bien",
+      "values": [
+        "consumible",
+        "patrimonial"
+      ]
+    },
+    {
+      "table": "aprobacion_seguimiento",
+      "column": "estado_resultante",
+      "values": [
+        "pendiente",
+        "en_revision",
+        "aprobado_parcial",
+        "aprobado",
+        "rechazado",
+        "finalizado",
+        "cancelado",
+        "pendiente_director"
+      ]
+    }
+  ]
+}
