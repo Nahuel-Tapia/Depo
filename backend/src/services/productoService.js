@@ -35,6 +35,7 @@ async function getProductos(user) {
         p.ubicacion_estante,
         p.descripcion,
         p.es_perecedero,
+        p.requiere_autorizacion,
         c.nombre as categoria_nombre,
         COALESCE(SUM(sd.cantidad), 0) as stock_total,
         COALESCE(SUM(CASE WHEN ${tipoExpr} = 'central' OR d.id_deposito = 1 THEN sd.cantidad ELSE 0 END), 0) as stock_central,
@@ -59,7 +60,7 @@ async function getProductos(user) {
     }
 
     query += `
-      GROUP BY p.id_producto, p.nombre, p.unidad_medida, p.stock_actual, p.stock_minimo, p.id_categoria, p.codigo_sku, p.marca, p.precio_unitario, p.ubicacion_estante, p.descripcion, p.es_perecedero, c.nombre
+      GROUP BY p.id_producto, p.nombre, p.unidad_medida, p.stock_actual, p.stock_minimo, p.id_categoria, p.codigo_sku, p.marca, p.precio_unitario, p.ubicacion_estante, p.descripcion, p.es_perecedero, p.requiere_autorizacion, c.nombre
       ORDER BY p.id_producto DESC
     `;
     
@@ -79,6 +80,7 @@ async function getProductos(user) {
         p.ubicacion_estante,
         p.descripcion,
         p.es_perecedero,
+        p.requiere_autorizacion,
         c.nombre as categoria_nombre,
         p.stock_actual as stock_central,
         0 as stock_centro_civico,
@@ -188,7 +190,8 @@ async function createProducto(user, body) {
       precio_unitario,
       ubicacion_estante,
       descripcion,
-      es_perecedero
+      es_perecedero,
+      requiere_autorizacion
     } = body;
 
     if (!nombre) {
@@ -207,9 +210,9 @@ async function createProducto(user, body) {
     const insertResult = await client.query(
       `INSERT INTO producto (
         nombre, unidad_medida, stock_actual, stock_minimo, id_categoria,
-        codigo_sku, marca, precio_unitario, ubicacion_estante, descripcion, es_perecedero
+        codigo_sku, marca, precio_unitario, ubicacion_estante, descripcion, es_perecedero, requiere_autorizacion
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        RETURNING id_producto`,
       [
         nombre.trim(),
@@ -222,7 +225,8 @@ async function createProducto(user, body) {
         parseFloat(precio_unitario) || 0,
         ubicacion_estante ? ubicacion_estante.trim() : null,
         descripcion ? descripcion.trim() : null,
-        Boolean(es_perecedero)
+        Boolean(es_perecedero),
+        Boolean(requiere_autorizacion)
       ]
     );
 
@@ -341,6 +345,10 @@ async function updateProducto(id, body) {
     if (es_perecedero !== undefined) {
       updates.push(`es_perecedero = $${paramIndex++}`);
       params.push(Boolean(es_perecedero));
+    }
+    if (body.requiere_autorizacion !== undefined) {
+      updates.push(`requiere_autorizacion = $${paramIndex++}`);
+      params.push(Boolean(body.requiere_autorizacion));
     }
     if (body.stock_actual !== undefined) {
       updates.push(`stock_actual = $${paramIndex++}`);

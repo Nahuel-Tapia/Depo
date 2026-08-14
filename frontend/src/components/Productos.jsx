@@ -31,7 +31,8 @@ export default function Productos() {
     stock_minimo: 0,
     id_categoria: '',
     descripcion: '',
-    es_perecedero: false
+    es_perecedero: false,
+    requiere_autorizacion: false
   })
   const [vencimientosProximos, setVencimientosProximos] = useState(new Set())
   const canDeleteProductos = hasPermission('productos.delete') || user?.role === 'admin' || user?.role === 'master'
@@ -264,7 +265,8 @@ export default function Productos() {
       stock_minimo: producto.stock_minimo ?? 0,
       id_categoria: producto.id_categoria || '',
       descripcion: producto.descripcion || '',
-      es_perecedero: Boolean(producto.es_perecedero)
+      es_perecedero: Boolean(producto.es_perecedero),
+      requiere_autorizacion: Boolean(producto.requiere_autorizacion)
     })
   }
 
@@ -281,7 +283,8 @@ export default function Productos() {
       stock_minimo: parseInt(editModal.stock_minimo, 10) || 0,
       id_categoria: editModal.id_categoria || null,
       descripcion: String(editModal.descripcion || '').trim() || '',
-      es_perecedero: Boolean(editModal.es_perecedero)
+      es_perecedero: Boolean(editModal.es_perecedero),
+      requiere_autorizacion: Boolean(editModal.requiere_autorizacion)
     }
 
     if (!payload.nombre) {
@@ -468,7 +471,14 @@ export default function Productos() {
               <td>
                 <span style={{ fontWeight: 600, color: 'var(--dark)' }}>{p.codigo_sku || `#${p.id}`}</span>
               </td>
-              <td>{p.nombre}</td>
+              <td>
+                {p.nombre}
+                {p.requiere_autorizacion && (
+                  <span style={{ marginLeft: 6, background: '#fffbeb', color: '#92400e', border: '1px solid #fcd34d', padding: '2px 6px', borderRadius: 4, fontSize: '0.7rem', fontWeight: 600 }}>
+                    🔒 Cápsula
+                  </span>
+                )}
+              </td>
               <td>{p.marca || '-'}</td>
               <td>{p.categoria_nombre || '-'}</td>
               <td>{p.ubicacion_estante || '-'}</td>
@@ -577,6 +587,18 @@ export default function Productos() {
               Es producto perecedero (requiere control de fecha de vencimiento)
             </label>
           </div>
+          <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
+            <input
+              type="checkbox"
+              id="create-requiere-autorizacion"
+              checked={form.requiere_autorizacion}
+              onChange={e => setForm({ ...form, requiere_autorizacion: e.target.checked })}
+              style={{ width: 'auto', minHeight: 'auto', cursor: 'pointer' }}
+            />
+            <label htmlFor="create-requiere-autorizacion" style={{ margin: 0, textTransform: 'none', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 600, color: '#92400e' }}>
+              🔒 Producto de Cápsula de Seguridad (requiere autorización de Admin para movimientos)
+            </label>
+          </div>
           <div style={{ gridColumn: '1 / -1' }}>
             <label>Descripción / Observaciones</label>
             <textarea
@@ -640,6 +662,18 @@ export default function Productos() {
               />
               <label htmlFor="edit-es-perecedero" style={{ margin: 0, textTransform: 'none', cursor: 'pointer', fontSize: '0.9rem' }}>
                 Es producto perecedero (requiere control de fecha de vencimiento)
+              </label>
+            </div>
+            <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
+              <input
+                type="checkbox"
+                id="edit-requiere-autorizacion"
+                checked={editModal.requiere_autorizacion}
+                onChange={e => setEditModal({ ...editModal, requiere_autorizacion: e.target.checked })}
+                style={{ width: 'auto', minHeight: 'auto', cursor: 'pointer' }}
+              />
+              <label htmlFor="edit-requiere-autorizacion" style={{ margin: 0, textTransform: 'none', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 600, color: '#92400e' }}>
+                🔒 Producto de Cápsula de Seguridad (requiere autorización de Admin para movimientos)
               </label>
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
