@@ -760,15 +760,32 @@ export default function Usuarios() {
                 <label>Telefono</label>
                 <input value={editModal.telefono} onChange={(e) => setEditModal({ ...editModal, telefono: e.target.value, error: '' })} />
               </div>
+              {editModal.role === 'supervisor' && !isDirectorArea && (
+                <div>
+                  <label>Área de Dirección (Director de Área)</label>
+                  <select value={editModal.director_area_id || ''} onChange={(e) => {
+                    const selected = directorAreas.find((area) => String(area.id) === e.target.value)
+                    setEditModal({
+                      ...editModal,
+                      director_area_id: e.target.value,
+                      nivel: selected?.nivel_educativo || editModal.nivel,
+                      error: ''
+                    })
+                  }}>
+                    <option value="">-- Seleccionar Director de Área --</option>
+                    {directorAreas.map((area) => (
+                      <option key={area.id} value={area.id}>
+                        {area.nombre} {area.apellido || ''} — Dirección de Educación {area.nivel_educativo || 'Sin nivel'}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div>
-                <label>Nivel educativo</label>
+                <label>Dirección de Área / Nivel</label>
                 {isDirectorArea ? (
                   <select value={user?.nivel_educativo || ''} disabled>
-                    {nivelesDisponibles
-                      .filter((nivel) => nivel === normalizeText(user?.nivel_educativo))
-                      .map((nivel) => (
-                        <option key={nivel} value={nivel}>{nivel}</option>
-                      ))}
+                    <option value={user?.nivel_educativo || ''}>{user?.nivel_educativo}</option>
                   </select>
                 ) : (
                   <select value={editModal.nivel || ''} onChange={(e) => setEditModal({ ...editModal, nivel: e.target.value, error: '' })}>
