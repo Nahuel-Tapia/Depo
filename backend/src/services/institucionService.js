@@ -10,9 +10,8 @@ function mapNivelToArea(nivel) {
   if (['CENS', 'PROPAA', 'UEPA'].includes(n)) return 'Adultos';
   if (['EDUCACION ESPECIAL', 'EDUCACION HOSPITALARIA'].includes(n)) return 'Especial';
   if (['INICIAL'].includes(n)) return 'Inicial';
-  if (['NO FORMAL', 'SECUNDARIO'].includes(n)) return 'Secundario';
+  if (['NO FORMAL', 'SECUNDARIO', 'AGROTECNICA', 'FOR. PROF. EDUC. NO FORMAL', 'MONOTECNICA', 'TECNICA', 'TECNICO', 'TEC. CAP. LABORAL'].includes(n)) return 'Secundario';
   if (['SUPERIOR'].includes(n)) return 'Superior';
-  if (['AGROTECNICA', 'FOR. PROF. EDUC. NO FORMAL', 'MONOTECNICA', 'TECNICA', 'TECNICO', 'TEC. CAP. LABORAL'].includes(n)) return 'Tecnica';
   if (['PRIMARIO', 'ALBERGUE'].includes(n)) return 'Primario';
   return null;
 }

@@ -170,13 +170,11 @@ async function initDatabaseSchema() {
           WHEN UPPER(COALESCE(nivel_educativo, '')) IN ('CENS', 'PROPAA', 'UEPA') THEN 'Adultos'
           WHEN UPPER(COALESCE(nivel_educativo, '')) IN ('EDUCACION ESPECIAL', 'EDUCACION HOSPITALARIA') THEN 'Especial'
           WHEN UPPER(COALESCE(nivel_educativo, '')) IN ('INICIAL') THEN 'Inicial'
-          WHEN UPPER(COALESCE(nivel_educativo, '')) IN ('SECUNDARIO', 'NO FORMAL') THEN 'Secundario'
+          WHEN UPPER(COALESCE(nivel_educativo, '')) IN ('SECUNDARIO', 'NO FORMAL', 'AGROTECNICA', 'FOR. PROF. EDUC. NO FORMAL', 'MONOTECNICA', 'TECNICA', 'TECNICO', 'TEC. CAP. LABORAL') THEN 'Secundario'
           WHEN UPPER(COALESCE(nivel_educativo, '')) IN ('SUPERIOR') THEN 'Superior'
-          WHEN UPPER(COALESCE(nivel_educativo, '')) IN ('AGROTECNICA', 'FOR. PROF. EDUC. NO FORMAL', 'MONOTECNICA', 'TECNICA', 'TECNICO', 'TEC. CAP. LABORAL') THEN 'Tecnica'
           WHEN UPPER(COALESCE(nivel_educativo, '')) IN ('PRIMARIO', 'ALBERGUE') THEN 'Primario'
           ELSE 'Otra'
-        END
-        WHERE direccion_area IS NULL OR BTRIM(direccion_area) = '';
+        END;
       `);
     } catch (err) {
       console.warn("[schemaManager] Warning updating institucion tipo_escuela/direccion_area:", err.message);

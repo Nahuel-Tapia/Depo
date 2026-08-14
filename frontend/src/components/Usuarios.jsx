@@ -18,12 +18,7 @@ const DIRECCIONES_DE_AREA = [
   {
     label: 'Dirección de Educación Secundaria',
     value: 'Secundario',
-    subniveles: ['SECUNDARIO', 'NO FORMAL']
-  },
-  {
-    label: 'Dirección de Educación Técnica y Formación Profesional',
-    value: 'Tecnica',
-    subniveles: ['AGROTECNICA', 'TECNICO', 'MONOTECNICA', 'FOR. PROF. EDUC. NO FORMAL', 'TEC. CAP. LABORAL']
+    subniveles: ['SECUNDARIO', 'AGROTECNICA', 'TECNICO', 'MONOTECNICA', 'FOR. PROF. EDUC. NO FORMAL', 'TEC. CAP. LABORAL', 'NO FORMAL']
   },
   {
     label: 'Dirección de Educación de Adultos',
