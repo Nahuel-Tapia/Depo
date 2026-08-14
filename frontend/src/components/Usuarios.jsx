@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../api'
+import InstitutionSelectorModal from './ui/InstitutionSelectorModal'
+import SelectorTrigger from './ui/SelectorTrigger'
 
 const FALLBACK_NIVELES = ['INICIAL', 'PRIMARIO', 'SECUNDARIO', 'SUPERIOR']
 
@@ -100,6 +102,7 @@ export default function Usuarios() {
   const [form, setForm] = useState(INITIAL_FORM)
   const [cueInfo, setCueInfo] = useState(null)
   const [cueLoading, setCueLoading] = useState(false)
+  const [instModalOpen, setInstModalOpen] = useState(false)
 
   const isDirectorArea = user?.role === 'director_area'
   const nivelesDisponibles = (() => {
@@ -631,13 +634,22 @@ export default function Usuarios() {
 
               {form.role === 'directivo' && (
                 <>
+                  <div style={{ marginBottom: 8 }}>
+                    <SelectorTrigger
+                      label="Seleccionar Escuela (Institución)"
+                      placeholder="Buscar por CUE o nombre de escuela..."
+                      selectedItem={cueInfo?.nombre ? { nombre: cueInfo.nombre, cue: form.cue, nivel_educativo: form.nivel } : (form.cue ? { cue: form.cue } : null)}
+                      onClick={() => setInstModalOpen(true)}
+                      onClear={() => { setForm({ ...form, cue: '', nivel: '' }); setCueInfo(null) }}
+                    />
+                  </div>
                   <div>
-                    <label>CUE</label>
+                    <label>o ingresar CUE manualmente</label>
                     <input
                       type="text"
                       value={form.cue}
                       onChange={(e) => setForm({ ...form, cue: e.target.value.replace(/\D/g, '').slice(0, 9), nivel: '' })}
-                      placeholder="Ingresar CUE (9 digitos)"
+                      placeholder="Ingresar CUE (9 dígitos)"
                       required
                     />
                   </div>
@@ -899,6 +911,24 @@ export default function Usuarios() {
           </div>
         </div>
       )}
+
+      {/* Floating Institution Selector Modal */}
+      <InstitutionSelectorModal
+        isOpen={instModalOpen}
+        onClose={() => setInstModalOpen(false)}
+        instituciones={instituciones}
+        onSelect={(inst) => {
+          if (inst.cue) {
+            setForm(prev => ({
+              ...prev,
+              cue: String(inst.cue),
+              nivel: inst.nivel_educativo || prev.nivel
+            }))
+          }
+        }}
+        selectedId={instituciones.find(i => String(i.cue) === String(form.cue))?.id}
+        title="Seleccionar Escuela / Institución"
+      />
     </div>
   )
 }
