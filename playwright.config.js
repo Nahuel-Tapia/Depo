@@ -37,7 +37,6 @@ module.exports = defineConfig({
       name: 'e2e',
       testDir: './tests/nivel-4-e2e',
       use: { ...devices['Desktop Chrome'] },
-      dependencies: ['api-integration'],
     },
   ],
   webServer: {
