@@ -138,6 +138,7 @@ export default function SolicitudesRetiro({ embedded = false }) {
   const [observaciones, setObservaciones] = useState('')
   const [msg, setMsg] = useState({ text: '', type: '' })
   const [loading, setLoading] = useState(true)
+  const [creando, setCreando] = useState(false)
   const [processingId, setProcessingId] = useState(null)
   const [comprobante, setComprobante] = useState(null)
   const [historialEntregadas, setHistorialEntregadas] = useState([])
@@ -217,37 +218,50 @@ export default function SolicitudesRetiro({ embedded = false }) {
       return
     }
 
-    const res = await apiFetch('/api/entregas/solicitudes', {
-      token,
-      method: 'POST',
-      body: JSON.stringify({
-        id_pedido: Number(selectedPedidoId),
-        fecha_retiro: fechaRetiro,
-        retira_tipo: retiraTipo,
-        retira_nombre: retiraTipo === 'otro' ? retiraNombre.trim() : null,
-        retira_dni: retiraTipo === 'otro' ? retiraDni.trim() : null,
-        solicitar_envio: solicitarEnvio,
-        observaciones: observaciones.trim() || null,
-        items
-      })
-    })
-
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok) {
-      setMsg({ text: data.error || 'No se pudo crear la solicitud de retiro', type: 'error' })
+    if (!token) {
+      setMsg({ text: 'Tu sesión expiró. Por favor iniciá sesión nuevamente.', type: 'error' })
       return
     }
 
-    setSelectedPedidoId('')
-    setCantidades({})
-    setFechaRetiro(todayInputValue())
-    setRetiraTipo('directivo')
-    setRetiraNombre('')
-    setRetiraDni('')
-    setSolicitarEnvio(false)
-    setObservaciones('')
-    setMsg({ text: 'Solicitud de retiro creada correctamente.', type: 'success' })
-    loadData()
+    setCreando(true)
+
+    try {
+      const res = await apiFetch('/api/entregas/solicitudes', {
+        token,
+        method: 'POST',
+        body: JSON.stringify({
+          id_pedido: Number(selectedPedidoId),
+          fecha_retiro: fechaRetiro,
+          retira_tipo: retiraTipo,
+          retira_nombre: retiraTipo === 'otro' ? retiraNombre.trim() : null,
+          retira_dni: retiraTipo === 'otro' ? retiraDni.trim() : null,
+          solicitar_envio: solicitarEnvio,
+          observaciones: observaciones.trim() || null,
+          items
+        })
+      })
+
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setMsg({ text: data.error || 'No se pudo crear la solicitud de retiro', type: 'error' })
+        return
+      }
+
+      setSelectedPedidoId('')
+      setCantidades({})
+      setFechaRetiro(todayInputValue())
+      setRetiraTipo('directivo')
+      setRetiraNombre('')
+      setRetiraDni('')
+      setSolicitarEnvio(false)
+      setObservaciones('')
+      setMsg({ text: 'Solicitud de retiro creada correctamente.', type: 'success' })
+      loadData()
+    } catch (err) {
+      setMsg({ text: err.message || 'Error de conexión al crear la solicitud', type: 'error' })
+    } finally {
+      setCreando(false)
+    }
   }
 
   const handleEntregar = async (solicitudId) => {
@@ -509,7 +523,18 @@ export default function SolicitudesRetiro({ embedded = false }) {
             </div>
 
             <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end' }}>
-              <button type="submit" style={{ width: 'auto', margin: 0 }}>Crear solicitud de retiro</button>
+              <button type="submit" disabled={creando} style={{ width: 'auto', margin: 0, display: 'inline-flex', alignItems: 'center', gap: 8, opacity: creando ? 0.7 : 1 }}>
+                {creando && (
+                  <span style={{
+                    display: 'inline-block', width: 16, height: 16,
+                    border: '2.5px solid rgba(255,255,255,0.3)',
+                    borderTopColor: '#fff',
+                    borderRadius: '50%',
+                    animation: 'spin 0.7s linear infinite'
+                  }} />
+                )}
+                {creando ? 'Enviando solicitud...' : 'Crear solicitud de retiro'}
+              </button>
             </div>
           </form>
 

@@ -85,6 +85,12 @@
   }
 }
 
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* Rediseño de botones flat */
 button:not(.secondary) {
   letter-spacing: 0.2px;
