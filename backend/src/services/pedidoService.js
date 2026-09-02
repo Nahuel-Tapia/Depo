@@ -454,10 +454,15 @@ async function listarKits(user, includeInactive) {
     );
 
     const kitAsignadoId = Number(usuario?.kit_id || 0);
-    if (!kitAsignadoId) return [];
-
-    whereSql += " AND k.id = ?";
-    params.push(kitAsignadoId);
+    if (kitAsignadoId > 0) {
+      whereSql += " AND k.id = ?";
+      params.push(kitAsignadoId);
+    } else if (usuario?.id_institucion) {
+      const perfil = await getInstitucionPerfil(usuario.id_institucion);
+      const tipoEscuela = perfil?.tipo_escuela || "normal";
+      whereSql += " AND (LOWER(k.tipo_escuela) = LOWER(?) OR k.activo = TRUE)";
+      params.push(tipoEscuela);
+    }
   }
 
   const rows = await all(
@@ -815,6 +820,16 @@ async function createPedido(data, user) {
     detalleItems = parsedItems;
   } else if (kit_id) {
     kit = await getKitById(Number(kit_id));
+    if (!kit) {
+      const perfil = perfilInstitucion;
+      const kitsFallback = await all(
+        "SELECT id FROM producto_kit WHERE (LOWER(tipo_escuela) = LOWER(?) OR activo = TRUE) ORDER BY id ASC LIMIT 1",
+        [perfil?.tipo_escuela || "normal"]
+      );
+      if (kitsFallback.length > 0) {
+        kit = await getKitById(kitsFallback[0].id);
+      }
+    }
     if (!kit) {
       throw { status: 404, message: "Kit no encontrado o inactivo." };
     }
