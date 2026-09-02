@@ -752,6 +752,28 @@ async function initDatabaseSchema() {
       console.warn("[schemaManager] Warning altering consumo_institucion:", err.message);
     }
 
+    // 27. Sync PostgreSQL Serial Sequences to prevent duplicate primary key collisions
+    try {
+      const tablesToSync = [
+        { table: 'pedido', pk: 'id_pedido' },
+        { table: 'detalle_pedido', pk: 'id_detalle_pedido' },
+        { table: 'usuario', pk: 'id_usuario' },
+        { table: 'institucion', pk: 'id_institucion' },
+        { table: 'producto', pk: 'id_producto' },
+        { table: 'movimiento_stock', pk: 'id_movimiento' }
+      ];
+      for (const { table, pk } of tablesToSync) {
+        await client.query(`
+          SELECT setval(
+            pg_get_serial_sequence('${table}', '${pk}'),
+            COALESCE((SELECT MAX(${pk}) FROM ${table}), 1)
+          )
+        `).catch(() => {});
+      }
+    } catch (err) {
+      console.warn("[schemaManager] Warning syncing serial sequences:", err.message);
+    }
+
     console.log("[schemaManager] Database schema and migrations completed successfully!");
   } finally {
     client.release();
