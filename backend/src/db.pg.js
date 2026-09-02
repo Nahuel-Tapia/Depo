@@ -29,6 +29,11 @@ function convertPlaceholders(sql) {
   return sql.replace(/\?/g, () => `$${++index}`);
 }
 
+function sanitizeParams(params = []) {
+  if (!Array.isArray(params)) return [];
+  return params.map((p) => (p === undefined ? null : p));
+}
+
 /**
  * Adapta SQL de SQLite a PostgreSQL
  * @param {string} sql - Query SQL
@@ -51,7 +56,8 @@ function adaptSql(sql) {
  */
 async function run(sql, params = []) {
   const adaptedSql = adaptSql(sql);
-  // console.debug("[DBG] SQL (adapted):", adaptedSql, "Params:", JSON.stringify(params));
+  const cleanParams = sanitizeParams(params);
+  // console.debug("[DBG] SQL (adapted):", adaptedSql, "Params:", JSON.stringify(cleanParams));
   // Para INSERT, añadir RETURNING con el campo de id correcto
   let finalSql = adaptedSql;
   if (/^\s*INSERT/i.test(adaptedSql) && !/RETURNING/i.test(adaptedSql)) {
@@ -76,7 +82,7 @@ async function run(sql, params = []) {
     else if (table === 'zona') idField = 'id';
     finalSql = adaptedSql.replace(/;?\s*$/, ` RETURNING ${idField} as id`);
   }
-  const result = await pool.query(finalSql, params);
+  const result = await pool.query(finalSql, cleanParams);
   const returnedId = result.rows[0]?.id || (result.rows[0] ? result.rows[0][Object.keys(result.rows[0])[0]] : null);
   return {
     rowCount: result.rowCount,
@@ -94,7 +100,8 @@ async function run(sql, params = []) {
  */
 async function get(sql, params = []) {
   const adaptedSql = adaptSql(sql);
-  const result = await pool.query(adaptedSql, params);
+  const cleanParams = sanitizeParams(params);
+  const result = await pool.query(adaptedSql, cleanParams);
   return result.rows[0];
 }
 
@@ -106,7 +113,8 @@ async function get(sql, params = []) {
  */
 async function all(sql, params = []) {
   const adaptedSql = adaptSql(sql);
-  const result = await pool.query(adaptedSql, params);
+  const cleanParams = sanitizeParams(params);
+  const result = await pool.query(adaptedSql, cleanParams);
   return result.rows;
 }
 

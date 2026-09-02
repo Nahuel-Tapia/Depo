@@ -846,7 +846,6 @@ async function createPedido(data, user) {
   }
 
   const hasEstadoAbastecimiento = await columnExists('pedido', 'estado_abastecimiento');
-  const insertFields = ["id_usuario_solicitante", "id_institucion", "observaciones_generales", "tipo", "kit_id", "kit_nombre", "kit_cantidad", "requiere_licitacion"];
   const insertValues = [
     user.sub,
     usuario.id_institucion,
@@ -855,12 +854,12 @@ async function createPedido(data, user) {
     kit?.id || null,
     kit?.nombre || null,
     kit ? cantidadSolicitada : null,
-    routingData.requiereLicitacion
+    Boolean(routingData?.requiereLicitacion)
   ];
 
   if (hasEstadoAbastecimiento) {
     insertFields.push("estado_abastecimiento");
-    insertValues.push(routingData.estadoAbastecimiento);
+    insertValues.push(routingData?.estadoAbastecimiento || 'stock_disponible');
   }
 
   const placeholders = insertValues.map(() => "?").join(", ");
