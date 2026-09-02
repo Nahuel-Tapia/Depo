@@ -56,7 +56,7 @@ async function getDepartamentoSql() {
   };
 }
 
-async function getSupervisorAssignedInstitutionIds(supervisorId, jurisdiccion, nivelEducativo) {
+async function getSupervisorAssignedInstitutionIds(supervisorId, nivelEducativo) {
   const parsedId = Number.parseInt(supervisorId, 10);
   if (!Number.isInteger(parsedId) || parsedId <= 0) return [];
 
@@ -84,22 +84,7 @@ async function getSupervisorAssignedInstitutionIds(supervisorId, jurisdiccion, n
       params
     );
 
-    let ids = rows.map((r) => r.id).filter((v) => Number.isInteger(v) && v > 0);
-
-    if (jurisdiccion && departamentoSql.hasDepartamento) {
-      const departamentos = jurisdiccion.split(',').map(d => d.trim().toLowerCase()).filter(Boolean);
-      const allowed = await all(
-        `SELECT DISTINCT i.id_institucion AS id
-         FROM institucion i
-         ${departamentoSql.joins}
-         WHERE i.id_institucion = ANY($1::int[])
-           AND LOWER(${departamentoSql.expression}) = ANY($2::text[])`,
-        [ids, departamentos]
-      );
-      ids = allowed.map((r) => r.id).filter((v) => Number.isInteger(v) && v > 0);
-    }
-
-    return [...new Set(ids)];
+    return rows.map((r) => r.id).filter((v) => Number.isInteger(v) && v > 0);
   }
 
   if (await hasAsignacionesTable()) {
@@ -265,34 +250,7 @@ async function getInstituciones(user, queryJurisdiccion) {
     };
   }
 
-  const jurisdiccion = queryJurisdiccion || user.jurisdiccion;
-
-  if (!jurisdiccion) {
-    if (isAdminLikeRole(user?.role)) {
-      return { instituciones: [], meta: { zona_label: "", zona_count: 0, nivel_educativo: null } };
-    }
-    throw { status: 400, message: "Jurisdicción no especificada" };
-  }
-
-  const selectSql = await getInstitucionSelectSql();
-  const hasJurisdiccion = await columnExists("institucion", "jurisdiccion");
-  const jurisdiccionExpr = hasJurisdiccion ? "i.jurisdiccion" : selectSql.departamentoSql.expression;
-
-  const instituciones = await all(
-    `SELECT i.id_institucion AS id,
-            i.nombre,
-            i.cue,
-            ${selectSql.tipoExpr} AS tipo,
-            ${jurisdiccionExpr} AS jurisdiccion,
-            ${selectSql.departamentoSql.expression} AS departamento
-     FROM institucion i
-     ${selectSql.departamentoSql.joins}
-     WHERE LOWER(${jurisdiccionExpr}) = LOWER(?)
-     ORDER BY nombre`,
-    [jurisdiccion]
-  );
-
-  return { instituciones };
+  return { instituciones: [], meta: { zona_label: "", zona_count: 0, nivel_educativo: user?.nivel_educativo || null } };
 }
 
 async function getDashboardStats(user) {
@@ -307,7 +265,6 @@ async function getDashboardStats(user) {
       ? await getMasterInstitutionIds()
       : await getSupervisorAssignedInstitutionIds(
           user.sub,
-          user.jurisdiccion,
           user.nivel_educativo
         );
 
@@ -479,63 +436,10 @@ async function getPedidosPendientes(user, queryJurisdiccion) {
     return { pedidos };
   }
 
-  const jurisdiccion = queryJurisdiccion || user.jurisdiccion;
-
-  if (!jurisdiccion) {
-    if (isAdminLikeRole(user?.role)) {
-      return { pedidos: [] };
-    }
-    throw { status: 400, message: "Jurisdicción no especificada" };
-  }
-
-  const selectSql = await getInstitucionSelectSql();
-  const hasJurisdiccion = await columnExists("institucion", "jurisdiccion");
-  const jurisdiccionExpr = hasJurisdiccion ? "i.jurisdiccion" : selectSql.departamentoSql.expression;
-  const matriculaGroupBy = selectSql.matriculaGroupBy ? `, ${selectSql.matriculaGroupBy}` : "";
-
-  const pedidos = await all(
-    `SELECT p.id_pedido AS id,
-            COALESCE(p.kit_cantidad, SUM(dp.cantidad_solicitada)) AS cantidad,
-            p.observaciones_generales AS notas,
-            p.motivo_supervisor,
-            p.respuesta_supervisor_tipo,
-            CASE WHEN p.estado::text = 'finalizado' THEN 'entregado' ELSE p.estado::text END AS estado,
-            p.fecha_creacion AS fecha,
-            COALESCE(
-              p.kit_nombre,
-              STRING_AGG(pr.nombre || ' x' || dp.cantidad_solicitada::text, ', ' ORDER BY pr.nombre)
-            ) AS producto,
-            i.nombre AS institucion,
-            i.id_institucion AS institucion_id,
-            ${selectSql.matriculaExpr} AS matricula,
-            u.nombre AS solicitante,
-            COALESCE(
-              JSON_AGG(
-                JSON_BUILD_OBJECT('producto', pr.nombre, 'cantidad', dp.cantidad_solicitada)
-                ORDER BY pr.nombre
-              ) FILTER (WHERE pr.id_producto IS NOT NULL),
-              '[]'::json
-            ) AS items
-     FROM pedido p
-     JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido
-     JOIN producto pr ON pr.id_producto = dp.id_producto
-     JOIN usuario u ON u.id_usuario = p.id_usuario_solicitante
-     JOIN institucion i ON i.id_institucion = p.id_institucion
-     ${selectSql.departamentoSql.joins}
-     WHERE p.estado = 'pendiente'
-       AND COALESCE(p.respuesta_supervisor_tipo, '') <> 'aclaracion'
-       AND LOWER(${jurisdiccionExpr}) = LOWER(?)
-     GROUP BY p.id_pedido, p.kit_nombre, p.kit_cantidad, p.observaciones_generales, p.motivo_supervisor,
-              p.respuesta_supervisor_tipo, p.estado, p.fecha_creacion, i.nombre, i.id_institucion,
-              u.nombre${matriculaGroupBy}
-     ORDER BY p.fecha_creacion DESC`,
-    [jurisdiccion]
-  );
-
-  return { pedidos };
+  return { pedidos: [] };
 }
 
-async function getSolicitudes(user, queryJurisdiccion) {
+async function getSolicitudes(user) {
   await ensureSupervisorSchema();
 
   if (user?.role === "supervisor" || user?.role === "director_area" || user?.role === "master") {
@@ -543,7 +447,6 @@ async function getSolicitudes(user, queryJurisdiccion) {
     if (user.role === "supervisor") {
       institutionIds = await getSupervisorAssignedInstitutionIds(
         user.sub,
-        user.jurisdiccion,
         user.nivel_educativo
       );
     } else if (user.role === "master") {
@@ -603,59 +506,7 @@ async function getSolicitudes(user, queryJurisdiccion) {
     return { solicitudes };
   }
 
-  const jurisdiccion = queryJurisdiccion || user.jurisdiccion;
-
-  if (!jurisdiccion) {
-    if (isAdminLikeRole(user?.role)) {
-      return { solicitudes: [] };
-    }
-    throw { status: 400, message: "Jurisdicción no especificada" };
-  }
-
-  const selectSql = await getInstitucionSelectSql();
-  const hasJurisdiccion = await columnExists("institucion", "jurisdiccion");
-  const jurisdiccionExpr = hasJurisdiccion ? "i.jurisdiccion" : selectSql.departamentoSql.expression;
-  const matriculaGroupBy = selectSql.matriculaGroupBy ? `, ${selectSql.matriculaGroupBy}` : "";
-
-  const solicitudes = await all(
-    `SELECT p.id_pedido AS id,
-            COALESCE(p.kit_cantidad, SUM(dp.cantidad_solicitada)) AS cantidad,
-            p.observaciones_generales AS notas,
-            p.motivo_supervisor,
-            p.respuesta_supervisor_tipo,
-            CASE WHEN p.estado::text = 'finalizado' THEN 'entregado' ELSE p.estado::text END AS estado,
-            p.fecha_creacion AS fecha,
-            COALESCE(
-              p.kit_nombre,
-              STRING_AGG(pr.nombre || ' x' || dp.cantidad_solicitada::text, ', ' ORDER BY pr.nombre)
-            ) AS producto,
-            i.nombre AS institucion,
-            i.id_institucion AS institucion_id,
-            ${selectSql.matriculaExpr} AS matricula,
-            u.nombre AS solicitante,
-            COALESCE(
-              JSON_AGG(
-                JSON_BUILD_OBJECT('producto', pr.nombre, 'cantidad', dp.cantidad_solicitada)
-                ORDER BY pr.nombre
-              ) FILTER (WHERE pr.id_producto IS NOT NULL),
-              '[]'::json
-            ) AS items
-     FROM pedido p
-     JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido
-     JOIN producto pr ON pr.id_producto = dp.id_producto
-     JOIN usuario u ON u.id_usuario = p.id_usuario_solicitante
-     JOIN institucion i ON i.id_institucion = p.id_institucion
-     ${selectSql.departamentoSql.joins}
-     WHERE p.estado::text IN ('pendiente', 'aprobado', 'rechazado', 'cancelado', 'entregado', 'finalizado')
-       AND LOWER(${jurisdiccionExpr}) = LOWER(?)
-     GROUP BY p.id_pedido, p.kit_nombre, p.kit_cantidad, p.observaciones_generales, p.motivo_supervisor,
-              p.respuesta_supervisor_tipo, p.estado, p.fecha_creacion, i.nombre, i.id_institucion,
-              u.nombre${matriculaGroupBy}
-     ORDER BY p.fecha_creacion DESC`,
-    [jurisdiccion]
-  );
-
-  return { solicitudes };
+  return { solicitudes: [] };
 }
 
 async function getHistorialInstitucion(institucionId, user) {

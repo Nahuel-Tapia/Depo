@@ -74,7 +74,6 @@ async function initDatabaseSchema() {
       await client.query(`
         ALTER TABLE usuario ADD COLUMN IF NOT EXISTS nivel_educativo VARCHAR(120);
         ALTER TABLE usuario ADD COLUMN IF NOT EXISTS director_area_id INT REFERENCES usuario(id_usuario);
-        ALTER TABLE usuario ADD COLUMN IF NOT EXISTS jurisdiccion VARCHAR(120);
       `);
     } catch (err) {
       console.warn("[schemaManager] Warning altering table usuario:", err.message);

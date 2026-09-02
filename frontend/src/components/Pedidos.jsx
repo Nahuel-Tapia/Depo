@@ -50,10 +50,9 @@ function SupervisorPedidos() {
 
   const loadData = async () => {
     try {
-      const jurisdiccion = user?.jurisdiccion || ''
       const [instRes, pedRes] = await Promise.all([
-        apiFetch(`/api/supervisor/instituciones?jurisdiccion=${encodeURIComponent(jurisdiccion)}`, { token }),
-        apiFetch(`/api/supervisor/pedidos-pendientes?jurisdiccion=${encodeURIComponent(jurisdiccion)}`, { token }),
+        apiFetch(`/api/supervisor/instituciones`, { token }),
+        apiFetch(`/api/supervisor/pedidos-pendientes`, { token }),
       ])
       if (instRes.ok) {
         const instData = await instRes.json()
@@ -154,7 +153,7 @@ function SupervisorPedidos() {
 
       <div className="sv-jurisdiction-banner">
         <span className="sv-jurisdiction-dot"></span>
-        <span>Jurisdicción: <strong>{user?.jurisdiccion || '-'}</strong></span>
+        <span>Nivel Educativo: <strong>{user?.nivel_educativo || '-'}</strong></span>
         <span className="sv-jurisdiction-count">{instituciones.length} escuelas</span>
       </div>
 

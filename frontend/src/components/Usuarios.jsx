@@ -72,14 +72,16 @@ function renderDireccionAreaSelectOptions(role) {
 
 const INITIAL_FORM = {
   nombre: '',
+  apellido: '',
+  dni: '',
+  telefono: '',
   email: '',
   password: '',
   role: 'consulta',
   institucion: '',
   cue: '',
   nivel: '',
-  director_area_id: '',
-  jurisdiccion: ''
+  director_area_id: ''
 }
 
 function normalizeText(value) {
@@ -119,7 +121,6 @@ export default function Usuarios() {
     }
     return [...seen.values()].sort((a, b) => a.localeCompare(b, 'es'))
   })()
-  const jurisdiccionesDisponibles = [...new Set(instituciones.map((inst) => String(inst.departamento || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'))
   const directorAreas = users.filter((u) => String(u.role || '').toLowerCase() === 'director_area' && u.activo)
 
   const isManagedSupervisor = (targetUser) => (
@@ -311,7 +312,6 @@ export default function Usuarios() {
     } else {
       if (nivelFinal) payload.nivel = nivelFinal
       if (directorAreaIdFinal) payload.director_area_id = directorAreaIdFinal
-      if (jurisdiccionFinal) payload.jurisdiccion = jurisdiccionFinal
     }
 
     try {
@@ -373,6 +373,7 @@ export default function Usuarios() {
   const canChangeRoleForCurrentUser = canChangeRole && !isDirectorArea
 
   const openEditModal = (targetUser) => {
+    if (!targetUser) return
     setMsg({ text: '', type: '' })
     setEditModal({
       id: targetUser.id,
@@ -384,7 +385,6 @@ export default function Usuarios() {
       telefono: targetUser.telefono || '',
       nivel: targetUser.nivel_educativo || user?.nivel_educativo || '',
       director_area_id: targetUser.director_area_id || user?.id || '',
-      jurisdiccion: targetUser.jurisdiccion || user?.jurisdiccion || '',
       password: '',
       confirmPassword: '',
       error: ''
@@ -416,8 +416,7 @@ export default function Usuarios() {
       dni: normalizeText(editModal.dni) || null,
       telefono: normalizeText(editModal.telefono) || null,
       nivel: isDirectorArea ? normalizeText(user?.nivel_educativo) : normalizeText(editModal.nivel) || null,
-      director_area_id: isDirectorArea ? user?.id : (editModal.director_area_id || null),
-      jurisdiccion: normalizeText(editModal.jurisdiccion) || null
+      director_area_id: isDirectorArea ? user?.id : (editModal.director_area_id || null)
     }
 
     if (normalizeText(editModal.password)) {
@@ -455,7 +454,6 @@ export default function Usuarios() {
       institucion: u.id_institucion || '',
       nivel: u.nivel_educativo || '',
       director_area_id: u.director_area_id || '',
-      jurisdiccion: u.jurisdiccion || '',
       error: ''
     })
   }
@@ -485,8 +483,7 @@ export default function Usuarios() {
       role: nextRole,
       institucion: roleModal.institucion || null,
       nivel: roleModal.nivel || null,
-      director_area_id: roleModal.director_area_id || null,
-      jurisdiccion: roleModal.jurisdiccion || null,
+      director_area_id: roleModal.director_area_id || null
     }
 
     try {
@@ -548,7 +545,6 @@ export default function Usuarios() {
             <th>Nombre</th>
             <th>Email</th>
             <th>Area</th>
-            <th>Jurisdiccion</th>
             <th>Nivel</th>
             <th>Rol</th>
             <th>Activo</th>
@@ -561,7 +557,6 @@ export default function Usuarios() {
               <td>{[u.nombre, u.apellido].filter(Boolean).join(' ') || u.nombre}</td>
               <td>{u.email}</td>
               <td>{u.director_area_nombre ? `${u.director_area_nombre || ''} ${u.director_area_apellido || ''}`.trim() : '-'}</td>
-              <td>{u.jurisdiccion || '-'}</td>
               <td>{u.nivel_educativo || '-'}</td>
               <td><span className="badge">{u.role}</span></td>
               <td>{u.activo ? 'Si' : 'No'}</td>
@@ -804,15 +799,6 @@ export default function Usuarios() {
                     {renderDireccionAreaSelectOptions(editModal.role)}
                   </select>
                 )}
-              </div>
-              <div>
-                <label>Jurisdiccion</label>
-                <select value={editModal.jurisdiccion || ''} onChange={(e) => setEditModal({ ...editModal, jurisdiccion: e.target.value, error: '' })}>
-                  <option value="">-- Seleccionar jurisdiccion --</option>
-                  {jurisdiccionesDisponibles.map((jur) => (
-                    <option key={jur} value={jur}>{jur}</option>
-                  ))}
-                </select>
               </div>
               <div>
                 <label>Nueva contrasena</label>

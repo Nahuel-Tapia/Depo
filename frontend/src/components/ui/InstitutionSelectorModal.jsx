@@ -33,7 +33,7 @@ export default function InstitutionSelectorModal({
       const name = (inst.nombre || '').toLowerCase()
       const cue = (inst.cue || '').toLowerCase()
       const nivel = (inst.nivel_educativo || '').toLowerCase()
-      const dep = (inst.departamento || inst.jurisdiccion || inst.domicilio || inst.localidad || '').toLowerCase()
+      const dep = (inst.departamento || inst.domicilio || inst.localidad || '').toLowerCase()
       
       return name.includes(term) || cue.includes(term) || nivel.includes(term) || dep.includes(term)
     })
@@ -201,11 +201,10 @@ export default function InstitutionSelectorModal({
                       )}
                     </div>
 
-                    {(inst.departamento || inst.jurisdiccion || inst.domicilio) && (
+                    {(inst.departamento || inst.domicilio) && (
                       <div style={{ fontSize: '0.8rem', color: '#64748b', display: 'flex', gap: 12 }}>
                         {inst.departamento && <span>📍 {inst.departamento}</span>}
                         {inst.domicilio && <span>🏠 {inst.domicilio}</span>}
-                        {inst.jurisdiccion && <span>🏛️ {inst.jurisdiccion}</span>}
                       </div>
                     )}
                   </div>

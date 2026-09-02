@@ -42,7 +42,7 @@ async function getDirectorAreaCreatorContext(authUserId, authUserRole) {
   }
 
   const creator = await get(
-    `SELECT id_usuario, role, activo, NULLIF(BTRIM(nivel_educativo), '') AS nivel_educativo, NULLIF(BTRIM(jurisdiccion), '') AS jurisdiccion
+    `SELECT id_usuario, role, activo, NULLIF(BTRIM(nivel_educativo), '') AS nivel_educativo
      FROM usuario
      WHERE id_usuario = ?`,
     [authUserId]
@@ -54,8 +54,7 @@ async function getDirectorAreaCreatorContext(authUserId, authUserRole) {
 
   return {
     id: authUserId,
-    nivelEducativo: normalizeText(creator.nivel_educativo),
-    jurisdiccion: normalizeText(creator.jurisdiccion)
+    nivelEducativo: normalizeText(creator.nivel_educativo)
   };
 }
 
@@ -113,13 +112,11 @@ async function validateRoleAssignment({
   institucion,
   nivel,
   director_area_id,
-  jurisdiccion,
   fallbackInstitucion = null
 }) {
   const institucionId = parseOptionalId(institucion);
   const nivelEducativo = normalizeText(nivel);
   const directorAreaId = parseOptionalId(director_area_id);
-  const jurisdiccionValue = normalizeText(jurisdiccion);
 
   const finalInstitucion = normalizedRole === "directivo"
     ? (institucionId || fallbackInstitucion || null)
@@ -160,8 +157,7 @@ async function validateRoleAssignment({
   return {
     institucionId: finalInstitucion,
     nivelEducativo: ["director_area", "supervisor"].includes(normalizedRole) ? nivelEducativo : null,
-    directorAreaId: normalizedRole === "supervisor" ? directorAreaId : null,
-    jurisdiccionValue: normalizedRole === "supervisor" ? jurisdiccionValue : null
+    directorAreaId: normalizedRole === "supervisor" ? directorAreaId : null
   };
 }
 
@@ -171,7 +167,7 @@ async function getMe(userId) {
   }
 
   const user = await get(
-    "SELECT id_usuario as id, nombre, apellido, email, dni, role, telefono, id_institucion, nivel_educativo, director_area_id, jurisdiccion FROM usuario WHERE id_usuario = ?",
+    "SELECT id_usuario as id, nombre, apellido, email, dni, role, telefono, id_institucion, nivel_educativo, director_area_id FROM usuario WHERE id_usuario = ?",
     [userId]
   );
   if (!user) {
@@ -197,28 +193,25 @@ async function getMe(userId) {
     telefono: user.telefono,
     institucion,
     nivel_educativo: user.nivel_educativo || null,
-    director_area_id: user.director_area_id || null,
-    jurisdiccion: user.jurisdiccion || null
+    director_area_id: user.director_area_id || null
   };
 }
 
-async function updateMe(userId, { nombre, apellido, email, telefono }) {
+async function updateMe(userId, { nombre, apellido, email, dni, telefono }) {
   if (!userId) {
     throw validationError("No autenticado", 401);
   }
 
-  const existing = await get(
-    "SELECT id_usuario as id, email, role, id_institucion FROM usuario WHERE id_usuario = ?",
-    [userId]
-  );
-  if (!existing) {
+  const current = await get("SELECT id_usuario, nombre, apellido, email, dni, telefono FROM usuario WHERE id_usuario = ?", [userId]);
+  if (!current) {
     throw validationError("Usuario no encontrado", 404);
   }
 
-  const finalNombre = typeof nombre === "string" ? nombre.trim() : null;
-  const finalApellido = typeof apellido === "string" ? apellido.trim() : null;
-  const finalTelefono = typeof telefono === "string" ? telefono.trim() : null;
-  const finalEmail = typeof email === "string" ? email.trim().toLowerCase() : null;
+  const finalNombre = normalizeText(nombre) || current.nombre;
+  const finalApellido = normalizeText(apellido) || current.apellido;
+  const finalEmail = normalizeEmail(email) || current.email;
+  const finalDni = normalizeDni(dni) || current.dni;
+  const finalTelefono = normalizeText(telefono) || current.telefono;
 
   if (finalEmail && !finalEmail.includes("@")) {
     throw validationError("El email no es válido", 400);
@@ -316,7 +309,6 @@ async function listUsers(authUserId, authUserRole) {
               u.created_at,
               u.nivel_educativo,
               u.director_area_id,
-              u.jurisdiccion,
               da.nombre AS director_area_nombre,
               da.apellido AS director_area_apellido
        FROM usuario u
@@ -340,7 +332,6 @@ async function listUsers(authUserId, authUserRole) {
               u.created_at,
               u.nivel_educativo,
               u.director_area_id,
-              u.jurisdiccion,
               da.nombre AS director_area_nombre,
               da.apellido AS director_area_apellido
        FROM usuario u
@@ -362,8 +353,7 @@ async function createUser(authUserId, authUserRole, {
   telefono,
   institucion,
   nivel,
-  director_area_id,
-  jurisdiccion
+  director_area_id
 }) {
   const creatorContext = await getDirectorAreaCreatorContext(authUserId, authUserRole);
   const normalizedRole = normalizeRoleName(role);
@@ -402,8 +392,7 @@ async function createUser(authUserId, authUserRole, {
     normalizedRole,
     institucion,
     nivel: finalNivel,
-    director_area_id: finalDirectorAreaId,
-    jurisdiccion
+    director_area_id: finalDirectorAreaId
   });
 
   const existing = await get("SELECT id_usuario FROM usuario WHERE LOWER(email) = ?", [emailNormalized]);
@@ -420,7 +409,7 @@ async function createUser(authUserId, authUserRole, {
 
   const hash = await bcrypt.hash(password, 10);
   const result = await run(
-    "INSERT INTO usuario (nombre, apellido, email, dni, password, telefono, id_institucion, role, activo, nivel_educativo, director_area_id, jurisdiccion) VALUES (?, ?, ?, ?, ?, ?, ?, ?, TRUE, ?, ?, ?)",
+    "INSERT INTO usuario (nombre, apellido, email, dni, password, telefono, id_institucion, role, activo, nivel_educativo, director_area_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, TRUE, ?, ?)",
     [
       nombre,
       apellido || null,
@@ -431,15 +420,14 @@ async function createUser(authUserId, authUserRole, {
       assignment.institucionId,
       normalizedRole,
       assignment.nivelEducativo,
-      assignment.directorAreaId,
-      assignment.jurisdiccionValue
+      assignment.directorAreaId
     ]
   );
 
   return result.lastID;
 }
 
-async function updateUserRole(authUserId, authUserRole, targetUserId, { role, institucion, nivel, director_area_id, jurisdiccion }) {
+async function updateUserRole(authUserId, authUserRole, targetUserId, { role, institucion, nivel, director_area_id }) {
   if (String(authUserRole || "").toLowerCase() === "director_area") {
     throw validationError("El Director de Area no puede cambiar roles de usuarios", 403);
   }
@@ -460,18 +448,16 @@ async function updateUserRole(authUserId, authUserRole, targetUserId, { role, in
     institucion,
     nivel,
     director_area_id,
-    jurisdiccion,
     fallbackInstitucion: user.id_institucion || null
   });
 
   await run(
-    "UPDATE usuario SET role = ?, id_institucion = ?, nivel_educativo = ?, director_area_id = ?, jurisdiccion = ? WHERE id_usuario = ?",
+    "UPDATE usuario SET role = ?, id_institucion = ?, nivel_educativo = ?, director_area_id = ? WHERE id_usuario = ?",
     [
       normalizedRole,
       assignment.institucionId,
       assignment.nivelEducativo,
       assignment.directorAreaId,
-      assignment.jurisdiccionValue,
       targetUserId
     ]
   );
@@ -486,7 +472,6 @@ async function updateUser(authUserId, authUserRole, targetUserId, {
   telefono,
   nivel,
   director_area_id,
-  jurisdiccion,
   password
 }) {
   if (!Number.isInteger(targetUserId) || targetUserId <= 0) {
@@ -530,8 +515,7 @@ async function updateUser(authUserId, authUserRole, targetUserId, {
     normalizedRole: accessibleUser.role,
     institucion: accessibleUser.id_institucion || null,
     nivel: finalNivel,
-    director_area_id: finalDirectorAreaId,
-    jurisdiccion
+    director_area_id: finalDirectorAreaId
   });
 
   const existingEmail = await get(
@@ -566,7 +550,6 @@ async function updateUser(authUserId, authUserRole, targetUserId, {
          telefono = ?,
          nivel_educativo = ?,
          director_area_id = ?,
-         jurisdiccion = ?,
          password = COALESCE(?, password)
      WHERE id_usuario = ?`,
     [
@@ -577,7 +560,6 @@ async function updateUser(authUserId, authUserRole, targetUserId, {
       finalTelefono,
       assignment.nivelEducativo,
       assignment.directorAreaId,
-      assignment.jurisdiccionValue,
       passwordHash,
       targetUserId
     ]

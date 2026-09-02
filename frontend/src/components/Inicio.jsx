@@ -878,10 +878,6 @@ function DirectorAreaInicio({ onNavigate }) {
         <div className="dashboard-hero-aside">
           <div className="dashboard-status-list">
             <div className="dashboard-status-row">
-              <span className="dashboard-status-label">Jurisdicción</span>
-              <span className="dashboard-status-value">{user?.jurisdiccion || 'San Juan'}</span>
-            </div>
-            <div className="dashboard-status-row">
               <span className="dashboard-status-label">Nivel</span>
               <span className="dashboard-status-value">{user?.nivel_educativo || '-'}</span>
             </div>

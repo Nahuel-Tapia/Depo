@@ -335,17 +335,7 @@ async function syncSupervisorAssignmentsForDirector(directorAreaId) {
   }
 
   for (const supervisor of supervisors) {
-    const departamentos = jurisdictionBySupervisor.get(Number(supervisor.id));
-    const jurisdiccion = departamentos && departamentos.size > 0
-      ? [...departamentos].sort((a, b) => a.localeCompare(b, "es")).join(", ")
-      : null;
-
-    await run(
-      `UPDATE usuario
-       SET jurisdiccion = ?
-       WHERE id_usuario = ?`,
-      [jurisdiccion, supervisor.id]
-    );
+    // Sync complete
   }
 }
 
@@ -371,7 +361,7 @@ async function getCatalogo(user, directorAreaActingId) {
   }
 
   const supervisores = await all(
-    `SELECT id_usuario AS id, nombre, apellido, email, nivel_educativo, director_area_id, jurisdiccion
+    `SELECT id_usuario AS id, nombre, apellido, email, nivel_educativo, director_area_id
      FROM usuario
      WHERE role = 'supervisor'
        AND activo = TRUE
@@ -499,7 +489,7 @@ async function getSupervisores(user, directorAreaActingId) {
   }
 
   const supervisores = await all(
-    `SELECT id_usuario AS id, nombre, apellido, email, nivel_educativo, jurisdiccion
+    `SELECT id_usuario AS id, nombre, apellido, email, nivel_educativo
      FROM usuario
      WHERE role = 'supervisor'
        AND activo = TRUE
@@ -512,7 +502,7 @@ async function getSupervisores(user, directorAreaActingId) {
   return { supervisores };
 }
 
-async function createSupervisor({ user, directorAreaActingId, directorAreaActingJurisdiccion }, { nombre, apellido, email, dni, password }) {
+async function createSupervisor({ user, directorAreaActingId }, { nombre, apellido, email, dni, password }) {
   const directorNivel = await getDirectorAreaLevel(user, directorAreaActingId);
 
   if (!nombre || !apellido || !email || !dni || !password) {
@@ -525,14 +515,12 @@ async function createSupervisor({ user, directorAreaActingId, directorAreaActing
   const bcrypt = require("bcryptjs");
   const hash = await bcrypt.hash(password, 10);
 
-  const jurisdiccion = directorAreaActingJurisdiccion || user.jurisdiccion || null;
-
   try {
     const result = await run(
-      `INSERT INTO usuario (nombre, apellido, email, dni, password, role, activo, nivel_educativo, director_area_id, jurisdiccion)
-       VALUES ($1, $2, $3, $4, $5, 'supervisor', TRUE, $6, $7, $8)
+      `INSERT INTO usuario (nombre, apellido, email, dni, password, role, activo, nivel_educativo, director_area_id)
+       VALUES ($1, $2, $3, $4, $5, 'supervisor', TRUE, $6, $7)
        RETURNING id_usuario`,
-      [nombre, apellido, email, dni, hash, directorNivel, directorAreaActingId, jurisdiccion]
+      [nombre, apellido, email, dni, hash, directorNivel, directorAreaActingId]
     );
 
     return { id: result.lastID, nombre, apellido, email, role: "supervisor" };
@@ -849,7 +837,7 @@ async function assignSupervisoresZona(directorAreaActingId, zonaId, body) {
 
 async function getDirectorAreaUser(id) {
   return get(
-    `SELECT id_usuario, NULLIF(BTRIM(jurisdiccion), '') AS jurisdiccion
+    `SELECT id_usuario
      FROM usuario
      WHERE id_usuario = ? AND role = 'director_area' AND (activo IS NULL OR activo = TRUE)`,
     [id]
@@ -858,7 +846,7 @@ async function getDirectorAreaUser(id) {
 
 async function getFirstDirectorAreaUser() {
   return get(
-    `SELECT id_usuario, NULLIF(BTRIM(jurisdiccion), '') AS jurisdiccion
+    `SELECT id_usuario
      FROM usuario
      WHERE role = 'director_area' AND (activo IS NULL OR activo = TRUE)
      ORDER BY id_usuario ASC
