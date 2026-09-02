@@ -108,7 +108,7 @@ async function createPedido(req, res) {
       return res.status(err.status).json({ error: err.message });
     }
     console.error("Error al crear pedido:", err && err.stack ? err.stack : err, "user:", req.user && req.user.sub, "body:", req.body);
-    return res.status(500).json({ error: "No se pudo crear pedido" });
+    return res.status(500).json({ error: err.message || "No se pudo crear el pedido" });
   }
 }
 
