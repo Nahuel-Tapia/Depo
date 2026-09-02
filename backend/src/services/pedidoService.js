@@ -870,26 +870,41 @@ async function createPedido(data, user) {
     insertValues
   );
 
+  const newPedidoId = Number(pedidoResult?.lastID);
+  if (!Number.isInteger(newPedidoId) || newPedidoId <= 0) {
+    throw { status: 500, message: "No se pudo generar la orden de pedido en la base de datos." };
+  }
+
+  const hasRequiereLicitacionDetalle = await columnExists('detalle_pedido', 'requiere_licitacion');
+  const hasStockRelevadoDetalle = await columnExists('detalle_pedido', 'stock_disponible_relevado');
+
   for (const item of detalleItems) {
     const cantidadEntera = Math.round(Number(item.cantidad || 0));
     if (!Number.isFinite(cantidadEntera) || cantidadEntera <= 0) {
       throw { status: 400, message: "Cada ítem del pedido debe tener una cantidad entera mayor a cero" };
     }
+
+    const detFields = ["id_pedido", "id_producto", "cantidad_solicitada", "observacion"];
+    const detValues = [newPedidoId, item.producto_id, cantidadEntera, null];
+
+    if (hasRequiereLicitacionDetalle) {
+      detFields.push("requiere_licitacion");
+      detValues.push(Boolean(item.requiere_licitacion));
+    }
+    if (hasStockRelevadoDetalle) {
+      detFields.push("stock_disponible_relevado");
+      detValues.push(item.stock_disponible_relevado ?? null);
+    }
+
+    const detPlaceholders = detValues.map(() => "?").join(", ");
     await run(
-      "INSERT INTO detalle_pedido (id_pedido, id_producto, cantidad_solicitada, observacion, requiere_licitacion, stock_disponible_relevado) VALUES (?, ?, ?, ?, ?, ?)",
-      [
-        pedidoResult.lastID,
-        item.producto_id,
-        cantidadEntera,
-        null,
-        Boolean(item.requiere_licitacion),
-        item.stock_disponible_relevado ?? null
-      ]
+      `INSERT INTO detalle_pedido (${detFields.join(", ")}) VALUES (${detPlaceholders})`,
+      detValues
     );
   }
 
   return {
-    id: pedidoResult.lastID,
+    id: newPedidoId,
     estado: "pendiente",
     requiere_licitacion: routingData.requiereLicitacion,
     estado_abastecimiento: routingData.estadoAbastecimiento,
