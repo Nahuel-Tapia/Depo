@@ -34,6 +34,10 @@ module.exports = defineConfig({
       dependencies: ['api-smoke'],
     },
     {
+      name: 'global-test',
+      testDir: './tests/global',
+    },
+    {
       name: 'e2e',
       testDir: './tests/nivel-4-e2e',
       use: { ...devices['Desktop Chrome'] },

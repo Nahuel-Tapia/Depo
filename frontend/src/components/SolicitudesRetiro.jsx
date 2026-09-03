@@ -419,7 +419,7 @@ export default function SolicitudesRetiro({ embedded = false }) {
         <>
           {pedidos.length === 0 && (
             <div className="msg show" style={{ background: '#fffbeb', color: '#b45309', border: '1px solid #fcd34d', marginBottom: 16 }}>
-              ℹ️ No tenés pedidos aprobados disponibles para solicitar retiro en este momento. Si tu solicitud anual fue aprobada por el supervisor, requiere la firma del Director de Área para figurar lista para retiro.
+              ℹ️ No tenés pedidos aprobados con saldo pendiente para solicitar retiro en este momento.
             </div>
           )}
 

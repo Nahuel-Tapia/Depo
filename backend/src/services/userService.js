@@ -209,7 +209,7 @@ async function updateMe(userId, { nombre, apellido, email, dni, telefono }) {
 
   const finalNombre = normalizeText(nombre) || current.nombre;
   const finalApellido = normalizeText(apellido) || current.apellido;
-  const finalEmail = normalizeEmail(email) || current.email;
+  const finalEmail = email ? String(email).trim().toLowerCase() : current.email;
   const finalDni = normalizeDni(dni) || current.dni;
   const finalTelefono = normalizeText(telefono) || current.telefono;
 
@@ -217,7 +217,7 @@ async function updateMe(userId, { nombre, apellido, email, dni, telefono }) {
     throw validationError("El email no es válido", 400);
   }
 
-  if (finalEmail && finalEmail !== String(existing.email || "").toLowerCase()) {
+  if (finalEmail && finalEmail !== String(current.email || "").toLowerCase()) {
     const other = await get(
       "SELECT id_usuario FROM usuario WHERE LOWER(email) = ? AND id_usuario <> ?",
       [finalEmail, userId]
