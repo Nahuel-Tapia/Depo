@@ -56,11 +56,13 @@ function SupervisorPedidos() {
       ])
       if (instRes.ok) {
         const instData = await instRes.json()
-        setInstituciones(instData.instituciones || [])
+        const nextInst = instData.instituciones || []
+        setInstituciones(prev => JSON.stringify(prev) === JSON.stringify(nextInst) ? prev : nextInst)
       }
       if (pedRes.ok) {
         const pedData = await pedRes.json()
-        setPedidosPendientes(pedData.pedidos || [])
+        const nextPed = pedData.pedidos || []
+        setPedidosPendientes(prev => JSON.stringify(prev) === JSON.stringify(nextPed) ? prev : nextPed)
       }
     } catch (err) {
       console.error('Error cargando datos del supervisor:', err)
@@ -68,8 +70,32 @@ function SupervisorPedidos() {
   }
 
   useEffect(() => {
+    let isMounted = true
     loadData()
-  }, [])
+
+    const interval = setInterval(() => {
+      if (isMounted && document.visibilityState === 'visible') {
+        loadData()
+      }
+    }, 3000)
+
+    const onFocus = () => {
+      if (isMounted) loadData()
+    }
+    const onVisibility = () => {
+      if (isMounted && document.visibilityState === 'visible') loadData()
+    }
+
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisibility)
+
+    return () => {
+      isMounted = false
+      clearInterval(interval)
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [token])
 
   const handleAprobar = async (pedidoId) => {
     try {
@@ -440,15 +466,40 @@ function DepositoPedidos() {
       const res = await apiFetch('/api/pedidos', { token })
       if (res.ok) {
         const data = await res.json()
-        setPedidos(data.pedidos || [])
+        const nextPedidos = data.pedidos || []
+        setPedidos(prev => JSON.stringify(prev) === JSON.stringify(nextPedidos) ? prev : nextPedidos)
       }
     } catch { /* ignore */ }
   }
 
   useEffect(() => {
+    let isMounted = true
     loadProductos()
     loadPedidos()
-  }, [])
+
+    const interval = setInterval(() => {
+      if (isMounted && document.visibilityState === 'visible') {
+        loadPedidos()
+      }
+    }, 3000)
+
+    const onFocus = () => {
+      if (isMounted) loadPedidos()
+    }
+    const onVisibility = () => {
+      if (isMounted && document.visibilityState === 'visible') loadPedidos()
+    }
+
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisibility)
+
+    return () => {
+      isMounted = false
+      clearInterval(interval)
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [token])
 
   const handleCreate = async (e) => {
     e.preventDefault()
@@ -735,15 +786,40 @@ function DirectivoPedidos() {
       const res = await apiFetch('/api/pedidos', { token })
       if (res.ok) {
         const data = await res.json()
-        setPedidos(data.pedidos || [])
+        const nextPedidos = data.pedidos || []
+        setPedidos(prev => JSON.stringify(prev) === JSON.stringify(nextPedidos) ? prev : nextPedidos)
       }
     } catch { /* ignore */ }
   }
 
   useEffect(() => {
+    let isMounted = true
     loadKits()
     loadPedidos()
-  }, [])
+
+    const interval = setInterval(() => {
+      if (isMounted && document.visibilityState === 'visible') {
+        loadPedidos()
+      }
+    }, 3000)
+
+    const onFocus = () => {
+      if (isMounted) loadPedidos()
+    }
+    const onVisibility = () => {
+      if (isMounted && document.visibilityState === 'visible') loadPedidos()
+    }
+
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisibility)
+
+    return () => {
+      isMounted = false
+      clearInterval(interval)
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [token])
 
   const handleCreate = async (e) => {
     e.preventDefault()
