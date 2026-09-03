@@ -651,7 +651,6 @@ export default function Usuarios() {
                   {cueLoading && <div style={{ color: '#888', fontSize: 13 }}>Buscando CUE...</div>}
                   {cueInfo && cueInfo.nombre && (
                     <div style={{ marginTop: 6 }}>
-                      <div><b>Escuela:</b> {cueInfo.nombre}</div>
                       <label style={{ marginTop: 8 }}>Nivel educativo</label>
                       <select value={form.nivel} onChange={(e) => setForm({ ...form, nivel: e.target.value })} required>
                         <option value="">-- Seleccionar nivel --</option>

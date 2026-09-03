@@ -112,7 +112,7 @@ const TABS = [
   { key: 'supervisor', label: 'Patrimonio Escolar', permission: 'pedidos.manage', rolesAllowed: ['supervisor', 'master'], icon: ActivityIcon },
   { key: 'asignar-kit', label: 'Asignar Kit', permission: 'pedidos.manage', rolesAllowed: ['supervisor', 'master'], icon: BoxIcon },
   { key: 'mis-escuelas', label: 'Mis Escuelas', permission: 'instituciones.view', rolesAllowed: ['supervisor', 'master'], icon: BuildingIcon },
-  { key: 'pedidos', label: 'Pedidos Escolas', permission: 'pedidos.view', rolesAllowed: ['director_area', 'supervisor', 'directivo', 'operador_escolar', 'operador', 'area_compras', 'master'], icon: ClipboardIcon },
+  { key: 'pedidos', label: 'Pedidos Escolares', permission: 'pedidos.view', rolesAllowed: ['director_area', 'supervisor', 'directivo', 'operador_escolar', 'operador', 'area_compras', 'master'], icon: ClipboardIcon },
   { key: 'mi-stock', label: 'Mi stock', permission: 'pedidos.view', rolesAllowed: ['directivo', 'operador_escolar'], icon: BoxIcon },
   { key: 'recepcion-mercaderia', label: 'Recepción de Mercadería', permission: 'pedidos.view', rolesAllowed: ['directivo', 'operador_escolar'], icon: BoxIcon },
   { key: 'deposito-institucion', label: 'Mi Depósito', permission: 'pedidos.view', rolesAllowed: ['directivo', 'operador_escolar'], icon: BuildingIcon },
@@ -345,8 +345,11 @@ export default function Dashboard() {
                   <UserIcon />
                 </span>
                 <div className="dashboard-user-copy">
-                  <strong>{user?.nombre || 'Usuario'}</strong>
-                  <span>{ROLE_LABELS[user?.role] || user?.role || 'Sin rol'}</span>
+                  <strong>{[user?.nombre, user?.apellido].filter(Boolean).join(' ') || 'Usuario'}</strong>
+                  <span>
+                    {ROLE_LABELS[user?.role] || user?.role || 'Sin rol'}
+                    {user?.institucion?.nombre ? ` - ${user.institucion.nombre}` : ''}
+                  </span>
                 </div>
               </div>
 

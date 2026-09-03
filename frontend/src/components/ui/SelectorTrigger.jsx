@@ -41,11 +41,11 @@ export default function SelectorTrigger({
           }}
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2, overflow: 'hidden' }}>
-            <span style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.92rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <span style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.92rem', whiteSpace: 'normal', wordBreak: 'break-word' }}>
               {getDisplayTitle(selectedItem)}
             </span>
             {getDisplaySubtitle(selectedItem) && (
-              <span style={{ fontSize: '0.78rem', color: '#ea580c', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <span style={{ fontSize: '0.78rem', color: '#ea580c', whiteSpace: 'normal', wordBreak: 'break-word' }}>
                 {getDisplaySubtitle(selectedItem)}
               </span>
             )}
