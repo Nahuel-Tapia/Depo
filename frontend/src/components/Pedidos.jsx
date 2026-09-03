@@ -583,7 +583,13 @@ function DepositoPedidos() {
               </div>
               <div style={{ gridColumn: '1 / -1' }}>
                 <label>Notas</label>
-                <input type="text" value={form.notas} onChange={e => setForm({ ...form, notas: e.target.value })} placeholder="Observaciones del pedido" />
+                <textarea
+                  value={form.notas}
+                  onChange={e => setForm({ ...form, notas: e.target.value })}
+                  placeholder="Observaciones del pedido"
+                  rows={4}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', fontFamily: 'inherit', fontSize: '0.9rem', resize: 'vertical' }}
+                />
               </div>
               <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
                 <button
@@ -1167,7 +1173,13 @@ function DirectivoPedidos() {
               )}
               <div style={{ gridColumn: '1 / -1' }}>
                 <label>Notas</label>
-                <input type="text" value={form.notas} onChange={e => setForm({ ...form, notas: e.target.value })} placeholder="Observaciones del pedido" />
+                <textarea
+                  value={form.notas}
+                  onChange={e => setForm({ ...form, notas: e.target.value })}
+                  placeholder="Observaciones del pedido"
+                  rows={4}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', fontFamily: 'inherit', fontSize: '0.9rem', resize: 'vertical' }}
+                />
               </div>
               <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
                 <button type="button" className="secondary" onClick={() => { setModalOpen(false); setForm({ kit_id: '', cantidad: '1', notas: '', items: {} }) }}>
