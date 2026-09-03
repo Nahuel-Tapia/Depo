@@ -1019,12 +1019,20 @@ async function updateEstadoPedido(id, data, user) {
       return { ok: true, estado: "pendiente", respuesta_supervisor_tipo: "aclaracion" };
     }
 
-    const nuevoEstado = (estadoObjetivoDb === "aprobado" && esPedidoAnual) ? "pendiente_director" : estadoObjetivoDb;
+    const isDirectApprovalRole = user.role === "admin" || user.role === "master" || user.role === "director_area";
+    const nuevoEstado = (estadoObjetivoDb === "aprobado" && esPedidoAnual && !isDirectApprovalRole) ? "pendiente_director" : estadoObjetivoDb;
 
-    await run(
-      "UPDATE pedido SET estado = ?, aprobado_por_supervisor_id = ?, fecha_aprobacion_supervisor = NOW(), motivo_supervisor = ?, respuesta_supervisor_tipo = ? WHERE id_pedido = ?",
-      [nuevoEstado, user.sub, estadoObjetivoDb === "rechazado" ? motivoSupervisor : null, estadoObjetivoDb === "rechazado" ? "rechazo" : "aprobacion", id]
-    );
+    if (nuevoEstado === "aprobado") {
+      await run(
+        "UPDATE pedido SET estado = 'aprobado', aprobado_director_area = TRUE, aprobado_por_supervisor_id = COALESCE(aprobado_por_supervisor_id, ?), fecha_aprobacion_supervisor = COALESCE(fecha_aprobacion_supervisor, NOW()), aprobado_por_director_id = ?, fecha_aprobacion_director = NOW(), motivo_supervisor = NULL, respuesta_supervisor_tipo = 'aprobacion' WHERE id_pedido = ?",
+        [user.sub, user.sub, id]
+      );
+    } else {
+      await run(
+        "UPDATE pedido SET estado = ?, aprobado_por_supervisor_id = ?, fecha_aprobacion_supervisor = NOW(), motivo_supervisor = ?, respuesta_supervisor_tipo = ? WHERE id_pedido = ?",
+        [nuevoEstado, user.sub, estadoObjetivoDb === "rechazado" ? motivoSupervisor : null, estadoObjetivoDb === "rechazado" ? "rechazo" : "aprobacion", id]
+      );
+    }
 
     const hasRequiereLicitacionSelect = await columnExists('pedido', 'requiere_licitacion');
     const requiereLicitacionExpr = hasRequiereLicitacionSelect

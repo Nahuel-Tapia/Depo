@@ -217,7 +217,7 @@ async function getRetiroAvailabilityRows(institucionId = null) {
     ) res ON res.id_pedido = p.id_pedido AND res.id_producto = dp.id_producto
     WHERE p.estado = 'aprobado'
       AND (
-        (COALESCE(p.tipo, 'anual') = 'anual' AND p.aprobado_director_area = TRUE)
+        (COALESCE(p.tipo, 'anual') = 'anual' AND COALESCE(p.aprobado_director_area, TRUE) = TRUE)
         OR (COALESCE(p.tipo, 'anual') = 'refuerzo')
       )
       ${institucionSql}
@@ -521,7 +521,7 @@ async function createSolicitudRetiro(userId, userRole, data) {
       AND id_institucion = ?
       AND estado = 'aprobado'
       AND (
-        (COALESCE(tipo, 'anual') = 'anual' AND aprobado_director_area = TRUE)
+        (COALESCE(tipo, 'anual') = 'anual' AND COALESCE(aprobado_director_area, TRUE) = TRUE)
         OR COALESCE(tipo, 'anual') = 'refuerzo'
       )
   `, [pedidoId, usuario.id_institucion]);
