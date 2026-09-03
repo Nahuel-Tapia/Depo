@@ -581,17 +581,27 @@ async function deleteKit(id) {
 async function listarPedidos(user) {
   await ensurePedidosSchema();
 
+  const hasRequiereLicitacion = await columnExists('pedido', 'requiere_licitacion');
+  const requiereLicitacionExpr = hasRequiereLicitacion
+    ? "COALESCE(p.requiere_licitacion, FALSE) as requiere_licitacion"
+    : "FALSE as requiere_licitacion";
+
   const hasEstadoAbastecimiento = await columnExists('pedido', 'estado_abastecimiento');
   const estadoAbastecimientoExpr = hasEstadoAbastecimiento
     ? "COALESCE(p.estado_abastecimiento, 'stock_disponible') as estado_abastecimiento"
     : "'stock_disponible' as estado_abastecimiento";
+
+  const hasRequiereLicitacionDetalle = await columnExists('detalle_pedido', 'requiere_licitacion');
+  const detalleRequiereLicitacionExpr = hasRequiereLicitacionDetalle
+    ? "COALESCE(dp.requiere_licitacion, FALSE) as detalle_requiere_licitacion"
+    : "FALSE as detalle_requiere_licitacion";
 
   const hasStockRelevado = await columnExists('detalle_pedido', 'stock_disponible_relevado');
   const stockRelevadoExpr = hasStockRelevado
     ? "dp.stock_disponible_relevado as detalle_stock_disponible_relevado"
     : "0 as detalle_stock_disponible_relevado";
 
-  let query = `SELECT p.id_pedido as id, CASE WHEN p.estado::text = 'finalizado' THEN 'entregado' ELSE p.estado::text END as estado, p.observaciones_generales as notas, p.motivo_supervisor, p.respuesta_supervisor_tipo, COALESCE(p.tipo, 'anual') as tipo, p.fecha_creacion as created_at, p.id_institucion, FALSE as requiere_licitacion, ${estadoAbastecimientoExpr}, p.aprobado_por_supervisor_id, p.fecha_aprobacion_supervisor, p.kit_id, p.kit_nombre, p.kit_cantidad, dp.id_producto as detalle_producto_id, pr.nombre as detalle_producto_nombre, pr.unidad_medida as detalle_unidad_medida, pr.stock_actual as detalle_stock_actual, FALSE as detalle_requiere_licitacion, ${stockRelevadoExpr}, dp.cantidad_solicitada as detalle_cantidad, p.aprobado_por_director_id, p.fecha_aprobacion_director, p.aprobado_director_area, u.nombre as usuario_nombre, i.nombre as institucion FROM pedido p LEFT JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido JOIN producto pr ON dp.id_producto = pr.id_producto JOIN usuario u ON p.id_usuario_solicitante = u.id_usuario LEFT JOIN institucion i ON p.id_institucion = i.id_institucion WHERE 1 = 1`;
+  let query = `SELECT p.id_pedido as id, CASE WHEN p.estado::text = 'finalizado' THEN 'entregado' ELSE p.estado::text END as estado, p.observaciones_generales as notas, p.motivo_supervisor, p.respuesta_supervisor_tipo, COALESCE(p.tipo, 'anual') as tipo, p.fecha_creacion as created_at, p.id_institucion, ${requiereLicitacionExpr}, ${estadoAbastecimientoExpr}, p.aprobado_por_supervisor_id, p.fecha_aprobacion_supervisor, p.kit_id, p.kit_nombre, p.kit_cantidad, dp.id_producto as detalle_producto_id, pr.nombre as detalle_producto_nombre, pr.unidad_medida as detalle_unidad_medida, pr.stock_actual as detalle_stock_actual, ${detalleRequiereLicitacionExpr}, ${stockRelevadoExpr}, dp.cantidad_solicitada as detalle_cantidad, p.aprobado_por_director_id, p.fecha_aprobacion_director, p.aprobado_director_area, u.nombre as usuario_nombre, i.nombre as institucion FROM pedido p LEFT JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido JOIN producto pr ON dp.id_producto = pr.id_producto JOIN usuario u ON p.id_usuario_solicitante = u.id_usuario LEFT JOIN institucion i ON p.id_institucion = i.id_institucion WHERE 1 = 1`;
   const params = [];
 
   if (user.role === "directivo") {
@@ -860,8 +870,9 @@ async function createPedido(data, user) {
     detalleItems = routingData.detalleEvaluado;
   }
 
+  const hasRequiereLicitacion = await columnExists('pedido', 'requiere_licitacion');
   const hasEstadoAbastecimiento = await columnExists('pedido', 'estado_abastecimiento');
-  const insertFields = ["id_usuario_solicitante", "id_institucion", "observaciones_generales", "tipo", "kit_id", "kit_nombre", "kit_cantidad", "requiere_licitacion"];
+  const insertFields = ["id_usuario_solicitante", "id_institucion", "observaciones_generales", "tipo", "kit_id", "kit_nombre", "kit_cantidad"];
   const insertValues = [
     user.sub,
     usuario.id_institucion,
@@ -869,9 +880,13 @@ async function createPedido(data, user) {
     tipoValido,
     kit?.id || null,
     kit?.nombre || null,
-    kit ? cantidadSolicitada : null,
-    Boolean(routingData?.requiereLicitacion)
+    kit ? cantidadSolicitada : null
   ];
+
+  if (hasRequiereLicitacion) {
+    insertFields.push("requiere_licitacion");
+    insertValues.push(Boolean(routingData?.requiereLicitacion));
+  }
 
   if (hasEstadoAbastecimiento) {
     insertFields.push("estado_abastecimiento");
@@ -1011,13 +1026,18 @@ async function updateEstadoPedido(id, data, user) {
       [nuevoEstado, user.sub, estadoObjetivoDb === "rechazado" ? motivoSupervisor : null, estadoObjetivoDb === "rechazado" ? "rechazo" : "aprobacion", id]
     );
 
+    const hasRequiereLicitacionSelect = await columnExists('pedido', 'requiere_licitacion');
+    const requiereLicitacionExpr = hasRequiereLicitacionSelect
+      ? "COALESCE(requiere_licitacion, FALSE)"
+      : "FALSE";
+
     const hasEstadoAbastecimientoSelect = await columnExists('pedido', 'estado_abastecimiento');
     const estadoAbastecimientoExpr = hasEstadoAbastecimientoSelect
       ? "COALESCE(estado_abastecimiento, 'stock_disponible')"
       : "'stock_disponible'";
 
     const pedidoActualizado = await get(
-      `SELECT COALESCE(requiere_licitacion, FALSE) AS requiere_licitacion, ${estadoAbastecimientoExpr} AS estado_abastecimiento FROM pedido WHERE id_pedido = ?`,
+      `SELECT ${requiereLicitacionExpr} AS requiere_licitacion, ${estadoAbastecimientoExpr} AS estado_abastecimiento FROM pedido WHERE id_pedido = ?`,
       [id]
     );
 
