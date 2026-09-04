@@ -1,5 +1,6 @@
 import { useAuth } from '../context/AuthContext'
 import { useEffect, useRef, useState } from 'react'
+import { printMovimiento } from '../utils/printHelpers'
 import { motion } from 'framer-motion'
 import { apiFetch } from '../api'
 import PrintButton from './PrintButton'
@@ -300,6 +301,7 @@ export default function Inicio({ onNavigate }) {
                   <th>Cantidad</th>
                   <th>Institucion</th>
                   <th>Usuario</th>
+                  <th>Acción</th>
                 </tr>
               </thead>
               <tbody>
@@ -318,6 +320,16 @@ export default function Inicio({ onNavigate }) {
                       <td style={{ fontWeight: 600 }}>{movimiento.cantidad}</td>
                       <td>{movimiento.institucion || '-'}</td>
                       <td>{movimiento.usuario || '-'}</td>
+                      <td>
+                        <button
+                          type="button"
+                          className="secondary"
+                          onClick={() => printMovimiento(movimiento)}
+                          style={{ width: 'auto', margin: 0, padding: '4px 8px', fontSize: '0.8rem' }}
+                        >
+                          Imprimir
+                        </button>
+                      </td>
                     </tr>
                   )
                 })}
@@ -407,6 +419,7 @@ export default function Inicio({ onNavigate }) {
                       <th>Producto</th>
                       <th>Cantidad</th>
                       <th>Usuario</th>
+                      <th>Acción</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -430,6 +443,16 @@ export default function Inicio({ onNavigate }) {
                             <td style={{ fontWeight: 600 }}>{mov.producto || '-'}</td>
                             <td style={{ textAlign: 'center' }}>{mov.cantidad}</td>
                             <td>{mov.usuario || '-'}</td>
+                            <td>
+                              <button
+                                type="button"
+                                className="secondary"
+                                onClick={() => printMovimiento(mov)}
+                                style={{ width: 'auto', margin: 0, padding: '4px 8px', fontSize: '0.8rem' }}
+                              >
+                                Imprimir
+                              </button>
+                            </td>
                           </tr>
                         )
                       })

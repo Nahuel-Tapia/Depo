@@ -1,4 +1,4 @@
-const { all, get, run } = require("../db.pg");
+const { all, get, run, pool } = require("../db.pg");
 const { DEFAULT_ROLE_PERMISSIONS } = require("../permissions");
 
 function normalizeRoleName(role) {
