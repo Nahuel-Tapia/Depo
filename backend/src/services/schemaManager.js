@@ -74,7 +74,6 @@ async function initDatabaseSchema() {
       await client.query(`
         ALTER TABLE usuario ADD COLUMN IF NOT EXISTS nivel_educativo VARCHAR(120);
         ALTER TABLE usuario ADD COLUMN IF NOT EXISTS director_area_id INT REFERENCES usuario(id_usuario);
-        ALTER TABLE usuario ADD COLUMN IF NOT EXISTS jurisdiccion VARCHAR(120);
       `);
     } catch (err) {
       console.warn("[schemaManager] Warning altering table usuario:", err.message);
@@ -149,12 +148,13 @@ async function initDatabaseSchema() {
         ALTER TABLE institucion ADD COLUMN IF NOT EXISTS tipo_escuela VARCHAR(40);
         ALTER TABLE institucion ADD COLUMN IF NOT EXISTS matriculados INT DEFAULT 0;
         ALTER TABLE institucion ADD COLUMN IF NOT EXISTS kit_id INT REFERENCES producto_kit(id);
+        ALTER TABLE institucion ADD COLUMN IF NOT EXISTS direccion_area VARCHAR(100);
       `);
     } catch (err) {
       console.warn("[schemaManager] Warning altering table institucion:", err.message);
     }
 
-    // 7. Seed/Update Institucion tipo_escuela
+    // 7. Seed/Update Institucion tipo_escuela & direccion_area
     try {
       await client.query(`
         UPDATE institucion
@@ -164,9 +164,19 @@ async function initDatabaseSchema() {
           WHEN LOWER(COALESCE(categoria, '')) LIKE '%jornada%' OR LOWER(COALESCE(ambito, '')) LIKE '%jornada%' THEN 'jornada_extendida'
           ELSE 'normal'
         END;
+
+        UPDATE institucion SET direccion_area = CASE
+          WHEN UPPER(COALESCE(nivel_educativo, '')) IN ('CENS', 'PROPAA', 'UEPA') THEN 'Adultos'
+          WHEN UPPER(COALESCE(nivel_educativo, '')) IN ('EDUCACION ESPECIAL', 'EDUCACION HOSPITALARIA') THEN 'Especial'
+          WHEN UPPER(COALESCE(nivel_educativo, '')) IN ('INICIAL') THEN 'Inicial'
+          WHEN UPPER(COALESCE(nivel_educativo, '')) IN ('SECUNDARIO', 'NO FORMAL', 'AGROTECNICA', 'FOR. PROF. EDUC. NO FORMAL', 'MONOTECNICA', 'TECNICA', 'TECNICO', 'TEC. CAP. LABORAL') THEN 'Secundario'
+          WHEN UPPER(COALESCE(nivel_educativo, '')) IN ('SUPERIOR') THEN 'Superior'
+          WHEN UPPER(COALESCE(nivel_educativo, '')) IN ('PRIMARIO', 'ALBERGUE') THEN 'Primario'
+          ELSE 'Otra'
+        END;
       `);
     } catch (err) {
-      console.warn("[schemaManager] Warning updating institucion tipo_escuela:", err.message);
+      console.warn("[schemaManager] Warning updating institucion tipo_escuela/direccion_area:", err.message);
     }
 
     // 8. Pedido Alterations
@@ -740,6 +750,28 @@ async function initDatabaseSchema() {
       await client.query(`CREATE INDEX IF NOT EXISTS idx_consumo_institucion_fecha ON consumo_institucion (fecha DESC)`);
     } catch (err) {
       console.warn("[schemaManager] Warning altering consumo_institucion:", err.message);
+    }
+
+    // 27. Sync PostgreSQL Serial Sequences to prevent duplicate primary key collisions
+    try {
+      const tablesToSync = [
+        { table: 'pedido', pk: 'id_pedido' },
+        { table: 'detalle_pedido', pk: 'id_detalle_pedido' },
+        { table: 'usuario', pk: 'id_usuario' },
+        { table: 'institucion', pk: 'id_institucion' },
+        { table: 'producto', pk: 'id_producto' },
+        { table: 'movimiento_stock', pk: 'id_movimiento' }
+      ];
+      for (const { table, pk } of tablesToSync) {
+        await client.query(`
+          SELECT setval(
+            pg_get_serial_sequence('${table}', '${pk}'),
+            COALESCE((SELECT MAX(${pk}) FROM ${table}), 1)
+          )
+        `).catch(() => {});
+      }
+    } catch (err) {
+      console.warn("[schemaManager] Warning syncing serial sequences:", err.message);
     }
 
     console.log("[schemaManager] Database schema and migrations completed successfully!");

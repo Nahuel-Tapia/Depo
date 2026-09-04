@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { apiFetch, API_URL } from '../api'
+import ProductSelectorModal from './ui/ProductSelectorModal'
+import SelectorTrigger from './ui/SelectorTrigger'
 
 export default function Bajas() {
   const { token, hasPermission } = useAuth()
@@ -9,6 +11,9 @@ export default function Bajas() {
   const [depositos, setDepositos] = useState([])
   const [msg, setMsg] = useState({ text: '', type: '' })
   const [loading, setLoading] = useState(false)
+
+  // Selector modal
+  const [prodModalOpen, setProdModalOpen] = useState(false)
 
   // Filtros
   const [filterDeposito, setFilterDeposito] = useState('')
@@ -571,19 +576,14 @@ export default function Bajas() {
 
                 {/* Producto */}
                 <div>
-                  <label>Producto</label>
-                  <select
-                    value={form.productoId}
-                    onChange={e => setForm(prev => ({ ...prev, productoId: e.target.value }))}
+                  <SelectorTrigger
+                    label="Producto"
+                    placeholder="Buscar producto a dar de baja..."
+                    selectedItem={productos.find(p => String(p.id) === String(form.productoId))}
+                    onClick={() => setProdModalOpen(true)}
+                    onClear={() => setForm(prev => ({ ...prev, productoId: '' }))}
                     required
-                  >
-                    <option value="">Seleccionar producto...</option>
-                    {productos.map(p => (
-                      <option key={p.id} value={p.id}>
-                        {p.nombre}{p.marca ? ` - ${p.marca}` : ''} ({p.unidad_medida || 'unidad'})
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </div>
 
                 {/* Stock info */}
@@ -844,6 +844,18 @@ export default function Bajas() {
           </div>
         </div>
       )}
+
+      {/* Floating Product Selector Modal */}
+      <ProductSelectorModal
+        isOpen={prodModalOpen}
+        onClose={() => setProdModalOpen(false)}
+        productos={productos}
+        onSelect={(prod) => {
+          setForm(prev => ({ ...prev, productoId: String(prod.id) }))
+        }}
+        selectedId={form.productoId}
+        title="Seleccionar Producto para Baja"
+      />
     </div>
   )
 }

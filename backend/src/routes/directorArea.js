@@ -19,7 +19,6 @@ async function attachDirectorAreaActingContext(req, res, next) {
         const row = await directorAreaService.getDirectorAreaUser(pick);
         if (row?.id_usuario) {
           req.directorAreaActingId = Number(row.id_usuario);
-          req.directorAreaActingJurisdiccion = row.jurisdiccion || null;
           return next();
         }
       }
@@ -31,12 +30,10 @@ async function attachDirectorAreaActingContext(req, res, next) {
         });
       }
       req.directorAreaActingId = Number(first.id_usuario);
-      req.directorAreaActingJurisdiccion = first.jurisdiccion || null;
       return next();
     }
 
     req.directorAreaActingId = Number(req.user.sub);
-    req.directorAreaActingJurisdiccion = req.user.jurisdiccion || null;
     return next();
   } catch (err) {
     return next(err);

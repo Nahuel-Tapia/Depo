@@ -49,8 +49,8 @@ export default function SupervisorSolicitudes() {
   const [loadingHistorial, setLoadingHistorial] = useState(false)
   const [updating, setUpdating] = useState(false)
 
-  const loadSolicitudes = async () => {
-    setLoading(true)
+  const loadSolicitudes = async (silent = false) => {
+    if (!silent) setLoading(true)
     try {
       const res = await apiFetch('/api/supervisor/solicitudes', { token })
       if (!res.ok) {
@@ -75,16 +75,42 @@ export default function SupervisorSolicitudes() {
         respuesta_supervisor_tipo: item.respuesta_supervisor_tipo || null,
         motivo_supervisor: item.motivo_supervisor || null
       }))
-      setSolicitudes(normalized)
+      setSolicitudes(prev => JSON.stringify(prev) === JSON.stringify(normalized) ? prev : normalized)
     } catch (err) {
-      setMsg({ text: err.message || 'Error cargando solicitudes', type: 'error' })
+      if (!silent) {
+        setMsg({ text: err.message || 'Error cargando solicitudes', type: 'error' })
+      }
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
   useEffect(() => {
-    loadSolicitudes()
+    let isMounted = true
+    loadSolicitudes(false)
+
+    const interval = setInterval(() => {
+      if (isMounted && document.visibilityState === 'visible') {
+        loadSolicitudes(true)
+      }
+    }, 3000)
+
+    const onFocus = () => {
+      if (isMounted) loadSolicitudes(true)
+    }
+    const onVisibility = () => {
+      if (isMounted && document.visibilityState === 'visible') loadSolicitudes(true)
+    }
+
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisibility)
+
+    return () => {
+      isMounted = false
+      clearInterval(interval)
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
   }, [token])
 
   const loadHistorial = async (solicitud) => {

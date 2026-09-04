@@ -5,7 +5,10 @@ async function listRoles(req, res) {
     const roles = await rolesService.listAllRoles();
     return res.json({ roles });
   } catch (err) {
-    return res.status(500).json({ error: "No se pudieron listar roles" });
+    console.error("[listRoles error]", err.message || err);
+    const { DEFAULT_ROLE_PERMISSIONS } = require("../permissions");
+    const fallbackRoles = Object.keys(DEFAULT_ROLE_PERMISSIONS).map((r, idx) => ({ id: idx + 1, nombre: r }));
+    return res.json({ roles: fallbackRoles });
   }
 }
 

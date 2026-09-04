@@ -15,23 +15,49 @@ export default function RetirarPedidoAnual({ onSuccess, onCancel }) {
   const [msg, setMsg] = useState({ text: '', type: '' })
   const [procesando, setProcesando] = useState(false)
 
-  useEffect(() => {
-    loadPedidos()
-  }, [])
-
-  const loadPedidos = async () => {
+  const loadPedidos = async (silent = false) => {
+    if (!silent) setLoading(true)
     try {
       const res = await apiFetch('/api/entregas/pedidos-disponibles', { token })
       if (res.ok) {
         const data = await res.json()
-        setPedidos(data.pedidos || [])
+        const nextPedidos = data.pedidos || []
+        setPedidos(prev => JSON.stringify(prev) === JSON.stringify(nextPedidos) ? prev : nextPedidos)
       }
     } catch (err) {
-      setMsg({ text: 'Error cargando pedidos disponibles', type: 'error' })
+      if (!silent) setMsg({ text: 'Error cargando pedidos disponibles', type: 'error' })
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
+
+  useEffect(() => {
+    let isMounted = true
+    loadPedidos(false)
+
+    const interval = setInterval(() => {
+      if (isMounted && document.visibilityState === 'visible') {
+        loadPedidos(true)
+      }
+    }, 3000)
+
+    const onFocus = () => {
+      if (isMounted) loadPedidos(true)
+    }
+    const onVisibility = () => {
+      if (isMounted && document.visibilityState === 'visible') loadPedidos(true)
+    }
+
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisibility)
+
+    return () => {
+      isMounted = false
+      clearInterval(interval)
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [token])
 
   const handleSeleccionarPedido = (pedido) => {
     setSelectedPedido(pedido)

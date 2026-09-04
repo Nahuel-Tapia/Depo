@@ -47,8 +47,7 @@ exports.login = async (req, res, next) => {
         dni: user.dni,
         role: user.role,
         nivel_educativo: user.nivel_educativo || null,
-        director_area_id: user.director_area_id || null,
-        jurisdiccion: user.jurisdiccion || null
+        director_area_id: user.director_area_id || null
       },
       process.env.JWT_SECRET || "dev-secret",
       { expiresIn: "8h" }
@@ -67,8 +66,7 @@ exports.login = async (req, res, next) => {
         role: user.role,
         institucion: institucionInfo,
         nivel_educativo: user.nivel_educativo || null,
-        director_area_id: user.director_area_id || null,
-        jurisdiccion: user.jurisdiccion || null
+        director_area_id: user.director_area_id || null
       }
     });
   } catch (err) {

@@ -16,8 +16,22 @@ pool.on("error", (err) => {
  * @returns {string} - Query con $n placeholders
  */
 function convertPlaceholders(sql) {
-  let index = 0;
+  if (!sql || !sql.includes("?")) return sql;
+  const matches = sql.match(/\$(\d+)/g);
+  let maxIndex = 0;
+  if (matches) {
+    for (const m of matches) {
+      const num = parseInt(m.substring(1), 10);
+      if (!isNaN(num) && num > maxIndex) maxIndex = num;
+    }
+  }
+  let index = maxIndex;
   return sql.replace(/\?/g, () => `$${++index}`);
+}
+
+function sanitizeParams(params = []) {
+  if (!Array.isArray(params)) return [];
+  return params.map((p) => (p === undefined ? null : p));
 }
 
 /**
@@ -42,12 +56,14 @@ function adaptSql(sql) {
  */
 async function run(sql, params = []) {
   const adaptedSql = adaptSql(sql);
-  // console.debug("[DBG] SQL (adapted):", adaptedSql, "Params:", JSON.stringify(params));
+  const cleanParams = sanitizeParams(params);
+  // console.debug("[DBG] SQL (adapted):", adaptedSql, "Params:", JSON.stringify(cleanParams));
   // Para INSERT, añadir RETURNING con el campo de id correcto
   let finalSql = adaptedSql;
   if (/^\s*INSERT/i.test(adaptedSql) && !/RETURNING/i.test(adaptedSql)) {
     // Detectar la tabla para usar el campo id correcto
-    const tableMatch = adaptedSql.match(/INSERT\s+INTO\s+(\w+)/i);
+    const cleanSql = adaptedSql.replace(/"/g, '');
+    const tableMatch = cleanSql.match(/INSERT\s+INTO\s+(?:public\.)?(\w+)/i);
     const table = tableMatch ? tableMatch[1].toLowerCase() : '';
     let idField = 'id';
     if (table === 'usuario') idField = 'id_usuario';
@@ -60,14 +76,18 @@ async function run(sql, params = []) {
     else if (table === 'movimiento_stock') idField = 'id_movimiento';
     else if (table === 'proveedor') idField = 'id_proveedor';
     else if (table === 'detalle_pedido') idField = 'id_detalle_pedido';
+    else if (table === 'baja_stock') idField = 'id_baja';
+    else if (table === 'kit_escuela') idField = 'id';
+    else if (table === 'kit_producto_anual') idField = 'id';
     else if (table === 'zona') idField = 'id';
     finalSql = adaptedSql.replace(/;?\s*$/, ` RETURNING ${idField} as id`);
   }
-  const result = await pool.query(finalSql, params);
+  const result = await pool.query(finalSql, cleanParams);
+  const returnedId = result.rows[0]?.id || (result.rows[0] ? result.rows[0][Object.keys(result.rows[0])[0]] : null);
   return {
     rowCount: result.rowCount,
     rows: result.rows,
-    lastID: result.rows[0]?.id || null,
+    lastID: returnedId,
     changes: result.rowCount,
   };
 }
@@ -80,7 +100,8 @@ async function run(sql, params = []) {
  */
 async function get(sql, params = []) {
   const adaptedSql = adaptSql(sql);
-  const result = await pool.query(adaptedSql, params);
+  const cleanParams = sanitizeParams(params);
+  const result = await pool.query(adaptedSql, cleanParams);
   return result.rows[0];
 }
 
@@ -92,7 +113,8 @@ async function get(sql, params = []) {
  */
 async function all(sql, params = []) {
   const adaptedSql = adaptSql(sql);
-  const result = await pool.query(adaptedSql, params);
+  const cleanParams = sanitizeParams(params);
+  const result = await pool.query(adaptedSql, cleanParams);
   return result.rows;
 }
 

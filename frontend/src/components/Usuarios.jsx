@@ -1,19 +1,87 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../api'
+import InstitutionSelectorModal from './ui/InstitutionSelectorModal'
+import SelectorTrigger from './ui/SelectorTrigger'
 
 const FALLBACK_NIVELES = ['INICIAL', 'PRIMARIO', 'SECUNDARIO', 'SUPERIOR']
 
+const DIRECCIONES_DE_AREA = [
+  {
+    label: 'Dirección de Educación Inicial',
+    value: 'Inicial',
+    subniveles: ['INICIAL']
+  },
+  {
+    label: 'Dirección de Educación Primaria',
+    value: 'Primario',
+    subniveles: ['PRIMARIO', 'ALBERGUE']
+  },
+  {
+    label: 'Dirección de Educación Secundaria',
+    value: 'Secundario',
+    subniveles: ['SECUNDARIO', 'AGROTECNICA', 'TECNICO', 'MONOTECNICA', 'FOR. PROF. EDUC. NO FORMAL', 'TEC. CAP. LABORAL', 'NO FORMAL']
+  },
+  {
+    label: 'Dirección de Educación de Adultos',
+    value: 'Adultos',
+    subniveles: ['CENS', 'UEPA', 'PROPAA']
+  },
+  {
+    label: 'Dirección de Educación Especial',
+    value: 'Especial',
+    subniveles: ['EDUCACION ESPECIAL', 'EDUCACION HOSPITALARIA']
+  },
+  {
+    label: 'Dirección de Educación Superior',
+    value: 'Superior',
+    subniveles: ['SUPERIOR']
+  }
+]
+
+function renderDireccionAreaSelectOptions(role) {
+  if (role === 'director_area') {
+    return (
+      <>
+        <option value="">-- Seleccionar Dirección de Área --</option>
+        {DIRECCIONES_DE_AREA.map((d) => (
+          <option key={d.value} value={d.value}>
+            {d.label} ({d.value})
+          </option>
+        ))}
+      </>
+    )
+  }
+
+  return (
+    <>
+      <option value="">-- Seleccionar Dirección de Área / Nivel --</option>
+      {DIRECCIONES_DE_AREA.map((group) => (
+        <optgroup key={group.value} label={group.label}>
+          <option value={group.value}>👉 {group.label} ({group.value})</option>
+          {group.subniveles.map((sub) => (
+            <option key={sub} value={sub}>
+              &nbsp;&nbsp;• {sub}
+            </option>
+          ))}
+        </optgroup>
+      ))}
+    </>
+  )
+}
+
 const INITIAL_FORM = {
   nombre: '',
+  apellido: '',
+  dni: '',
+  telefono: '',
   email: '',
   password: '',
   role: 'consulta',
   institucion: '',
   cue: '',
   nivel: '',
-  director_area_id: '',
-  jurisdiccion: ''
+  director_area_id: ''
 }
 
 function normalizeText(value) {
@@ -36,6 +104,7 @@ export default function Usuarios() {
   const [form, setForm] = useState(INITIAL_FORM)
   const [cueInfo, setCueInfo] = useState(null)
   const [cueLoading, setCueLoading] = useState(false)
+  const [instModalOpen, setInstModalOpen] = useState(false)
 
   const isDirectorArea = user?.role === 'director_area'
   const nivelesDisponibles = (() => {
@@ -52,7 +121,6 @@ export default function Usuarios() {
     }
     return [...seen.values()].sort((a, b) => a.localeCompare(b, 'es'))
   })()
-  const jurisdiccionesDisponibles = [...new Set(instituciones.map((inst) => String(inst.departamento || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'))
   const directorAreas = users.filter((u) => String(u.role || '').toLowerCase() === 'director_area' && u.activo)
 
   const isManagedSupervisor = (targetUser) => (
@@ -122,7 +190,22 @@ export default function Usuarios() {
     loadRoles()
   }, [])
 
-  let availableRoles = roles.length ? roles : ['consulta', 'operador', 'operador_escolar', 'supervisor', 'director_area', 'directivo', 'admin']
+  const ALL_SYSTEM_ROLES = [
+    'admin',
+    'master',
+    'directivo',
+    'director_area',
+    'supervisor',
+    'operador',
+    'operador_escolar',
+    'area_compras',
+    'control_ministerio',
+    'secretario_administrativo',
+    'ministro_financiero',
+    'consulta'
+  ]
+
+  let availableRoles = roles.length ? roles : ALL_SYSTEM_ROLES
   if (isDirectorArea) {
     availableRoles = ['supervisor']
   }
@@ -154,11 +237,16 @@ export default function Usuarios() {
     const normalized = String(roleName || '').toLowerCase()
     const labels = {
       admin: 'Administrador',
+      master: 'Super Administrador (Master)',
       supervisor: 'Supervisor',
-      director_area: 'Director de Area',
+      director_area: 'Director de Área',
       directivo: 'Directivo',
-      operador: 'Operador',
+      operador: 'Operador Depósito',
       operador_escolar: 'Operador Escolar',
+      control_ministerio: 'Control Ministerio',
+      area_compras: 'Área Compras / Licitaciones',
+      secretario_administrativo: 'Secretario Administrativo',
+      ministro_financiero: 'Ministro Financiero / Hacienda',
       consulta: 'Consulta'
     }
     return labels[normalized] || normalized.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
@@ -224,7 +312,6 @@ export default function Usuarios() {
     } else {
       if (nivelFinal) payload.nivel = nivelFinal
       if (directorAreaIdFinal) payload.director_area_id = directorAreaIdFinal
-      if (jurisdiccionFinal) payload.jurisdiccion = jurisdiccionFinal
     }
 
     try {
@@ -286,6 +373,7 @@ export default function Usuarios() {
   const canChangeRoleForCurrentUser = canChangeRole && !isDirectorArea
 
   const openEditModal = (targetUser) => {
+    if (!targetUser) return
     setMsg({ text: '', type: '' })
     setEditModal({
       id: targetUser.id,
@@ -297,7 +385,6 @@ export default function Usuarios() {
       telefono: targetUser.telefono || '',
       nivel: targetUser.nivel_educativo || user?.nivel_educativo || '',
       director_area_id: targetUser.director_area_id || user?.id || '',
-      jurisdiccion: targetUser.jurisdiccion || user?.jurisdiccion || '',
       password: '',
       confirmPassword: '',
       error: ''
@@ -329,8 +416,7 @@ export default function Usuarios() {
       dni: normalizeText(editModal.dni) || null,
       telefono: normalizeText(editModal.telefono) || null,
       nivel: isDirectorArea ? normalizeText(user?.nivel_educativo) : normalizeText(editModal.nivel) || null,
-      director_area_id: isDirectorArea ? user?.id : (editModal.director_area_id || null),
-      jurisdiccion: normalizeText(editModal.jurisdiccion) || null
+      director_area_id: isDirectorArea ? user?.id : (editModal.director_area_id || null)
     }
 
     if (normalizeText(editModal.password)) {
@@ -368,7 +454,6 @@ export default function Usuarios() {
       institucion: u.id_institucion || '',
       nivel: u.nivel_educativo || '',
       director_area_id: u.director_area_id || '',
-      jurisdiccion: u.jurisdiccion || '',
       error: ''
     })
   }
@@ -398,8 +483,7 @@ export default function Usuarios() {
       role: nextRole,
       institucion: roleModal.institucion || null,
       nivel: roleModal.nivel || null,
-      director_area_id: roleModal.director_area_id || null,
-      jurisdiccion: roleModal.jurisdiccion || null,
+      director_area_id: roleModal.director_area_id || null
     }
 
     try {
@@ -461,7 +545,6 @@ export default function Usuarios() {
             <th>Nombre</th>
             <th>Email</th>
             <th>Area</th>
-            <th>Jurisdiccion</th>
             <th>Nivel</th>
             <th>Rol</th>
             <th>Activo</th>
@@ -474,7 +557,6 @@ export default function Usuarios() {
               <td>{[u.nombre, u.apellido].filter(Boolean).join(' ') || u.nombre}</td>
               <td>{u.email}</td>
               <td>{u.director_area_nombre ? `${u.director_area_nombre || ''} ${u.director_area_apellido || ''}`.trim() : '-'}</td>
-              <td>{u.jurisdiccion || '-'}</td>
               <td>{u.nivel_educativo || '-'}</td>
               <td><span className="badge">{u.role}</span></td>
               <td>{u.activo ? 'Si' : 'No'}</td>
@@ -547,20 +629,28 @@ export default function Usuarios() {
 
               {form.role === 'directivo' && (
                 <>
+                  <div style={{ marginBottom: 8 }}>
+                    <SelectorTrigger
+                      label="Seleccionar Escuela (Institución)"
+                      placeholder="Buscar por CUE o nombre de escuela..."
+                      selectedItem={cueInfo?.nombre ? { nombre: cueInfo.nombre, cue: form.cue, nivel_educativo: form.nivel } : (form.cue ? { cue: form.cue } : null)}
+                      onClick={() => setInstModalOpen(true)}
+                      onClear={() => { setForm({ ...form, cue: '', nivel: '' }); setCueInfo(null) }}
+                    />
+                  </div>
                   <div>
-                    <label>CUE</label>
+                    <label>o ingresar CUE manualmente</label>
                     <input
                       type="text"
                       value={form.cue}
                       onChange={(e) => setForm({ ...form, cue: e.target.value.replace(/\D/g, '').slice(0, 9), nivel: '' })}
-                      placeholder="Ingresar CUE (9 digitos)"
+                      placeholder="Ingresar CUE (9 dígitos)"
                       required
                     />
                   </div>
                   {cueLoading && <div style={{ color: '#888', fontSize: 13 }}>Buscando CUE...</div>}
                   {cueInfo && cueInfo.nombre && (
                     <div style={{ marginTop: 6 }}>
-                      <div><b>Escuela:</b> {cueInfo.nombre}</div>
                       <label style={{ marginTop: 8 }}>Nivel educativo</label>
                       <select value={form.nivel} onChange={(e) => setForm({ ...form, nivel: e.target.value })} required>
                         <option value="">-- Seleccionar nivel --</option>
@@ -576,12 +666,9 @@ export default function Usuarios() {
 
               {form.role === 'director_area' && (
                 <div>
-                  <label>Nivel educativo</label>
+                  <label>Dirección de Área</label>
                   <select value={form.nivel} onChange={(e) => setForm({ ...form, nivel: e.target.value })} required>
-                    <option value="">-- Seleccionar nivel --</option>
-                    {nivelesDisponibles.map((nivel) => (
-                      <option key={nivel} value={nivel}>{nivel}</option>
-                    ))}
+                    {renderDireccionAreaSelectOptions('director_area')}
                   </select>
                 </div>
               )}
@@ -611,24 +698,17 @@ export default function Usuarios() {
                   )}
                   {user?.role === 'director_area' ? (
                     <div>
-                      <label>Nivel educativo</label>
+                      <label>Dirección de Área / Nivel</label>
                       <select value={user.nivel_educativo || ''} disabled>
-                        {nivelesDisponibles
-                          .filter((nivel) => nivel === normalizeText(user.nivel_educativo))
-                          .map((nivel) => (
-                            <option key={nivel} value={nivel}>{nivel}</option>
-                          ))}
+                        <option value={user.nivel_educativo || ''}>{user.nivel_educativo}</option>
                       </select>
                       <input type="hidden" name="nivel" value={user.nivel_educativo || ''} />
                     </div>
                   ) : (
                     <div>
-                      <label>Nivel educativo</label>
+                      <label>Dirección de Área / Nivel</label>
                       <select value={form.nivel} onChange={(e) => setForm({ ...form, nivel: e.target.value })} required>
-                        <option value="">-- Seleccionar nivel --</option>
-                        {nivelesDisponibles.map((nivel) => (
-                          <option key={nivel} value={nivel}>{nivel}</option>
-                        ))}
+                        {renderDireccionAreaSelectOptions('supervisor')}
                       </select>
                     </div>
                   )}
@@ -686,33 +766,38 @@ export default function Usuarios() {
                 <label>Telefono</label>
                 <input value={editModal.telefono} onChange={(e) => setEditModal({ ...editModal, telefono: e.target.value, error: '' })} />
               </div>
+              {editModal.role === 'supervisor' && !isDirectorArea && (
+                <div>
+                  <label>Área de Dirección (Director de Área)</label>
+                  <select value={editModal.director_area_id || ''} onChange={(e) => {
+                    const selected = directorAreas.find((area) => String(area.id) === e.target.value)
+                    setEditModal({
+                      ...editModal,
+                      director_area_id: e.target.value,
+                      nivel: selected?.nivel_educativo || editModal.nivel,
+                      error: ''
+                    })
+                  }}>
+                    <option value="">-- Seleccionar Director de Área --</option>
+                    {directorAreas.map((area) => (
+                      <option key={area.id} value={area.id}>
+                        {area.nombre} {area.apellido || ''} — Dirección de Educación {area.nivel_educativo || 'Sin nivel'}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div>
-                <label>Nivel educativo</label>
+                <label>Dirección de Área / Nivel</label>
                 {isDirectorArea ? (
                   <select value={user?.nivel_educativo || ''} disabled>
-                    {nivelesDisponibles
-                      .filter((nivel) => nivel === normalizeText(user?.nivel_educativo))
-                      .map((nivel) => (
-                        <option key={nivel} value={nivel}>{nivel}</option>
-                      ))}
+                    <option value={user?.nivel_educativo || ''}>{user?.nivel_educativo}</option>
                   </select>
                 ) : (
                   <select value={editModal.nivel || ''} onChange={(e) => setEditModal({ ...editModal, nivel: e.target.value, error: '' })}>
-                    <option value="">-- Seleccionar nivel --</option>
-                    {nivelesDisponibles.map((nivel) => (
-                      <option key={nivel} value={nivel}>{nivel}</option>
-                    ))}
+                    {renderDireccionAreaSelectOptions(editModal.role)}
                   </select>
                 )}
-              </div>
-              <div>
-                <label>Jurisdiccion</label>
-                <select value={editModal.jurisdiccion || ''} onChange={(e) => setEditModal({ ...editModal, jurisdiccion: e.target.value, error: '' })}>
-                  <option value="">-- Seleccionar jurisdiccion --</option>
-                  {jurisdiccionesDisponibles.map((jur) => (
-                    <option key={jur} value={jur}>{jur}</option>
-                  ))}
-                </select>
               </div>
               <div>
                 <label>Nueva contrasena</label>
@@ -773,12 +858,9 @@ export default function Usuarios() {
 
             {(roleModal.role === 'director_area' || roleModal.role === 'supervisor') && (
               <div style={{ marginTop: 16 }}>
-                <label>Nivel educativo</label>
+                <label>Dirección de Área / Nivel</label>
                 <select value={roleModal.nivel || ''} onChange={(e) => setRoleModal({ ...roleModal, nivel: e.target.value, error: '' })}>
-                  <option value="">-- Seleccionar nivel --</option>
-                  {nivelesDisponibles.map((nivel) => (
-                    <option key={nivel} value={nivel}>{nivel}</option>
-                  ))}
+                  {renderDireccionAreaSelectOptions(roleModal.role)}
                 </select>
               </div>
             )}
@@ -814,6 +896,24 @@ export default function Usuarios() {
           </div>
         </div>
       )}
+
+      {/* Floating Institution Selector Modal */}
+      <InstitutionSelectorModal
+        isOpen={instModalOpen}
+        onClose={() => setInstModalOpen(false)}
+        instituciones={instituciones}
+        onSelect={(inst) => {
+          if (inst.cue) {
+            setForm(prev => ({
+              ...prev,
+              cue: String(inst.cue),
+              nivel: inst.nivel_educativo || prev.nivel
+            }))
+          }
+        }}
+        selectedId={instituciones.find(i => String(i.cue) === String(form.cue))?.id}
+        title="Seleccionar Escuela / Institución"
+      />
     </div>
   )
 }

@@ -439,15 +439,30 @@ tbody tr:last-child td {
   height: auto;
   background: var(--dark);
   border-radius: var(--radius-md);
+  border: 1px solid transparent;
 }
 
 .inline-actions button:hover {
   background: var(--orange);
+  color: #ffffff !important;
 }
 
 .inline-actions button:active {
   transform: scale(0.96);
 }
+
+.inline-actions button.secondary {
+  background: #ffffff;
+  color: var(--dark);
+  border: 1px solid var(--border);
+}
+
+.inline-actions button.secondary:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+  color: var(--dark) !important;
+}
+
 
 /* ===== FILTER AND SORT ===== */
 .filter-sort {

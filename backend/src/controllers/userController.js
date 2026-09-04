@@ -68,7 +68,11 @@ async function createUser(req, res) {
       return res.status(err.status).json({ error: err.message });
     }
     console.error("Error creando usuario:", err);
-    return res.status(500).json({ error: "No se pudo crear el usuario" });
+    return res.status(500).json({ 
+      error: "No se pudo crear el usuario", 
+      details: err.message || String(err),
+      stack: err.stack
+    });
   }
 }
 

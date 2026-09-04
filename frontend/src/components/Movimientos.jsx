@@ -3,7 +3,13 @@ import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../api'
 import PrintButton from './PrintButton'
 import RetirarPedidoAnual from './RetirarPedidoAnual'
+<<<<<<< HEAD
 import { printMovimiento } from '../utils/printHelpers'
+=======
+import InstitutionSelectorModal from './ui/InstitutionSelectorModal'
+import ProductSelectorModal from './ui/ProductSelectorModal'
+import SelectorTrigger from './ui/SelectorTrigger'
+>>>>>>> 4d6351a39916563293e1fb631f9d1156768d8e10
 
 const ESTADOS_PRODUCTO = ['nuevo', 'usado', 'dañado', 'reparado']
 const CARGOS = ['director/a', 'vicedirector/a', 'secretario/a', 'rector/a', 'maestro/a a cargo']
@@ -19,6 +25,11 @@ export default function Movimientos() {
   const [ingresoModalOpen, setIngresoModalOpen] = useState(false)
   const [egresoModalOpen, setEgresoModalOpen] = useState(false)
   const [retirarPedidoModalOpen, setRetirarPedidoModalOpen] = useState(false)
+
+  // Floating selector modals states
+  const [egresoInstModalOpen, setEgresoInstModalOpen] = useState(false)
+  const [egresoProdModalOpen, setEgresoProdModalOpen] = useState(false)
+  const [ingresoProdModalOpen, setIngresoProdModalOpen] = useState(false)
 
   // Detalle modal
   const [detalleModalOpen, setDetalleModalOpen] = useState(false)
@@ -508,30 +519,20 @@ return (
               </div>
               <form onSubmit={handleEgresoSubmit} className="grid">
                 <div>
-                  <label>Institución o Depósito Destino</label>
-                  <input
-                    list="egresoInstitucionList"
-                    value={egresoInst}
-                    onChange={e => setEgresoInst(e.target.value)}
-                    placeholder="Busque escuela o depósito (ej: Centro Cívico)..."
-                    autoComplete="off"
+                  <SelectorTrigger
+                    label="Institución o Depósito Destino"
+                    placeholder="Buscar escuela o depósito..."
+                    selectedItem={instituciones.find(i => i.nombre.toLowerCase() === egresoInst.trim().toLowerCase()) || (egresoInst ? { nombre: egresoInst, departamento: egresoNivel ? `Nivel: ${egresoNivel}` : '' } : null)}
+                    onClick={() => setEgresoInstModalOpen(true)}
+                    onClear={() => { setEgresoInst(''); setEgresoNivel('') }}
                     required
                   />
-                  <datalist id="egresoInstitucionList">
-                    {instituciones.map(i => (
-                      <option key={i.id} value={i.nombre} />
-                    ))}
-                    {depositos.filter(d => d.id != egresoDeposito).map(d => (
-                      <option key={`dep-${d.id}`} value={d.nombre}>{d.nombre} (Depósito)</option>
-                    ))}
-                  </datalist>
                 </div>
                 <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                   <div>
                     <label>Cargo de quien retira</label>
                     <select value={egresoCargo} onChange={e => {
                       setEgresoCargo(e.target.value);
-                      // Si es un deposito, no forzar cargo pero dejarlo opcional
                     }} required={!depositos.some(d => d.nombre.toLowerCase() === egresoInst.trim().toLowerCase())}>
                       <option value="">Seleccionar cargo...</option>
                       {CARGOS.map(c => (
@@ -555,23 +556,13 @@ return (
                   <h4>Productos a egresar</h4>
                   <div className="grid" style={{ marginBottom: 16 }}>
                     <div>
-                      <label>Producto</label>
-                      <input
-                        list="egresoProductoList"
-                        value={egresoItem.productoNombre}
-                        onChange={e => setEgresoItem({ ...egresoItem, productoNombre: e.target.value })}
-                        placeholder="Escriba para buscar producto..."
-                        autoComplete="off"
+                      <SelectorTrigger
+                        label="Producto"
+                        placeholder="Buscar producto en catálogo..."
+                        selectedItem={productos.find(p => p.nombre.toLowerCase() === egresoItem.productoNombre.trim().toLowerCase()) || (egresoItem.productoNombre ? { nombre: egresoItem.productoNombre } : null)}
+                        onClick={() => setEgresoProdModalOpen(true)}
+                        onClear={() => setEgresoItem({ ...egresoItem, productoNombre: '' })}
                       />
-                      <datalist id="egresoProductoList">
-                        {productos.map(p => {
-                          const stockDisp = Number(p.stock_central ?? p.stock_actual ?? 0)
-                          const stockLabel = stockDisp > 0 ? `(Stock Central: ${stockDisp} ${p.unidad_medida || 'unidades'})` : '(⚠️ SIN STOCK Central)'
-                          return (
-                            <option key={p.id} value={p.nombre}>{p.nombre}{p.marca ? ` - ${p.marca}` : ''} {stockLabel}</option>
-                          )
-                        })}
-                      </datalist>
 
                       {(() => {
                         const inputVal = egresoItem.productoNombre.trim()
@@ -717,20 +708,13 @@ return (
                   <h4>Productos a ingresar</h4>
                   <div className="grid" style={{ marginBottom: 16 }}>
                     <div>
-                      <label>Producto</label>
-                      <select
-                        value={ingresoItem.productoId}
-                        onChange={e => setIngresoItem({ ...ingresoItem, productoId: e.target.value })}
-                      >
-                        <option value="">Seleccionar producto...</option>
-                        {productos.map(p => {
-                          const stockDisp = Number(p.stock_central ?? p.stock_actual ?? 0)
-                          const stockText = stockDisp > 0 ? `(Stock Central: ${stockDisp} ${p.unidad_medida || 'unidades'})` : '(⚠️ SIN STOCK Central)'
-                          return (
-                            <option key={p.id} value={p.id}>{p.nombre}{p.marca ? ` - ${p.marca}` : ''} {stockText}</option>
-                          )
-                        })}
-                      </select>
+                      <SelectorTrigger
+                        label="Producto"
+                        placeholder="Buscar producto en catálogo..."
+                        selectedItem={productos.find(p => String(p.id) === String(ingresoItem.productoId))}
+                        onClick={() => setIngresoProdModalOpen(true)}
+                        onClear={() => setIngresoItem({ ...ingresoItem, productoId: '' })}
+                      />
                       {(() => {
                         const selectedProd = productos.find(p => String(p.id) === String(ingresoItem.productoId))
                         if (!selectedProd) return null
@@ -1211,6 +1195,38 @@ return (
         </div>
       </div>
     )}
+
+    {/* Floating Selector Modals */}
+    <InstitutionSelectorModal
+      isOpen={egresoInstModalOpen}
+      onClose={() => setEgresoInstModalOpen(false)}
+      instituciones={instituciones}
+      onSelect={(inst) => {
+        setEgresoInst(inst.nombre)
+        setEgresoNivel(inst.nivel_educativo || '')
+      }}
+      selectedId={instituciones.find(i => i.nombre.toLowerCase() === egresoInst.trim().toLowerCase())?.id}
+    />
+
+    <ProductSelectorModal
+      isOpen={egresoProdModalOpen}
+      onClose={() => setEgresoProdModalOpen(false)}
+      productos={productos}
+      onSelect={(prod) => {
+        setEgresoItem(prev => ({ ...prev, productoNombre: prod.nombre }))
+      }}
+      selectedId={productos.find(p => p.nombre.toLowerCase() === egresoItem.productoNombre.trim().toLowerCase())?.id}
+    />
+
+    <ProductSelectorModal
+      isOpen={ingresoProdModalOpen}
+      onClose={() => setIngresoProdModalOpen(false)}
+      productos={productos}
+      onSelect={(prod) => {
+        setIngresoItem(prev => ({ ...prev, productoId: String(prod.id) }))
+      }}
+      selectedId={ingresoItem.productoId}
+    />
   </div>
 )
 }

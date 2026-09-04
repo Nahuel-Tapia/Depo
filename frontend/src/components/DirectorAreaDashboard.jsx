@@ -73,8 +73,8 @@ export default function DirectorAreaDashboard({ escuelas = [], supervisores = []
               <span className="dashboard-status-value" style={{ fontWeight: 700 }}>{anioActual}</span>
             </div>
             <div className="dashboard-status-row">
-              <span className="dashboard-status-label">Jurisdicción</span>
-              <span className="dashboard-status-value" style={{ fontWeight: 700 }}>{user?.jurisdiccion || 'San Juan'}</span>
+              <span className="dashboard-status-label">Nivel Educativo</span>
+              <span className="dashboard-status-value" style={{ fontWeight: 700 }}>{user?.nivel_educativo || 'General'}</span>
             </div>
           </div>
         </div>

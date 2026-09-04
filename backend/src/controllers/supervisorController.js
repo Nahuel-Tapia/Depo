@@ -2,7 +2,7 @@ const supervisorService = require("../services/supervisorService");
 
 async function getInstituciones(req, res) {
   try {
-    const result = await supervisorService.getInstituciones(req.user, req.query.jurisdiccion);
+    const result = await supervisorService.getInstituciones(req.user);
     return res.json(result);
   } catch (err) {
     if (err.status) return res.status(err.status).json({ error: err.message });
@@ -37,7 +37,7 @@ async function updateInstitucionKit(req, res) {
 
 async function getPedidosPendientes(req, res) {
   try {
-    const result = await supervisorService.getPedidosPendientes(req.user, req.query.jurisdiccion);
+    const result = await supervisorService.getPedidosPendientes(req.user);
     return res.json(result);
   } catch (err) {
     if (err.status) return res.status(err.status).json({ error: err.message });
@@ -48,7 +48,7 @@ async function getPedidosPendientes(req, res) {
 
 async function getSolicitudes(req, res) {
   try {
-    const result = await supervisorService.getSolicitudes(req.user, req.query.jurisdiccion);
+    const result = await supervisorService.getSolicitudes(req.user);
     return res.json(result);
   } catch (err) {
     if (err.status) return res.status(err.status).json({ error: err.message });

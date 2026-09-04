@@ -1,4 +1,5 @@
 const { all, get, run, pool } = require("../db.pg");
+const { getInstitucionNivelColumn, columnExists, tableExists } = require("../utils/schemaCache");
 
 const NIVELES = ["inicial", "primario", "secundario", "superior", "especial", "adultos", "otro"];
 const TIPOS = ["publica", "privada", "municipal"];
@@ -9,9 +10,8 @@ function mapNivelToArea(nivel) {
   if (['CENS', 'PROPAA', 'UEPA'].includes(n)) return 'Adultos';
   if (['EDUCACION ESPECIAL', 'EDUCACION HOSPITALARIA'].includes(n)) return 'Especial';
   if (['INICIAL'].includes(n)) return 'Inicial';
-  if (['NO FORMAL', 'SECUNDARIO'].includes(n)) return 'Secundario';
+  if (['NO FORMAL', 'SECUNDARIO', 'AGROTECNICA', 'FOR. PROF. EDUC. NO FORMAL', 'MONOTECNICA', 'TECNICA', 'TECNICO', 'TEC. CAP. LABORAL'].includes(n)) return 'Secundario';
   if (['SUPERIOR'].includes(n)) return 'Superior';
-  if (['AGROTECNICA', 'FOR. PROF. EDUC. NO FORMAL', 'MONOTECNICA', 'TECNICA', 'TECNICO', 'TEC. CAP. LABORAL'].includes(n)) return 'Tecnica';
   if (['PRIMARIO', 'ALBERGUE'].includes(n)) return 'Primario';
   return null;
 }
@@ -40,27 +40,6 @@ function calcularFactorAsignacion(matriculados) {
 function calcularCantidadAsignada(matriculados, cantidadBase = 10) {
   const factor = calcularFactorAsignacion(matriculados);
   return Math.ceil(cantidadBase * factor);
-}
-
-async function getInstitucionNivelColumn() {
-  const row = await get(`
-    SELECT CASE
-      WHEN EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'institucion' AND column_name = 'direccion_area'
-      ) THEN 'direccion_area'
-      WHEN EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'institucion' AND column_name = 'nivel_educativo'
-      ) THEN 'nivel_educativo'
-      WHEN EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'institucion' AND column_name = 'nivel'
-      ) THEN 'nivel'
-      ELSE NULL
-    END AS col
-  `);
-  return row?.col || null;
 }
 
 function validationError(message, status = 400) {

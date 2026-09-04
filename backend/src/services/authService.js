@@ -1,30 +1,10 @@
 const bcrypt = require("bcryptjs");
 const { get, run } = require("../db.pg");
+const { getInstitucionNivelColumn } = require("../utils/schemaCache");
 
 function normalizeDni(dni) {
   if (!dni) return "";
   return String(dni).replace(/\D/g, "");
-}
-
-async function getInstitucionNivelColumn() {
-  const row = await get(`
-    SELECT CASE
-      WHEN EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'institucion' AND column_name = 'direccion_area'
-      ) THEN 'direccion_area'
-      WHEN EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'institucion' AND column_name = 'nivel_educativo'
-      ) THEN 'nivel_educativo'
-      WHEN EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'institucion' AND column_name = 'nivel'
-      ) THEN 'nivel'
-      ELSE NULL
-    END AS col
-  `);
-  return row?.col || null;
 }
 
 class AuthService {

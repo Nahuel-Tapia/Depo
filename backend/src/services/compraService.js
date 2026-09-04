@@ -1,31 +1,6 @@
 const { all, get, run, pool } = require("../db.pg");
 const { isAdminLikeRole } = require("../middleware/auth");
-
-// Shared Helpers
-async function columnExists(tableName, columnName) {
-  const row = await get(
-    `SELECT 1 as "exists" FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1 AND column_name = $2`,
-    [tableName, columnName]
-  );
-  return !!row?.exists;
-}
-
-async function getInstitucionNivelColumn() {
-  const row = await get(`
-    SELECT CASE
-      WHEN EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'institucion' AND column_name = 'nivel_educativo'
-      ) THEN 'nivel_educativo'
-      WHEN EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'institucion' AND column_name = 'nivel'
-      ) THEN 'nivel'
-      ELSE NULL
-    END AS col
-  `);
-  return row?.col || null;
-}
+const { columnExists, getInstitucionNivelColumn } = require("../utils/schemaCache");
 
 async function getDirectorAreaNivel(userId) {
   const row = await get(
