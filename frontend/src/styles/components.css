@@ -116,9 +116,9 @@ button {
   justify-content: center;
   gap: 7px;
   width: 100%;
-  padding: 9px 18px;
-  border-radius: var(--radius-md);
-  border: 1.5px solid transparent;
+  padding: 9px 20px;
+  border-radius: var(--radius-lg);
+  border: 1.5px solid rgba(234, 88, 12, 0.55);
   font-size: 0.875rem;
   font-weight: 600;
   min-height: 40px;
@@ -126,15 +126,16 @@ button {
   transition: background var(--transition-base), border-color var(--transition-base),
               box-shadow var(--transition-base), transform 80ms ease,
               opacity var(--transition-fast);
-  background: var(--orange);
+  background: linear-gradient(160deg, #fb923c 0%, #ea580c 100%);
   color: #ffffff;
-  letter-spacing: 0.1px;
+  letter-spacing: 0.15px;
   white-space: nowrap;
   user-select: none;
   text-decoration: none;
   font-family: 'Ubuntu', sans-serif;
   position: relative;
   overflow: hidden;
+  box-shadow: 0 1px 2px rgba(234, 88, 12, 0.18), inset 0 1px 0 rgba(255,255,255,0.18);
 }
 
 button::after {
@@ -147,71 +148,78 @@ button::after {
 }
 
 button:hover:not(:disabled)::after {
-  background: rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.10);
 }
 
 button:hover:not(:disabled) {
-  background: var(--orange-hover);
-  box-shadow: 0 4px 12px -2px rgba(234, 88, 12, 0.30);
+  background: linear-gradient(160deg, #f97316 0%, #dc4e0a 100%);
+  border-color: rgba(220, 78, 10, 0.70);
+  box-shadow: 0 4px 14px -2px rgba(234, 88, 12, 0.40), inset 0 1px 0 rgba(255,255,255,0.18);
   transform: translateY(-1px);
 }
 
 button:active:not(:disabled) {
   transform: translateY(0) scale(0.98);
-  box-shadow: none;
+  box-shadow: 0 1px 4px rgba(234, 88, 12, 0.20), inset 0 1px 0 rgba(255,255,255,0.12);
 }
 
 button:disabled {
-  opacity: 0.48;
+  opacity: 0.46;
   cursor: not-allowed;
   pointer-events: none;
 }
 
 button:focus-visible {
   outline: 2px solid var(--orange);
-  outline-offset: 2px;
+  outline-offset: 3px;
 }
 
 /* ── Button: Secondary ── */
 button.secondary {
-  background: var(--surface-1);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
   color: var(--dark);
-  border: 1.5px solid var(--border);
+  border: 1.5px solid #d1d9e0;
   width: auto;
   margin: 0;
   padding: 7px 16px;
-  box-shadow: var(--shadow-xs);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06), inset 0 1px 0 rgba(255,255,255,0.90);
 }
 
 button.secondary:hover:not(:disabled) {
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
   border-color: #94a3b8;
-  background: var(--surface-2);
   color: var(--dark);
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.10), inset 0 1px 0 rgba(255,255,255,0.90);
   transform: translateY(-1px);
 }
 
-button.secondary:hover:not(:disabled)::after {
-  background: transparent;
+button.secondary:hover:not(:disabled)::after { background: transparent; }
+
+button.secondary:active:not(:disabled) {
+  transform: translateY(0) scale(0.98);
+  background: #f1f5f9;
+  box-shadow: inset 0 1px 2px rgba(15,23,42,0.08);
 }
 
 /* ── Button: Danger ── */
 button.danger {
-  background: var(--red);
+  background: linear-gradient(160deg, #f87171 0%, #dc2626 100%);
   color: #ffffff;
-  border-color: transparent;
+  border: 1.5px solid rgba(220, 38, 38, 0.55);
+  box-shadow: 0 1px 2px rgba(220, 38, 38, 0.18), inset 0 1px 0 rgba(255,255,255,0.18);
 }
 
 button.danger:hover:not(:disabled) {
-  background: #dc2626;
-  box-shadow: 0 4px 12px -2px rgba(239, 68, 68, 0.30);
+  background: linear-gradient(160deg, #ef4444 0%, #b91c1c 100%);
+  border-color: rgba(185, 28, 28, 0.70);
+  box-shadow: 0 4px 14px -2px rgba(220, 38, 38, 0.40), inset 0 1px 0 rgba(255,255,255,0.14);
 }
 
 /* ── Button: Ghost ── */
 button.ghost {
   background: transparent;
   color: var(--muted);
-  border-color: transparent;
+  border: 1.5px solid transparent;
   box-shadow: none;
   padding: 6px 10px;
   min-height: 32px;
@@ -219,14 +227,13 @@ button.ghost {
 
 button.ghost:hover:not(:disabled) {
   background: var(--surface-3);
+  border-color: var(--border);
   color: var(--dark);
   box-shadow: none;
   transform: none;
 }
 
-button.ghost:hover:not(:disabled)::after {
-  background: transparent;
-}
+button.ghost:hover:not(:disabled)::after { background: transparent; }
 
 /* ── Button: Icon only ── */
 button.icon-btn {
@@ -234,19 +241,19 @@ button.icon-btn {
   min-height: 36px;
   padding: 0;
   border-radius: var(--radius-md);
-  background: transparent;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
   color: var(--muted);
-  border: 1.5px solid var(--border);
-  box-shadow: none;
+  border: 1.5px solid #d1d9e0;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06), inset 0 1px 0 rgba(255,255,255,0.90);
   flex-shrink: 0;
 }
 
 button.icon-btn:hover:not(:disabled) {
-  background: var(--surface-2);
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
   color: var(--dark);
   border-color: #94a3b8;
   transform: none;
-  box-shadow: none;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.10), inset 0 1px 0 rgba(255,255,255,0.90);
 }
 
 /* ── Messages / Alerts ── */
@@ -550,32 +557,37 @@ tbody tr:last-child td {
 .inline-actions button {
   margin: 0;
   width: auto;
-  padding: 7px 14px;
+  padding: 6px 14px;
   font-size: 0.825rem;
   min-height: 34px;
   height: auto;
-  background: var(--dark);
-  border-radius: var(--radius-md);
-  border: 1px solid transparent;
+  background: linear-gradient(160deg, #334155 0%, #1e293b 100%);
+  border-radius: var(--radius-lg);
+  border: 1.5px solid rgba(15, 23, 42, 0.50);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.14), inset 0 1px 0 rgba(255,255,255,0.08);
 }
 
 .inline-actions button:hover {
-  background: var(--orange);
+  background: linear-gradient(160deg, #fb923c 0%, #ea580c 100%);
+  border-color: rgba(234, 88, 12, 0.55);
   color: #ffffff !important;
   transform: translateY(-1px);
+  box-shadow: 0 4px 12px -2px rgba(234, 88, 12, 0.38), inset 0 1px 0 rgba(255,255,255,0.18);
 }
 
 .inline-actions button.secondary {
-  background: var(--surface-1);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
   color: var(--dark);
-  border: 1.5px solid var(--border);
+  border: 1.5px solid #d1d9e0;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06), inset 0 1px 0 rgba(255,255,255,0.90);
 }
 
 .inline-actions button.secondary:hover {
-  background: var(--surface-2);
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
   border-color: #94a3b8;
   color: var(--dark) !important;
   transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.10), inset 0 1px 0 rgba(255,255,255,0.90);
 }
 
 /* ── Filter & Sort ── */
