@@ -583,6 +583,7 @@ tbody tr:last-child td {
   position: relative;
   display: inline-flex;
   justify-content: flex-end;
+  z-index: 200;
 }
 
 .filter-sort-trigger {
@@ -642,7 +643,7 @@ tbody tr:last-child td {
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  z-index: var(--z-dropdown);
+  z-index: 300;
   width: min(520px, calc(100vw - 40px));
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
