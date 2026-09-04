@@ -3,14 +3,10 @@ import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../api'
 import PrintButton from './PrintButton'
 import RetirarPedidoAnual from './RetirarPedidoAnual'
-<<<<<<< HEAD
 import { printMovimiento } from '../utils/printHelpers'
-=======
 import InstitutionSelectorModal from './ui/InstitutionSelectorModal'
 import ProductSelectorModal from './ui/ProductSelectorModal'
 import SelectorTrigger from './ui/SelectorTrigger'
->>>>>>> 4d6351a39916563293e1fb631f9d1156768d8e10
-
 const ESTADOS_PRODUCTO = ['nuevo', 'usado', 'dañado', 'reparado']
 const CARGOS = ['director/a', 'vicedirector/a', 'secretario/a', 'rector/a', 'maestro/a a cargo']
 const MINISTERIO_LOGO_URL = '/faviconmin.png'
@@ -418,8 +414,6 @@ export default function Movimientos() {
 
 
 const canCreate = hasPermission('movimientos.create')
-
-const printRef = useRef(null)
 
 const printRef = useRef(null)
 
