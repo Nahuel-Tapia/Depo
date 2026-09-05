@@ -417,7 +417,6 @@ const canCreate = hasPermission('movimientos.create')
 
 const printRef = useRef(null)
 
-<<<<<<< HEAD
 const handlePrintMovimiento = (movimientoOrGroup) => {
   const printWindow = window.open('', '_blank', 'width=800,height=600')
   if (!printWindow) return
@@ -486,8 +485,8 @@ const handlePrintMovimiento = (movimientoOrGroup) => {
         <div class="info-section">
           <div><strong>CUE de la Institución:</strong> ${cueStr}</div>
           <div><strong>Nombre de la Institución:</strong> ${institucionNombre}</div>
-          ${primer.cargo_retira ? \`<div><strong>Retira:</strong> \${primer.cargo_retira}</div>\` : ''}
-          ${primer.motivo ? \`<div><strong>Motivo:</strong> \${primer.motivo}</div>\` : ''}
+          ${primer.cargo_retira ? '<div><strong>Retira:</strong> ' + primer.cargo_retira + '</div>' : ''}
+          ${primer.motivo ? '<div><strong>Motivo:</strong> ' + primer.motivo + '</div>' : ''}
         </div>
 
         <table>
@@ -520,8 +519,6 @@ const handlePrintMovimiento = (movimientoOrGroup) => {
   }, 300)
 }
 
-=======
->>>>>>> a861cdd01dbcf6d67c6adb23c7c6a8bfeaab746f
 // Traslado entre depositos
 const [transfer, setTransfer] = useState({ productoId: '', origenId: '', destinoId: '', cantidad: '' })
 
