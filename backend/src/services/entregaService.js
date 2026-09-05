@@ -189,7 +189,7 @@ async function getRetiroAvailabilityRows(institucionId = null) {
       p.id_institucion,
       i.nombre AS institucion_nombre,
       i.cue,
-      u.nombre AS solicitante_nombre,
+      COALESCE(u.nombre, 'Directivo') AS solicitante_nombre,
       p.fecha_creacion,
       dp.id_producto,
       pr.nombre AS producto_nombre,
@@ -199,8 +199,8 @@ async function getRetiroAvailabilityRows(institucionId = null) {
       COALESCE(ent.total_entregado, 0) AS cantidad_entregada,
       COALESCE(res.total_reservado, 0) AS cantidad_reservada
     FROM pedido p
-    JOIN institucion i ON i.id_institucion = p.id_institucion
-    JOIN usuario u ON u.id_usuario = p.id_usuario_solicitante
+    LEFT JOIN institucion i ON i.id_institucion = p.id_institucion
+    LEFT JOIN usuario u ON u.id_usuario = p.id_usuario_solicitante
     JOIN detalle_pedido dp ON dp.id_pedido = p.id_pedido
     JOIN producto pr ON pr.id_producto = dp.id_producto
     LEFT JOIN (
@@ -217,7 +217,7 @@ async function getRetiroAvailabilityRows(institucionId = null) {
     ) res ON res.id_pedido = p.id_pedido AND res.id_producto = dp.id_producto
     WHERE p.estado = 'aprobado'
       AND (
-        (COALESCE(p.tipo, 'anual') = 'anual' AND p.aprobado_director_area = TRUE)
+        (COALESCE(p.tipo, 'anual') = 'anual' AND COALESCE(p.aprobado_director_area, TRUE) = TRUE)
         OR (COALESCE(p.tipo, 'anual') = 'refuerzo')
       )
       ${institucionSql}
@@ -521,7 +521,7 @@ async function createSolicitudRetiro(userId, userRole, data) {
       AND id_institucion = ?
       AND estado = 'aprobado'
       AND (
-        (COALESCE(tipo, 'anual') = 'anual' AND aprobado_director_area = TRUE)
+        (COALESCE(tipo, 'anual') = 'anual' AND COALESCE(aprobado_director_area, TRUE) = TRUE)
         OR COALESCE(tipo, 'anual') = 'refuerzo'
       )
   `, [pedidoId, usuario.id_institucion]);

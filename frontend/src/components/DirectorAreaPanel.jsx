@@ -35,7 +35,8 @@ export default function DirectorAreaPanel({ initialSection }) {
       const res = await apiFetch('/api/supervisor/solicitudes', { token })
       if (res.ok) {
         const data = await res.json()
-        setSolicitudes(data.solicitudes || [])
+        const nextSol = data.solicitudes || []
+        setSolicitudes(prev => JSON.stringify(prev) === JSON.stringify(nextSol) ? prev : nextSol)
       }
     } catch (err) {}
   }
@@ -70,7 +71,31 @@ export default function DirectorAreaPanel({ initialSection }) {
   }
 
   useEffect(() => {
+    let isMounted = true
     loadAll()
+
+    const interval = setInterval(() => {
+      if (isMounted && document.visibilityState === 'visible') {
+        loadSolicitudes()
+      }
+    }, 3000)
+
+    const onFocus = () => {
+      if (isMounted) loadSolicitudes()
+    }
+    const onVisibility = () => {
+      if (isMounted && document.visibilityState === 'visible') loadSolicitudes()
+    }
+
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisibility)
+
+    return () => {
+      isMounted = false
+      clearInterval(interval)
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
   }, [token, user?.role, withMasterDirector])
 
   const supervisorMap = useMemo(() => {
@@ -154,7 +179,8 @@ export default function DirectorAreaPanel({ initialSection }) {
           <section className="fade-in">
             <DirectorAreaPedidosAnuales 
               solicitudes={solicitudes} 
-              isSent={submissionStatus?.sent} 
+              isSent={submissionStatus?.sent}
+              onUpdated={loadSolicitudes}
             />
           </section>
         )}

@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { apiFetch } from '../api'
 import { useAuth } from '../context/AuthContext'
 
-export default function DirectorAreaPedidosAnuales({ solicitudes, isSent }) {
+export default function DirectorAreaPedidosAnuales({ solicitudes, isSent, onUpdated }) {
   const [detalle, setDetalle] = useState(null)
   const { token } = useAuth()
   
@@ -327,7 +327,12 @@ export default function DirectorAreaPedidosAnuales({ solicitudes, isSent }) {
                       })
                       if (res.ok) {
                         alert('Solicitud aprobada correctamente')
-                        window.location.reload()
+                        setDetalle(null)
+                        if (onUpdated) {
+                          await onUpdated()
+                        } else {
+                          window.location.reload()
+                        }
                       } else {
                         const err = await res.json()
                         alert(err.error || 'Error al aprobar')

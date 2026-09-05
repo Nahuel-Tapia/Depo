@@ -417,6 +417,12 @@ export default function SolicitudesRetiro({ embedded = false }) {
 
       {isDirectivo && (
         <>
+          {pedidos.length === 0 && (
+            <div className="msg show" style={{ background: '#fffbeb', color: '#b45309', border: '1px solid #fcd34d', marginBottom: 16 }}>
+              ℹ️ No tenés pedidos aprobados con saldo pendiente para solicitar retiro en este momento.
+            </div>
+          )}
+
           <form onSubmit={handleCreate} className="grid" style={{ marginTop: 16 }}>
             <div style={{ gridColumn: '1 / -1' }}>
               <label>Pedido aprobado</label>
@@ -510,10 +516,10 @@ export default function SolicitudesRetiro({ embedded = false }) {
                   checked={solicitarEnvio}
                   onChange={(event) => setSolicitarEnvio(event.target.checked)}
                 />
-                Solicitar envÃ­o
+                Solicitar envío
               </label>
               <div style={{ fontSize: '0.82rem', color: 'var(--muted)' }}>
-                Esta opciÃ³n estÃ¡ disponible para escuelas de zona alejada.
+                Esta opción está disponible para escuelas de zona alejada.
               </div>
             </div>
 

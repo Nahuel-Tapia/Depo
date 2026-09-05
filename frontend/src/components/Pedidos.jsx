@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import Modal from './ui/Modal'
 import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../api'
 import PrintButton from './PrintButton'
@@ -56,11 +57,13 @@ function SupervisorPedidos() {
       ])
       if (instRes.ok) {
         const instData = await instRes.json()
-        setInstituciones(instData.instituciones || [])
+        const nextInst = instData.instituciones || []
+        setInstituciones(prev => JSON.stringify(prev) === JSON.stringify(nextInst) ? prev : nextInst)
       }
       if (pedRes.ok) {
         const pedData = await pedRes.json()
-        setPedidosPendientes(pedData.pedidos || [])
+        const nextPed = pedData.pedidos || []
+        setPedidosPendientes(prev => JSON.stringify(prev) === JSON.stringify(nextPed) ? prev : nextPed)
       }
     } catch (err) {
       console.error('Error cargando datos del supervisor:', err)
@@ -68,8 +71,32 @@ function SupervisorPedidos() {
   }
 
   useEffect(() => {
+    let isMounted = true
     loadData()
-  }, [])
+
+    const interval = setInterval(() => {
+      if (isMounted && document.visibilityState === 'visible') {
+        loadData()
+      }
+    }, 3000)
+
+    const onFocus = () => {
+      if (isMounted) loadData()
+    }
+    const onVisibility = () => {
+      if (isMounted && document.visibilityState === 'visible') loadData()
+    }
+
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisibility)
+
+    return () => {
+      isMounted = false
+      clearInterval(interval)
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [token])
 
   const handleAprobar = async (pedidoId) => {
     try {
@@ -349,6 +376,8 @@ function DepositoPedidos() {
   const [form, setForm] = useState({ producto_id: '', cantidad: '', notas: '' })
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [viewingPedido, setViewingPedido] = useState(null)
+  const [pedidoACancelar, setPedidoACancelar] = useState(null)
+  const [cancelando, setCancelando] = useState(false)
 
   const handleImprimirPedido = (pedido) => {
     const printWindow = window.open('', '_blank')
@@ -440,15 +469,40 @@ function DepositoPedidos() {
       const res = await apiFetch('/api/pedidos', { token })
       if (res.ok) {
         const data = await res.json()
-        setPedidos(data.pedidos || [])
+        const nextPedidos = data.pedidos || []
+        setPedidos(prev => JSON.stringify(prev) === JSON.stringify(nextPedidos) ? prev : nextPedidos)
       }
     } catch { /* ignore */ }
   }
 
   useEffect(() => {
+    let isMounted = true
     loadProductos()
     loadPedidos()
-  }, [])
+
+    const interval = setInterval(() => {
+      if (isMounted && document.visibilityState === 'visible') {
+        loadPedidos()
+      }
+    }, 3000)
+
+    const onFocus = () => {
+      if (isMounted) loadPedidos()
+    }
+    const onVisibility = () => {
+      if (isMounted && document.visibilityState === 'visible') loadPedidos()
+    }
+
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisibility)
+
+    return () => {
+      isMounted = false
+      clearInterval(interval)
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [token])
 
   const handleCreate = async (e) => {
     e.preventDefault()
@@ -583,7 +637,13 @@ function DepositoPedidos() {
               </div>
               <div style={{ gridColumn: '1 / -1' }}>
                 <label>Notas</label>
-                <input type="text" value={form.notas} onChange={e => setForm({ ...form, notas: e.target.value })} placeholder="Observaciones del pedido" />
+                <textarea
+                  value={form.notas}
+                  onChange={e => setForm({ ...form, notas: e.target.value })}
+                  placeholder="Observaciones del pedido"
+                  rows={4}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', fontFamily: 'inherit', fontSize: '0.9rem', resize: 'vertical' }}
+                />
               </div>
               <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
                 <button
@@ -639,6 +699,104 @@ function DepositoPedidos() {
         </div>
       )}
 
+      {/* Modal de confirmación para cancelar pedido */}
+      <Modal
+        isOpen={Boolean(pedidoACancelar)}
+        onClose={() => {
+          if (!cancelando) setPedidoACancelar(null)
+        }}
+        title="Confirmar cancelación de pedido"
+        maxWidth={480}
+      >
+        {pedidoACancelar && (
+          <div>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 16 }}>
+              <div
+                style={{
+                  fontSize: '1.5rem',
+                  background: '#fee2e2',
+                  color: '#dc2626',
+                  borderRadius: '50%',
+                  width: 44,
+                  height: 44,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0
+                }}
+              >
+                ⚠️
+              </div>
+              <div>
+                <p style={{ margin: '0 0 6px 0', fontSize: '1.05rem', fontWeight: 600, color: '#111827' }}>
+                  ¿Está seguro que desea cancelar este pedido?
+                </p>
+                <p style={{ margin: 0, fontSize: '0.875rem', color: '#64748b', lineHeight: 1.45 }}>
+                  Esta acción anulará el pedido.
+                </p>
+              </div>
+            </div>
+
+            <div
+              style={{
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: 8,
+                padding: '12px 16px',
+                marginBottom: 20,
+                fontSize: '0.9rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 6
+              }}
+            >
+              <div><strong>Nº de Pedido:</strong> #{pedidoACancelar.id}</div>
+              <div><strong>Producto:</strong> {pedidoACancelar.producto_nombre || '-'}</div>
+              <div><strong>Cantidad:</strong> {pedidoACancelar.cantidad}</div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="secondary"
+                disabled={cancelando}
+                onClick={() => setPedidoACancelar(null)}
+                style={{ margin: 0 }}
+              >
+                No, mantener pedido
+              </button>
+              <button
+                type="button"
+                className="sv-btn-rechazar"
+                disabled={cancelando}
+                onClick={async () => {
+                  setCancelando(true)
+                  try {
+                    await handleAction(pedidoACancelar.id, 'cancelar')
+                    setPedidoACancelar(null)
+                  } finally {
+                    setCancelando(false)
+                  }
+                }}
+                style={{
+                  margin: 0,
+                  padding: '9px 18px',
+                  background: '#dc2626',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 6,
+                  fontWeight: 600,
+                  cursor: cancelando ? 'not-allowed' : 'pointer',
+                  opacity: cancelando ? 0.7 : 1
+                }}
+              >
+                {cancelando ? 'Cancelando...' : 'Sí, cancelar pedido'}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
       {msg.text && (
         <div className={`msg show ${msg.type === 'success' ? 'msg-success' : 'msg-error'}`}>{msg.text}</div>
       )}
@@ -687,7 +845,7 @@ function DepositoPedidos() {
                       <button onClick={() => handleAction(pedido.id, 'entregar')}>Entregar</button>
                     )}
                     {canCancel && (
-                      <button onClick={() => handleAction(pedido.id, 'cancelar')}>Cancelar</button>
+                      <button type="button" onClick={() => setPedidoACancelar(pedido)}>Cancelar</button>
                     )}
                     {user?.role === 'director_area' && (
                       <>
@@ -718,6 +876,8 @@ function DirectivoPedidos() {
   const [msg, setMsg] = useState({ text: '', type: '' })
   const [form, setForm] = useState({ kit_id: '', cantidad: '1', notas: '', items: {} })
   const [modalOpen, setModalOpen] = useState(false)
+  const [pedidoACancelar, setPedidoACancelar] = useState(null)
+  const [cancelando, setCancelando] = useState(false)
   const printRef = useRef(null)
 
   const loadKits = async () => {
@@ -735,15 +895,40 @@ function DirectivoPedidos() {
       const res = await apiFetch('/api/pedidos', { token })
       if (res.ok) {
         const data = await res.json()
-        setPedidos(data.pedidos || [])
+        const nextPedidos = data.pedidos || []
+        setPedidos(prev => JSON.stringify(prev) === JSON.stringify(nextPedidos) ? prev : nextPedidos)
       }
     } catch { /* ignore */ }
   }
 
   useEffect(() => {
+    let isMounted = true
     loadKits()
     loadPedidos()
-  }, [])
+
+    const interval = setInterval(() => {
+      if (isMounted && document.visibilityState === 'visible') {
+        loadPedidos()
+      }
+    }, 3000)
+
+    const onFocus = () => {
+      if (isMounted) loadPedidos()
+    }
+    const onVisibility = () => {
+      if (isMounted && document.visibilityState === 'visible') loadPedidos()
+    }
+
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisibility)
+
+    return () => {
+      isMounted = false
+      clearInterval(interval)
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [token])
 
   const handleCreate = async (e) => {
     e.preventDefault()
@@ -796,15 +981,29 @@ function DirectivoPedidos() {
     loadPedidos()
   }
 
-  const handleCancelar = async (id) => {
+  const handleCancelar = (pedido) => {
+    setPedidoACancelar(pedido)
+  }
+
+  const confirmarCancelar = async () => {
+    if (!pedidoACancelar) return
+    setCancelando(true)
     setMsg({ text: '', type: '' })
-    const res = await apiFetch(`/api/pedidos/${id}/cancelar`, { token, method: 'PATCH' })
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok) {
-      setMsg({ text: data.error || 'No se pudo cancelar el pedido', type: 'error' })
-      return
+    try {
+      const res = await apiFetch(`/api/pedidos/${pedidoACancelar.id}/cancelar`, { token, method: 'PATCH' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setMsg({ text: data.error || 'No se pudo cancelar el pedido', type: 'error' })
+        return
+      }
+      setMsg({ text: `Pedido #${pedidoACancelar.id} cancelado correctamente`, type: 'success' })
+      setPedidoACancelar(null)
+      loadPedidos()
+    } catch {
+      setMsg({ text: 'Error de conexión al cancelar el pedido', type: 'error' })
+    } finally {
+      setCancelando(false)
     }
-    loadPedidos()
   }
 
   const getEstadoVisiblePedido = (pedido) => {
@@ -881,7 +1080,7 @@ function DirectivoPedidos() {
   const formatEstadoPedido = (pedido) => {
     const { estado, logistica } = pedido
     if (estado === 'aclaracion') return 'Aclaración solicitada'
-    if (estado === 'pendiente_director') return 'Aprobado por Supervisor'
+    if (estado === 'pendiente_director') return 'Aprob. Supervisor (En revisión Director)'
 
     if ((pedido.tipo || 'anual') === 'refuerzo' && estado === 'aprobado') {
       if (pedido.requiere_licitacion || pedido.estado_abastecimiento === 'requiere_licitacion') {
@@ -1167,7 +1366,13 @@ function DirectivoPedidos() {
               )}
               <div style={{ gridColumn: '1 / -1' }}>
                 <label>Notas</label>
-                <input type="text" value={form.notas} onChange={e => setForm({ ...form, notas: e.target.value })} placeholder="Observaciones del pedido" />
+                <textarea
+                  value={form.notas}
+                  onChange={e => setForm({ ...form, notas: e.target.value })}
+                  placeholder="Observaciones del pedido"
+                  rows={4}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', fontFamily: 'inherit', fontSize: '0.9rem', resize: 'vertical' }}
+                />
               </div>
               <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
                 <button type="button" className="secondary" onClick={() => { setModalOpen(false); setForm({ kit_id: '', cantidad: '1', notas: '', items: {} }) }}>
@@ -1179,6 +1384,102 @@ function DirectivoPedidos() {
           </div>
         </div>
       )}
+
+      {/* Modal de confirmación para cancelar pedido (Doble check) */}
+      <Modal
+        isOpen={Boolean(pedidoACancelar)}
+        onClose={() => {
+          if (!cancelando) setPedidoACancelar(null)
+        }}
+        title="Confirmar cancelación de pedido"
+        maxWidth={480}
+      >
+        {pedidoACancelar && (
+          <div>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 16 }}>
+              <div
+                style={{
+                  fontSize: '1.5rem',
+                  background: '#fee2e2',
+                  color: '#dc2626',
+                  borderRadius: '50%',
+                  width: 44,
+                  height: 44,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0
+                }}
+              >
+                ⚠️
+              </div>
+              <div>
+                <p style={{ margin: '0 0 6px 0', fontSize: '1.05rem', fontWeight: 600, color: '#111827' }}>
+                  ¿Está seguro que desea cancelar este pedido?
+                </p>
+                <p style={{ margin: 0, fontSize: '0.875rem', color: '#64748b', lineHeight: 1.45 }}>
+                  Esta acción anulará la solicitud y no podrá ser procesada por el supervisor.
+                </p>
+              </div>
+            </div>
+
+            <div
+              style={{
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: 8,
+                padding: '12px 16px',
+                marginBottom: 20,
+                fontSize: '0.9rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 6
+              }}
+            >
+              <div><strong>Nº de Solicitud:</strong> #{pedidoACancelar.id}</div>
+              <div><strong>Tipo:</strong> {(pedidoACancelar.tipo || 'anual') === 'refuerzo' ? 'Solicitud de Refuerzo' : 'Solicitud Anual'}</div>
+              <div><strong>Producto / Kit:</strong> {pedidoACancelar.producto_nombre || '-'}</div>
+              <div><strong>Cantidad:</strong> {pedidoACancelar.cantidad}</div>
+              {pedidoACancelar.notas && (
+                <div style={{ color: '#64748b', fontStyle: 'italic', marginTop: 2 }}>
+                  <strong>Notas:</strong> "{pedidoACancelar.notas}"
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="secondary"
+                disabled={cancelando}
+                onClick={() => setPedidoACancelar(null)}
+                style={{ margin: 0 }}
+              >
+                No, mantener pedido
+              </button>
+              <button
+                type="button"
+                className="sv-btn-rechazar"
+                disabled={cancelando}
+                onClick={confirmarCancelar}
+                style={{
+                  margin: 0,
+                  padding: '9px 18px',
+                  background: '#dc2626',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 6,
+                  fontWeight: 600,
+                  cursor: cancelando ? 'not-allowed' : 'pointer',
+                  opacity: cancelando ? 0.7 : 1
+                }}
+              >
+                {cancelando ? 'Cancelando...' : 'Sí, cancelar pedido'}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {tab !== 'retiro' && (
       <div ref={printRef} style={{ marginTop: 16 }}>
@@ -1234,7 +1535,12 @@ function DirectivoPedidos() {
                     <td>{pedido.resumen_items || '-'}</td>
                     <td>
                       {pedido.estado === 'pendiente' && (
-                        <button className="sv-btn-rechazar" style={{ margin: 0 }} onClick={() => handleCancelar(pedido.id)}>
+                        <button
+                          type="button"
+                          className="sv-btn-rechazar"
+                          style={{ margin: 0 }}
+                          onClick={() => handleCancelar(pedido)}
+                        >
                           Cancelar
                         </button>
                       )}

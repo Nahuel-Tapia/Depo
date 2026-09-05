@@ -227,7 +227,7 @@ export default function Instituciones({ supervisorMode = false }) {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', position: 'relative', zIndex: 100 }}>
         <h2>{supervisorMode ? 'Mis Escuelas' : 'Mapa de Instituciones - San Juan'}</h2>
         <FilterSortButton
           searchValue={searchText}
@@ -294,7 +294,7 @@ export default function Instituciones({ supervisorMode = false }) {
 
       <div className="instituciones-map-layout">
         {/* Mapa */}
-        <div className="instituciones-map-container">
+        <div className="instituciones-map-container" style={{ isolation: 'isolate' }}>
           {validInstituciones.length === 0 ? (
             <div style={{ padding: 20, color: 'var(--muted)' }}>
               No hay instituciones georreferenciadas para mostrar en el mapa con los filtros actuales.

@@ -203,6 +203,8 @@ async function getInstituciones(user, queryJurisdiccion) {
               ${selectSql.departamentoSql.expression} AS departamento,
               d.latitud,
               d.longitud,
+              ${selectSql.kitIdExpr} AS kit_id,
+              ${selectSql.kitNombreExpr} AS kit_nombre,
               CASE 
                 WHEN i.kit_id IS NULL THEN 'sin_kit'
                 WHEN NOT EXISTS (
@@ -216,6 +218,7 @@ async function getInstituciones(user, queryJurisdiccion) {
        FROM institucion i
        LEFT JOIN edificio e ON i.id_edificio = e.id_edificio
        LEFT JOIN direccion d ON e.id_direccion = d.id_direccion
+       ${selectSql.kitJoin}
        WHERE i.id_institucion = ANY($1::int[])
        ORDER BY i.nombre`,
       [institutionIds]

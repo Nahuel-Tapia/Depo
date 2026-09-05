@@ -1,10 +1,11 @@
 const express = require("express");
-const { authenticate } = require("../middleware/auth");
+const { authenticate, authorizeRoles } = require("../middleware/auth");
 const supervisorController = require("../controllers/supervisorController");
 
 const router = express.Router();
 
 router.use(authenticate);
+router.use(authorizeRoles("supervisor", "director_area", "admin", "master"));
 
 router.get("/instituciones", supervisorController.getInstituciones);
 router.get("/dashboard/stats", supervisorController.getDashboardStats);

@@ -3,10 +3,10 @@ import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../api'
 import PrintButton from './PrintButton'
 import RetirarPedidoAnual from './RetirarPedidoAnual'
+import { printMovimiento } from '../utils/printHelpers'
 import InstitutionSelectorModal from './ui/InstitutionSelectorModal'
 import ProductSelectorModal from './ui/ProductSelectorModal'
 import SelectorTrigger from './ui/SelectorTrigger'
-
 const ESTADOS_PRODUCTO = ['nuevo', 'usado', 'dañado', 'reparado']
 const CARGOS = ['director/a', 'vicedirector/a', 'secretario/a', 'rector/a', 'maestro/a a cargo']
 const MINISTERIO_LOGO_URL = '/faviconmin.png'
@@ -417,6 +417,7 @@ const canCreate = hasPermission('movimientos.create')
 
 const printRef = useRef(null)
 
+<<<<<<< HEAD
 const handlePrintMovimiento = (movimientoOrGroup) => {
   const printWindow = window.open('', '_blank', 'width=800,height=600')
   if (!printWindow) return
@@ -519,6 +520,8 @@ const handlePrintMovimiento = (movimientoOrGroup) => {
   }, 300)
 }
 
+=======
+>>>>>>> a861cdd01dbcf6d67c6adb23c7c6a8bfeaab746f
 // Traslado entre depositos
 const [transfer, setTransfer] = useState({ productoId: '', origenId: '', destinoId: '', cantidad: '' })
 
@@ -778,149 +781,311 @@ return (
             style={{
               position: 'fixed',
               inset: 0,
-              background: 'rgba(0, 0, 0, 0.45)',
+              background: 'rgba(15, 23, 42, 0.60)',
+              backdropFilter: 'blur(8px)',
+              WebkitBackdropFilter: 'blur(8px)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               zIndex: 1000,
-              padding: 16
+              padding: 16,
+              overflowY: 'auto',
             }}
-            onClick={e => {
-              if (e.target === e.currentTarget) setIngresoModalOpen(false)
-            }}
+            onClick={e => { if (e.target === e.currentTarget) setIngresoModalOpen(false) }}
           >
-            <div style={{ background: '#f9fafb', padding: 24, borderRadius: 10, width: 'min(980px, 100%)', maxHeight: '90vh', overflowY: 'auto' }}>
-              <h3>Ingreso de Productos</h3>
-              <div style={{ marginBottom: 16, padding: 12, background: '#e8f5e9', borderRadius: 6 }}>
-                <label><strong>Depósito destino:</strong></label>
-                <select value={ingresoDeposito} onChange={e => setIngresoDeposito(e.target.value)} style={{ marginLeft: 8 }} disabled>
-                  {depositosDisponibles.map(d => (
-                    <option key={d.id} value={d.id}>{d.nombre} ({d.ubicacion || 'Casa Central'})</option>
-                  ))}
-                </select>
+            <div style={{
+              background: '#ffffff',
+              borderRadius: 20,
+              width: 'min(900px, 100%)',
+              maxHeight: '92vh',
+              overflowY: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 25px 60px -12px rgba(15,23,42,0.25)',
+              border: '1px solid #e2e8f0',
+              animation: 'modalSlideUp 0.25s ease-out',
+            }}>
+
+              {/* Header */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '18px 24px',
+                borderBottom: '1px solid #e2e8f0',
+                background: 'linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%)',
+                borderRadius: '20px 20px 0 0',
+                flexShrink: 0,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{
+                    width: 40, height: 40, borderRadius: 12,
+                    background: 'linear-gradient(135deg, #10b981, #059669)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 18, flexShrink: 0,
+                    boxShadow: '0 4px 12px rgba(16,185,129,0.30)',
+                  }}>➕</div>
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: '1.1rem', color: '#0f172a', lineHeight: 1.2 }}>Registrar Ingreso</div>
+                    <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: 2 }}>
+                      Depósito: <strong>{depositosDisponibles.find(d => String(d.id) === String(ingresoDeposito))?.nombre || 'Central'}</strong>
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIngresoModalOpen(false)}
+                  style={{
+                    background: 'transparent', border: 'none', color: '#64748b',
+                    width: 32, height: 32, borderRadius: '50%', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '1.2rem', padding: 0, margin: 0, minHeight: 0,
+                  }}
+                >✕</button>
               </div>
-              <form onSubmit={handleIngresoSubmit} className="grid">
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <h4>Productos a ingresar</h4>
-                  <div className="grid" style={{ marginBottom: 16 }}>
+
+              {/* Body */}
+              <div style={{ padding: '20px 24px', flex: 1 }}>
+
+                {/* Add item section */}
+                <div style={{
+                  background: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: 14,
+                  padding: '18px 20px',
+                  marginBottom: 20,
+                }}>
+                  <div style={{ fontWeight: 700, fontSize: '0.82rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 14 }}>
+                    Agregar producto
+                  </div>
+
+                  {/* Row 1: Producto + Origen */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
                     <div>
+                      <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }}>Producto *</label>
                       <SelectorTrigger
-                        label="Producto"
-                        placeholder="Buscar producto en catálogo..."
+                        placeholder="Buscar en catálogo..."
                         selectedItem={productos.find(p => String(p.id) === String(ingresoItem.productoId))}
                         onClick={() => setIngresoProdModalOpen(true)}
                         onClear={() => setIngresoItem({ ...ingresoItem, productoId: '' })}
                       />
                       {(() => {
-                        const selectedProd = productos.find(p => String(p.id) === String(ingresoItem.productoId))
-                        if (!selectedProd) return null
-                        const stockDisp = Number(selectedProd.stock_central ?? selectedProd.stock_actual ?? 0)
+                        const sel = productos.find(p => String(p.id) === String(ingresoItem.productoId))
+                        if (!sel) return null
+                        const stock = Number(sel.stock_central ?? sel.stock_actual ?? 0)
                         return (
-                          <div style={{ marginTop: 6, padding: '6px 10px', background: stockDisp === 0 ? '#fffbe6' : '#f0fdf4', border: `1px solid ${stockDisp === 0 ? '#ffe58f' : '#bbf7d0'}`, borderRadius: 6, fontSize: '0.82rem', color: stockDisp === 0 ? '#d48806' : '#166534', fontWeight: 600 }}>
-                            📦 Stock actual en Depósito Central: <strong>{stockDisp}</strong> {selectedProd.unidad_medida || 'unidades'} {stockDisp === 0 ? '⚠️ (Actualmente sin stock)' : ''}
+                          <div style={{
+                            marginTop: 6, padding: '5px 10px',
+                            background: stock === 0 ? '#fffbe6' : '#f0fdf4',
+                            border: `1px solid ${stock === 0 ? '#ffe58f' : '#bbf7d0'}`,
+                            borderRadius: 8, fontSize: '0.78rem',
+                            color: stock === 0 ? '#d48806' : '#166534', fontWeight: 600,
+                            display: 'flex', alignItems: 'center', gap: 6,
+                          }}>
+                            <span>📦</span>
+                            <span>Stock actual: <strong>{stock}</strong> {sel.unidad_medida || 'u.'}</span>
+                            {stock === 0 && <span style={{ color: '#d48806' }}>⚠️ Sin stock</span>}
                           </div>
                         )
                       })()}
                     </div>
                     <div>
-                      <label>Origen (Proveedor o Depósito)</label>
+                      <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }}>Origen</label>
                       <select
                         value={ingresoItem.proveedorId}
                         onChange={e => setIngresoItem({ ...ingresoItem, proveedorId: e.target.value })}
+                        style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #e2e8f0', fontSize: '0.875rem', background: '#fff', minHeight: 40 }}
                       >
-                        <option value="">Seleccionar origen...</option>
+                        <option value="">Sin proveedor / Sin origen</option>
                         <optgroup label="Proveedores">
-                          {proveedores.length === 0 && <option disabled>No hay proveedores registrados</option>}
+                          {proveedores.length === 0 && <option disabled>No hay proveedores</option>}
                           {proveedores.map(prov => (
                             <option key={`prov-${prov.id}`} value={`prov-${prov.id}`}>{prov.nombre}</option>
                           ))}
                         </optgroup>
-                        <optgroup label="Depósitos (Traslado)">
+                        <optgroup label="Depósitos (traslado)">
                           {depositos.filter(d => String(d.id) !== String(ingresoDeposito)).map(d => (
                             <option key={`dep-${d.id}`} value={`dep-${d.id}`}>{d.nombre}</option>
                           ))}
                         </optgroup>
                       </select>
                     </div>
+                  </div>
+
+                  {/* Row 2: Cantidad + Estado + Vencimiento + Botón */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr 1fr auto', gap: 12, alignItems: 'end' }}>
                     <div>
-                      <label>Cantidad</label>
+                      <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }}>Cantidad *</label>
                       <input
                         type="number"
                         value={ingresoItem.cantidad}
                         onChange={e => setIngresoItem({ ...ingresoItem, cantidad: e.target.value })}
                         placeholder="0"
                         min="1"
+                        style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #e2e8f0', fontSize: '0.875rem', minHeight: 40 }}
                       />
                     </div>
                     <div>
-                      <label>Estado del producto</label>
-                      <select value={ingresoItem.estado} onChange={e => setIngresoItem({ ...ingresoItem, estado: e.target.value })}>
+                      <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }}>Estado</label>
+                      <select
+                        value={ingresoItem.estado}
+                        onChange={e => setIngresoItem({ ...ingresoItem, estado: e.target.value })}
+                        style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #e2e8f0', fontSize: '0.875rem', background: '#fff', minHeight: 40 }}
+                      >
                         {ESTADOS_PRODUCTO.map(est => (
                           <option key={est} value={est}>{est.charAt(0).toUpperCase() + est.slice(1)}</option>
                         ))}
                       </select>
                     </div>
                     <div>
-                      <label>Fecha de Vencimiento</label>
+                      <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }}>Vencimiento</label>
                       <input
                         type="date"
                         value={ingresoItem.fechaVencimiento || ''}
                         onChange={e => setIngresoItem({ ...ingresoItem, fechaVencimiento: e.target.value })}
+                        style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #e2e8f0', fontSize: '0.875rem', minHeight: 40 }}
                       />
                     </div>
-                    <div style={{ alignSelf: 'end' }}>
-                      <button type="button" onClick={addToIngreso}>Agregar al Ingreso</button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={addToIngreso}
+                      style={{
+                        margin: 0, width: 'auto', padding: '9px 18px', minHeight: 40,
+                        background: 'linear-gradient(135deg, #10b981, #059669)',
+                        border: '1.5px solid rgba(5,150,105,0.50)',
+                        borderRadius: 10, color: '#fff', fontWeight: 700, fontSize: '0.875rem',
+                        display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer',
+                        boxShadow: '0 2px 8px rgba(16,185,129,0.25)',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      <span style={{ fontSize: 16, lineHeight: 1 }}>+</span> Agregar
+                    </button>
                   </div>
                 </div>
 
-                {loteIngreso.length > 0 && (
-                  <div style={{ gridColumn: '1 / -1' }}>
-                    <h4>Productos en el Ingreso:</h4>
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                      <thead>
-                        <tr style={{ background: '#f0f0f0' }}>
-                          <th style={{ border: '1px solid #ddd', padding: 8 }}>Producto</th>
-                          <th style={{ border: '1px solid #ddd', padding: 8 }}>Cantidad</th>
-                          <th style={{ border: '1px solid #ddd', padding: 8 }}>Estado</th>
-                          <th style={{ border: '1px solid #ddd', padding: 8 }}>Acción</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {loteIngreso.map((item, idx) => (
-                          <tr key={idx}>
-                            <td style={{ border: '1px solid #ddd', padding: 8 }}>{item.nombre}</td>
-                            <td style={{ border: '1px solid #ddd', padding: 8 }}>{item.cantidad}</td>
-                            <td style={{ border: '1px solid #ddd', padding: 8 }}>{item.estado}</td>
-                            <td style={{ border: '1px solid #ddd', padding: 8 }}>
-                              <button type="button" className="secondary" onClick={() => removeFromIngreso(idx)} style={{ margin: 0 }}>Remover</button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                {/* Item list */}
+                {loteIngreso.length > 0 ? (
+                  <div style={{ marginBottom: 20 }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.82rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span>Lista de productos</span>
+                      <span style={{ background: '#10b981', color: '#fff', borderRadius: 99, padding: '1px 8px', fontSize: '0.72rem', fontWeight: 700 }}>{loteIngreso.length}</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {loteIngreso.map((item, idx) => (
+                        <div key={idx} style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 12,
+                          padding: '11px 16px',
+                          background: '#f8fafc',
+                          border: '1px solid #e2e8f0',
+                          borderRadius: 10,
+                          borderLeft: '3px solid #10b981',
+                        }}>
+                          <div style={{ flex: 1, fontWeight: 600, fontSize: '0.9rem', color: '#0f172a', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {item.nombre}
+                          </div>
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
+                            <span style={{ background: '#f0fdf4', color: '#047857', border: '1px solid #a7f3d0', borderRadius: 99, padding: '2px 10px', fontSize: '0.75rem', fontWeight: 700 }}>
+                              {item.cantidad} u.
+                            </span>
+                            <span style={{ background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', borderRadius: 99, padding: '2px 10px', fontSize: '0.75rem', fontWeight: 600 }}>
+                              {item.estado}
+                            </span>
+                            {item.fecha_vencimiento && (
+                              <span style={{ background: '#fffbeb', color: '#b45309', border: '1px solid #fde68a', borderRadius: 99, padding: '2px 10px', fontSize: '0.75rem', fontWeight: 600 }}>
+                                📅 {item.fecha_vencimiento}
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeFromIngreso(idx)}
+                            style={{
+                              background: 'transparent', border: 'none', color: '#94a3b8',
+                              width: 28, height: 28, borderRadius: '50%', cursor: 'pointer',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              fontSize: '1rem', padding: 0, margin: 0, minHeight: 0,
+                              flexShrink: 0, transition: 'all 0.15s',
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.color = '#ef4444' }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#94a3b8' }}
+                            title="Quitar"
+                          >✕</button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{
+                    textAlign: 'center', padding: '28px 20px',
+                    border: '2px dashed #e2e8f0', borderRadius: 14,
+                    color: '#94a3b8', marginBottom: 20, background: '#fafbfc',
+                  }}>
+                    <div style={{ fontSize: '1.6rem', marginBottom: 8, opacity: 0.5 }}>📦</div>
+                    <div style={{ fontWeight: 600, color: '#475569', fontSize: '0.9rem' }}>Sin productos agregados</div>
+                    <div style={{ fontSize: '0.8rem', marginTop: 4 }}>Completá los campos arriba y hacé clic en "+ Agregar"</div>
                   </div>
                 )}
 
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <label>Motivo del ingreso</label>
+                {/* Motivo */}
+                <div style={{ marginBottom: 4 }}>
+                  <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }}>Motivo del ingreso</label>
                   <input
                     type="text"
                     value={ingresoMotivo}
                     onChange={e => setIngresoMotivo(e.target.value)}
-                    placeholder="Motivo del ingreso"
+                    placeholder="Ej: Compra ordinaria, donación, devolución..."
+                    style={{ width: '100%', padding: '9px 14px', borderRadius: 8, border: '1.5px solid #e2e8f0', fontSize: '0.875rem', minHeight: 40 }}
                   />
                 </div>
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-                    <button type="button" className="secondary" onClick={() => setIngresoModalOpen(false)}>Cancelar</button>
-                    <button type="submit" style={{ width: 'auto', margin: 0, padding: '10px 18px' }}>Registrar Ingreso</button>
-                  </div>
+              </div>
+
+              {/* Footer */}
+              <div style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                padding: '16px 24px', borderTop: '1px solid #e2e8f0',
+                background: '#f8fafc', borderRadius: '0 0 20px 20px', flexShrink: 0, gap: 12,
+              }}>
+                <div style={{ fontSize: '0.82rem', color: '#64748b' }}>
+                  {loteIngreso.length > 0
+                    ? <span>🟢 <strong>{loteIngreso.length}</strong> producto{loteIngreso.length !== 1 ? 's' : ''} listos para ingresar</span>
+                    : <span>Agregá al menos un producto para continuar</span>
+                  }
                 </div>
-              </form>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => setIngresoModalOpen(false)}
+                    style={{ margin: 0, width: 'auto' }}
+                  >Cancelar</button>
+                  <button
+                    type="button"
+                    onClick={handleIngresoSubmit}
+                    disabled={loteIngreso.length === 0}
+                    style={{
+                      margin: 0, width: 'auto', padding: '9px 22px',
+                      background: loteIngreso.length === 0
+                        ? '#cbd5e1'
+                        : 'linear-gradient(135deg, #10b981, #059669)',
+                      border: loteIngreso.length === 0
+                        ? '1.5px solid #cbd5e1'
+                        : '1.5px solid rgba(5,150,105,0.50)',
+                      borderRadius: 10, color: '#fff', fontWeight: 700,
+                      fontSize: '0.875rem', cursor: loteIngreso.length === 0 ? 'not-allowed' : 'pointer',
+                      boxShadow: loteIngreso.length === 0 ? 'none' : '0 4px 12px rgba(16,185,129,0.30)',
+                    }}
+                  >
+                    ✓ Registrar Ingreso
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}
+
 
 
 
@@ -1054,7 +1219,6 @@ return (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
-                <th>Nº Movimiento</th>
                 <th>Tipo</th>
                 <th>Producto(s)</th>
                 <th>Cantidad</th>
@@ -1111,7 +1275,6 @@ return (
 
                   return (
                     <tr key={first.id || i}>
-                      <td>{`#${first.id}`}</td>
                       <td><span className={`badge badge-${first.tipo}`}>{first.tipo}</span></td>
                       <td style={{ maxWidth: 200, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={productosDisplay}>{productosDisplay}</td>
                       <td>{isMulti ? totalCantidad : first.cantidad}</td>
@@ -1124,7 +1287,7 @@ return (
                           <button
                             type="button"
                             className="secondary"
-                            onClick={() => handlePrintMovimiento(group.items)}
+                            onClick={() => printMovimiento(group.items)}
                             title="Imprimir movimiento"
                             aria-label="Imprimir movimiento"
                             style={{ width: 'auto', margin: 0, minWidth: 36, padding: '6px 10px' }}
@@ -1283,7 +1446,10 @@ return (
             <h4 style={{ marginTop: 0 }}>Productos</h4>
             <ul>
               {detalleData.productos.map((p, idx) => (
-                <li key={idx}>{p.producto_nombre || '-'} — Cantidad: {p.cantidad}</li>
+                <li key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, paddingBottom: 8, borderBottom: '1px solid #eee' }}>
+                  <span>{p.producto_nombre || '-'} — Cantidad: {p.cantidad}</span>
+                  <button type="button" className="secondary" onClick={() => printMovimiento(p)} style={{ width: 'auto', margin: 0, padding: '4px 8px', fontSize: '0.8rem' }}>Imprimir este producto</button>
+                </li>
               ))}
             </ul>
           </div>
