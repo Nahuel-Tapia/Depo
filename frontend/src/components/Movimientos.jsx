@@ -617,17 +617,17 @@ return (
                 </select>
               </div>
               <form onSubmit={handleEgresoSubmit} className="grid">
-                <div>
-                  <SelectorTrigger
-                    label="Institución o Depósito Destino"
-                    placeholder="Buscar escuela o depósito..."
-                    selectedItem={instituciones.find(i => i.nombre.toLowerCase() === egresoInst.trim().toLowerCase()) || (egresoInst ? { nombre: egresoInst, departamento: egresoNivel ? `Nivel: ${egresoNivel}` : '' } : null)}
-                    onClick={() => setEgresoInstModalOpen(true)}
-                    onClear={() => { setEgresoInst(''); setEgresoNivel('') }}
-                    required
-                  />
-                </div>
-                <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div className="grid" style={{ gridTemplateColumns: '2fr 1fr 1fr', gap: 16, alignItems: 'start' }}>
+                  <div>
+                    <SelectorTrigger
+                      label="Institución o Depósito Destino"
+                      placeholder="Buscar escuela o depósito..."
+                      selectedItem={instituciones.find(i => i.nombre.toLowerCase() === egresoInst.trim().toLowerCase()) || (egresoInst ? { nombre: egresoInst, departamento: egresoNivel ? `Nivel: ${egresoNivel}` : '' } : null)}
+                      onClick={() => setEgresoInstModalOpen(true)}
+                      onClear={() => { setEgresoInst(''); setEgresoNivel('') }}
+                      required
+                    />
+                  </div>
                   <div>
                     <label>Cargo de quien retira</label>
                     <select value={egresoCargo} onChange={e => {
@@ -653,7 +653,7 @@ return (
 
                 <div style={{ gridColumn: '1 / -1' }}>
                   <h4>Productos a egresar</h4>
-                  <div className="grid" style={{ marginBottom: 16 }}>
+                  <div className="grid" style={{ marginBottom: 16, gridTemplateColumns: '2fr 1fr 1fr auto', alignItems: 'start' }}>
                     <div>
                       <SelectorTrigger
                         label="Producto"
