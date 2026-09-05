@@ -592,66 +592,136 @@ return (
             style={{
               position: 'fixed',
               inset: 0,
-              background: 'rgba(0, 0, 0, 0.45)',
+              background: 'rgba(15, 23, 42, 0.60)',
+              backdropFilter: 'blur(8px)',
+              WebkitBackdropFilter: 'blur(8px)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               zIndex: 1000,
-              padding: 16
+              padding: 16,
+              overflowY: 'auto',
             }}
-            onClick={e => {
-              if (e.target === e.currentTarget) setEgresoModalOpen(false)
-            }}
+            onClick={e => { if (e.target === e.currentTarget) setEgresoModalOpen(false) }}
           >
-            <div style={{ background: '#f9fafb', padding: 24, borderRadius: 10, width: 'min(980px, 100%)', maxHeight: '90vh', overflowY: 'auto' }}>
-              <h3>➖ Egreso de Productos</h3>
-              <div style={{ marginBottom: 16, padding: 12, background: '#fff3e0', borderRadius: 6 }}>
-                <label><strong>Depósito origen:</strong></label>
-                <select value={egresoDeposito} onChange={e => setEgresoDeposito(e.target.value)} style={{ marginLeft: 8 }} disabled>
-                  {depositosDisponibles.map(d => (
-                    <option key={d.id} value={d.id}>{d.nombre} ({d.ubicacion || 'Casa Central'})</option>
-                  ))}
-                </select>
-              </div>
-              <form onSubmit={handleEgresoSubmit} className="grid">
-                <div>
-                  <SelectorTrigger
-                    label="Institución o Depósito Destino"
-                    placeholder="Buscar escuela o depósito..."
-                    selectedItem={instituciones.find(i => i.nombre.toLowerCase() === egresoInst.trim().toLowerCase()) || (egresoInst ? { nombre: egresoInst, departamento: egresoNivel ? `Nivel: ${egresoNivel}` : '' } : null)}
-                    onClick={() => setEgresoInstModalOpen(true)}
-                    onClear={() => { setEgresoInst(''); setEgresoNivel('') }}
-                    required
-                  />
-                </div>
-                <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 16, alignItems: 'start' }}>
-                  <div>
-                    <label>Cargo de quien retira</label>
-                    <select value={egresoCargo} onChange={e => {
-                      setEgresoCargo(e.target.value);
-                    }} required={!depositos.some(d => d.nombre.toLowerCase() === egresoInst.trim().toLowerCase())}>
-                      <option value="">Seleccionar cargo...</option>
-                      {CARGOS.map(c => (
-                        <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label>Nivel Educativo</label>
-                    <input
-                      type="text"
-                      value={egresoNivel}
-                      placeholder="Se cargará automáticamente"
-                      readOnly
-                      disabled
-                    />
-                  </div>
-                </div>
+            <div style={{
+              background: '#ffffff',
+              borderRadius: 20,
+              width: 'min(900px, 100%)',
+              maxHeight: '92vh',
+              overflowY: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 25px 60px -12px rgba(15,23,42,0.25)',
+              border: '1px solid #e2e8f0',
+              animation: 'modalSlideUp 0.25s ease-out',
+            }}>
 
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <h4>Productos a egresar</h4>
-                  <div className="grid" style={{ marginBottom: 16 }}>
-                    <div>
+              {/* Header */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '18px 24px',
+                borderBottom: '1px solid #e2e8f0',
+                background: 'linear-gradient(135deg, #fff1f2 0%, #ffe4e6 100%)',
+                borderRadius: '20px 20px 0 0',
+                flexShrink: 0,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{
+                    width: 40, height: 40, borderRadius: 12,
+                    background: 'linear-gradient(135deg, #f43f5e, #e11d48)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 18, flexShrink: 0,
+                    boxShadow: '0 4px 12px rgba(225,29,72,0.30)',
+                  }}>➖</div>
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: '1.1rem', color: '#0f172a', lineHeight: 1.2 }}>Egreso de Productos</div>
+                    <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: 2 }}>
+                      Depósito de origen: <strong>{depositosDisponibles.find(d => String(d.id) === String(egresoDeposito))?.nombre || 'Central'}</strong>
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEgresoModalOpen(false)}
+                  style={{
+                    background: 'transparent', border: 'none', color: '#64748b',
+                    width: 32, height: 32, borderRadius: '50%', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '1.2rem', padding: 0, margin: 0, minHeight: 0,
+                  }}
+                >✕</button>
+              </div>
+
+              {/* Body */}
+              <div style={{ padding: '20px 24px', flex: 1 }}>
+                
+                {/* Form to submit whole egreso */}
+                <form id="egreso-form" onSubmit={handleEgresoSubmit}>
+                  
+                  {/* Destino section */}
+                  <div style={{
+                    background: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: 14,
+                    padding: '18px 20px',
+                    marginBottom: 20,
+                  }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.82rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 14 }}>
+                      Destino del Egreso
+                    </div>
+
+                    <div style={{ marginBottom: 12 }}>
+                      <SelectorTrigger
+                        label="Institución o Depósito Destino"
+                        placeholder="Buscar escuela o depósito..."
+                        selectedItem={instituciones.find(i => i.nombre.toLowerCase() === egresoInst.trim().toLowerCase()) || (egresoInst ? { nombre: egresoInst, departamento: egresoNivel ? `Nivel: ${egresoNivel}` : '' } : null)}
+                        onClick={() => setEgresoInstModalOpen(true)}
+                        onClear={() => { setEgresoInst(''); setEgresoNivel('') }}
+                        required
+                      />
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }}>Cargo de quien retira</label>
+                        <select value={egresoCargo} onChange={e => {
+                          setEgresoCargo(e.target.value);
+                        }} required={!depositos.some(d => d.nombre.toLowerCase() === egresoInst.trim().toLowerCase())} style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #e2e8f0', fontSize: '0.875rem', background: '#fff', minHeight: 40 }}>
+                          <option value="">Seleccionar cargo...</option>
+                          {CARGOS.map(c => (
+                            <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }}>Nivel Educativo</label>
+                        <input
+                          type="text"
+                          value={egresoNivel}
+                          placeholder="Se cargará automáticamente"
+                          readOnly
+                          disabled
+                          style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #e2e8f0', fontSize: '0.875rem', minHeight: 40, background: '#f1f5f9' }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Add item section */}
+                  <div style={{
+                    background: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: 14,
+                    padding: '18px 20px',
+                    marginBottom: 20,
+                  }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.82rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 14 }}>
+                      Agregar producto a egresar
+                    </div>
+                    
+                    <div style={{ marginBottom: 12 }}>
                       <SelectorTrigger
                         label="Producto"
                         placeholder="Buscar producto en catálogo..."
@@ -659,12 +729,11 @@ return (
                         onClick={() => setEgresoProdModalOpen(true)}
                         onClear={() => setEgresoItem({ ...egresoItem, productoNombre: '' })}
                       />
-
                       {(() => {
                         const inputVal = egresoItem.productoNombre.trim()
                         if (!inputVal) {
                           return (
-                            <div style={{ marginTop: 6, fontSize: '0.8rem', color: '#6b7280' }}>
+                            <div style={{ marginTop: 6, fontSize: '0.78rem', color: '#64748b' }}>
                               ℹ️ Busque un producto para verificar su stock en Depósito Central.
                             </div>
                           )
@@ -672,7 +741,7 @@ return (
                         const selectedProd = findProducto(inputVal)
                         if (!selectedProd) {
                           return (
-                            <div style={{ marginTop: 6, fontSize: '0.8rem', color: '#dc2626' }}>
+                            <div style={{ marginTop: 6, fontSize: '0.78rem', color: '#ef4444' }}>
                               ⚠️ Producto no encontrado en el catálogo.
                             </div>
                           )
@@ -680,96 +749,187 @@ return (
                         const stockDisp = Number(selectedProd.stock_central ?? selectedProd.stock_actual ?? 0)
                         if (stockDisp > 0) {
                           return (
-                            <div style={{ marginTop: 6, padding: '8px 12px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <span style={{ fontSize: '1.1rem' }}>📦</span>
-                              <span style={{ fontSize: '0.85rem', color: '#166534', fontWeight: 600 }}>
-                                Stock disponible (Depósito Central): <strong>{stockDisp}</strong> {selectedProd.unidad_medida || 'unidades'}
-                              </span>
+                            <div style={{
+                              marginTop: 6, padding: '5px 10px',
+                              background: '#f0fdf4',
+                              border: '1px solid #bbf7d0',
+                              borderRadius: 8, fontSize: '0.78rem',
+                              color: '#166534', fontWeight: 600,
+                              display: 'flex', alignItems: 'center', gap: 6,
+                            }}>
+                              <span>📦</span>
+                              <span>Stock disponible (Depósito Central): <strong>{stockDisp}</strong> {selectedProd.unidad_medida || 'u.'}</span>
                             </div>
                           )
                         }
                         return (
-                          <div style={{ marginTop: 6, padding: '8px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <span style={{ fontSize: '1.1rem' }}>🚨</span>
-                            <span style={{ fontSize: '0.85rem', color: '#991b1b', fontWeight: 700 }}>
-                              ⚠️ ADVERTENCIA: No hay stock disponible en Depósito Central (0 {selectedProd.unidad_medida || 'unidades'})
-                            </span>
+                          <div style={{
+                              marginTop: 6, padding: '5px 10px',
+                              background: '#fffbe6',
+                              border: '1px solid #ffe58f',
+                              borderRadius: 8, fontSize: '0.78rem',
+                              color: '#d48806', fontWeight: 600,
+                              display: 'flex', alignItems: 'center', gap: 6,
+                            }}>
+                            <span>⚠️</span>
+                            <span>Sin stock disponible en Depósito Central</span>
                           </div>
                         )
                       })()}
                     </div>
-                    <div className="grid" style={{ gridTemplateColumns: '1fr 1fr auto', gap: 16, alignItems: 'end' }}>
+                    
+                    <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr auto', gap: 12, alignItems: 'end' }}>
                       <div>
-                        <label>Cantidad</label>
+                        <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }}>Cantidad *</label>
                         <input
                           type="number"
                           value={egresoItem.cantidad}
                           onChange={e => setEgresoItem({ ...egresoItem, cantidad: e.target.value })}
                           placeholder="0"
                           min="1"
+                          style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #e2e8f0', fontSize: '0.875rem', minHeight: 40 }}
                         />
                       </div>
                       <div>
-                        <label>Estado del producto</label>
-                        <select value={egresoItem.estado} onChange={e => setEgresoItem({ ...egresoItem, estado: e.target.value })}>
+                        <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }}>Estado</label>
+                        <select value={egresoItem.estado} onChange={e => setEgresoItem({ ...egresoItem, estado: e.target.value })} style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1.5px solid #e2e8f0', fontSize: '0.875rem', background: '#fff', minHeight: 40 }}>
                           {ESTADOS_PRODUCTO.map(est => (
                             <option key={est} value={est}>{est.charAt(0).toUpperCase() + est.slice(1)}</option>
                           ))}
                         </select>
                       </div>
-                      <div>
-                        <button type="button" onClick={addToEgreso} style={{ margin: 0 }}>Agregar al Egreso</button>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={addToEgreso}
+                        style={{
+                          margin: 0, width: 'auto', padding: '9px 18px', minHeight: 40,
+                          background: 'linear-gradient(135deg, #f43f5e, #e11d48)',
+                          border: '1.5px solid rgba(225,29,72,0.50)',
+                          borderRadius: 10, color: '#fff', fontWeight: 700, fontSize: '0.875rem',
+                          display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer',
+                          boxShadow: '0 2px 8px rgba(225,29,72,0.25)',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        <span style={{ fontSize: 16, lineHeight: 1 }}>+</span> Agregar
+                      </button>
                     </div>
                   </div>
-                </div>
 
-                {loteEgreso.length > 0 && (
-                  <div style={{ gridColumn: '1 / -1' }}>
-                    <h4>Productos en el Egreso:</h4>
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                      <thead>
-                        <tr style={{ background: '#f0f0f0' }}>
-                          <th style={{ border: '1px solid #ddd', padding: 8 }}>Producto</th>
-                          <th style={{ border: '1px solid #ddd', padding: 8 }}>Stock Central</th>
-                          <th style={{ border: '1px solid #ddd', padding: 8 }}>Cantidad A Egresar</th>
-                          <th style={{ border: '1px solid #ddd', padding: 8 }}>Estado</th>
-                          <th style={{ border: '1px solid #ddd', padding: 8 }}>Acción</th>
-                        </tr>
-                      </thead>
-                      <tbody>
+                  {/* Item list */}
+                  {loteEgreso.length > 0 ? (
+                    <div style={{ marginBottom: 20 }}>
+                      <div style={{ fontWeight: 700, fontSize: '0.82rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span>Productos a Egresar</span>
+                        <span style={{ background: '#f43f5e', color: '#fff', borderRadius: 99, padding: '1px 8px', fontSize: '0.72rem', fontWeight: 700 }}>{loteEgreso.length}</span>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                         {loteEgreso.map((item, idx) => (
-                          <tr key={idx}>
-                            <td style={{ border: '1px solid #ddd', padding: 8 }}>{item.nombre}</td>
-                            <td style={{ border: '1px solid #ddd', padding: 8, color: '#15803d', fontWeight: 600 }}>{item.stock_disponible} {item.unidad_medida}</td>
-                            <td style={{ border: '1px solid #ddd', padding: 8, fontWeight: 700 }}>{item.cantidad}</td>
-                            <td style={{ border: '1px solid #ddd', padding: 8 }}>{item.estado}</td>
-                            <td style={{ border: '1px solid #ddd', padding: 8 }}>
-                              <button type="button" className="secondary" onClick={() => removeFromEgreso(idx)} style={{ margin: 0 }}>Remover</button>
-                            </td>
-                          </tr>
+                          <div key={idx} style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 12,
+                            padding: '11px 16px',
+                            background: '#f8fafc',
+                            border: '1px solid #e2e8f0',
+                            borderRadius: 10,
+                            borderLeft: '3px solid #f43f5e',
+                          }}>
+                            <div style={{ flex: 1, fontWeight: 600, fontSize: '0.9rem', color: '#0f172a', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {item.nombre}
+                            </div>
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
+                              <span style={{ background: '#fff1f2', color: '#be123c', border: '1px solid #fecdd3', borderRadius: 99, padding: '2px 10px', fontSize: '0.75rem', fontWeight: 700 }}>
+                                {item.cantidad} u.
+                              </span>
+                              <span style={{ background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', borderRadius: 99, padding: '2px 10px', fontSize: '0.75rem', fontWeight: 600 }}>
+                                {item.estado}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeFromEgreso(idx)}
+                              style={{
+                                background: 'transparent', border: 'none', color: '#94a3b8',
+                                width: 28, height: 28, borderRadius: '50%', cursor: 'pointer',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                fontSize: '1rem', padding: 0, margin: 0, minHeight: 0,
+                                flexShrink: 0, transition: 'all 0.15s',
+                              }}
+                              onMouseEnter={e => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.color = '#ef4444' }}
+                              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#94a3b8' }}
+                              title="Quitar"
+                            >✕</button>
+                          </div>
                         ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{
+                      textAlign: 'center', padding: '28px 20px',
+                      border: '2px dashed #e2e8f0', borderRadius: 14,
+                      color: '#94a3b8', marginBottom: 20, background: '#fafbfc',
+                    }}>
+                      <div style={{ fontSize: '1.6rem', marginBottom: 8, opacity: 0.5 }}>📦</div>
+                      <div style={{ fontWeight: 600, color: '#475569', fontSize: '0.9rem' }}>Sin productos agregados</div>
+                      <div style={{ fontSize: '0.8rem', marginTop: 4 }}>Completá los campos arriba y hacé clic en "+ Agregar"</div>
+                    </div>
+                  )}
 
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <label>Motivo del egreso</label>
-                  <input
-                    type="text"
-                    value={egresoMotivo}
-                    onChange={e => setEgresoMotivo(e.target.value)}
-                    placeholder="Motivo del egreso"
-                  />
-                </div>
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-                    <button type="button" className="secondary" onClick={() => setEgresoModalOpen(false)}>Cancelar</button>
-                    <button type="submit" style={{ width: 'auto', margin: 0, padding: '10px 18px' }}>Registrar Egreso</button>
+                  {/* Motivo */}
+                  <div style={{ marginBottom: 4 }}>
+                    <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }}>Motivo del egreso</label>
+                    <input
+                      type="text"
+                      value={egresoMotivo}
+                      onChange={e => setEgresoMotivo(e.target.value)}
+                      placeholder="Ej: Entrega a escuela, donación, traslado..."
+                      style={{ width: '100%', padding: '9px 14px', borderRadius: 8, border: '1.5px solid #e2e8f0', fontSize: '0.875rem', minHeight: 40 }}
+                    />
                   </div>
+                </form>
+              </div>
+
+              {/* Footer */}
+              <div style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                padding: '16px 24px', borderTop: '1px solid #e2e8f0',
+                background: '#f8fafc', borderRadius: '0 0 20px 20px', flexShrink: 0, gap: 12,
+              }}>
+                <div style={{ fontSize: '0.82rem', color: '#64748b' }}>
+                  {loteEgreso.length > 0
+                    ? <span>🔴 <strong>{loteEgreso.length}</strong> producto{loteEgreso.length !== 1 ? 's' : ''} listos para egresar</span>
+                    : <span>Agregá al menos un producto para continuar</span>
+                  }
                 </div>
-              </form>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => setEgresoModalOpen(false)}
+                    style={{ margin: 0, width: 'auto' }}
+                  >Cancelar</button>
+                  <button
+                    type="submit"
+                    form="egreso-form"
+                    disabled={loteEgreso.length === 0}
+                    style={{
+                      margin: 0, width: 'auto', padding: '9px 22px',
+                      background: loteEgreso.length === 0
+                        ? '#cbd5e1'
+                        : 'linear-gradient(135deg, #f43f5e, #e11d48)',
+                      border: loteEgreso.length === 0
+                        ? '1.5px solid #cbd5e1'
+                        : '1.5px solid rgba(225,29,72,0.50)',
+                      borderRadius: 10, color: '#fff', fontWeight: 700,
+                      fontSize: '0.875rem', cursor: loteEgreso.length === 0 ? 'not-allowed' : 'pointer',
+                      boxShadow: loteEgreso.length === 0 ? 'none' : '0 4px 12px rgba(225,29,72,0.30)',
+                    }}
+                  >
+                    ✓ Registrar Egreso
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}
