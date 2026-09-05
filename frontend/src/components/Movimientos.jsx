@@ -418,68 +418,85 @@ const canCreate = hasPermission('movimientos.create')
 const printRef = useRef(null)
 
 const handlePrintMovimiento = (movimientoOrGroup) => {
-  const printWindow = window.open('', '_blank', 'width=700,height=600')
+  const printWindow = window.open('', '_blank', 'width=800,height=600')
   if (!printWindow) return
 
   const isGroup = Array.isArray(movimientoOrGroup);
   const movs = isGroup ? movimientoOrGroup : [movimientoOrGroup];
   const primer = movs[0];
 
-  const institucionCargo = primer.institucion_nombre && primer.cargo_retira
-    ? `${primer.institucion_nombre} (${primer.cargo_retira})`
-    : primer.institucion_nombre || primer.cargo_retira || '-'
+  const institucionMatch = instituciones.find(i => i.nombre === primer.institucion_nombre)
+  const cueStr = institucionMatch && institucionMatch.cue ? institucionMatch.cue : '-'
 
-  const fecha = primer.created_at
-    ? new Date(primer.created_at).toLocaleString('es-AR')
-    : '-'
+  const institucionNombre = primer.institucion_nombre || '-'
 
-  const rowsHTML = movs.map(m => `<tr><td>${m.producto_nombre || '-'}</td><td>${m.cantidad ?? '-'}</td><td>${m.estado_producto || '-'}</td><td>${m.proveedor_nombre || '-'}</td></tr>`).join('');
+  const dateObj = primer.created_at ? new Date(primer.created_at) : new Date()
+  const day = dateObj.getDate()
+  const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+  const month = monthNames[dateObj.getMonth()]
+  const year = dateObj.getFullYear()
+  const fechaStr = `San Juan, ${day} de ${month} del ${year}`
+
+  const rowsHTML = movs.map((m, i) => `<tr>
+    <td style="text-align: center;">${i + 1}</td>
+    <td style="text-align: center;">${m.cantidad ?? '-'}</td>
+    <td>${m.producto_nombre || '-'}</td>
+    <td>${m.estado_producto || '-'}</td>
+  </tr>`).join('');
 
   printWindow.document.write(`
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Movimiento #${primer.id || ''}</title>
+        <title>Remito de Egreso #${primer.id || ''}</title>
         <style>
           * { box-sizing: border-box; font-family: Arial, sans-serif; }
-          body { margin: 24px; color: #111827; font-size: 13px; }
-          .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #FF8200; padding-bottom: 10px; margin-bottom: 16px; }
-          .header-left { display: flex; align-items: center; gap: 12px; }
-          .header-left img { height: 40px; width: auto; }
-          .header-right { text-align: right; }
-          table { width: 100%; border-collapse: collapse; margin-bottom: 28px; }
-          th, td { border: 1px solid #d1d5db; padding: 8px 10px; text-align: left; }
-          th { background: #f3f4f6; }
-          .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 36px; margin-top: 54px; }
-          .signature { border-top: 1px solid #111827; padding-top: 8px; text-align: center; }
+          body { margin: 40px; color: #111827; font-size: 14px; }
+          .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
+          .header-left { display: flex; align-items: center; gap: 16px; }
+          .header-left img { height: 60px; width: auto; }
+          .header-text { line-height: 1.4; }
+          .title { text-align: center; font-size: 24px; font-weight: bold; margin: 30px 0; text-decoration: underline; letter-spacing: 1px; }
+          .date { text-align: right; margin-bottom: 30px; font-style: italic; font-size: 15px; }
+          .info-section { margin-bottom: 30px; line-height: 1.8; font-size: 15px; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 40px; }
+          th, td { border: 1px solid #000; padding: 10px; text-align: left; }
+          th { background: #f3f4f6; font-weight: bold; text-align: center; }
+          .signatures { display: flex; justify-content: space-around; margin-top: 80px; }
+          .signature-line { border-top: 1px solid #000; padding-top: 8px; text-align: center; width: 250px; }
         </style>
       </head>
       <body>
         <div class="header">
           <div class="header-left">
-            <img src="/faviconmin.png" alt="Logo San Juan" />
-            <div>
-              <div style="font-weight: bold; font-size: 1.1rem;">San Juan Gobierno</div>
-              <div style="font-size: 0.9rem; color: #666;">Ministerio de Educación</div>
+            <img src="/faviconmin.png" alt="Logo" />
+            <div class="header-text">
+              <div style="font-weight: bold; font-size: 18px;">Depósito Central</div>
+              <div style="font-size: 14px; color: #444;">Hipólito Yrigoyen 1515(E) - Santa Lucía 4302361</div>
             </div>
           </div>
-          <div class="header-right">
-            <div style="font-weight: bold; font-size: 1.1rem;">Comprobante de Movimiento</div>
-            <div style="font-size: 0.9rem; color: #666;">Tipo: ${primer.tipo || '-'}</div>
+          <div style="font-weight: bold; font-size: 18px;">
+            REMITO N° ${primer.id || ''}
           </div>
         </div>
 
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px;">
-          <div><strong>Institución/Cargo:</strong> ${institucionCargo}</div>
-          <div><strong>Motivo:</strong> ${primer.motivo || '-'}</div>
-          <div><strong>Registrado por:</strong> ${primer.usuario_nombre || '-'}</div>
-          <div><strong>Fecha:</strong> ${fecha}</div>
+        <div class="date">${fechaStr}</div>
+
+        <div class="info-section">
+          <div><strong>CUE de la Institución:</strong> ${cueStr}</div>
+          <div><strong>Nombre de la Institución:</strong> ${institucionNombre}</div>
+          ${primer.cargo_retira ? \`<div><strong>Retira:</strong> \${primer.cargo_retira}</div>\` : ''}
+          ${primer.motivo ? \`<div><strong>Motivo:</strong> \${primer.motivo}</div>\` : ''}
         </div>
 
-        <h4>Productos</h4>
         <table>
           <thead>
-            <tr><th>Producto</th><th>Cantidad</th><th>Estado</th><th>Proveedor</th></tr>
+            <tr>
+              <th style="width: 50px;">Reng</th>
+              <th style="width: 80px;">Cant.</th>
+              <th>Descripción del Producto</th>
+              <th style="width: 120px;">Estado</th>
+            </tr>
           </thead>
           <tbody>
             ${rowsHTML}
@@ -487,8 +504,8 @@ const handlePrintMovimiento = (movimientoOrGroup) => {
         </table>
 
         <div class="signatures">
-          <div class="signature">Firma de quien entrega</div>
-          <div class="signature">Firma y sello del directivo</div>
+          <div class="signature-line">Firma de quien entrega</div>
+          <div class="signature-line">Firma de quien recibe</div>
         </div>
       </body>
       </html>
