@@ -614,17 +614,17 @@ return (
                 </select>
               </div>
               <form onSubmit={handleEgresoSubmit} className="grid">
-                <div className="grid" style={{ gridTemplateColumns: '2fr 1fr 1fr', gap: 16, alignItems: 'start' }}>
-                  <div>
-                    <SelectorTrigger
-                      label="Institución o Depósito Destino"
-                      placeholder="Buscar escuela o depósito..."
-                      selectedItem={instituciones.find(i => i.nombre.toLowerCase() === egresoInst.trim().toLowerCase()) || (egresoInst ? { nombre: egresoInst, departamento: egresoNivel ? `Nivel: ${egresoNivel}` : '' } : null)}
-                      onClick={() => setEgresoInstModalOpen(true)}
-                      onClear={() => { setEgresoInst(''); setEgresoNivel('') }}
-                      required
-                    />
-                  </div>
+                <div>
+                  <SelectorTrigger
+                    label="Institución o Depósito Destino"
+                    placeholder="Buscar escuela o depósito..."
+                    selectedItem={instituciones.find(i => i.nombre.toLowerCase() === egresoInst.trim().toLowerCase()) || (egresoInst ? { nombre: egresoInst, departamento: egresoNivel ? `Nivel: ${egresoNivel}` : '' } : null)}
+                    onClick={() => setEgresoInstModalOpen(true)}
+                    onClear={() => { setEgresoInst(''); setEgresoNivel('') }}
+                    required
+                  />
+                </div>
+                <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 16, alignItems: 'start' }}>
                   <div>
                     <label>Cargo de quien retira</label>
                     <select value={egresoCargo} onChange={e => {
@@ -650,7 +650,7 @@ return (
 
                 <div style={{ gridColumn: '1 / -1' }}>
                   <h4>Productos a egresar</h4>
-                  <div className="grid" style={{ marginBottom: 16, gridTemplateColumns: '2fr 1fr 1fr auto', alignItems: 'start' }}>
+                  <div className="grid" style={{ marginBottom: 16 }}>
                     <div>
                       <SelectorTrigger
                         label="Producto"
@@ -698,26 +698,28 @@ return (
                         )
                       })()}
                     </div>
-                    <div>
-                      <label>Cantidad</label>
-                      <input
-                        type="number"
-                        value={egresoItem.cantidad}
-                        onChange={e => setEgresoItem({ ...egresoItem, cantidad: e.target.value })}
-                        placeholder="0"
-                        min="1"
-                      />
-                    </div>
-                    <div>
-                      <label>Estado del producto</label>
-                      <select value={egresoItem.estado} onChange={e => setEgresoItem({ ...egresoItem, estado: e.target.value })}>
-                        {ESTADOS_PRODUCTO.map(est => (
-                          <option key={est} value={est}>{est.charAt(0).toUpperCase() + est.slice(1)}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div style={{ alignSelf: 'end' }}>
-                      <button type="button" onClick={addToEgreso}>Agregar al Egreso</button>
+                    <div className="grid" style={{ gridTemplateColumns: '1fr 1fr auto', gap: 16, alignItems: 'end' }}>
+                      <div>
+                        <label>Cantidad</label>
+                        <input
+                          type="number"
+                          value={egresoItem.cantidad}
+                          onChange={e => setEgresoItem({ ...egresoItem, cantidad: e.target.value })}
+                          placeholder="0"
+                          min="1"
+                        />
+                      </div>
+                      <div>
+                        <label>Estado del producto</label>
+                        <select value={egresoItem.estado} onChange={e => setEgresoItem({ ...egresoItem, estado: e.target.value })}>
+                          {ESTADOS_PRODUCTO.map(est => (
+                            <option key={est} value={est}>{est.charAt(0).toUpperCase() + est.slice(1)}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <button type="button" onClick={addToEgreso} style={{ margin: 0 }}>Agregar al Egreso</button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1284,7 +1286,7 @@ return (
                           <button
                             type="button"
                             className="secondary"
-                            onClick={() => printMovimiento(group.items)}
+                            onClick={() => printMovimiento(group.items, instituciones)}
                             title="Imprimir movimiento"
                             aria-label="Imprimir movimiento"
                             style={{ width: 'auto', margin: 0, minWidth: 36, padding: '6px 10px' }}
@@ -1445,7 +1447,7 @@ return (
               {detalleData.productos.map((p, idx) => (
                 <li key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, paddingBottom: 8, borderBottom: '1px solid #eee' }}>
                   <span>{p.producto_nombre || '-'} — Cantidad: {p.cantidad}</span>
-                  <button type="button" className="secondary" onClick={() => printMovimiento(p)} style={{ width: 'auto', margin: 0, padding: '4px 8px', fontSize: '0.8rem' }}>Imprimir este producto</button>
+                  <button type="button" className="secondary" onClick={() => printMovimiento(p, instituciones)} style={{ width: 'auto', margin: 0, padding: '4px 8px', fontSize: '0.8rem' }}>Imprimir este producto</button>
                 </li>
               ))}
             </ul>
